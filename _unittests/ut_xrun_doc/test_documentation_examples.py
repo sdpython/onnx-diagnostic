@@ -5,7 +5,8 @@ import importlib.util
 import subprocess
 import time
 from onnx_diagnostic import __file__ as onnx_diagnostic_file
-from onnx_diagnostic.ext_test_case import ExtTestCase, is_windows
+from onnx_diagnostic.ext_test_case import ExtTestCase, is_windows, has_transformers
+
 
 VERBOSE = 0
 ROOT = os.path.realpath(os.path.abspath(os.path.join(onnx_diagnostic_file, "..", "..")))
@@ -68,6 +69,13 @@ class TestDocumentationExamples(ExtTestCase):
             if not name.endswith(".py") or not name.startswith("plot_"):
                 continue
             reason = None
+
+            if (
+                not reason
+                and name in {"plot_export_tiny_llm.py"}
+                and not has_transformers("4.50")
+            ):
+                reason = "transformers<4.50"
 
             if reason:
 
