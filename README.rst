@@ -5,6 +5,9 @@
 onnx-diagnostic: investigate onnx models
 ========================================
 
+.. image:: https://github.com/sdpython/onnx-diagnostic/actions/workflows/documentation.yml/badge.svg
+    :target: https://github.com/sdpython/onnx-diagnostic/actions/workflows/documentation.yml
+
 .. image:: https://badge.fury.io/py/onnx-diagnostic.svg
     :target: http://badge.fury.io/py/onnx-diagnostic
 
