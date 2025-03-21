@@ -1,7 +1,7 @@
 
-.args
-=====
+onnx_diagnostic.args
+====================
 
-.. automodule:: experimental_experiment.args
+.. automodule:: onnx_diagnostic.args
     :members:
     :no-undoc-members:

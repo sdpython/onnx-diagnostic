@@ -40,7 +40,7 @@ def onnx_lighten(
     """
     Creates a model without big initializers but stores statistics
     into dictionaries. The function can be reversed with
-    :func:`experimental_experiment.onnx_tools.onnx_unlighten`.
+    :func:`onnx_diagnostic.onnx_tools.onnx_unlighten`.
     The model is modified inplace.
 
     :param onx: model
@@ -97,7 +97,7 @@ def onnx_unlighten(
 ) -> ModelProto:
     """
     Function fixing the model produced by function
-    :func:`experimental_experiment.onnx_tools.onnx_lighten`.
+    :func:`onnx_diagnostic.onnx_tools.onnx_lighten`.
     The model is modified inplace.
 
     :param onx: model

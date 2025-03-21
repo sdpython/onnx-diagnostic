@@ -228,7 +228,7 @@ def measure_time(
 
         from pprint import pprint
         from math import cos
-        from experimental_experiment.ext_test_case import measure_time
+        from onnx_diagnostic.ext_test_case import measure_time
 
         res = measure_time(lambda: cos(0.5))
         pprint(res)
@@ -349,13 +349,13 @@ class ExtTestCase(unittest.TestCase):
 
     def print_model(self, model: "ModelProto"):  # noqa: F821
         "Prints a ModelProto"
-        from experimental_experiment.helpers import pretty_onnx
+        from onnx_diagnostic.helpers import pretty_onnx
 
         print(pretty_onnx(model))
 
     def print_onnx(self, model: "ModelProto"):  # noqa: F821
         "Prints a ModelProto"
-        from experimental_experiment.helpers import pretty_onnx
+        from onnx_diagnostic.helpers import pretty_onnx
 
         print(pretty_onnx(model))
 
@@ -426,8 +426,8 @@ class ExtTestCase(unittest.TestCase):
 
     def assertEqualArray(
         self,
-        expected: numpy.ndarray,
-        value: numpy.ndarray,
+        expected: Any,
+        value: Any,
         atol: float = 0,
         rtol: float = 0,
         msg: Optional[str] = None,
@@ -1038,7 +1038,7 @@ def statistics_on_file(filename: str) -> Dict[str, Union[int, float, str]]:
         :showcode:
 
         import pprint
-        from experimental_experiment.ext_test_case import statistics_on_file, __file__
+        from onnx_diagnostic.ext_test_case import statistics_on_file, __file__
 
         pprint.pprint(statistics_on_file(__file__))
     """
@@ -1087,7 +1087,7 @@ def statistics_on_folder(
 
         import os
         import pprint
-        from experimental_experiment.ext_test_case import statistics_on_folder, __file__
+        from onnx_diagnostic.ext_test_case import statistics_on_folder, __file__
 
         pprint.pprint(statistics_on_folder(os.path.dirname(__file__)))
 
@@ -1099,7 +1099,7 @@ def statistics_on_folder(
 
         import os
         import pprint
-        from experimental_experiment.ext_test_case import statistics_on_folder, __file__
+        from onnx_diagnostic.ext_test_case import statistics_on_folder, __file__
 
         pprint.pprint(statistics_on_folder(os.path.dirname(__file__), aggregation=1))
     """

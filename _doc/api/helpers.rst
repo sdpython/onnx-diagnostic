@@ -1,7 +1,7 @@
 
-.helpers
-========
+onnx_diagnostic.helpers
+=======================
 
-.. automodule:: experimental_experiment.helpers
+.. automodule:: onnx_diagnostic.helpers
     :members:
     :no-undoc-members:

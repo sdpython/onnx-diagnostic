@@ -1,6 +1,34 @@
 [tool.black]
 line-length = 95
-extend-exclude = '''.*clones*'''
+extend-exclude = '''.*clones.*'''
+
+[tool.mypy]
+ignore_missing_imports = true
+packages = ["onnx_diagnostic"]
+exclude = [
+    "^_doc/auto_examples",  # skips examples in the documentation
+    "^_doc/conf.py",
+    "^_doc/examples",
+    "^_unittests",  # skips unit tests
+    "^build",  # skips build
+    "^dist",  # skips dist
+]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.args"]
+disable_error_code = ["arg-type", "call-overload", "index"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.helpers"]
+disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.ext_test_case"]
+disable_error_code = ["arg-type", "assignment", "import-untyped", "misc", "name-defined", "override", "return-value", "truthy-function"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.ort_session"]
+disable_error_code = ["union-attr"]
 
 [tool.ruff]
 

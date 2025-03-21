@@ -2,12 +2,10 @@
 More complex helpers used in unit tests.
 """
 
-import contextlib
-import io
-import os
-import warnings
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 from onnx import ModelProto, save
+import torch
+import onnxruntime
 from .helpers import pretty_onnx
 
 
@@ -22,7 +20,6 @@ def to_numpy(tensor: "torch.Tensor"):  # noqa: F821
         pass
 
     import ml_dtypes
-    import torch
 
     conv = {torch.bfloat16: ml_dtypes.bfloat16}
     assert tensor.dtype in conv, f"Unsupported type {tensor.dtype}, not in {conv}"
@@ -31,9 +28,9 @@ def to_numpy(tensor: "torch.Tensor"):  # noqa: F821
 
 def check_model_ort(
     onx: ModelProto,
-    providers: Optional[Union[str, List[str]]] = None,
+    providers: Optional[Union[str, List[Any]]] = None,
     dump_file: Optional[str] = None,
-) -> "onnxruntime.InferenceSession":  # noqa: F821
+) -> onnxruntime.InferenceSession:
     """
     Loads a model with onnxruntime.
 
@@ -78,80 +75,13 @@ def check_model_ort(
         )
 
 
-def export_to_onnx(
-    model: Any,
-    *args: List[Any],
-    verbose: int = 0,
-    return_builder: bool = False,
-    torch_script: bool = True,
-    target_opset: int = 18,
-    prefix: Optional[str] = None,
-    rename_inputs: bool = False,
-    optimize: Union[str, bool] = True,
-    folder: Optional[str] = "dump_test",
-    export_options: Optional["ExportOptions"] = None,  # noqa: F821
-) -> Dict[str, Union[str, ModelProto, "GraphBuilder"]]:  # noqa: F821
-    """
-    Exports a model to ONNX.
-
-    :param model: model to export
-    :param args: arguments
-    :param verbose: verbosity
-    :param return_builder: returns the builder
-    :param torch_script: export with torch.script as well
-    :param target_opset: opset to export into
-    :param prefix: prefix to choose to export into
-    :param rename_inputs: rename the inputs into ``input_{i}``
-    :param optimize: enable, disable optimizations of pattern to test
-    :param folder: where to dump the model, creates it if it does not exist
-    :param export_options: see :class:`ExportOptions
-        <experimental_experiment.torch_interpreter.ExportOptions>`
-    :return: dictionary with ModelProto, builder, filenames
-    """
-    from .xbuilder import OptimizationOptions
-    from .torch_interpreter import to_onnx
-
-    ret = {}
-    if torch_script and prefix is not None:
-        import torch
-
-        filename = f"{prefix}.onnx"
-        with contextlib.redirect_stdout(io.StringIO()), warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            torch.onnx.export(model, args, filename, input_names=["input"])
-            ret["torch.script"] = filename
-
-    if isinstance(optimize, str):
-        options = OptimizationOptions(verbose=verbose, patterns=optimize)
-    else:
-        options = OptimizationOptions(verbose=verbose)
-    onx = to_onnx(
-        model,
-        tuple(args),
-        input_names=[f"input{i}" for i in range(len(args))] if rename_inputs else None,
-        options=options,
-        verbose=verbose,
-        return_builder=return_builder,
-        optimize=optimize,
-        export_options=export_options,
-    )
-    ret["proto"] = onx
-    if prefix is not None:
-        filename = f"{prefix}.custom.onnx"
-        if folder:
-            if not os.path.exists(folder):
-                os.makedirs(folder)
-            filename = os.path.join(folder, filename)
-        with open(filename, "wb") as f:
-            f.write((onx[0] if return_builder else onx).SerializeToString())
-        ret["custom"] = filename
-    return ret
-
-
 def dummy_llm(
     cls_name: Optional[str] = None,
     dynamic_shapes: bool = False,
-) -> Tuple["torch.nn.Module", Tuple["torch.Tensor", ...]]:  # noqa: F821
+) -> Union[
+    Tuple[torch.nn.Module, Tuple[torch.Tensor, ...]],
+    Tuple[torch.nn.Module, Tuple[torch.Tensor, ...], Any],
+]:
     """
     Creates a dummy LLM for test purposes.
 
@@ -161,10 +91,9 @@ def dummy_llm(
     .. runpython::
         :showcode:
 
-        from experimental_experiment.torch_test_helper import dummy_llm
+        from onnx_diagnostic.torch_test_helper import dummy_llm
         print(dummy_llm())
     """
-    import torch
 
     class Embedding(torch.nn.Module):
         def __init__(self, vocab_size: int = 1024, embedding_dim: int = 16):
@@ -284,7 +213,7 @@ def dummy_llm(
             return y
 
     if cls_name in (None, "LLM"):
-        dec = LLM()
+        dec: torch.nn.Module = LLM()
         x = torch.randint(0, 1024, (2 if dynamic_shapes else 1, 30)).to(torch.int64)
         dec(x)
         if dynamic_shapes:

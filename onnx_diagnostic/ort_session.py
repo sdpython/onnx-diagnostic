@@ -1,8 +1,12 @@
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import onnx
 import numpy as np
 import torch
 from torch._C import _from_dlpack
+import onnxruntime
+from onnxruntime.capi import _pybind_state as ORTC
+
+DEVICES = {-1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memory(), 0)}
 
 
 class _InferenceSession:
@@ -29,14 +33,12 @@ class _InferenceSession:
 
     def __init__(
         self,
-        sess: Union[onnx.ModelProto, str, "onnxruntime.InferenceSession"],  # noqa: F821
-        session_options: Optional["onnxruntime.SessionOptions"] = None,  # noqa: F821
-        providers: Optional[Union[str, List[str]]] = None,
+        sess: Union[onnx.ModelProto, str, onnxruntime.InferenceSession],
+        session_options: Optional[onnxruntime.SessionOptions] = None,
+        providers: Optional[Union[str, List[Any]]] = None,
         nvtx: bool = False,
         enable_profiling: bool = False,
-        graph_optimization_level: Union[
-            "onnxruntime.GraphOptimizationLevel", bool  # noqa: F821
-        ] = None,
+        graph_optimization_level: Union[onnxruntime.GraphOptimizationLevel, bool] = None,
         log_severity_level: Optional[int] = None,
         log_verbosity_level: Optional[int] = None,
         optimized_model_filepath: Optional[str] = None,
@@ -45,9 +47,6 @@ class _InferenceSession:
     ):
         # onnxruntime is importing when needed as it takes a
         # couple of seconds if it contains CUDA EP.
-        import onnxruntime
-        from onnxruntime.capi import _pybind_state as ORTC  # noqa: N812
-
         if isinstance(sess, (onnx.ModelProto, str)):
             assert session_options is None or (
                 providers is None
@@ -88,7 +87,9 @@ class _InferenceSession:
                 else:
                     raise ValueError(f"Unexpected value for providers={providers!r}")
             sess = onnxruntime.InferenceSession(
-                sess.SerializeToString(), session_options, providers=providers
+                sess if isinstance(sess, str) else sess.SerializeToString(),
+                session_options,
+                providers=providers,
             )
         else:
             assert (
@@ -102,8 +103,6 @@ class _InferenceSession:
         self.sess = sess
         self.input_names = [i.name for i in sess.get_inputs()]
         self.output_names = [i.name for i in sess.get_outputs()]
-        self.OrtValue = ORTC.OrtValue
-        self.ORTC = ORTC
         self.torch = torch
         self.nvtx = nvtx
         self.run_options = onnxruntime.RunOptions()
@@ -117,17 +116,12 @@ class _InferenceSession:
             self.has_onnxruntime_training() if use_training_api is None else use_training_api
         )
 
-        DEVICES = {
-            -1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memory(), 0)
-        }
-
         if torch.cuda.device_count() > 0:
             for i in range(torch.cuda.device_count()):
                 DEVICES[i] = ORTC.OrtDevice(
                     ORTC.OrtDevice.cuda(), ORTC.OrtDevice.default_memory(), i
                 )
 
-        self.DEVICES = DEVICES
         self._torch_from_dlpack = _from_dlpack
 
 
@@ -151,14 +145,12 @@ class InferenceSessionForNumpy(_InferenceSession):
 
     def __init__(
         self,
-        sess: Union[onnx.ModelProto, str, "onnxruntime.InferenceSession"],  # noqa: F821
-        session_options: Optional["onnxruntime.SessionOptions"] = None,  # noqa: F821
+        sess: Union[onnx.ModelProto, str, onnxruntime.InferenceSession],
+        session_options: Optional[onnxruntime.SessionOptions] = None,
         providers: Optional[Union[str, List[str]]] = None,
         nvtx: bool = False,
         enable_profiling: bool = False,
-        graph_optimization_level: Union[
-            "onnxruntime.GraphOptimizationLevel", bool  # noqa: F821
-        ] = None,
+        graph_optimization_level: Union[onnxruntime.GraphOptimizationLevel, bool] = None,
         log_severity_level: Optional[int] = None,
         log_verbosity_level: Optional[int] = None,
         optimized_model_filepath: Optional[str] = None,
@@ -182,9 +174,7 @@ class InferenceSessionForNumpy(_InferenceSession):
     def run(
         self, output_names: Optional[List[str]], feeds: Dict[str, np.ndarray]
     ) -> List[np.ndarray]:
-        """
-        Calls :meth:`onnxruntime.InferenceSession.run`.
-        """
+        """Calls :meth:`onnxruntime.InferenceSession.run`."""
         return self.sess.run(output_names, feeds)
 
 
@@ -208,14 +198,12 @@ class InferenceSessionForTorch(_InferenceSession):
 
     def __init__(
         self,
-        sess: Union[onnx.ModelProto, str, "onnxruntime.InferenceSession"],  # noqa: F821
-        session_options: Optional["onnxruntime.SessionOptions"] = None,  # noqa: F821
+        sess: Union[onnx.ModelProto, str, onnxruntime.InferenceSession],
+        session_options: Optional[onnxruntime.SessionOptions] = None,
         providers: Optional[Union[str, List[str]]] = None,
         nvtx: bool = False,
         enable_profiling: bool = False,
-        graph_optimization_level: Union[
-            "onnxruntime.GraphOptimizationLevel", bool  # noqa: F821
-        ] = None,
+        graph_optimization_level: Union[onnxruntime.GraphOptimizationLevel, bool] = None,
         log_severity_level: Optional[int] = None,
         log_verbosity_level: Optional[int] = None,
         optimized_model_filepath: Optional[str] = None,
@@ -265,9 +253,9 @@ class InferenceSessionForTorch(_InferenceSession):
 
     def _get_ortvalues_from_torch_tensors(
         self, tensors: Tuple[torch.Tensor, ...], n_outputs: int
-    ) -> Tuple[Tuple[torch.Tensor, "onnxruntime.OrtDevice"], ...]:  # noqa: F821
+    ) -> Tuple[ORTC.OrtValueVector, List[onnxruntime.OrtDevice]]:
         assert tensors is not None, "tensors cannot be None"
-        ortvalues = self.ORTC.OrtValueVector()
+        ortvalues = ORTC.OrtValueVector()
         ortvalues.reserve(len(tensors))
         dtypes = []
         shapes = []
@@ -284,7 +272,7 @@ class InferenceSessionForTorch(_InferenceSession):
             shapes.append(tensor.size())
             data_ptrs.append(tensor.data_ptr())
             d = tensor.get_device()
-            devices.append(self.DEVICES[d])
+            devices.append(DEVICES[d])
             new_tensors.append(tensor)
             max_device = max(max_device, d)
 
@@ -296,7 +284,7 @@ class InferenceSessionForTorch(_InferenceSession):
         ortvalues.push_back_batch(new_tensors, data_ptrs, dtypes, shapes, devices)
         output_devices = []
         for _ in range(n_outputs):
-            dev = self.DEVICES[max_device]
+            dev = DEVICES[max_device]
             output_devices.append(dev)
 
         if self.nvtx:
@@ -305,9 +293,7 @@ class InferenceSessionForTorch(_InferenceSession):
 
     def _ortvalues_to_torch_tensor(
         self,
-        ortvalues: Union[
-            List["onnxruntime.OrtValue"], "onnxruntime.OrtValueVector"  # noqa: F821
-        ],
+        ortvalues: Union[List[onnxruntime.OrtValue], onnxruntime.OrtValueVector],
     ) -> Tuple[torch.Tensor, ...]:
         if len(ortvalues) == 0:
             return tuple()
@@ -334,7 +320,7 @@ class InferenceSessionForTorch(_InferenceSession):
 
     def run(
         self, output_names: Optional[List[str]], feeds: Dict[str, torch.Tensor]
-    ) -> List[torch.Tensor]:
+    ) -> Tuple[torch.Tensor, ...]:
         """
         Same as :meth:`onnxruntime.InferenceSession.run` except that
         feeds is a dictionary of :class:`torch.Tensor`.
@@ -346,13 +332,13 @@ class InferenceSessionForTorch(_InferenceSession):
 
     def run_training_api(
         self, *inputs, output_names: Optional[List[str]] = None
-    ) -> List[torch.Tensor]:
+    ) -> Tuple[torch.Tensor, ...]:
         """
         Calls the former training API now implemented in onnxruntime as well.
 
         :param inputs: list of :class:`torch.Tensor`
         :param output_names: requested outputs or None for all
-        :return: list of :class:`torch.Tensor`
+        :return: tuple of :class:`torch.Tensor`
         """
         if output_names is None:
             output_names = self.output_names
@@ -363,7 +349,7 @@ class InferenceSessionForTorch(_InferenceSession):
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("run_with_ortvaluevector")
 
-        ort_outputs = self.ORTC.OrtValueVector()
+        ort_outputs = ORTC.OrtValueVector()
         self.sess.run_with_ortvaluevector(
             self.run_options,
             self.input_names,
@@ -381,7 +367,7 @@ class InferenceSessionForTorch(_InferenceSession):
 
     def run_dlpack(
         self, output_names: Optional[List[str]], feeds: Dict[str, torch.Tensor]
-    ) -> List[torch.Tensor]:
+    ) -> Tuple[torch.Tensor, ...]:
         """
         Same as :meth:`onnxruntime.InferenceSession.run` except that
         feeds is a dictionary of :class:`torch.Tensor`.
@@ -389,7 +375,7 @@ class InferenceSessionForTorch(_InferenceSession):
         """
         new_feeds = {}
         for k, v in feeds.items():
-            new_feeds[k] = self.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
+            new_feeds[k] = ORTC.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("run_with_ort_values")
         ort_outputs = self.sess._sess.run_with_ort_values(
@@ -402,21 +388,19 @@ class InferenceSessionForTorch(_InferenceSession):
 
 
 def investigate_onnxruntime_issue(
-    proto: Union[onnx.ModelProto, str],  # noqa: F821
-    session_options: Optional["onnxruntime.SessionOptions"] = None,  # noqa: F821
+    proto: Union[onnx.ModelProto, str],
+    session_options: Optional[onnxruntime.SessionOptions] = None,
     providers: Optional[Union[str, List[str]]] = None,
     nvtx: bool = False,
     enable_profiling: bool = False,
-    graph_optimization_level: Union[
-        "onnxruntime.GraphOptimizationLevel", bool  # noqa: F821
-    ] = None,
+    graph_optimization_level: Union[onnxruntime.GraphOptimizationLevel, bool] = None,
     log_severity_level: Optional[int] = None,
     log_verbosity_level: Optional[int] = None,
     optimized_model_filepath: Optional[str] = None,
     disable_aot_function_inlining: Optional[bool] = None,
     use_training_api: Optional[bool] = None,
     onnx_to_session: Optional[
-        Union[str, Callable[onnx.ModelProto, "onnxruntime.InferenceSession"]]  # noqa: F821
+        Union[str, Callable[[onnx.ModelProto], onnxruntime.InferenceSession]]
     ] = None,
     # if model needs to be run.
     feeds: Optional[Union[Dict[str, torch.Tensor], Dict[str, np.ndarray]]] = None,

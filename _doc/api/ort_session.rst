@@ -1,7 +1,7 @@
 
-.ort_session
-============
+onnx_diagnostic.ort_session
+===========================
 
-.. automodule:: experimental_experiment.ort_session
+.. automodule:: onnx_diagnostic.ort_session
     :members:
     :no-undoc-members:

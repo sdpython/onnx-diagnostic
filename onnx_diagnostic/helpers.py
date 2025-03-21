@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 from onnx import (
     AttributeProto,
+    DataType,
     FunctionProto,
     GraphProto,
     ModelProto,
@@ -86,7 +87,7 @@ def size_type(dtype: Any) -> int:
     raise AssertionError(f"Unexpected dtype={dtype}")
 
 
-def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
+def tensor_dtype_to_np_dtype(tensor_dtype: DataType) -> np.dtype:
     """
     Converts a TensorProto's data_type to corresponding numpy dtype.
     It can be used while making tensor.
@@ -140,7 +141,7 @@ def string_type(
     .. runpython::
         :showcode:
 
-        from experimental_experiment.helpers import string_type
+        from onnx_diagnostic.helpers import string_type
         print(string_type((1, ["r", 6.6])))
     """
     if obj is None:
@@ -402,9 +403,7 @@ def string_type(
 
 
 def string_signature(sig: Any) -> str:
-    """
-    Displays the signature of a functions.
-    """
+    """Displays the signature of a functions."""
 
     def _k(p, kind):
         for name in dir(p):
@@ -423,12 +422,10 @@ def string_signature(sig: Any) -> str:
             t = f"*{t}"
         le = (30 - len(t)) * " "
         text.append(f"    {t}{le}|{_k(pp,kind)}")
-        text.append(
-            f") -> {sig.return_annotation}"
-            if sig.return_annotation is not inspect._empty
-            else ")"
-        )
-        return "\n".join(text)
+    text.append(
+        f") -> {sig.return_annotation}" if sig.return_annotation is not inspect._empty else ")"
+    )
+    return "\n".join(text)
 
 
 def string_sig(f: Callable, kwargs: Optional[Dict[str, Any]] = None) -> str:
@@ -585,7 +582,7 @@ def get_onnx_signature(model: ModelProto) -> Tuple[Tuple[str, Any], ...]:
     :param model: model
     :return: signature
     """
-    sig = []
+    sig: List[Any] = []
     for i in model.graph.input:
         dt = i.type
         if dt.HasField("sequence_type"):
@@ -782,7 +779,7 @@ def torch_dtype_to_onnx_dtype(to: "torch.dtype") -> int:  # noqa: F821
     raise NotImplementedError(f"Unable to convert torch dtype {to!r} to onnx dtype.")
 
 
-def dtype_to_tensor_dtype(dt: "dtype") -> int:  # noqa: F821
+def dtype_to_tensor_dtype(dt: Union[np.dtype, "torch.dtype"]) -> int:  # noqa: F821
     """
     Converts a torch dtype or numpy dtype into a onnx element type.
 
@@ -796,9 +793,9 @@ def dtype_to_tensor_dtype(dt: "dtype") -> int:  # noqa: F821
     return torch_dtype_to_onnx_dtype(dt)
 
 
-def np_dtype_to_tensor_dtype(dt: "dtype") -> int:  # noqa: F821
+def np_dtype_to_tensor_dtype(dt: np.dtype) -> int:  # noqa: F821
     """
-    Converts a tnumpy dtype into a onnx element type.
+    Converts a numpy dtype into a onnx element type.
 
     :param to: dtype
     :return: onnx type
@@ -848,8 +845,8 @@ def rename_dynamic_dimensions(
             common = v & original
             if not common:
                 continue
-            common = sorted(common)
-            by = common[0]
+            sorted_common = sorted(common)
+            by = sorted_common[0]
             if ban_prefix and by.startswith(ban_prefix):
                 continue
             replacements[k] = by
@@ -881,7 +878,7 @@ def rename_dynamic_expression(expression: str, replacements: Dict[str, str]):
     return ast.unparse(new_tree)
 
 
-def flatten_object(x: Any, drop_keys: bool = False) -> List[Any]:
+def flatten_object(x: Any, drop_keys: bool = False) -> Any:
     """
     Flattens the object.
     It accepts some common classes used in deep learning.
@@ -914,7 +911,7 @@ def flatten_object(x: Any, drop_keys: bool = False) -> List[Any]:
         if isinstance(x.conv_states, list):
             res = flatten_object(x.conv_states) + flatten_object(x.ssm_states)
             return tuple(res)
-        return tuple(x.conv_states, x.ssm_states)
+        return (x.conv_states, x.ssm_states)
     if hasattr(x, "to_tuple"):
         return flatten_object(x.to_tuple(), drop_keys=drop_keys)
     if hasattr(x, "shape"):

@@ -1,6 +1,6 @@
 
-API
-===
+API of onnx_diagnostic
+======================
 
 
 .. toctree::
@@ -17,6 +17,7 @@ API
     ext_test_case
     helpers
     ort_session
+    torch_test_helper
 
 
 .. automodule:: onnx_diagnostic
