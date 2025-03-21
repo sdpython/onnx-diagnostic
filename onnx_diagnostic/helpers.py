@@ -56,7 +56,9 @@ def size_type(dtype: Any) -> int:
             return 1
         if dtype in {TensorProto.COMPLEX128}:
             return 16
-        raise AssertionError(f"Unable to return the element size for type {dtype}")
+        raise AssertionError(
+            f"Unable to return the element size for type {onnx_dtype_name(dtype)}"
+        )
 
     if dtype == np.float64 or dtype == np.int64:
         return 8
