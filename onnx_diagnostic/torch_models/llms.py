@@ -18,6 +18,8 @@ def get_tiny_llm(
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
     :return: dictionary
+
+    See :ref:`l-plot-tiny-llm-export` for an example.
     """
     config = {
         "architectures": ["LlamaForCausalLM"],

@@ -73,9 +73,9 @@ class TestDocumentationExamples(ExtTestCase):
             if (
                 not reason
                 and name in {"plot_export_tiny_llm.py"}
-                and not has_transformers("4.50")
+                and not has_transformers("4.51")
             ):
-                reason = "transformers<4.50"
+                reason = "transformers<4.51"
 
             if reason:
 
