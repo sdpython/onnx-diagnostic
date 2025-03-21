@@ -146,7 +146,9 @@ class TestHelpers(ExtTestCase):
                     name = onnx_dtype_name(i)
                 except ValueError:
                     continue
-                if name not in {"STRING", "UINT4", "INT4", "FLOAT4E2M1", "NAME_FIELD_NUMBER"}:
+                if name in {"NAME_FIELD_NUMBER"}:
+                    continue
+                if name not in {"STRING", "UINT4", "INT4", "FLOAT4E2M1"}:
                     size_type(i)
 
                 if name not in {

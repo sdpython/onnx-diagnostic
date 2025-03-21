@@ -1,4 +1,4 @@
-name: Documentation and Code Coverage
+name: nightly-ci
 
 on:
   push:
@@ -10,18 +10,19 @@ on:
 
 jobs:
   run:
-    name: nightly-ci ${{ matrix.os }}
+    name: nightly-ci ${{ matrix.os }}-${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest]
+        python: ['3.12']
 
     steps:
       - uses: actions/checkout@v3
 
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
 
       - name: Install pytorch
         run: python -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cpu
@@ -51,7 +52,7 @@ jobs:
       - name: pip freeze
         run: python -m pip freeze
 
-      - name: Generate coverage report
+      - name: run tests
         run: |
           pip install pytest
           export PYTHONPATH=.
