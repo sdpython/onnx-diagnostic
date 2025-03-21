@@ -181,7 +181,7 @@ def get_tiny_llm(
 # Let's get the model, inputs and dynamic shapes.
 
 experiment = get_tiny_llm()
-model, inputs, dynamic_shapes = (
+untrained_model, inputs, dynamic_shapes = (
     experiment["model"],
     experiment["inputs"],
     experiment["dynamic_shapes"],
@@ -198,7 +198,26 @@ print("result type", type(expected_output))
 # +++++++++++++++
 
 try:
-    ep = torch.export.export(model, (), inputs, dynamic_shapes=dynamic_shapes)
+    ep = torch.export.export(
+        untrained_model, (), inputs, dynamic_shapes=dynamic_shapes, strict=False
+    )
+    print("It worked:")
+    print(ep)
+except Exception as e:
+    # To work, it needs at least PRs:
+    # * https://github.com/huggingface/transformers/pull/36311
+    # * https://github.com/huggingface/transformers/pull/36652
+    print("It failed:", e)
+
+
+# %%
+# Back to the original model
+# ++++++++++++++++++++++++++
+#
+# Let's use the same dummy inputs but we use the downloaded model.
+
+try:
+    ep = torch.export.export(model, (), inputs, dynamic_shapes=dynamic_shapes, strict=False)
     print("It worked:")
     print(ep)
 except Exception as e:
