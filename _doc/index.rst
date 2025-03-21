@@ -36,7 +36,7 @@ Source are `sdpython/onnx-diagnostic
     :caption: Contents
 
     api/index
-    galleries
+    auto_examples/index
 
 .. toctree::
     :maxdepth: 1
