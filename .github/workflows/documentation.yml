@@ -82,7 +82,6 @@ jobs:
         run: cat doc.txt
 
       - name: Check for errors and warnings
-        continue-on-error: true
         run: |
           if [[ $(grep ERROR doc.txt | grep -v 'Unknown target name: "l_shape"' | grep -v 'Unknown target name: "l_x"') ]]; then
             echo "Documentation produces errors."

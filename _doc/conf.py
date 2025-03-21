@@ -108,6 +108,7 @@ nitpick_ignore = [
     ("py:class", "default=sklearn.utils.metadata_routing.UNCHANGED"),
     ("py:class", "ModelProto"),
     ("py:class", "Module"),
+    ("py:class", "numpy._typing._nested_sequence._NestedSequence"),
     ("py:class", "torch.fx.passes.operator_support.OperatorSupport"),
     ("py:class", "torch.fx.proxy.TracerBase"),
     ("py:class", "torch.utils._pytree.Context"),
