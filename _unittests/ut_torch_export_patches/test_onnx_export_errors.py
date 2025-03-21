@@ -1,5 +1,5 @@
 import unittest
-from experimental_experiment.ext_test_case import (
+from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     requires_torch,
     requires_transformers,
