@@ -6,6 +6,7 @@ import sys
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 import numpy.typing as npt
+import onnx
 from onnx import (
     AttributeProto,
     FunctionProto,
@@ -528,7 +529,7 @@ def pretty_onnx(
     assert onx is not None, "onx cannot be None"
 
     if shape_inference:
-        onx = onx.shape_inference.infer_shapes(onx)
+        onx = onnx.shape_inference.infer_shapes(onx)
 
     if isinstance(onx, ValueInfoProto):
         name = onx.name
