@@ -5,9 +5,9 @@ import inspect
 import sys
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
+import numpy.typing as npt
 from onnx import (
     AttributeProto,
-    DataType,
     FunctionProto,
     GraphProto,
     ModelProto,
@@ -87,7 +87,7 @@ def size_type(dtype: Any) -> int:
     raise AssertionError(f"Unexpected dtype={dtype}")
 
 
-def tensor_dtype_to_np_dtype(tensor_dtype: DataType) -> np.dtype:
+def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
     """
     Converts a TensorProto's data_type to corresponding numpy dtype.
     It can be used while making tensor.
@@ -105,7 +105,7 @@ def tensor_dtype_to_np_dtype(tensor_dtype: DataType) -> np.dtype:
                 f"ml_dtypes can be used."
             ) from e
 
-        mapping = {
+        mapping: Dict[int, np.dtype] = {
             TensorProto.BFLOAT16: ml_dtypes.bfloat16,
             TensorProto.FLOAT8E4M3FN: ml_dtypes.float8_e4m3fn,
             TensorProto.FLOAT8E4M3FNUZ: ml_dtypes.float8_e4m3fnuz,
@@ -611,7 +611,7 @@ def convert_endian(tensor: TensorProto) -> None:
     tensor.raw_data = np.frombuffer(tensor.raw_data, dtype=np_dtype).byteswap().tobytes()
 
 
-def from_array_ml_dtypes(arr: np.ndarray, name: Optional[str] = None) -> TensorProto:
+def from_array_ml_dtypes(arr: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
     """
     Converts a numpy array to a tensor def assuming the dtype
     is defined in ml_dtypes.
@@ -651,7 +651,7 @@ def from_array_ml_dtypes(arr: np.ndarray, name: Optional[str] = None) -> TensorP
     return tensor
 
 
-def from_array_extended(tensor: np.ndarray, name: Optional[str] = None) -> TensorProto:
+def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
     """
     Converts an array into a TensorProto.
 

@@ -1,6 +1,4 @@
 """
-.. _l-plot-exporter-dynamic_shapes:
-
 Use DYNAMIC or AUTO when dynamic shapes has constraints
 =======================================================
 
