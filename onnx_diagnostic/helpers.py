@@ -653,7 +653,7 @@ def from_array_ml_dtypes(arr: npt.ArrayLike, name: Optional[str] = None) -> Tens
 
 def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
     """
-    Converts an array into a TensorProto.
+    Converts an array into a :class:`onnx.TensorProto`.
 
     :param tensor: numpy array
     :param name: name

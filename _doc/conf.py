@@ -124,7 +124,7 @@ nitpick_ignore_regex = [
     ("py:func", ".*numpy[.].*"),
     ("py:func", ".*scipy[.].*"),
     # ("py:func", ".*torch.ops.higher_order.*"),
-    ("py:class", ".*numpy._typing.[.].*"),
+    ("py:class", ".*numpy._typing[.].*"),
     ("py:class", ".*onnxruntime[.].*"),
     ("py:meth", ".*onnxruntime[.].*"),
 ]
