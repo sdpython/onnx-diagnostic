@@ -1,6 +1,6 @@
 
-onnx-diagnostic: fuzzy work
-===================================
+onnx-diagnostic: investigate onnx models
+========================================
 
 .. image:: https://github.com/sdpython/onnx-diagnostic/actions/workflows/documentation.yml/badge.svg
     :target: https://github.com/sdpython/onnx-diagnostic/actions/workflows/documentation.yml
@@ -36,6 +36,7 @@ Source are `sdpython/onnx-diagnostic
     :caption: Contents
 
     api/index
+    galleries
 
 .. toctree::
     :maxdepth: 1
@@ -43,6 +44,45 @@ Source are `sdpython/onnx-diagnostic
 
     CHANGELOGS
     license
+
+
+**Some usefuls tools**
+
+.. code-block:: python
+
+    import torch
+    from onnx_diagnostic.helpers import string_type
+
+    inputs = (
+        torch.rand((3, 4), dtype=torch.float16),
+        [
+            torch.rand((5, 6), dtype=torch.float16),
+            torch.rand((5, 6, 7), dtype=torch.float16),
+        ]
+    )
+
+    # with shapes
+    print(string_type(inputs, with_shape=True))
+
+::
+
+    >>> (T10s3x4,#2[T10s5x6,T10s5x6x7])
+
+.. code-block:: python
+
+        import onnx
+        from onnx_diagnostic.helpers import onnx_dtype_name
+
+        itype = onnx.TensorProto.BFLOAT16
+        print(onnx_dtype_name(itype))
+        print(onnx_dtype_name(7))
+
+::
+
+    >>> BFLOAT16
+    >>> INT64
+
+:func:`onnx_diagnostic.helpers.max_diff`, ...
 
 The documentation was updated on:
 

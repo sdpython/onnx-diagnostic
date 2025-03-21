@@ -1,6 +1,7 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import onnx
 import numpy as np
+import numpy.typing as npt
 import torch
 from torch._C import _from_dlpack
 import onnxruntime
@@ -128,7 +129,7 @@ class _InferenceSession:
 class InferenceSessionForNumpy(_InferenceSession):
     """
     Wraps an `onnxruntime.InferenceSession` to overload method `run`
-    to support :class:`np.ndarray`.
+    to support :class:`numpy.ndarray`.
 
     :param sess: model or inference session
     :param session_options: options
@@ -172,8 +173,8 @@ class InferenceSessionForNumpy(_InferenceSession):
         )
 
     def run(
-        self, output_names: Optional[List[str]], feeds: Dict[str, np.ndarray]
-    ) -> List[np.ndarray]:
+        self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
+    ) -> List[npt.ArrayLike]:
         """Calls :meth:`onnxruntime.InferenceSession.run`."""
         return self.sess.run(output_names, feeds)
 
@@ -293,7 +294,7 @@ class InferenceSessionForTorch(_InferenceSession):
 
     def _ortvalues_to_torch_tensor(
         self,
-        ortvalues: Union[List[onnxruntime.OrtValue], onnxruntime.OrtValueVector],
+        ortvalues: Union[List[ORTC.OrtValue], ORTC.OrtValueVector],
     ) -> Tuple[torch.Tensor, ...]:
         if len(ortvalues) == 0:
             return tuple()
@@ -403,7 +404,7 @@ def investigate_onnxruntime_issue(
         Union[str, Callable[[onnx.ModelProto], onnxruntime.InferenceSession]]
     ] = None,
     # if model needs to be run.
-    feeds: Optional[Union[Dict[str, torch.Tensor], Dict[str, np.ndarray]]] = None,
+    feeds: Optional[Union[Dict[str, torch.Tensor], Dict[str, npt.ArrayLike]]] = None,
     verbose: int = 0,
     dump_filename: Optional[str] = None,
     infer_shapes: bool = True,

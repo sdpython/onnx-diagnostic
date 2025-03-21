@@ -16,6 +16,7 @@ API of onnx_diagnostic
     cache_helpers
     ext_test_case
     helpers
+    onnx_tools
     ort_session
     torch_test_helper
 

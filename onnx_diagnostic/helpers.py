@@ -5,9 +5,9 @@ import inspect
 import sys
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
+import numpy.typing as npt
 from onnx import (
     AttributeProto,
-    DataType,
     FunctionProto,
     GraphProto,
     ModelProto,
@@ -87,7 +87,7 @@ def size_type(dtype: Any) -> int:
     raise AssertionError(f"Unexpected dtype={dtype}")
 
 
-def tensor_dtype_to_np_dtype(tensor_dtype: DataType) -> np.dtype:
+def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
     """
     Converts a TensorProto's data_type to corresponding numpy dtype.
     It can be used while making tensor.
@@ -105,7 +105,7 @@ def tensor_dtype_to_np_dtype(tensor_dtype: DataType) -> np.dtype:
                 f"ml_dtypes can be used."
             ) from e
 
-        mapping = {
+        mapping: Dict[int, np.dtype] = {
             TensorProto.BFLOAT16: ml_dtypes.bfloat16,
             TensorProto.FLOAT8E4M3FN: ml_dtypes.float8_e4m3fn,
             TensorProto.FLOAT8E4M3FNUZ: ml_dtypes.float8_e4m3fnuz,
@@ -142,7 +142,30 @@ def string_type(
         :showcode:
 
         from onnx_diagnostic.helpers import string_type
+
         print(string_type((1, ["r", 6.6])))
+
+    With pytorch:
+
+    .. runpython::
+        :showcode:
+
+        import torch
+        from onnx_diagnostic.helpers import string_type
+
+        inputs = (
+            torch.rand((3, 4), dtype=torch.float16),
+            [
+                torch.rand((5, 6), dtype=torch.float16),
+                torch.rand((5, 6, 7), dtype=torch.float16),
+            ]
+        )
+
+        # with shapes
+        print(string_type(inputs, with_shape=True))
+
+        # with min max
+        print(string_type(inputs, with_shape=True, with_min_max=True))
     """
     if obj is None:
         return "None"
@@ -465,7 +488,19 @@ def string_sig(f: Callable, kwargs: Optional[Dict[str, Any]] = None) -> str:
 
 @functools.cache
 def onnx_dtype_name(itype: int) -> str:
-    """Returns the ONNX name for a specific element type."""
+    """
+    Returns the ONNX name for a specific element type.
+
+    .. runpython::
+        :showcode:
+
+        import onnx
+        from onnx_diagnostic.helpers import onnx_dtype_name
+
+        itype = onnx.TensorProto.BFLOAT16
+        print(onnx_dtype_name(itype))
+        print(onnx_dtype_name(7))
+    """
     for k in dir(TensorProto):
         v = getattr(TensorProto, k)
         if v == itype:
@@ -477,18 +512,23 @@ def pretty_onnx(
     onx: Union[FunctionProto, GraphProto, ModelProto, ValueInfoProto, str],
     with_attributes: bool = False,
     highlight: Optional[Set[str]] = None,
+    shape_inference: bool = False,
 ) -> str:
     """
     Displays an onnx prot in a better way.
 
     :param with_attributes: displays attributes as well, if only a node is printed
     :param highlight: to highlight some names
+    :param shape_inference: run shape inference before printing the model
     :return: text
     """
     assert onx is not None, "onx cannot be None"
     if isinstance(onx, str):
         onx = onnx_load(onx, load_external_data=False)
     assert onx is not None, "onx cannot be None"
+
+    if shape_inference:
+        onx = onx.shape_inference.infer_shapes(onx)
 
     if isinstance(onx, ValueInfoProto):
         name = onx.name
@@ -577,7 +617,7 @@ def make_hash(obj: Any) -> str:
 
 def get_onnx_signature(model: ModelProto) -> Tuple[Tuple[str, Any], ...]:
     """
-    Produces a tuple of tuples correspinding to the signatures.
+    Produces a tuple of tuples corresponding to the signatures.
 
     :param model: model
     :return: signature
@@ -611,7 +651,7 @@ def convert_endian(tensor: TensorProto) -> None:
     tensor.raw_data = np.frombuffer(tensor.raw_data, dtype=np_dtype).byteswap().tobytes()
 
 
-def from_array_ml_dtypes(arr: np.ndarray, name: Optional[str] = None) -> TensorProto:
+def from_array_ml_dtypes(arr: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
     """
     Converts a numpy array to a tensor def assuming the dtype
     is defined in ml_dtypes.
@@ -625,7 +665,7 @@ def from_array_ml_dtypes(arr: np.ndarray, name: Optional[str] = None) -> TensorP
     """
     import ml_dtypes
 
-    assert isinstance(arr, np.ndarray), f"arr must be of type np.ndarray, got {type(arr)}"
+    assert isinstance(arr, np.ndarray), f"arr must be of type numpy.ndarray, got {type(arr)}"
 
     tensor = TensorProto()
     tensor.dims.extend(arr.shape)
@@ -651,9 +691,9 @@ def from_array_ml_dtypes(arr: np.ndarray, name: Optional[str] = None) -> TensorP
     return tensor
 
 
-def from_array_extended(tensor: np.ndarray, name: Optional[str] = None) -> TensorProto:
+def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
     """
-    Converts an array into a TensorProto.
+    Converts an array into a :class:`onnx.TensorProto`.
 
     :param tensor: numpy array
     :param name: name

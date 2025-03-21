@@ -85,10 +85,6 @@ intersphinx_mapping = {
     "matplotlib": ("https://matplotlib.org/stable/", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "onnx": ("https://onnx.ai/onnx/", None),
-    "onnx_diagnostic": (
-        "https://sdpython.github.io/doc/onnx-diagnostic/dev/",
-        None,
-    ),
     "onnx_array_api": ("https://sdpython.github.io/doc/onnx-array-api/dev/", None),
     "onnx_extended": ("https://sdpython.github.io/doc/onnx-extended/dev/", None),
     "pandas": ("https://pandas.pydata.org/pandas-docs/stable/", None),
@@ -118,8 +114,8 @@ nitpick_ignore = [
     ("py:class", "torch.utils._pytree.KeyEntry"),
     ("py:class", "torch.utils._pytree.TreeSpec"),
     ("py:class", "transformers.cache_utils.Cache"),
-    # ("py:class", "transformers.cache_utils.DynamicCache"),
-    # ("py:class", "transformers.cache_utils.MambaCache"),
+    ("py:class", "transformers.cache_utils.DynamicCache"),
+    ("py:class", "transformers.cache_utils.MambaCache"),
     ("py:func", "torch.export._draft_export.draft_export"),
     ("py:func", "torch._export.tools.report_exportability"),
 ]
@@ -128,7 +124,9 @@ nitpick_ignore_regex = [
     ("py:func", ".*numpy[.].*"),
     ("py:func", ".*scipy[.].*"),
     # ("py:func", ".*torch.ops.higher_order.*"),
+    ("py:class", ".*numpy._typing[.].*"),
     ("py:class", ".*onnxruntime[.].*"),
+    ("py:meth", ".*onnxruntime[.].*"),
 ]
 
 
@@ -148,7 +146,7 @@ sphinx_gallery_conf = {
     # errors
     "abort_on_example_error": True,
     # recommendation
-    "recommender": {"enable": True, "n_examples": 5, "min_df": 3, "max_df": 0.9},
+    "recommender": {"enable": True, "n_examples": 3, "min_df": 3, "max_df": 0.9},
     # ignore capture for matplotib axes
     "ignore_repr_types": "matplotlib\\.(text|axes)",
     # robubstness
