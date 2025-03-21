@@ -30,6 +30,10 @@ disable_error_code = ["arg-type", "assignment", "import-untyped", "misc", "name-
 module = ["onnx_diagnostic.ort_session"]
 disable_error_code = ["union-attr"]
 
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.torch_export_patches.*"]
+disable_error_code = ["arg-type", "assignment", "attr-defined", "index", "misc", "name-defined", "operator", "return-value"]
+
 [tool.ruff]
 
 # Exclude a variety of commonly ignored directories.
@@ -86,3 +90,5 @@ select = [
 "_doc/notebooks/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_doc/recipes/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_unittests/*/test*.py" = ["B008", "B904", "PIE808", "SIM117", "SIM105", "UP008"]
+"onnx_diagnostic/torch_export_patches/__init__.py" = ["F401"]
+"onnx_diagnostic/torch_export_patches/patches/__init__.py" = ["F401"]

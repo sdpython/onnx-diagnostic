@@ -7,6 +7,7 @@ API of onnx_diagnostic
     :maxdepth: 1
     :caption: submodules
 
+    torch_export_patches/index
 
 .. toctree::
     :maxdepth: 1
