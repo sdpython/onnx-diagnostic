@@ -6,6 +6,7 @@ import sys
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 import numpy.typing as npt
+import onnx
 from onnx import (
     AttributeProto,
     FunctionProto,
@@ -43,11 +44,21 @@ def size_type(dtype: Any) -> int:
             TensorProto.UINT16,
         }:
             return 2
-        if dtype in {TensorProto.INT8, TensorProto.UINT8, TensorProto.BOOL}:
+        if dtype in {
+            TensorProto.INT8,
+            TensorProto.UINT8,
+            TensorProto.BOOL,
+            TensorProto.FLOAT8E4M3FN,
+            TensorProto.FLOAT8E4M3FNUZ,
+            TensorProto.FLOAT8E5M2,
+            TensorProto.FLOAT8E5M2FNUZ,
+        }:
             return 1
         if dtype in {TensorProto.COMPLEX128}:
             return 16
-        raise AssertionError(f"Unable to return the element size for type {dtype}")
+        raise AssertionError(
+            f"Unable to return the element size for type {onnx_dtype_name(dtype)}"
+        )
 
     if dtype == np.float64 or dtype == np.int64:
         return 8
@@ -55,6 +66,12 @@ def size_type(dtype: Any) -> int:
         return 4
     if dtype == np.float16 or dtype == np.int16:
         return 2
+    if dtype == np.int16 or dtype == np.uint16:
+        return 2
+    if dtype == np.int32 or dtype == np.uint32:
+        return 4
+    if dtype == np.int64 or dtype == np.uint64:
+        return 8
     if dtype == np.int8 or dtype == np.uint8:
         return 1
     if hasattr(np, "uint64"):
@@ -84,6 +101,10 @@ def size_type(dtype: Any) -> int:
             return 4
         if dtype in {torch.uint16}:
             return 2
+    import ml_dtypes
+
+    if dtype == ml_dtypes.bfloat16:
+        return 2
     raise AssertionError(f"Unexpected dtype={dtype}")
 
 
@@ -528,7 +549,7 @@ def pretty_onnx(
     assert onx is not None, "onx cannot be None"
 
     if shape_inference:
-        onx = onx.shape_inference.infer_shapes(onx)
+        onx = onnx.shape_inference.infer_shapes(onx)
 
     if isinstance(onx, ValueInfoProto):
         name = onx.name
@@ -782,7 +803,9 @@ def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821
         return torch.complex64
     if itype == TensorProto.COMPLEX128:
         return torch.complex128
-    raise NotImplementedError(f"Unable to convert onnx type {itype} to torch.type.")
+    raise NotImplementedError(
+        f"Unable to convert onnx type {onnx_dtype_name(itype)} to torch.type."
+    )
 
 
 def torch_dtype_to_onnx_dtype(to: "torch.dtype") -> int:  # noqa: F821
@@ -806,10 +829,22 @@ def torch_dtype_to_onnx_dtype(to: "torch.dtype") -> int:  # noqa: F821
         return TensorProto.INT64
     if to == torch.int32:
         return TensorProto.INT32
+    if to == torch.uint64:
+        return TensorProto.UINT64
+    if to == torch.uint32:
+        return TensorProto.UINT32
     if to == torch.bool:
         return TensorProto.BOOL
     if to == torch.SymInt:
         return TensorProto.INT64
+    if to == torch.int16:
+        return TensorProto.INT16
+    if to == torch.uint16:
+        return TensorProto.UINT16
+    if to == torch.int8:
+        return TensorProto.INT8
+    if to == torch.uint8:
+        return TensorProto.UINT8
     if to == torch.SymFloat:
         return TensorProto.FLOAT
     if to == torch.complex64:
@@ -858,6 +893,34 @@ def np_dtype_to_tensor_dtype(dt: np.dtype) -> int:  # noqa: F821
                 return TensorProto.FLOAT8E5M2
             if dt == ml_dtypes.float8_e5m2fnuz:
                 return TensorProto.FLOAT8E5M2FNUZ
+    if dt == np.float32:
+        return TensorProto.FLOAT
+    if dt == np.float16:
+        return TensorProto.FLOAT16
+    if dt == np.float64:
+        return TensorProto.DOUBLE
+    if dt == np.int64:
+        return TensorProto.INT64
+    if dt == np.uint64:
+        return TensorProto.UINT64
+    if dt == np.int16:
+        return TensorProto.INT16
+    if dt == np.uint16:
+        return TensorProto.UINT16
+    if dt == np.int32:
+        return TensorProto.INT32
+    if dt == np.int8:
+        return TensorProto.INT8
+    if dt == np.uint8:
+        return TensorProto.UINT8
+    if dt == np.uint32:
+        return TensorProto.UINT32
+    if dt == np.bool:
+        return TensorProto.BOOL
+    if dt == np.complex64:
+        return TensorProto.COMPLEX64
+    if dt == np.complex128:
+        return TensorProto.COMPLEX128
     raise ValueError(f"Unable to convert type {dt}")
 
 

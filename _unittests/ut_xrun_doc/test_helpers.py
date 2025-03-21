@@ -1,7 +1,34 @@
+import inspect
 import unittest
 import numpy as np
+import ml_dtypes
+import onnx
+import onnx.helper as oh
+import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, skipif_ci_windows
-from onnx_diagnostic.helpers import string_type, string_sig
+from onnx_diagnostic.helpers import (
+    string_type,
+    string_sig,
+    pretty_onnx,
+    get_onnx_signature,
+    flatten_object,
+    max_diff,
+    type_info,
+    size_type,
+    onnx_dtype_name,
+    string_signature,
+    make_hash,
+    onnx_dtype_to_torch_dtype,
+    np_dtype_to_tensor_dtype,
+    torch_dtype_to_onnx_dtype,
+    from_array_extended,
+    convert_endian,
+    from_array_ml_dtypes,
+    dtype_to_tensor_dtype,
+    string_diff,
+)
+
+TFLOAT = onnx.TensorProto.FLOAT
 
 
 class TestHelpers(ExtTestCase):
@@ -19,8 +46,6 @@ class TestHelpers(ExtTestCase):
         self.assertEqual(s, "dict(a:A1r1,b:dict(r:float),c:{int})")
 
     def test_string_type_array(self):
-        import torch
-
         a = np.array([1], dtype=np.float32)
         t = torch.tensor([1])
         obj = {"a": a, "b": t}
@@ -30,7 +55,6 @@ class TestHelpers(ExtTestCase):
         self.assertEqual(s, "dict(a:A1s1,b:T7s1)")
 
     def test_string_sig_f(self):
-
         def f(a, b=3, c=4, e=5):
             pass
 
@@ -38,13 +62,184 @@ class TestHelpers(ExtTestCase):
         self.assertEqual(ssig, "f(a=1, c=8)")
 
     def test_string_sig_cls(self):
-
         class A:
             def __init__(self, a, b=3, c=4, e=5):
                 self.a, self.b, self.c, self.e = a, b, c, e
 
         ssig = string_sig(A(1, c=8))
         self.assertEqual(ssig, "A(a=1, c=8)")
+
+    def test_pretty_onnx(self):
+        proto = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Sigmoid", ["Y"], ["sy"]),
+                    oh.make_node("Mul", ["Y", "sy"], ["ysy"]),
+                    oh.make_node("Mul", ["X", "ysy"], ["final"]),
+                ],
+                "nd",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, [1, "b", "c"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b", "c"]),
+                ],
+                [oh.make_tensor_value_info("final", TFLOAT, ["a", "b", "c"])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        pretty_onnx(proto, shape_inference=True)
+        pretty_onnx(proto.graph.input[0])
+        pretty_onnx(proto.graph)
+        pretty_onnx(proto.graph.node[0])
+
+    def test_get_onnx_signature(self):
+        proto = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Sigmoid", ["Y"], ["sy"]),
+                    oh.make_node("Mul", ["Y", "sy"], ["ysy"]),
+                    oh.make_node("Mul", ["X", "ysy"], ["final"]),
+                ],
+                "nd",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, [1, "b", "c"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b", "c"]),
+                ],
+                [oh.make_tensor_value_info("final", TFLOAT, ["a", "b", "c"])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        sig = get_onnx_signature(proto)
+        self.assertEqual(sig, (("X", 1, (1, "b", "c")), ("Y", 1, ("a", "b", "c"))))
+
+    def test_flatten(self):
+        inputs = (
+            torch.rand((3, 4), dtype=torch.float16),
+            [
+                torch.rand((5, 6), dtype=torch.float16),
+                torch.rand((5, 6, 7), dtype=torch.float16),
+            ],
+        )
+        flat = flatten_object(inputs)
+        diff = max_diff(inputs, flat, flatten=True)
+        self.assertEqual(diff["abs"], 0)
+        d = string_diff(diff)
+        print(d)
+
+    def test_type_info(self):
+        for tt in [
+            onnx.TensorProto.FLOAT,
+            onnx.TensorProto.FLOAT16,
+            onnx.TensorProto.DOUBLE,
+            onnx.TensorProto.BFLOAT16,
+            onnx.TensorProto.INT32,
+            onnx.TensorProto.INT64,
+        ]:
+            type_info(tt, "min")
+            type_info(tt, "max")
+
+    def test_size_type_onnx(self):
+        for i in range(1, 40):
+            with self.subTest(i=i):
+                try:
+                    name = onnx_dtype_name(i)
+                except ValueError:
+                    continue
+                if name in {"NAME_FIELD_NUMBER"}:
+                    continue
+                if name not in {"STRING", "UINT4", "INT4", "FLOAT4E2M1"}:
+                    size_type(i)
+
+                if name not in {
+                    "STRING",
+                    "UINT4",
+                    "INT4",
+                    "FLOAT4E2M1",
+                    "FLOAT8E5M2FNUZ",
+                    "FLOAT8E5M2",
+                    "FLOAT8E4M3FN",
+                    "FLOAT8E4M3FNUZ",
+                }:
+                    onnx_dtype_to_torch_dtype(i)
+
+    def test_size_type_numpy(self):
+        for dt in {
+            np.float32,
+            np.float64,
+            np.float16,
+            np.int32,
+            np.int64,
+            np.int8,
+            np.int16,
+            np.uint8,
+            np.uint16,
+            np.uint32,
+            np.uint64,
+        }:
+            size_type(dt)
+            np_dtype_to_tensor_dtype(dt)
+
+    def test_from_array(self):
+        for dt in {
+            np.float32,
+            np.float64,
+            np.float16,
+            np.int32,
+            np.int64,
+            np.int8,
+            np.int16,
+            np.uint8,
+            np.uint16,
+            np.uint32,
+            np.uint64,
+        }:
+            t = np.random.rand(4, 3).astype(dt)
+            proto = from_array_extended(t)
+            self.assertIsInstance(proto, onnx.TensorProto)
+            convert_endian(proto)
+            dtype_to_tensor_dtype(dt)
+
+    def test_from_array_ml_dtypes(self):
+        for dt in {
+            ml_dtypes.bfloat16,
+        }:
+            t = np.random.rand(4, 3).astype(dt)
+            from_array_ml_dtypes(t)
+            from_array_extended(t)
+
+    def test_size_type_mldtypes(self):
+        for dt in {
+            ml_dtypes.bfloat16,
+        }:
+            size_type(dt)
+            np_dtype_to_tensor_dtype(dt)
+            dtype_to_tensor_dtype(dt)
+
+    def test_size_type_torch(self):
+        for dt in {
+            torch.float32,
+            torch.float64,
+            torch.float16,
+            torch.int32,
+            torch.int64,
+            torch.int8,
+            torch.int16,
+            torch.uint8,
+            torch.uint16,
+            torch.uint32,
+            torch.uint64,
+        }:
+            size_type(dt)
+            torch_dtype_to_onnx_dtype(dt)
+            dtype_to_tensor_dtype(dt)
+
+    def test_string_signature(self):
+        sig = string_signature(inspect.signature(string_signature))
+        self.assertIn("sig: typing.Any", sig)
+
+    def test_make_hash(self):
+        self.assertIsInstance(make_hash([]), str)
 
 
 if __name__ == "__main__":

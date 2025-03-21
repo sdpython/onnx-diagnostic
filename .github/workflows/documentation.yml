@@ -1,4 +1,4 @@
-name: Documentation and Code Coverage
+name: Code Coverage and Documentation
 
 on:
   push:
@@ -10,18 +10,19 @@ on:
 
 jobs:
   run:
-    name: Build documentation on ${{ matrix.os }}
+    name: Code Coverage and Documentation on ${{ matrix.os }}-${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest]
+        python: ['3.12']
 
     steps:
       - uses: actions/checkout@v3
 
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
 
       - uses: tlylt/install-graphviz@v1
 
