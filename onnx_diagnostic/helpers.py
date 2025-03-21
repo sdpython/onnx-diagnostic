@@ -625,7 +625,7 @@ def from_array_ml_dtypes(arr: npt.ArrayLike, name: Optional[str] = None) -> Tens
     """
     import ml_dtypes
 
-    assert isinstance(arr, np.ndarray), f"arr must be of type np.ndarray, got {type(arr)}"
+    assert isinstance(arr, np.ndarray), f"arr must be of type numpy.ndarray, got {type(arr)}"
 
     tensor = TensorProto()
     tensor.dims.extend(arr.shape)
