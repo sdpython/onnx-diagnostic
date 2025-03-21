@@ -1,0 +1,2 @@
+ignore:
+  - onnx_diagnostic/big_models/*
