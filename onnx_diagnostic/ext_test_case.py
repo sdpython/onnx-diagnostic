@@ -774,11 +774,19 @@ def requires_sklearn(version: str, msg: str = "") -> Callable:
 
 
 def has_torch(version: str) -> bool:
-    "Returns True if torch verions is higher."
+    "Returns True if torch transformers is higher."
     import packaging.version as pv
     import torch
 
     return pv.Version(torch.__version__) >= pv.Version(version)
+
+
+def has_transformers(version: str) -> bool:
+    "Returns True if transformers version is higher."
+    import packaging.version as pv
+    import transformers
+
+    return pv.Version(transformers.__version__) >= pv.Version(version)
 
 
 def requires_torch(version: str, msg: str = "") -> Callable:
