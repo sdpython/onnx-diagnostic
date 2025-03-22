@@ -66,12 +66,8 @@ def size_type(dtype: Any) -> int:
         return 4
     if dtype == np.float16 or dtype == np.int16:
         return 2
-    if dtype == np.int16:
-        return 2
     if dtype == np.int32:
         return 4
-    if dtype == np.int64:
-        return 8
     if dtype == np.int8:
         return 1
     if hasattr(np, "uint64"):
@@ -226,7 +222,7 @@ def string_type(
         )
         if with_min_max and all(isinstance(_, (int, float, bool)) for _ in obj):
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
-            return f"({tt},...)#{len(obj)}[{mini},{maxi}:A[{avg}]]"
+            return f"#{len(obj)}({tt},...)[{mini},{maxi}:A[{avg}]]"
         return f"#{len(obj)}({tt},...)"
     if isinstance(obj, list):
         if len(obj) < limit:

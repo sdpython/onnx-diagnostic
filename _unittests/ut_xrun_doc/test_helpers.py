@@ -5,7 +5,7 @@ import ml_dtypes
 import onnx
 import onnx.helper as oh
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, skipif_ci_windows
+from onnx_diagnostic.ext_test_case import ExtTestCase, skipif_ci_windows, hide_stdout
 from onnx_diagnostic.helpers import (
     string_type,
     string_sig,
@@ -127,7 +127,22 @@ class TestHelpers(ExtTestCase):
         diff = max_diff(inputs, flat, flatten=True)
         self.assertEqual(diff["abs"], 0)
         d = string_diff(diff)
-        print(d)
+        self.assertIsInstance(d, str)
+
+    @hide_stdout()
+    def test_max_diff_verbose(self):
+        inputs = (
+            torch.rand((3, 4), dtype=torch.float16),
+            [
+                torch.rand((5, 6), dtype=torch.float16),
+                torch.rand((5, 6, 7), dtype=torch.float16),
+            ],
+        )
+        flat = flatten_object(inputs)
+        diff = max_diff(inputs, flat, flatten=True, verbose=10)
+        self.assertEqual(diff["abs"], 0)
+        d = string_diff(diff)
+        self.assertIsInstance(d, str)
 
     def test_type_info(self):
         for tt in [
@@ -249,6 +264,38 @@ class TestHelpers(ExtTestCase):
         self.assertEqual(string_type((4, 5)), "(int,int)")
         self.assertEqual(string_type([4] * 100), "#100[int,...]")
         self.assertEqual(string_type((4,) * 100), "#100(int,...)")
+
+    def test_string_type_one_with_min_max_int(self):
+        self.assertEqual(string_type(None, with_min_max=True), "None")
+        self.assertEqual(string_type([4], with_min_max=True), "#1[int=4]")
+        self.assertEqual(string_type((4, 5), with_min_max=True), "(int=4,int=5)")
+        self.assertEqual(string_type([4] * 100, with_min_max=True), "#100[int=4,...][4,4:4.0]")
+        self.assertEqual(
+            string_type((4,) * 100, with_min_max=True), "#100(int=4,...)[4,4:A[4.0]]"
+        )
+
+    def test_string_type_one_with_min_max_bool(self):
+        self.assertEqual(string_type(None, with_min_max=True), "None")
+        self.assertEqual(string_type([True], with_min_max=True), "#1[bool=True]")
+        self.assertEqual(string_type((True, True), with_min_max=True), "(bool=True,bool=True)")
+        self.assertEqual(
+            string_type([True] * 100, with_min_max=True), "#100[bool=True,...][True,True:1.0]"
+        )
+        self.assertEqual(
+            string_type((True,) * 100, with_min_max=True),
+            "#100(bool=True,...)[True,True:A[1.0]]",
+        )
+
+    def test_string_type_one_with_min_max_float(self):
+        self.assertEqual(string_type(None, with_min_max=True), "None")
+        self.assertEqual(string_type([4.5], with_min_max=True), "#1[float=4.5]")
+        self.assertEqual(string_type((4.5, 5.5), with_min_max=True), "(float=4.5,float=5.5)")
+        self.assertEqual(
+            string_type([4.5] * 100, with_min_max=True), "#100[float=4.5,...][4.5,4.5:4.5]"
+        )
+        self.assertEqual(
+            string_type((4.5,) * 100, with_min_max=True), "#100(float=4.5,...)[4.5,4.5:A[4.5]]"
+        )
 
     def test_string_type_at(self):
         self.assertEqual(string_type(None), "None")

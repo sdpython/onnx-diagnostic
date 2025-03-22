@@ -5,6 +5,7 @@ from onnx_diagnostic.ext_test_case import (
     requires_transformers,
     skipif_ci_windows,
     ignore_warnings,
+    hide_stdout,
 )
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
@@ -16,6 +17,7 @@ class TestOnnxExportErrors(ExtTestCase):
     @requires_transformers("4.49.999")
     @skipif_ci_windows("not working on Windows")
     @ignore_warnings(UserWarning)
+    @hide_stdout()
     def test_pytree_flatten_mamba_cache(self):
         import torch
         import torch.utils._pytree as py_pytree
@@ -31,7 +33,7 @@ class TestOnnxExportErrors(ExtTestCase):
 
         cache = MambaCache(_config(), max_batch_size=1, device="cpu")
 
-        with bypass_export_some_errors():
+        with bypass_export_some_errors(verbose=1):
             values, spec = py_pytree.tree_flatten(cache)
             cache2 = py_pytree.tree_unflatten(values, spec)
             self.assertEqual(cache.dtype, cache2.dtype)
@@ -46,6 +48,7 @@ class TestOnnxExportErrors(ExtTestCase):
     @requires_torch("2.7")
     @skipif_ci_windows("not working on Windows")
     @ignore_warnings(UserWarning)
+    @hide_stdout()
     def test_exportable_mamba_cache(self):
         import torch
         from transformers.models.mamba.modeling_mamba import MambaCache
@@ -73,7 +76,7 @@ class TestOnnxExportErrors(ExtTestCase):
         model = Model()
         model(x, cache)
 
-        with bypass_export_some_errors():
+        with bypass_export_some_errors(replace_dynamic_cache=True, verbose=1):
             cache = MambaCache(_config(), max_batch_size=1, device="cpu")
             torch.export.export(Model(), (x, cache))
 
