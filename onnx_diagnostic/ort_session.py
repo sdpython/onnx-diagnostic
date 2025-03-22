@@ -408,6 +408,7 @@ def investigate_onnxruntime_issue(
     verbose: int = 0,
     dump_filename: Optional[str] = None,
     infer_shapes: bool = True,
+    quiet: bool = False,
 ):
     """
     Invgestigates a crashing model. It tries every node until
@@ -433,6 +434,8 @@ def investigate_onnxruntime_issue(
     :param verbosity: verbosity level
     :param dump_filename: if not None, the function dumps the last model run
     :param infer_shapes: run shape inference
+    :param quiet: if True, raises an exception, False, just stops and
+        return the failing node
 
     The most simple use:
 
@@ -531,7 +534,19 @@ def investigate_onnxruntime_issue(
                 f"{', '.join(node.output)}"
             )
         e = onnx.utils.Extractor(onx)
-        extracted = e.extract_model(input_names, node.output)
+        if quiet:
+            try:
+                extracted = e.extract_model(input_names, node.output)
+            except Exception as e:
+                if verbose > 0:
+                    print(
+                        f"[investigate_onnxruntime_issue] cannot extract "
+                        f"model at node {i} due to {e}"
+                    )
+                return node
+        else:
+            extracted = e.extract_model(input_names, node.output)
+
         if dump_filename:
             if verbose > 1:
                 print(f"[investigate_onnxruntime_issue]   save into {dump_filename}")
@@ -540,11 +555,11 @@ def investigate_onnxruntime_issue(
         if verbose > 1:
             print("[investigate_onnxruntime_issue]   create the session")
 
-        if onnx_to_session:
-            sess = onnx_to_session(onx)
-        else:
-            sess = cls(
-                extracted,
+        def _make_session(proto):
+            if onnx_to_session:
+                return onnx_to_session(proto)
+            return cls(
+                proto,
                 session_options=session_options,
                 providers=providers,
                 nvtx=nvtx,
@@ -557,6 +572,19 @@ def investigate_onnxruntime_issue(
                 use_training_api=use_training_api,
             )
 
+        if quiet:
+            try:
+                sess = _make_session(extracted)
+            except Exception as e:
+                if verbose > 0:
+                    print(
+                        f"[investigate_onnxruntime_issue] cannot create session "
+                        f"at node {i} due to {e}"
+                    )
+                return node
+        else:
+            sess = _make_session(extracted)
+
         if not feeds:
             if verbose > 1:
                 print("[investigate_onnxruntime_issue]   session created")
@@ -565,7 +593,18 @@ def investigate_onnxruntime_issue(
         if verbose > 1:
             print("[investigate_onnxruntime_issue]   running session")
 
-        sess.run(None, feeds)
+        if quiet:
+            try:
+                sess.run(None, feeds)
+            except Exception as e:
+                if verbose > 0:
+                    print(
+                        f"[investigate_onnxruntime_issue] cannot run session "
+                        f"at node {i} due to {e}"
+                    )
+                return node
+        else:
+            sess.run(None, feeds)
 
     if verbose > 0:
         print("[investigate_onnxruntime_issue] done.")
