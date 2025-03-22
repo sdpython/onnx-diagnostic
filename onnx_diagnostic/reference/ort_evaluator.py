@@ -16,6 +16,8 @@ import onnxruntime
 from ..helpers import pretty_onnx, dtype_to_tensor_dtype, string_type
 from ..ort_session import InferenceSessionForTorch, InferenceSessionForNumpy, _InferenceSession
 
+Proto = Union[FunctionProto, ModelProto, GraphProto, NodeProto]
+
 
 class OnnxruntimeEvaluator:
     """
@@ -41,7 +43,7 @@ class OnnxruntimeEvaluator:
 
     def __init__(
         self,
-        proto: Union[str, ModelProto, FunctionProto, GraphProto, NodeProto],
+        proto: Union[str, Proto, "OnnxruntimeEvaluator"],
         session_options: Optional[onnxruntime.SessionOptions] = None,
         providers: Optional[Union[str, List[str]]] = None,
         nvtx: bool = False,
@@ -53,7 +55,7 @@ class OnnxruntimeEvaluator:
         disable_aot_function_inlining: Optional[bool] = None,
         use_training_api: Optional[bool] = None,
         verbose: int = 0,
-        local_functions: Optional[Dict[Tuple[str, str], FunctionProto]] = None,
+        local_functions: Optional[Dict[Tuple[str, str], Proto]] = None,
         ir_version: int = 10,
         opsets: Optional[Union[int, Dict[str, int]]] = None,
     ):
@@ -222,7 +224,7 @@ class OnnxruntimeEvaluator:
 
     def _make_model_proto(
         self, nodes: Sequence[NodeProto], vinputs: ValueInfoProto, voutputs: ValueInfoProto
-    ):
+    ) -> ModelProto:
         onx = oh.make_model(
             oh.make_graph(nodes, "-", vinputs, voutputs),
             ir_version=getattr(self.proto, "ir_version", self.ir_version),
@@ -279,7 +281,7 @@ class OnnxruntimeEvaluator:
 
     def _get_sess_if(
         self, node: NodeProto, branch: str, inputs: List[Any], context: Dict[str, Any]
-    ) -> Tuple[ModelProto, onnxruntime.InferenceSession]:
+    ) -> Tuple[ModelProto, "OnnxruntimeEvaluator"]:
         unique_names = set()
         vinputs = []
         for i, it in zip(node.input, inputs):
@@ -314,7 +316,7 @@ class OnnxruntimeEvaluator:
 
     def _get_sess_local(
         self, node: NodeProto, inputs: List[Any]
-    ) -> Tuple[ModelProto, onnxruntime.InferenceSession]:
+    ) -> Tuple[ModelProto, "OnnxruntimeEvaluator"]:
         onx = self.local_functions[node.domain, node.op_type]
         sess = OnnxruntimeEvaluator(
             onx,
