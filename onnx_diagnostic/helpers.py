@@ -222,7 +222,7 @@ def string_type(
         )
         if with_min_max and all(isinstance(_, (int, float, bool)) for _ in obj):
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
-            return f"({tt},...)#{len(obj)}[{mini},{maxi}:A[{avg}]]"
+            return f"#{len(obj)}({tt},...)[{mini},{maxi}:A[{avg}]]"
         return f"#{len(obj)}({tt},...)"
     if isinstance(obj, list):
         if len(obj) < limit:
