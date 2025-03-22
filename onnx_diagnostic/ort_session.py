@@ -533,10 +533,10 @@ def investigate_onnxruntime_issue(
                 f"{node.op_type}({', '.join(node.input)}) -> "
                 f"{', '.join(node.output)}"
             )
-        e = onnx.utils.Extractor(onx)
+        ext = onnx.utils.Extractor(onx)
         if quiet:
             try:
-                extracted = e.extract_model(input_names, node.output)
+                extracted = ext.extract_model(input_names, node.output)
             except Exception as e:
                 if verbose > 0:
                     print(
@@ -545,7 +545,7 @@ def investigate_onnxruntime_issue(
                     )
                 return node
         else:
-            extracted = e.extract_model(input_names, node.output)
+            extracted = ext.extract_model(input_names, node.output)
 
         if dump_filename:
             if verbose > 1:
