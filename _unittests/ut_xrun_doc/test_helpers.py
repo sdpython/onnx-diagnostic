@@ -407,6 +407,27 @@ class TestHelpers(ExtTestCase):
         text = rename_dynamic_expression("a * 10 - a", {"a": "x"})
         self.assertEqual(text, "x * 10 - x")
 
+    def test_from_tensor(self):
+        for dt in {
+            torch.float32,
+            torch.float64,
+            torch.bfloat16,
+            torch.float16,
+            torch.int32,
+            torch.int64,
+            torch.int8,
+            torch.int16,
+            torch.uint8,
+            torch.uint16,
+            torch.uint32,
+            torch.uint64,
+        }:
+            t = torch.rand((4, 3), dtype=torch.dtype)
+            proto = from_array_extended(t)
+            self.assertIsInstance(proto, onnx.TensorProto)
+            convert_endian(proto)
+            dtype_to_tensor_dtype(dt)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
