@@ -29,6 +29,7 @@ from onnx_diagnostic.helpers import (
     rename_dynamic_dimensions,
     rename_dynamic_expression,
 )
+from onnx_diagnostic.cache_helpers import make_dynamic_cache
 
 TFLOAT = onnx.TensorProto.FLOAT
 
@@ -94,6 +95,32 @@ class TestHelpers(ExtTestCase):
         pretty_onnx(proto.graph)
         pretty_onnx(proto.graph.node[0])
 
+    @hide_stdout()
+    def test_print_pretty_onnx(self):
+        proto = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Sigmoid", ["Y"], ["sy"]),
+                    oh.make_node("Mul", ["Y", "sy"], ["ysy"]),
+                    oh.make_node("Mul", ["X", "ysy"], ["final"]),
+                ],
+                "nd",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, [1, "b", "c"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b", "c"]),
+                ],
+                [oh.make_tensor_value_info("final", TFLOAT, ["a", "b", "c"])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        self.print_onnx(proto)
+        self.print_model(proto)
+        self.dump_onnx("test_print_pretty_onnx", proto)
+        self.check_ort(proto)
+        self.assertNotEmpty(proto)
+        self.assertEmpty(None)
+
     def test_get_onnx_signature(self):
         proto = oh.make_model(
             oh.make_graph(
@@ -115,16 +142,23 @@ class TestHelpers(ExtTestCase):
         sig = get_onnx_signature(proto)
         self.assertEqual(sig, (("X", 1, (1, "b", "c")), ("Y", 1, ("a", "b", "c"))))
 
+    @hide_stdout()
     def test_flatten(self):
         inputs = (
             torch.rand((3, 4), dtype=torch.float16),
             [
                 torch.rand((5, 6), dtype=torch.float16),
                 torch.rand((5, 6, 7), dtype=torch.float16),
+                {
+                    "a": torch.rand((2,), dtype=torch.float16),
+                    "cache": make_dynamic_cache(
+                        [(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]
+                    ),
+                },
             ],
         )
-        flat = flatten_object(inputs)
-        diff = max_diff(inputs, flat, flatten=True)
+        flat = flatten_object(inputs, drop_keys=True)
+        diff = max_diff(inputs, flat, flatten=True, verbose=10)
         self.assertEqual(diff["abs"], 0)
         d = string_diff(diff)
         self.assertIsInstance(d, str)

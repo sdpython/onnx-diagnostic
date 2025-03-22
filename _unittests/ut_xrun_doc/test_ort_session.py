@@ -183,6 +183,17 @@ class TestOrtSession(ExtTestCase):
         )
 
     @hide_stdout()
+    def test_investigate_onnxruntime_issue_torch_quiet(self):
+        model, feeds, _expected = self._get_model()
+        investigate_onnxruntime_issue(
+            model,
+            feeds=feeds,
+            verbose=10,
+            dump_filename="test_investigate_onnxruntime_issue_torch.onnx",
+            quiet=True,
+        )
+
+    @hide_stdout()
     def test_investigate_onnxruntime_issue_numpy(self):
         model, feeds, _expected = self._get_model()
         feeds = {k: v.numpy() for k, v in feeds.items()}

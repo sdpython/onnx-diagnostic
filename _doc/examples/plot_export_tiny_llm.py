@@ -1,16 +1,25 @@
 """
 .. _l-plot-tiny-llm-export:
 
-Export LLM with dynamic shapes
-==============================
+Steel method forward to guess the dynamic shapes
+================================================
+
+Inputs are always dynamic with LLMs that is why dyanmic shapes
+needs to be specified when a LLM is exported with:func:`torch.export.export`.
+Most of the examples on :epkg:`HuggingFace` use method
+:meth:`transformers.GenerationMixin.generate` but we only want to
+export the model and its method ``forward``.
+
+That example shows to guess the inputs of this method even though the model
+is executed through meth ``generate``.
 
 We focus on the model
 `Tiny-LLM <https://huggingface.co/arnir0/Tiny-LLM>`_.
 To avoid downloading any weigths, we write a function creating a
 random model based on the same architecture.
 
-Guess the cache dimension
-+++++++++++++++++++++++++
+Steel the forward method
+++++++++++++++++++++++++
 
 The first step is to guess the dummy inputs.
 Let's use the true model for that.
@@ -18,6 +27,7 @@ We use the dummy example from the model page.
 """
 
 import copy
+import pprint
 import torch
 import transformers
 from onnx_diagnostic.helpers import string_type
@@ -64,8 +74,13 @@ print(generated_text)
 model.forward = keep_model_forward
 
 # %%
-# The model creation
-# ++++++++++++++++++
+# Untrained model
+# +++++++++++++++
+#
+# This part can skipped if you are only interested in exporting
+# the original model. It is useful to create a unit test to ensure
+# a specific architecture can be exported despite the many changes
+# brought to :epkg:`torch` or :epkg:`transformers`.
 #
 # Let's create an untrained model using the config file provided
 # `config.json <https://huggingface.co/arnir0/Tiny-LLM/blob/main/config.json>`_
@@ -126,6 +141,22 @@ except Exception as e:
 # ++++++++++++++++++++++++++
 #
 # Let's use the same dummy inputs but we use the downloaded model.
+# Dummy inputs and dynamic shapes are created by function
+# :func:`onnx_diagnostic.torch_models.llms.get_tiny_llm`.
+
+data = get_tiny_llm()
+inputs, dynamic_shapes = data["inputs"], data["dynamic_shapes"]
+
+# %%
+# Let's print the inputs.
+
+print(string_type(inputs, with_shape=True))
+
+# %% Let's print the dynamic shapes
+pprint.pprint(dynamic_shapes)
+
+# %%
+# And Let's finally export.
 
 try:
     ep = torch.export.export(model, (), kwargs=cloned_inputs, dynamic_shapes=dynamic_shapes)

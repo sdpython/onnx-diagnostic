@@ -45,8 +45,14 @@ Source are `sdpython/onnx-diagnostic
     CHANGELOGS
     license
 
+**Enlightening Examples**
 
-**Some usefuls tools**
+* :ref:`l-plot-export-cond`
+* :ref:`l-plot-sxport-with-dynamio-shapes-auto`
+* :ref:`l-plot-tiny-llm-export`
+* :ref:`l-plot-failing-model-extract`
+
+**Some Usefuls Tools**
 
 .. code-block:: python
 
@@ -135,7 +141,6 @@ Size of the package:
     gr = df[["dir", "ext", "lines", "chars"]].groupby(["ext", "dir"]).sum()
     print(gr)
 
-Older versions
-++++++++++++++
+**Older versions**
 
 * `0.1.0 <../v0.1.0/index.html>`_
