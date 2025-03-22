@@ -22,6 +22,7 @@ from onnx.helper import (
     tensor_dtype_to_np_dtype as onnx_tensor_dtype_to_np_dtype,
 )
 from onnx.numpy_helper import from_array as onnx_from_array
+from onnx.reference.op_run import to_array_extended
 
 
 def size_type(dtype: Any) -> int:
@@ -569,8 +570,6 @@ def pretty_onnx(
         if att.type == AttributeProto.STRING:
             return f"{att.name}={att.s!r}"
         if att.type == AttributeProto.TENSOR:
-            from .reference import to_array_extended
-
             v = to_array_extended(att.t)
             vf = v.reshape((-1,))
             if vf.size < 10:

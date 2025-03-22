@@ -145,7 +145,7 @@ class TestCheckOrtFloat16(ExtTestCase):
             (np.float16, "add"): default_value,
         }
         for opset, dtype, reduction in itertools.product(
-            [16, 18], [np.float32, np.float16], ["none", "add"]
+            [16, 18], [np.float32, np.float16], ["none", "add", "min", "max"]
         ):
             with self.subTest(dtype=dtype, reduction=reduction, opset=opset):
                 self.common_scatter(
