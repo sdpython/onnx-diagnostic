@@ -1,8 +1,8 @@
 """
 .. _l-plot-failing-model-extract:
 
-Find where a model failing by running submodels
-===============================================
+Find where a model is failing by running submodels
+==================================================
 
 Let's assume :epkg:`onnxruntime` crashes without telling why or where.
 The first thing is do is to locate where. For that, we extract every submodel

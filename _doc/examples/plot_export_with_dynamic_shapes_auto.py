@@ -1,4 +1,6 @@
 """
+.. _l-plot-sxport-with-dynamio-shapes-auto:
+
 Use DYNAMIC or AUTO when dynamic shapes has constraints
 =======================================================
 
