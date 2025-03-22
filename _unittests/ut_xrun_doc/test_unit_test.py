@@ -13,6 +13,8 @@ from onnx_diagnostic.ext_test_case import (
     is_linux,
     unit_test_going,
     measure_time,
+    has_cuda,
+    has_onnxscript,
 )
 
 
@@ -65,6 +67,8 @@ class TestUnitTest(ExtTestCase):
         is_azure()
         is_linux()
         unit_test_going()
+        has_cuda()
+        has_onnxscript()
 
     def test_measure_time(self):
         res = measure_time(lambda: math.cos(0.5))
