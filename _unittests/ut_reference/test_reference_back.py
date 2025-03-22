@@ -89,10 +89,12 @@ class RunnerTest(onnx.backend.test.BackendTest):
                     continue
                 if not name.startswith(
                     (
-                        "test_scatter_elements",
-                        "test_gather",
                         "test_cast_like",
                         "test_concat",
+                        "test_constant",
+                        "test_gather",
+                        "test_scatter_elements",
+                        "test_slice",
                         "test_softmax",
                     )
                 ):

@@ -508,7 +508,7 @@ class TestReferenceOps(ExtTestCase):
             A=np.arange(9).reshape((3, 3)).astype(np.float32),
             B=np.arange(9).reshape((3, 3)).astype(np.float32),
         )
-        expected = ref.run(None, feeds)[0]
+        ref.run(None, feeds)[0]
 
 
 if __name__ == "__main__":
