@@ -9,6 +9,11 @@ The first thing is do is to locate where. For that, we extract every submodel
 starting from the inputs and running the first *n* nodes of the model.
 The model is likely to fail for some *n*. Then the failing is known.
 
+This method only works if the model only contains operator coming
+from the main domain *ai.onnx* otherwise shape inference stops
+at the first non standard operator and the algorithm fails at
+producing :class:`onnx.ModelProto` including the non standard operators.
+
 A failing model
 +++++++++++++++
 
