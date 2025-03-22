@@ -86,6 +86,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     "onnx": ("https://onnx.ai/onnx/", None),
     "onnx_array_api": ("https://sdpython.github.io/doc/onnx-array-api/dev/", None),
+    "onnx_diagnostic": ("https://sdpython.github.io/doc/onnx-diagnostic/dev/", None),
     "onnx_extended": ("https://sdpython.github.io/doc/onnx-extended/dev/", None),
     "pandas": ("https://pandas.pydata.org/pandas-docs/stable/", None),
     "python": (f"https://docs.python.org/{sys.version_info.major}", None),

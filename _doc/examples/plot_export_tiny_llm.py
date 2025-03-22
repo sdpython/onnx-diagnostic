@@ -67,11 +67,10 @@ model.forward = keep_model_forward
 # The model creation
 # ++++++++++++++++++
 #
-# Let's create an untrained model.
-
-
-# %%
-# Let's get the model, inputs and dynamic shapes.
+# Let's create an untrained model using the config file provided
+# `config.json <https://huggingface.co/arnir0/Tiny-LLM/blob/main/config.json>`_
+# to create an untrained model: :func:`onnx_diagnostic.torch_models.llms.get_tiny_llm`.
+# Then let's use it.
 
 experiment = get_tiny_llm()
 untrained_model, inputs, dynamic_shapes = (
@@ -88,12 +87,15 @@ cloned_inputs = copy.deepcopy(inputs)
 
 
 # %% Let's run it.
-print("input type", string_type(inputs, with_shape=True))
+print("input type before", string_type(inputs, with_shape=True))
 
 expected_output = untrained_model(**inputs)
 
+print("input type after-", string_type(inputs, with_shape=True))
 
-print("input after the execution", string_type(inputs, with_shape=True))
+# %%
+# The outputs
+
 print("result type", string_type(expected_output, with_shape=True))
 
 ep = torch.export.export(
