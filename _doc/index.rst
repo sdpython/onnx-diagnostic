@@ -47,6 +47,7 @@ Source are `sdpython/onnx-diagnostic
 
 **Enlightening Examples**
 
+* :ref:`l-plot-export-cond`
 * :ref:`l-plot-sxport-with-dynamio-shapes-auto`
 * :ref:`l-plot-tiny-llm-export`
 * :ref:`l-plot-failing-model-extract`
