@@ -14,7 +14,7 @@ import warnings
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from timeit import Timer
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import numpy
 from numpy.testing import assert_allclose
 
@@ -36,28 +36,6 @@ def is_apple() -> bool:
 
 def is_linux() -> bool:
     return sys.platform == "linux"
-
-
-def skipif_transformers(version_to_skip: Union[str, Set[str]], msg: str) -> Callable:
-    """Skips a unit test if transformers has a specific version."""
-    if isinstance(version_to_skip, str):
-        version_to_skip = {version_to_skip}
-    import transformers
-
-    if transformers.__version__ in version_to_skip:
-        msg = f"Unstable test. {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def skipif_not_onnxrt(msg) -> Callable:
-    """Skips a unit test if it runs on :epkg:`azure pipeline` on :epkg:`Windows`."""
-    UNITTEST_ONNXRT = os.environ.get("UNITTEST_ONNXRT", "0")
-    value = int(UNITTEST_ONNXRT)
-    if not value:
-        msg = f"Set UNITTEST_ONNXRT=1 to run the unittest. {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
 
 
 def skipif_ci_windows(msg) -> Callable:

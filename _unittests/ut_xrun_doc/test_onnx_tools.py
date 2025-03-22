@@ -5,7 +5,12 @@ import onnx.numpy_helper as onh
 from onnx import TensorProto
 from onnx.checker import check_model
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.onnx_tools import onnx_lighten, onnx_unlighten, onnx_find
+from onnx_diagnostic.onnx_tools import (
+    onnx_lighten,
+    onnx_unlighten,
+    onnx_find,
+    _validate_function,
+)
 from onnx_diagnostic.torch_test_helper import check_model_ort
 
 TFLOAT = TensorProto.FLOAT
@@ -66,6 +71,23 @@ class TestOnnxTools(ExtTestCase):
         self.assertEqual(len(res), 2)
         self.assertIn("xm2", res[0].output)
         self.assertIn("xm2", res[1].input)
+
+    def test__validate_function(self):
+        new_domain = "custom"
+
+        linear_regression = oh.make_function(
+            new_domain,
+            "LinearRegression",
+            ["x", "a", "b"],
+            ["y"],
+            [
+                oh.make_node("MatMul", ["x", "a"], ["xa"]),
+                oh.make_node("Add", ["xa", "b"], ["y"]),
+            ],
+            [oh.make_opsetid("", 14)],
+            [],
+        )
+        _validate_function(linear_regression)
 
 
 if __name__ == "__main__":
