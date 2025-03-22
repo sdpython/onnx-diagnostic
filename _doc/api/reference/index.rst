@@ -13,11 +13,18 @@ onnx_diagnostic.reference
 
     evaluator
     quantized_tensor
+    ort_evaluator
 
 ExtendedReferenceEvaluator
 ++++++++++++++++++++++++++
 
 .. autoclass:: onnx_diagnostic.reference.ExtendedReferenceEvaluator
+    :members:
+
+OnnxruntimeEvaluator
+++++++++++++++++++++
+
+.. autoclass:: onnx_diagnostic.reference.OnnxruntimeEvaluator
     :members:
 
 Other functions

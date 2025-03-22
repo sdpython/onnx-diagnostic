@@ -717,6 +717,13 @@ def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> Te
     :param name: name
     :return: TensorProto
     """
+    try:
+        import torch
+    except ImportError:
+        torch = None
+    if torch is not None and isinstance(tensor, torch.Tensor):
+        raise NotImplementedError()
+
     from onnx.reference.ops.op_cast import (
         bfloat16,
         float8e4m3fn,
