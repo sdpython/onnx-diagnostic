@@ -84,6 +84,24 @@ class TestUnitTest(ExtTestCase):
             },
         )
 
+    def test_measure_time_max(self):
+        res = measure_time(lambda: math.cos(0.5), max_time=0.1)
+        self.assertIsInstance(res, dict)
+        self.assertEqual(
+            set(res),
+            {
+                "min_exec",
+                "max_exec",
+                "average",
+                "warmup_time",
+                "context_size",
+                "deviation",
+                "repeat",
+                "ttime",
+                "number",
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

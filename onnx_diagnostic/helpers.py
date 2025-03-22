@@ -66,12 +66,8 @@ def size_type(dtype: Any) -> int:
         return 4
     if dtype == np.float16 or dtype == np.int16:
         return 2
-    if dtype == np.int16:
-        return 2
     if dtype == np.int32:
         return 4
-    if dtype == np.int64:
-        return 8
     if dtype == np.int8:
         return 1
     if hasattr(np, "uint64"):
