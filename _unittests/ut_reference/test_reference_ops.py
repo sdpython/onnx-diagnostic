@@ -1,3 +1,4 @@
+import os
 import unittest
 from typing import Optional
 import numpy as np
@@ -231,6 +232,25 @@ class TestReferenceOps(ExtTestCase):
         expected = sess.run(None, feeds)
         self.assertEqual(len(expected), len(got))
         self.assertEqualArrayAny(expected, got, atol=1e-3)
+
+    def test_attention(self):
+        path = os.path.join(
+            os.path.dirname(__file__), "data", "test_attention_pattern_1_4d_cpu.onnx"
+        )
+        ref = ExtendedReferenceEvaluator(path)
+        feeds = {
+            "layer_norm_1": self._range(2, 8, 1024),  # s0,(s1-1)//8+1,1024
+            "expand_1": np.random.randint(0, 2, size=(2, 8, 8))
+            > 0,  # s0,CeilToInt(IntTrueDiv(s1, 8)),CeilToInt(IntTrueDiv(s1, 8))
+            "unsqueeze_9": self._range(1, 16, 8, 8),  # 1,16,(s1-1)//8+1,(s1-1)//8+1
+            "val_104": np.array([2, 8, 16, 64], dtype=np.int64),  # s0,(s1-1)//8+1,16,6
+            "val_112": np.array([2, 8, 16, 64], dtype=np.int64),  # s0,(s1-1)//8+1,16,6
+            "val_120": np.array([2, 8, 16, 64], dtype=np.int64),  # s0,(s1-1)//8+1,16,6
+            "val_132": np.array(
+                [2, 8, 1024], dtype=np.int64
+            ),  # s0,CeilToInt(IntTrueDiv(s1, 8)),1024
+        }
+        ref.run(None, feeds)
 
 
 if __name__ == "__main__":
