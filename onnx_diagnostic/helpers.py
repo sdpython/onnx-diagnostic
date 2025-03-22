@@ -66,13 +66,13 @@ def size_type(dtype: Any) -> int:
         return 4
     if dtype == np.float16 or dtype == np.int16:
         return 2
-    if dtype == np.int16 or dtype == np.uint16:
+    if dtype == np.int16:
         return 2
-    if dtype == np.int32 or dtype == np.uint32:
+    if dtype == np.int32:
         return 4
-    if dtype == np.int64 or dtype == np.uint64:
+    if dtype == np.int64:
         return 8
-    if dtype == np.int8 or dtype == np.uint8:
+    if dtype == np.int8:
         return 1
     if hasattr(np, "uint64"):
         # it fails on mac
@@ -82,6 +82,8 @@ def size_type(dtype: Any) -> int:
             return 4
         if dtype == np.uint16:
             return 2
+        if dtype == np.uint8:
+            return 1
 
     import torch
 
@@ -225,7 +227,7 @@ def string_type(
         if with_min_max and all(isinstance(_, (int, float, bool)) for _ in obj):
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
             return f"({tt},...)#{len(obj)}[{mini},{maxi}:A[{avg}]]"
-        return f"({tt},...)#{len(obj)}" if with_shape else f"({tt},...)"
+        return f"#{len(obj)}({tt},...)"
     if isinstance(obj, list):
         if len(obj) < limit:
             js = ",".join(
@@ -250,8 +252,8 @@ def string_type(
         )
         if with_min_max and all(isinstance(_, (int, float, bool)) for _ in obj):
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
-            return f"[{tt},...]#{len(obj)}[{mini},{maxi}:{avg}]"
-        return f"[{tt},...]#{len(obj)}" if with_shape else f"[{tt},...]"
+            return f"#{len(obj)}[{tt},...][{mini},{maxi}:{avg}]"
+        return f"#{len(obj)}[{tt},...]"
     if isinstance(obj, set):
         if len(obj) < 10:
             js = ",".join(
@@ -932,7 +934,7 @@ def rename_dynamic_dimensions(
     many names for dynamic dimensions. When building the onnx model,
     some of them are redundant and can be replaced by the name provided by the user.
 
-    :param constraints: exhaustive list of used name and all the values equal to it
+    :param constraints: exhaustive list of used names and all the values equal to it
     :param original: the names to use if possible
     :param ban_prefix: avoid any rewriting by a constant starting with this prefix
     :return: replacement dictionary

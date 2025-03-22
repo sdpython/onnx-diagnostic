@@ -1,10 +1,12 @@
 import unittest
 import numpy as np
+import ml_dtypes
 import onnx
 import onnx.helper as oh
 import onnx.numpy_helper as onh
+import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.torch_test_helper import dummy_llm, check_model_ort
+from onnx_diagnostic.torch_test_helper import dummy_llm, check_model_ort, to_numpy
 
 TFLOAT = onnx.TensorProto.FLOAT
 
@@ -12,9 +14,18 @@ TFLOAT = onnx.TensorProto.FLOAT
 class TestOrtSession(ExtTestCase):
 
     def test_dummy_llm(self):
-        for cls_name in ["AttentionBlock", "MultiAttentionBlock", "DecoderLayer"]:
+        for cls_name in ["AttentionBlock", "MultiAttentionBlock", "DecoderLayer", "LLM"]:
             model, inputs = dummy_llm(cls_name)
             model(*inputs)
+
+    def test_dummy_llm_ds(self):
+        for cls_name in ["AttentionBlock", "MultiAttentionBlock", "DecoderLayer", "LLM"]:
+            model, inputs, ds = dummy_llm(cls_name, dynamic_shapes=True)
+            model(*inputs)
+            self.assertIsInstance(ds, dict)
+
+    def test_dummy_llm_exc(self):
+        self.assertRaise(lambda: dummy_llm("LLLLLL"), NotImplementedError)
 
     def test_check_model_ort(self):
         model = oh.make_model(
@@ -46,6 +57,11 @@ class TestOrtSession(ExtTestCase):
             ir_version=9,
         )
         check_model_ort(model)
+
+    def test_to_numpy(self):
+        t = torch.tensor([0, 1], dtype=torch.bfloat16)
+        a = to_numpy(t)
+        self.assertEqual(a.dtype, ml_dtypes.bfloat16)
 
 
 if __name__ == "__main__":

@@ -26,6 +26,8 @@ from onnx_diagnostic.helpers import (
     from_array_ml_dtypes,
     dtype_to_tensor_dtype,
     string_diff,
+    rename_dynamic_dimensions,
+    rename_dynamic_expression,
 )
 
 TFLOAT = onnx.TensorProto.FLOAT
@@ -240,6 +242,89 @@ class TestHelpers(ExtTestCase):
 
     def test_make_hash(self):
         self.assertIsInstance(make_hash([]), str)
+
+    def test_string_type_one(self):
+        self.assertEqual(string_type(None), "None")
+        self.assertEqual(string_type([4]), "#1[int]")
+        self.assertEqual(string_type((4, 5)), "(int,int)")
+        self.assertEqual(string_type([4] * 100), "#100[int,...]")
+        self.assertEqual(string_type((4,) * 100), "#100(int,...)")
+
+    def test_string_type_at(self):
+        self.assertEqual(string_type(None), "None")
+        a = np.array([4, 5], dtype=np.float32)
+        t = torch.tensor([4, 5], dtype=torch.float32)
+        self.assertEqual(string_type([a]), "#1[A1r1]")
+        self.assertEqual(string_type([t]), "#1[T1r1]")
+        self.assertEqual(string_type((a,)), "(A1r1,)")
+        self.assertEqual(string_type((t,)), "(T1r1,)")
+        self.assertEqual(string_type([a] * 100), "#100[A1r1,...]")
+        self.assertEqual(string_type([t] * 100), "#100[T1r1,...]")
+        self.assertEqual(string_type((a,) * 100), "#100(A1r1,...)")
+        self.assertEqual(string_type((t,) * 100), "#100(T1r1,...)")
+
+    def test_string_type_at_with_shape(self):
+        self.assertEqual(string_type(None), "None")
+        a = np.array([4, 5], dtype=np.float32)
+        t = torch.tensor([4, 5], dtype=torch.float32)
+        self.assertEqual(string_type([a], with_shape=True), "#1[A1s2]")
+        self.assertEqual(string_type([t], with_shape=True), "#1[T1s2]")
+        self.assertEqual(string_type((a,), with_shape=True), "(A1s2,)")
+        self.assertEqual(string_type((t,), with_shape=True), "(T1s2,)")
+        self.assertEqual(string_type([a] * 100, with_shape=True), "#100[A1s2,...]")
+        self.assertEqual(string_type([t] * 100, with_shape=True), "#100[T1s2,...]")
+        self.assertEqual(string_type((a,) * 100, with_shape=True), "#100(A1s2,...)")
+        self.assertEqual(string_type((t,) * 100, with_shape=True), "#100(T1s2,...)")
+
+    def test_string_type_at_with_shape_min_max(self):
+        self.assertEqual(string_type(None), "None")
+        a = np.array([4, 5], dtype=np.float32)
+        t = torch.tensor([4, 5], dtype=torch.float32)
+        self.assertEqual(
+            string_type([a], with_shape=True, with_min_max=True), "#1[A1s2[4.0,5.0:A4.5]]"
+        )
+        self.assertEqual(
+            string_type([t], with_shape=True, with_min_max=True), "#1[T1s2[4.0,5.0:A4.5]]"
+        )
+        self.assertEqual(
+            string_type((a,), with_shape=True, with_min_max=True), "(A1s2[4.0,5.0:A4.5],)"
+        )
+        self.assertEqual(
+            string_type((t,), with_shape=True, with_min_max=True), "(T1s2[4.0,5.0:A4.5],)"
+        )
+        self.assertEqual(
+            string_type([a] * 100, with_shape=True, with_min_max=True),
+            "#100[A1s2[4.0,5.0:A4.5],...]",
+        )
+        self.assertEqual(
+            string_type([t] * 100, with_shape=True, with_min_max=True),
+            "#100[T1s2[4.0,5.0:A4.5],...]",
+        )
+        self.assertEqual(
+            string_type((a,) * 100, with_shape=True, with_min_max=True),
+            "#100(A1s2[4.0,5.0:A4.5],...)",
+        )
+        self.assertEqual(
+            string_type((t,) * 100, with_shape=True, with_min_max=True),
+            "#100(T1s2[4.0,5.0:A4.5],...)",
+        )
+
+    def test_pretty_onnx_att(self):
+        node = oh.make_node("Cast", ["xm2c"], ["xm2"], to=1)
+        pretty_onnx(node.attribute[0])
+
+    def test_rename_dimension(self):
+        res = rename_dynamic_dimensions(
+            {"a": {"B", "C"}},
+            {
+                "B",
+            },
+        )
+        self.assertEqual(res, {"B": "B", "a": "B", "C": "B"})
+
+    def test_rename_dynamic_expression(self):
+        text = rename_dynamic_expression("a * 10 - a", {"a": "x"})
+        self.assertEqual(text, "x * 10 - x")
 
 
 if __name__ == "__main__":

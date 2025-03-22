@@ -1,3 +1,4 @@
+import math
 import os
 import unittest
 import pandas
@@ -6,6 +7,12 @@ from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     statistics_on_file,
     statistics_on_folder,
+    is_apple,
+    is_windows,
+    is_azure,
+    is_linux,
+    unit_test_going,
+    measure_time,
 )
 
 
@@ -51,6 +58,31 @@ class TestUnitTest(ExtTestCase):
         )
         self.assertEqual(len(gr.columns), 4)
         self.assertEqual(total.shape, (2,))
+
+    def test_is(self):
+        is_apple()
+        is_windows()
+        is_azure()
+        is_linux()
+        unit_test_going()
+
+    def test_measure_time(self):
+        res = measure_time(lambda: math.cos(0.5))
+        self.assertIsInstance(res, dict)
+        self.assertEqual(
+            set(res),
+            {
+                "min_exec",
+                "max_exec",
+                "average",
+                "warmup_time",
+                "context_size",
+                "deviation",
+                "repeat",
+                "ttime",
+                "number",
+            },
+        )
 
 
 if __name__ == "__main__":
