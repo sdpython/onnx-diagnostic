@@ -1,16 +1,16 @@
-import os
 import unittest
 from typing import Optional
 import numpy as np
+import onnx
+import onnx.helper as oh
 from onnx import TensorProto
 from onnx.helper import (
-    make_graph,
-    make_model,
     make_node,
     make_tensor_value_info,
     make_opsetid,
 )
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.helpers import from_array_extended
+from onnx_diagnostic.ext_test_case import ExtTestCase, has_cuda
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 
 
@@ -23,17 +23,17 @@ class TestReferenceOps(ExtTestCase):
         return x.reshape(tuple(shape)).astype(np.float32)
 
     def test_fused_matmul(self):
-        model = make_model(
-            make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [make_node("FusedMatMul", ["X", "Y"], ["Z"], domain="com.microsoft")],
                 "name",
                 [
-                    make_tensor_value_info("X", TensorProto.FLOAT, None),
-                    make_tensor_value_info("Y", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("X", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("Y", TensorProto.FLOAT, None),
                 ],
                 [make_tensor_value_info("Z", TensorProto.FLOAT, None)],
             ),
-            opset_imports=[make_opsetid("", 18), make_opsetid("com.microsoft", 1)],
+            opset_imports=[make_opsetid("", 18), oh.make_opsetid("com.microsoft", 1)],
         )
         ref = ExtendedReferenceEvaluator(model)
         a = np.arange(4).reshape(-1, 2)
@@ -41,10 +41,10 @@ class TestReferenceOps(ExtTestCase):
         self.assertEqualArray(a @ a, got[0])
 
     def test_fused_matmul11(self):
-        model = make_model(
-            make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    make_node(
+                    oh.make_node(
                         "FusedMatMul",
                         ["X", "Y"],
                         ["Z"],
@@ -55,12 +55,12 @@ class TestReferenceOps(ExtTestCase):
                 ],
                 "name",
                 [
-                    make_tensor_value_info("X", TensorProto.FLOAT, None),
-                    make_tensor_value_info("Y", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("X", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("Y", TensorProto.FLOAT, None),
                 ],
                 [make_tensor_value_info("Z", TensorProto.FLOAT, None)],
             ),
-            opset_imports=[make_opsetid("", 18), make_opsetid("com.microsoft", 1)],
+            opset_imports=[make_opsetid("", 18), oh.make_opsetid("com.microsoft", 1)],
         )
         ref = ExtendedReferenceEvaluator(model)
         a = np.arange(4).reshape(-1, 2)
@@ -68,17 +68,17 @@ class TestReferenceOps(ExtTestCase):
         self.assertEqualArray(a.T @ a.T, got[0])
 
     def test_memcpy(self):
-        model = make_model(
-            make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    make_node("MemcpyToHost", ["X"], ["Z"]),
-                    make_node("MemcpyFromHost", ["X"], ["Z"]),
+                    oh.make_node("MemcpyToHost", ["X"], ["Z"]),
+                    oh.make_node("MemcpyFromHost", ["X"], ["Z"]),
                 ],
                 "name",
                 [make_tensor_value_info("X", TensorProto.FLOAT, None)],
                 [make_tensor_value_info("Z", TensorProto.FLOAT, None)],
             ),
-            opset_imports=[make_opsetid("", 18), make_opsetid("com.microsoft", 1)],
+            opset_imports=[make_opsetid("", 18), oh.make_opsetid("com.microsoft", 1)],
             ir_version=9,
         )
         a = np.arange(4).reshape(-1, 2).astype(np.float32)
@@ -90,10 +90,10 @@ class TestReferenceOps(ExtTestCase):
         from onnxruntime import InferenceSession
 
         for alpha in [0.0, 2.0]:
-            model = make_model(
-                make_graph(
+            model = oh.make_model(
+                oh.make_graph(
                     [
-                        make_node(
+                        oh.make_node(
                             "QuickGelu",
                             ["X"],
                             ["Z"],
@@ -105,7 +105,7 @@ class TestReferenceOps(ExtTestCase):
                     [make_tensor_value_info("X", TensorProto.FLOAT, None)],
                     [make_tensor_value_info("Z", TensorProto.FLOAT, None)],
                 ),
-                opset_imports=[make_opsetid("", 18), make_opsetid("com.microsoft", 1)],
+                opset_imports=[make_opsetid("", 18), oh.make_opsetid("com.microsoft", 1)],
                 ir_version=9,
             )
             sess = InferenceSession(
@@ -118,10 +118,10 @@ class TestReferenceOps(ExtTestCase):
             self.assertEqualArray(expected[0], got[0])
 
     def test_scatter_elements(self):
-        model = make_model(
-            make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    make_node(
+                    oh.make_node(
                         "ScatterElements",
                         ["data", "indices", "updates"],
                         ["Z"],
@@ -131,9 +131,9 @@ class TestReferenceOps(ExtTestCase):
                 ],
                 "name",
                 [
-                    make_tensor_value_info("data", TensorProto.FLOAT, None),
-                    make_tensor_value_info("indices", TensorProto.INT64, None),
-                    make_tensor_value_info("updates", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("data", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("indices", TensorProto.INT64, None),
+                    oh.make_tensor_value_info("updates", TensorProto.FLOAT, None),
                 ],
                 [make_tensor_value_info("Z", TensorProto.FLOAT, None)],
             ),
@@ -152,10 +152,10 @@ class TestReferenceOps(ExtTestCase):
     def test_skip_layer_normalization_nobias(self):
         import onnxruntime
 
-        model = make_model(
-            make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    make_node(
+                    oh.make_node(
                         "SkipLayerNormalization",
                         ["x", "skip", "beta", "gamma"],
                         ["Z"],
@@ -165,14 +165,14 @@ class TestReferenceOps(ExtTestCase):
                 ],
                 "name",
                 [
-                    make_tensor_value_info("x", TensorProto.FLOAT, ["a", "b", "c"]),
-                    make_tensor_value_info("skip", TensorProto.FLOAT, ["a", "b", "c"]),
-                    make_tensor_value_info("beta", TensorProto.FLOAT, ["c"]),
-                    make_tensor_value_info("gamma", TensorProto.FLOAT, ["c"]),
+                    oh.make_tensor_value_info("x", TensorProto.FLOAT, ["a", "b", "c"]),
+                    oh.make_tensor_value_info("skip", TensorProto.FLOAT, ["a", "b", "c"]),
+                    oh.make_tensor_value_info("beta", TensorProto.FLOAT, ["c"]),
+                    oh.make_tensor_value_info("gamma", TensorProto.FLOAT, ["c"]),
                 ],
                 [make_tensor_value_info("Z", TensorProto.FLOAT, None)],
             ),
-            opset_imports=[make_opsetid("", 18), make_opsetid("com.microsoft", 1)],
+            opset_imports=[make_opsetid("", 18), oh.make_opsetid("com.microsoft", 1)],
             ir_version=10,
         )
         feeds = dict(
@@ -193,10 +193,10 @@ class TestReferenceOps(ExtTestCase):
     def test_skip_layer_normalization_bias(self):
         import onnxruntime
 
-        model = make_model(
-            make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    make_node(
+                    oh.make_node(
                         "SkipLayerNormalization",
                         ["x", "skip", "beta", "gamma", "bias"],
                         ["Z"],
@@ -206,15 +206,15 @@ class TestReferenceOps(ExtTestCase):
                 ],
                 "name",
                 [
-                    make_tensor_value_info("x", TensorProto.FLOAT, ["a", "b", "c"]),
-                    make_tensor_value_info("skip", TensorProto.FLOAT, ["a", "b", "c"]),
-                    make_tensor_value_info("beta", TensorProto.FLOAT, ["c"]),
-                    make_tensor_value_info("gamma", TensorProto.FLOAT, ["c"]),
-                    make_tensor_value_info("bias", TensorProto.FLOAT, ["c"]),
+                    oh.make_tensor_value_info("x", TensorProto.FLOAT, ["a", "b", "c"]),
+                    oh.make_tensor_value_info("skip", TensorProto.FLOAT, ["a", "b", "c"]),
+                    oh.make_tensor_value_info("beta", TensorProto.FLOAT, ["c"]),
+                    oh.make_tensor_value_info("gamma", TensorProto.FLOAT, ["c"]),
+                    oh.make_tensor_value_info("bias", TensorProto.FLOAT, ["c"]),
                 ],
                 [make_tensor_value_info("Z", TensorProto.FLOAT, None)],
             ),
-            opset_imports=[make_opsetid("", 18), make_opsetid("com.microsoft", 1)],
+            opset_imports=[make_opsetid("", 18), oh.make_opsetid("com.microsoft", 1)],
             ir_version=10,
         )
         feeds = dict(
@@ -233,10 +233,159 @@ class TestReferenceOps(ExtTestCase):
         self.assertEqual(len(expected), len(got))
         self.assertEqualArrayAny(expected, got, atol=1e-3)
 
-    def test_attention(self):
-        path = os.path.join(
-            os.path.dirname(__file__), "data", "test_attention_pattern_1_4d_cpu.onnx"
+    def _get_model_attention(self) -> onnx.ModelProto:
+        # Obtained with:
+        # python -m onnx_array_api translate -a onnx-short -m <model.onnx>
+        opset_imports = [
+            oh.make_opsetid("pkg.onnxscript.torch_lib.common", 1),
+            oh.make_opsetid("", 18),
+            oh.make_opsetid("pkg.onnxscript.torch_lib", 1),
+            oh.make_opsetid("pkg.torch.__subgraph__", 1),
+            oh.make_opsetid("com.microsoft", 1),
+        ]
+        inputs = []
+        outputs = []
+        nodes = []
+        initializers = []
+        sparse_initializers = []
+        functions = []
+        value = np.random.randn(1024, 1024).astype(np.float32)
+        initializers.append(
+            from_array_extended(
+                np.array(value, dtype=np.float32),
+                name="encoder.encoders.0.self_attn.linear_q.weight",
+            )
         )
+        value = np.random.randn(1024).astype(np.float32)
+        initializers.append(
+            from_array_extended(
+                np.array(value, dtype=np.float32),
+                name="encoder.encoders.0.self_attn.linear_q.bias",
+            )
+        )
+        value = np.random.randn(1024, 1024).astype(np.float32)
+        initializers.append(
+            from_array_extended(
+                np.array(value, dtype=np.float32),
+                name="encoder.encoders.0.self_attn.linear_k.weight",
+            )
+        )
+        value = np.random.randn(1024).astype(np.float32)
+        initializers.append(
+            from_array_extended(
+                np.array(value, dtype=np.float32),
+                name="encoder.encoders.0.self_attn.linear_k.bias",
+            )
+        )
+        value = np.random.randn(1024, 1024).astype(np.float32)
+        initializers.append(
+            from_array_extended(
+                np.array(value, dtype=np.float32),
+                name="encoder.encoders.0.self_attn.linear_v.weight",
+            )
+        )
+        value = np.random.randn(1024).astype(np.float32)
+        initializers.append(
+            from_array_extended(
+                np.array(value, dtype=np.float32),
+                name="encoder.encoders.0.self_attn.linear_v.bias",
+            )
+        )
+        initializers.append(from_array_extended(np.array(1, dtype=np.int64), name="dim_0_7"))
+        inputs.append(
+            oh.make_tensor_value_info(
+                "layer_norm_1", onnx.TensorProto.FLOAT, shape=("s0", "(s1-1)//8+1", 1024)
+            )
+        )
+        inputs.append(
+            oh.make_tensor_value_info(
+                "expand_1", onnx.TensorProto.BOOL, shape=("s0", "(s1-1)//8+1", "(s1-1)//8+1")
+            )
+        )
+        inputs.append(
+            oh.make_tensor_value_info(
+                "unsqueeze_9",
+                onnx.TensorProto.FLOAT,
+                shape=(1, 16, "(s1-1)//8+1", "(s1-1)//8+1"),
+            )
+        )
+        inputs.append(oh.make_tensor_value_info("val_104", onnx.TensorProto.INT64, shape=(4,)))
+        inputs.append(oh.make_tensor_value_info("val_112", onnx.TensorProto.INT64, shape=(4,)))
+        inputs.append(oh.make_tensor_value_info("val_120", onnx.TensorProto.INT64, shape=(4,)))
+        inputs.append(oh.make_tensor_value_info("val_132", onnx.TensorProto.INT64, shape=(3,)))
+        nodes.append(oh.make_node("Unsqueeze", ["expand_1", "dim_0_7"], ["unsqueeze_6"]))
+        nodes.append(
+            oh.make_node("Cast", ["unsqueeze_6"], ["convert_element_type_default"], to=7)
+        )
+        nodes.append(
+            oh.make_node(
+                "Concat",
+                [
+                    "encoder.encoders.0.self_attn.linear_q.weight",
+                    "encoder.encoders.0.self_attn.linear_k.weight",
+                    "encoder.encoders.0.self_attn.linear_v.weight",
+                ],
+                ["encoder.encoders.0.self_attn.linear_q.weight_qkv"],
+                axis=1,
+            )
+        )
+        nodes.append(
+            oh.make_node(
+                "Concat",
+                [
+                    "encoder.encoders.0.self_attn.linear_q.bias",
+                    "encoder.encoders.0.self_attn.linear_k.bias",
+                    "encoder.encoders.0.self_attn.linear_v.bias",
+                ],
+                ["encoder.encoders.0.self_attn.linear_q.bias_bias"],
+                axis=0,
+            )
+        )
+        nodes.append(
+            oh.make_node(
+                "Cast",
+                ["convert_element_type_default"],
+                ["convert_element_type_default_int32"],
+                to=6,
+            )
+        )
+        nodes.append(
+            oh.make_node(
+                "Attention",
+                [
+                    "layer_norm_1",
+                    "encoder.encoders.0.self_attn.linear_q.weight_qkv",
+                    "encoder.encoders.0.self_attn.linear_q.bias_bias",
+                    "convert_element_type_default_int32",
+                    "",
+                    "unsqueeze_9",
+                ],
+                ["view_3"],
+                domain="com.microsoft",
+                num_heads=16,
+            )
+        )
+        outputs.append(
+            oh.make_tensor_value_info(
+                "view_3", onnx.TensorProto.FLOAT, shape=("s0", "(s1-1)//8+1", 1024)
+            )
+        )
+        graph = oh.make_graph(
+            nodes,
+            "experiment",
+            inputs,
+            outputs,
+            initializers,
+            sparse_initializer=sparse_initializers,
+        )
+        model = oh.make_model(
+            graph, functions=functions, opset_imports=opset_imports, ir_version=10
+        )
+        return model
+
+    def test_attention(self):
+        model = self._get_model_attention()
+        path = self.dump_onnx("test_attention.onnx", model)
         ref = ExtendedReferenceEvaluator(path)
         feeds = {
             "layer_norm_1": self._range(2, 8, 1024),  # s0,(s1-1)//8+1,1024
@@ -250,7 +399,18 @@ class TestReferenceOps(ExtTestCase):
                 [2, 8, 1024], dtype=np.int64
             ),  # s0,CeilToInt(IntTrueDiv(s1, 8)),1024
         }
-        ref.run(None, feeds)
+        got = ref.run(None, feeds)
+
+        if not has_cuda():
+            return
+        import onnxruntime
+
+        sess = onnxruntime.InferenceSession(
+            model.SerializeToString(),
+            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+        )
+        expected = sess.run(None, feeds)
+        self.assertEqualArrayAny(expected, got, atol=1)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,12 @@ from onnx.reference.op_run import OpRun
 class Attention(OpRun):
     op_domain = "com.microsoft"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Fix a bug onnx.reference.ReferenceEvaluator
+        self._schema = None
+        self.attributes_names_ = ["num_heads"]
+
     def _run(
         self,
         x,

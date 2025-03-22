@@ -1,6 +1,6 @@
 from logging import getLogger
 from typing import Any, Dict, List, Optional, Union
-from onnx import FunctionProto, ModelProto
+from onnx import FunctionProto, ModelProto, NodeProto, TypeProto
 from onnx.defs import get_schema
 from onnx.reference import ReferenceEvaluator
 from onnx.reference.op_run import OpRun
@@ -190,6 +190,13 @@ class ExtendedReferenceEvaluator(ReferenceEvaluator):
         if isinstance(self.proto_, FunctionProto):
             return self._run_function(*args, **kwargs)
         return ReferenceEvaluator.run(self, *args, **kwargs)
+
+    def _load_impl(self, node: NodeProto, input_types: TypeProto | None = None) -> Any:
+        res = super()._load_impl(node, input_types)
+        assert (
+            res.op_domain == node.domain
+        ), f"Domain mismatch {res.op_domain!r} != {node.domain} for node={node}"
+        return res
 
     def _run_function(
         self,
