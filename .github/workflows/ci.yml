@@ -59,51 +59,7 @@ jobs:
           UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py
           export PYTHONPATH=
 
-jobs:
-  run:
-    name: backend-test ${{ matrix.os }}-${{ matrix.python }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        python: ['3.12']
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python }}
-
-      - name: Install pytorch
-        run: python -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cpu
-
-      - name: Install transformers
-        run: |
-          git clone https://github.com/huggingface/transformers.git
-          cd transformers
-          pip install -e .
-          cd ..
-
-      - name: Install requirements
-        run: python -m pip install -r requirements.txt
-
-      - name: Install requirements dev
-        run: python -m pip install -r requirements-dev.txt
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
-
-      - name: pip freeze
-        run: python -m pip freeze
-
-      - name: run tests
+      - name: run backend tests
         run: |
           pip install pytest
           export PYTHONPATH=.
