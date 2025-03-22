@@ -10,7 +10,7 @@ import onnx.version_converter
 from onnx import ModelProto
 from onnx.backend.base import Device, DeviceType
 from onnx.defs import onnx_opset_version
-from experimental_experiment.reference import ExtendedReferenceEvaluator
+from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 
 
 class ExtendedReferenceEvaluatorBackendRep(onnx.backend.base.BackendRep):

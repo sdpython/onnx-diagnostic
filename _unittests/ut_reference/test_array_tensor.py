@@ -2,8 +2,8 @@ import unittest
 import numpy as np
 from onnx import TensorProto
 from onnx.helper import make_graph, make_model, make_node, make_tensor_value_info
-from experimental_experiment.ext_test_case import ExtTestCase
-from experimental_experiment.reference import (
+from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.reference import (
     to_array_extended,
     from_array_extended,
     ExtendedReferenceEvaluator,
