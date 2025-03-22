@@ -1,6 +1,6 @@
 import unittest
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from experimental_experiment.args import get_parsed_args
+from onnx_diagnostic.args import get_parsed_args
 
 
 class TestHelpers(ExtTestCase):

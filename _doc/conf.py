@@ -78,7 +78,7 @@ latex_elements = {
 }
 
 intersphinx_mapping = {
-    "experimental_experiment": (
+    "_".join(["experimental", "experiment"]): (
         "https://sdpython.github.io/doc/experimental-experiment/dev/",
         None,
     ),
