@@ -66,7 +66,8 @@ class TestOnnxExportErrors(ExtTestCase):
 
         cache = MambaCache(_config(), max_batch_size=1, device="cpu")
         self.assertEqual(
-            string_type(cache), "MambaCache(conv_states=[T10r3,...], ssm_states=[T10r3,...])"
+            string_type(cache),
+            "MambaCache(conv_states=#64[T10r3,...], ssm_states=#64[T10r3,...])",
         )
         x = torch.ones(2, 8, 16).to(torch.float16)
         model = Model()
