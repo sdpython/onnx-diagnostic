@@ -194,7 +194,7 @@ class ExtendedReferenceEvaluator(ReferenceEvaluator):
     def _load_impl(self, node: NodeProto, input_types: TypeProto | None = None) -> Any:
         res = super()._load_impl(node, input_types)
         assert (
-            res.op_domain == node.domain
+            not hasattr(res, "op_domain") or res.op_domain == node.domain
         ), f"Domain mismatch {res.op_domain!r} != {node.domain} for node={node}"
         return res
 

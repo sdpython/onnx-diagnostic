@@ -412,6 +412,104 @@ class TestReferenceOps(ExtTestCase):
         expected = sess.run(None, feeds)
         self.assertEqualArrayAny(expected, got, atol=1)
 
+    def test_inline_1_function(self):
+        new_domain = "custom"
+
+        linear_regression = oh.make_function(
+            new_domain,
+            "LinearRegression",
+            ["x", "a", "b"],
+            ["y"],
+            [
+                oh.make_node("MatMul", ["x", "a"], ["xa"]),
+                oh.make_node("Add", ["xa", "b"], ["y"]),
+            ],
+            [oh.make_opsetid("", 14)],
+            [],
+        )
+
+        graph = oh.make_graph(
+            [
+                oh.make_node("LinearRegression", ["X", "A", "B"], ["Y1"], domain=new_domain),
+                oh.make_node("Abs", ["Y1"], ["Y"]),
+            ],
+            "example",
+            [
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [None, None]),
+                oh.make_tensor_value_info("A", TensorProto.FLOAT, [None, None]),
+                oh.make_tensor_value_info("B", TensorProto.FLOAT, [None, None]),
+            ],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+        )
+
+        onnx_model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_opsetid("", 14), oh.make_opsetid(new_domain, 1)],
+            functions=[linear_regression],
+        )
+        ref = ExtendedReferenceEvaluator(onnx_model)
+        feeds = dict(
+            X=np.arange(9).reshape((3, 3)).astype(np.float32),
+            A=np.arange(9).reshape((3, 3)).astype(np.float32),
+            B=np.arange(9).reshape((3, 3)).astype(np.float32),
+        )
+        ref.run(None, feeds)[0]
+
+    def test_inline_2_functions_recursive(self):
+        new_domain = "custom"
+
+        linear_add = oh.make_function(
+            new_domain,
+            "LinearAdd",
+            ["x", "a"],
+            ["y"],
+            [
+                oh.make_node("Add", ["x", "a"], ["y"]),
+            ],
+            [oh.make_opsetid("", 14)],
+            [],
+        )
+
+        linear_regression = oh.make_function(
+            new_domain,
+            "LinearRegression",
+            ["x", "a", "b"],
+            ["y"],
+            [
+                oh.make_node("MatMul", ["x", "a"], ["xa"]),
+                oh.make_node("LinearAdd", ["xa", "b"], ["y"], domain=new_domain),
+            ],
+            [oh.make_opsetid("", 14), oh.make_opsetid(new_domain, 1)],
+            [],
+        )
+
+        graph = oh.make_graph(
+            [
+                oh.make_node("LinearRegression", ["X", "A", "B"], ["Y2"], domain=new_domain),
+                oh.make_node("Abs", ["Y2"], ["Y"]),
+            ],
+            "example",
+            [
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [None, None]),
+                oh.make_tensor_value_info("A", TensorProto.FLOAT, [None, None]),
+                oh.make_tensor_value_info("B", TensorProto.FLOAT, [None, None]),
+            ],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+        )
+
+        onnx_model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_opsetid("", 14), oh.make_opsetid(new_domain, 1)],
+            functions=[linear_add, linear_regression],
+        )
+        ref = ExtendedReferenceEvaluator(onnx_model)
+        feeds = dict(
+            X=np.arange(9).reshape((3, 3)).astype(np.float32),
+            A=np.arange(9).reshape((3, 3)).astype(np.float32),
+            B=np.arange(9).reshape((3, 3)).astype(np.float32),
+        )
+        expected = ref.run(None, feeds)[0]
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

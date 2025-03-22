@@ -12,6 +12,7 @@ onnx_diagnostic.reference
     :caption: modules
 
     evaluator
+    quantizd_tensor
 
 ExtendedReferenceEvaluator
 ++++++++++++++++++++++++++
