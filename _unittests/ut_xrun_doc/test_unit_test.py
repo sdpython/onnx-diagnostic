@@ -68,7 +68,7 @@ class TestUnitTest(ExtTestCase):
         is_linux()
         unit_test_going()
         has_cuda()
-        has_onnxscript()
+        has_onnxscript("0.2.0")
 
     def test_measure_time(self):
         res = measure_time(lambda: math.cos(0.5))

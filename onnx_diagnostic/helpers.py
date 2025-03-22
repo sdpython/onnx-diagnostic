@@ -1203,11 +1203,20 @@ def max_diff(
                 if verbose > 2:
                     print(
                         f"[max_diff] flattening because of length mismatch, "
-                        f"expected is {string_type(expected)} and got is {string_type(got)}"
+                        f"expected is\n  {string_type(expected)}\n  -- and got is\n  "
+                        f"{string_type(got)}"
+                    )
+                flat_a = flatten_object(expected, drop_keys=True)
+                flat_b = flatten_object(got, drop_keys=True)
+                if verbose > 2:
+                    print(
+                        f"[max_diff] after flattening, "
+                        f"expected is\n  {string_type(flat_a)}\n  -- and got is\n  "
+                        f"{string_type(flat_b)}"
                     )
                 return max_diff(
-                    flatten_object(expected, drop_keys=True),
-                    flatten_object(got, drop_keys=True),
+                    flat_a,
+                    flat_b,
                     verbose=verbose,
                     level=level,
                     begin=begin,
@@ -1224,7 +1233,7 @@ def max_diff(
                         if verbose > 5
                         else None
                     ),
-                    flatten=flatten,
+                    flatten=False,
                 )
 
             if verbose > 2:

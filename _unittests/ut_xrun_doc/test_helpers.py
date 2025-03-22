@@ -142,6 +142,7 @@ class TestHelpers(ExtTestCase):
         sig = get_onnx_signature(proto)
         self.assertEqual(sig, (("X", 1, (1, "b", "c")), ("Y", 1, ("a", "b", "c"))))
 
+    @hide_stdout()
     def test_flatten(self):
         inputs = (
             torch.rand((3, 4), dtype=torch.float16),
@@ -156,8 +157,8 @@ class TestHelpers(ExtTestCase):
                 },
             ],
         )
-        flat = flatten_object(inputs)
-        diff = max_diff(inputs, flat, flatten=True)
+        flat = flatten_object(inputs, drop_keys=True)
+        diff = max_diff(inputs, flat, flatten=True, verbose=10)
         self.assertEqual(diff["abs"], 0)
         d = string_diff(diff)
         self.assertIsInstance(d, str)
