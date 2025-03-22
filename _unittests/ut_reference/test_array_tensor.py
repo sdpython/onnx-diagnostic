@@ -2,15 +2,14 @@ import unittest
 import numpy as np
 from onnx import TensorProto
 from onnx.helper import make_graph, make_model, make_node, make_tensor_value_info
-from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.reference import (
-    to_array_extended,
-    from_array_extended,
-    ExtendedReferenceEvaluator,
-)
+from onnx.reference.op_run import to_array_extended
+from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
+from onnx_diagnostic.helpers import from_array_extended
+from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 
 
 class TestArrayTensor(ExtTestCase):
+    @ignore_warnings(DeprecationWarning)
     def test_from_array(self):
         for dt in (np.float32, np.float16, np.uint16, np.uint8):
             with self.subTest(dtype=dt):
@@ -21,6 +20,7 @@ class TestArrayTensor(ExtTestCase):
                 t2 = from_array_extended(b, "a")
                 self.assertEqual(t.SerializeToString(), t2.SerializeToString())
 
+    @ignore_warnings(DeprecationWarning)
     def test_from_array_f8(self):
         def make_model_f8(fr, to):
             model = make_model(
