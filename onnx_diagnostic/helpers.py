@@ -1,4 +1,5 @@
 import ast
+import ctypes
 import enum
 import functools
 import inspect
@@ -21,8 +22,7 @@ from onnx.helper import (
     np_dtype_to_tensor_dtype as onnx_np_dtype_to_tensor_dtype,
     tensor_dtype_to_np_dtype as onnx_tensor_dtype_to_np_dtype,
 )
-from onnx.numpy_helper import from_array as onnx_from_array
-from onnx.reference.op_run import to_array_extended
+from onnx.numpy_helper import from_array as onnx_from_array, to_array
 
 
 def size_type(dtype: Any) -> int:
@@ -317,6 +317,7 @@ def string_type(
         if not with_shape:
             return f"{prefix}F{i}r{len(obj.shape)}"
         return f"{prefix}F{i}s{'x'.join(map(str, obj.shape))}"
+
     if isinstance(obj, torch.Tensor):
         if with_min_max:
             s = string_type(obj, with_shape=with_shape, with_device=with_device)
@@ -341,6 +342,25 @@ def string_type(
         if not with_shape:
             return f"{prefix}T{i}r{len(obj.shape)}"
         return f"{prefix}T{i}s{'x'.join(map(str, obj.shape))}"
+
+    if obj.__class__.__name__ == "OrtValue":
+        if not obj.has_value():
+            return "OV(<novalue>)"
+        if not obj.is_tensor():
+            return "OV(NOTENSOR)"
+        if with_min_max:
+            try:
+                t = obj.numpy()
+            except Exception:
+                # pass unable to convert into numpy (bfloat16, ...)
+                return "OV(NO-NUMPY:FIXIT)"
+            return f"OV({string_type(t, with_shape=with_shape, with_min_max=with_min_max)})"
+        dt = obj.element_type()
+        shape = obj.shape()
+        if with_shape:
+            return f"OV{dt}s{'x'.join(map(str, shape))}"
+        return f"OV{dt}r{len(shape)}"
+
     if isinstance(obj, bool):
         if with_min_max:
             return f"bool={obj}"
@@ -442,6 +462,7 @@ def string_type(
 
     if ignore:
         return f"{obj.__class__.__name__}(...)"
+
     raise AssertionError(f"Unsupported type {type(obj).__name__!r} - {type(obj)}")
 
 
@@ -709,14 +730,97 @@ def from_array_ml_dtypes(arr: npt.ArrayLike, name: Optional[str] = None) -> Tens
     return tensor
 
 
+_STORAGE_TYPE = {
+    TensorProto.FLOAT16: np.int16,
+    TensorProto.BFLOAT16: np.int16,
+}
+
+
+def proto_from_tensor(
+    arr: "torch.Tensor",  # noqa: F821
+    name: Optional[str] = None,
+    verbose: int = 0,
+) -> TensorProto:
+    """
+    Converts a torch Tensor into a TensorProto.
+
+    :param arr: tensor
+    :param verbose: display the type and shape
+    :return: a TensorProto
+    """
+    import torch
+
+    if not isinstance(arr, torch.Tensor):
+        raise TypeError(f"Unexpected type {type(arr)}.")
+    if arr.is_sparse:
+        raise NotImplementedError(
+            f"Sparse tensor is not supported yet but initializer {name!r} is."
+        )
+
+    # arr.contiguous() is slow after a transpose, maybe there is a way to optimize this.
+    if arr.is_contiguous():
+        arr_cpu = arr.cpu()
+    else:
+        arr_cpu = arr.contiguous().cpu()
+
+    numel = torch.numel(arr_cpu)
+    element_size = arr_cpu.element_size()
+
+    if arr_cpu.dtype in {torch.bfloat16}:
+        np_arr = arr_cpu
+    elif arr_cpu.data_ptr() == arr.data_ptr():
+        copy = arr_cpu.clone().detach().requires_grad_(False)
+        assert (
+            arr_cpu.data_ptr() == 0 or arr_cpu.data_ptr() != copy.data_ptr()
+        ), f"Pointers are not null and different {arr_cpu.data_ptr()} != {copy.data_ptr()}"
+        np_arr = np.from_dlpack(copy)
+    else:
+        np_arr = np.from_dlpack(arr_cpu.detach())
+
+    tensor = TensorProto()
+    tensor.dims.extend(arr_cpu.shape)
+    if name:
+        tensor.name = name
+    itype = torch_dtype_to_onnx_dtype(arr_cpu.dtype)
+    assert not hasattr(TensorProto, "INT4") or itype not in {
+        TensorProto.INT4,
+        TensorProto.UINT4,
+    }, f"Type {arr.dtype} is not supported yet for name={name!r}"
+    tensor.data_type = itype
+
+    if verbose > 1 and numel > 100:
+        print(f"[proto_from_array] {tensor.data_type}[{arr_cpu.shape}]")
+
+    if isinstance(np_arr, torch.Tensor):
+        byte_data = (ctypes.c_ubyte * numel * element_size).from_address(np_arr.data_ptr())
+        tensor.raw_data = bytes(byte_data)
+        if sys.byteorder == "big":
+            np_dtype = _STORAGE_TYPE[tensor.data_type]  # type: ignore
+            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)
+    else:
+        tensor.raw_data = np_arr.tobytes()
+        if sys.byteorder == "big":
+            np_dtype = tensor_dtype_to_np_dtype(tensor.data_type)
+            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)
+
+    return tensor
+
+
 def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
     """
     Converts an array into a :class:`onnx.TensorProto`.
 
-    :param tensor: numpy array
+    :param tensor: numpy array or torch tensor
     :param name: name
     :return: TensorProto
     """
+    try:
+        import torch
+    except ImportError:
+        torch = None
+    if torch is not None and isinstance(tensor, torch.Tensor):
+        return proto_from_tensor(tensor, name=name)
+
     from onnx.reference.ops.op_cast import (
         bfloat16,
         float8e4m3fn,
@@ -761,6 +865,16 @@ def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> Te
     return t
 
 
+def to_array_extended(proto: TensorProto) -> npt.ArrayLike:
+    """Converts :class:`onnx.TensorProto` into a numpy array."""
+    arr = to_array(proto)
+    if proto.data_type >= onnx.TensorProto.BFLOAT16:
+        # Types not supported by numpy
+        ml_dtypes = onnx_dtype_to_np_dtype(proto.data_type)
+        return arr.view(ml_dtypes)
+    return arr
+
+
 def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821
     """
     Converts an onnx type into a torch dtype.
@@ -800,6 +914,51 @@ def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821
         return torch.complex64
     if itype == TensorProto.COMPLEX128:
         return torch.complex128
+    raise NotImplementedError(
+        f"Unable to convert onnx type {onnx_dtype_name(itype)} to torch.type."
+    )
+
+
+def onnx_dtype_to_np_dtype(itype: int) -> Any:
+    """
+    Converts an onnx type into a to numpy dtype.
+    That includes :epkg:`ml_dtypes` dtypes.
+
+    :param to: onnx dtype
+    :return: numpy dtype
+    """
+    if itype == TensorProto.FLOAT:
+        return np.float32
+    if itype == TensorProto.FLOAT16:
+        return np.float16
+    if itype == TensorProto.BFLOAT16:
+        import ml_dtypes
+
+        return ml_dtypes.bfloat16
+    if itype == TensorProto.DOUBLE:
+        return np.float64
+    if itype == TensorProto.INT32:
+        return np.int32
+    if itype == TensorProto.INT64:
+        return np.int64
+    if itype == TensorProto.UINT32:
+        return np.uint32
+    if itype == TensorProto.UINT64:
+        return np.uint64
+    if itype == TensorProto.BOOL:
+        return np.bool
+    if itype == TensorProto.INT16:
+        return np.int16
+    if itype == TensorProto.UINT16:
+        return np.uint16
+    if itype == TensorProto.INT8:
+        return np.int16
+    if itype == TensorProto.UINT8:
+        return np.uint16
+    if itype == TensorProto.COMPLEX64:
+        return np.complex64
+    if itype == TensorProto.COMPLEX128:
+        return np.complex128
     raise NotImplementedError(
         f"Unable to convert onnx type {onnx_dtype_name(itype)} to torch.type."
     )

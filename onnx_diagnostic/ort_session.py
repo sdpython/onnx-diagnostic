@@ -6,6 +6,13 @@ import torch
 from torch._C import _from_dlpack
 import onnxruntime
 from onnxruntime.capi import _pybind_state as ORTC
+from .helpers import (
+    torch_dtype_to_onnx_dtype,
+    onnx_dtype_to_np_dtype,
+    np_dtype_to_tensor_dtype,
+    onnx_dtype_name,
+    size_type,
+)
 
 DEVICES = {-1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memory(), 0)}
 
@@ -48,7 +55,14 @@ class _InferenceSession:
     ):
         # onnxruntime is importing when needed as it takes a
         # couple of seconds if it contains CUDA EP.
+        can_use_training_api = True
         if isinstance(sess, (onnx.ModelProto, str)):
+            if isinstance(sess, onnx.ModelProto):
+                for i in sess.graph.initializer:
+                    if i.data_type >= onnx.TensorProto.BFLOAT16:
+                        # Cannot use training api as it relies too much on numpy.
+                        can_use_training_api = False
+                        break
             assert session_options is None or (
                 providers is None
                 and graph_optimization_level is None
@@ -113,7 +127,7 @@ class _InferenceSession:
         if log_verbosity_level is not None:
             self.run_options.log_verbosity_level = log_verbosity_level
 
-        self.use_training_api = (
+        self.use_training_api = can_use_training_api and (
             self.has_onnxruntime_training() if use_training_api is None else use_training_api
         )
 
@@ -174,9 +188,75 @@ class InferenceSessionForNumpy(_InferenceSession):
 
     def run(
         self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
-    ) -> List[npt.ArrayLike]:
+    ) -> List[Optional[npt.ArrayLike]]:
         """Calls :meth:`onnxruntime.InferenceSession.run`."""
-        return self.sess.run(output_names, feeds)
+        # sess.run does not support blfoat16
+        # res = self.sess.run(output_names, feeds)
+        return list(self.run_dlpack(output_names, feeds))
+
+    def run_dlpack(
+        self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
+    ) -> Tuple[Optional[npt.ArrayLike], ...]:
+        """
+        Same as :meth:`onnxruntime.InferenceSession.run` except that
+        feeds is a dictionary of :class:`np.ndarray`.
+        The output device is CPU even if the outputs are on CUDA.
+        """
+        new_feeds = {}
+        for k, v in feeds.items():
+            if not k:
+                continue
+            new_feeds[k] = (
+                ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
+                    v, np_dtype_to_tensor_dtype(v.dtype)
+                )
+                if isinstance(v, np.ndarray)
+                else ORTC.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
+            )
+        if self.nvtx:
+            self.torch.cuda.nvtx.range_push("run_with_ort_values")
+        ort_outputs = self.sess._sess.run_with_ort_values(
+            new_feeds, output_names or self.output_names, self.run_options
+        )
+        if self.nvtx:
+            self.torch.cuda.nvtx.range_pop()
+        pth_outputs = self._ortvalues_to_numpy_tensor(ort_outputs)
+        return pth_outputs
+
+    def _ortvalues_to_numpy_tensor(
+        self,
+        ortvalues: Union[List[ORTC.OrtValue], ORTC.OrtValueVector],
+    ) -> Tuple[Optional[npt.ArrayLike], ...]:
+        if len(ortvalues) == 0:
+            return tuple()
+
+        if self.nvtx:
+            self.torch.cuda.nvtx.range_push("_ortvalues_to_numpy_tensor")
+        res: List[Optional[npt.ArrayLike]] = []  # noqa: F823
+        for i in range(len(ortvalues)):
+            if not ortvalues[i].has_value():
+                res.append(None)
+                continue
+
+            el_type = ortvalues[i].element_type()
+            if el_type < onnx.TensorProto.BFLOAT16:
+                res.append(np.from_dlpack(ortvalues[i]))
+                continue
+
+            # no easy conversion, let's use torch
+            tch = torch.from_dlpack(ortvalues[i].to_dlpack())
+            size = size_type(el_type)
+            assert size == 2, f"Not implemented for type {onnx_dtype_name(el_type)}"
+            it = torch.uint16
+            itch = tch.view(it)
+            npt = itch.numpy()
+
+            dtype = onnx_dtype_to_np_dtype(el_type)
+            res.append(npt.view(dtype))
+
+        if self.nvtx:
+            self.torch.cuda.nvtx.range_pop()
+        return tuple(res)
 
 
 class InferenceSessionForTorch(_InferenceSession):
@@ -225,33 +305,6 @@ class InferenceSessionForTorch(_InferenceSession):
             use_training_api=use_training_api,
         )
 
-        self.TORCH_DTYPE_TO_ONNX_DTYPE = {
-            torch.float16: onnx.TensorProto.FLOAT16,
-            torch.bfloat16: onnx.TensorProto.BFLOAT16,
-            torch.float32: onnx.TensorProto.FLOAT,
-            torch.float64: onnx.TensorProto.DOUBLE,
-            torch.uint32: onnx.TensorProto.UINT32,
-            torch.uint16: onnx.TensorProto.UINT16,
-            torch.uint8: onnx.TensorProto.UINT8,
-            torch.int8: onnx.TensorProto.INT8,
-            torch.int16: onnx.TensorProto.INT16,
-            torch.int32: onnx.TensorProto.INT32,
-            torch.int64: onnx.TensorProto.INT64,
-            torch.bool: onnx.TensorProto.BOOL,
-        }
-
-        self.TORCH_DTYPE_TO_NUMPY_DTYPE = {
-            torch.float16: np.float16,
-            torch.float32: np.float32,
-            torch.float64: np.float64,
-            torch.uint8: np.uint8,
-            torch.int8: np.int8,
-            torch.int16: np.int16,
-            torch.int32: np.int32,
-            torch.int64: np.int64,
-            torch.bool: np.bool_,
-        }
-
     def _get_ortvalues_from_torch_tensors(
         self, tensors: Tuple[torch.Tensor, ...], n_outputs: int
     ) -> Tuple[ORTC.OrtValueVector, List[onnxruntime.OrtDevice]]:
@@ -269,7 +322,7 @@ class InferenceSessionForTorch(_InferenceSession):
         new_tensors = []
         for tensor in tensors:
             assert isinstance(tensor, self.torch.Tensor), f"Unexpected type {type(tensor)}"
-            dtypes.append(self.TORCH_DTYPE_TO_NUMPY_DTYPE[tensor.dtype])
+            dtypes.append(onnx_dtype_to_np_dtype(torch_dtype_to_onnx_dtype(tensor.dtype)))
             shapes.append(tensor.size())
             data_ptrs.append(tensor.data_ptr())
             d = tensor.get_device()

@@ -56,12 +56,19 @@ jobs:
         run: |
           pip install pytest
           export PYTHONPATH=.
-          UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py
+          UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py --ignore _unittests/ut_reference/test_backend_onnxruntime_evaluator.py
           export PYTHONPATH=
 
-      - name: run backend tests
+      - name: run backend tests python
         run: |
           pip install pytest
           export PYTHONPATH=.
           UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_extended_reference_evaluator.py
+          export PYTHONPATH=
+
+      - name: run backend tests onnxruntime
+        run: |
+          pip install pytest
+          export PYTHONPATH=.
+          UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --maxfail=15
           export PYTHONPATH=

@@ -5,7 +5,12 @@ import ml_dtypes
 import onnx
 import onnx.helper as oh
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, skipif_ci_windows, hide_stdout
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    skipif_ci_windows,
+    hide_stdout,
+    requires_onnx,
+)
 from onnx_diagnostic.helpers import (
     string_type,
     string_sig,
@@ -19,9 +24,11 @@ from onnx_diagnostic.helpers import (
     string_signature,
     make_hash,
     onnx_dtype_to_torch_dtype,
+    onnx_dtype_to_np_dtype,
     np_dtype_to_tensor_dtype,
     torch_dtype_to_onnx_dtype,
     from_array_extended,
+    to_array_extended,
     convert_endian,
     from_array_ml_dtypes,
     dtype_to_tensor_dtype,
@@ -213,6 +220,7 @@ class TestHelpers(ExtTestCase):
                     "FLOAT8E4M3FNUZ",
                 }:
                     onnx_dtype_to_torch_dtype(i)
+                    onnx_dtype_to_np_dtype(i)
 
     def test_size_type_numpy(self):
         for dt in {
@@ -248,16 +256,21 @@ class TestHelpers(ExtTestCase):
             t = np.random.rand(4, 3).astype(dt)
             proto = from_array_extended(t)
             self.assertIsInstance(proto, onnx.TensorProto)
-            convert_endian(proto)
             dtype_to_tensor_dtype(dt)
+            arr = to_array_extended(proto)
+            self.assertEqualArray(t, arr)
+            convert_endian(proto)
 
+    @requires_onnx("1.18.0")
     def test_from_array_ml_dtypes(self):
         for dt in {
             ml_dtypes.bfloat16,
         }:
             t = np.random.rand(4, 3).astype(dt)
-            from_array_ml_dtypes(t)
+            proto = from_array_ml_dtypes(t)
             from_array_extended(t)
+            arr = to_array_extended(proto)
+            self.assertEqualArray(t, arr)
 
     def test_size_type_mldtypes(self):
         for dt in {
@@ -406,6 +419,28 @@ class TestHelpers(ExtTestCase):
     def test_rename_dynamic_expression(self):
         text = rename_dynamic_expression("a * 10 - a", {"a": "x"})
         self.assertEqual(text, "x * 10 - x")
+
+    def test_from_tensor(self):
+        for dt in {
+            torch.float32,
+            torch.float64,
+            torch.bfloat16,
+            torch.float16,
+            torch.int32,
+            torch.int64,
+            torch.int8,
+            torch.int16,
+            torch.uint8,
+            torch.uint16,
+            torch.uint32,
+            torch.uint64,
+        }:
+            t = torch.arange(12).reshape((4, 3)).to(dt)
+            from_array_extended(t)
+            proto = from_array_extended(t, name="a")
+            self.assertIsInstance(proto, onnx.TensorProto)
+            convert_endian(proto)
+            dtype_to_tensor_dtype(dt)
 
 
 if __name__ == "__main__":

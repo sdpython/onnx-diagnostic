@@ -11,10 +11,6 @@ onnx-diagnostic: investigate onnx models
 .. image:: https://badge.fury.io/py/onnx-diagnostic.svg
     :target: http://badge.fury.io/py/onnx-diagnostic
 
-.. image:: http://img.shields.io/github/issues/sdpython/onnx-diagnostic.png
-    :alt: GitHub Issues
-    :target: https://github.com/sdpython/onnx-diagnostic/issues
-
 .. image:: https://img.shields.io/badge/license-MIT-blue.svg
     :alt: MIT License
     :target: https://opensource.org/license/MIT/
