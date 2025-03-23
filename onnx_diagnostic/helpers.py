@@ -713,7 +713,7 @@ def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> Te
     """
     Converts an array into a :class:`onnx.TensorProto`.
 
-    :param tensor: numpy array
+    :param tensor: numpy array or torch tensor
     :param name: name
     :return: TensorProto
     """

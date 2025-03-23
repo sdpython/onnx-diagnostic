@@ -16,6 +16,7 @@ import onnxruntime
 from ..helpers import pretty_onnx, dtype_to_tensor_dtype, string_type
 from ..ort_session import InferenceSessionForTorch, InferenceSessionForNumpy, _InferenceSession
 
+PROTO = (FunctionProto, ModelProto, GraphProto, NodeProto)
 Proto = Union[FunctionProto, ModelProto, GraphProto, NodeProto]
 
 
@@ -55,22 +56,29 @@ class OnnxruntimeEvaluator:
         disable_aot_function_inlining: Optional[bool] = None,
         use_training_api: Optional[bool] = None,
         verbose: int = 0,
-        local_functions: Optional[Dict[Tuple[str, str], Proto]] = None,
+        local_functions: Optional[
+            Dict[Tuple[str, str], Union[Proto, "OnnxruntimeEvaluator"]]
+        ] = None,
         ir_version: int = 10,
         opsets: Optional[Union[int, Dict[str, int]]] = None,
     ):
-        self._cache = {}
         if isinstance(proto, str):
-            proto = load(proto)
+            self.proto: Proto = load(proto)
         if isinstance(proto, OnnxruntimeEvaluator):
-            proto = proto.proto
+            assert isinstance(
+                proto.proto, PROTO
+            ), f"Unexpected type for proto.proto {type(proto.proto)}"
+            self.proto = proto.proto
         assert isinstance(
-            proto, (FunctionProto, ModelProto, GraphProto, NodeProto)
-        ), f"Unexpected type {type(proto)}"
+            self.proto, PROTO
+        ), f"Unexpected type for self.proto {type(self.proto)}"
 
+        self._cache: Dict[
+            Any, Tuple[Proto, Union["OnnxruntimeEvaluator", _InferenceSession]]  # noqa: UP037
+        ] = {}
         self.ir_version = ir_version
         self.opsets = opsets
-        self.session_kwargs = dict(
+        self.session_kwargs: Dict[str, Any] = dict(
             session_options=session_options,
             providers=providers,
             nvtx=nvtx,
@@ -83,22 +91,25 @@ class OnnxruntimeEvaluator:
             use_training_api=use_training_api,
         )
 
-        self.proto = proto
         self.nodes = (
-            [proto]
-            if isinstance(proto, NodeProto)
-            else (list(proto.graph.node if hasattr(proto, "graph") else proto.node))
+            [self.proto]
+            if isinstance(self.proto, NodeProto)
+            else (
+                list(
+                    self.proto.graph.node if hasattr(self.proto, "graph") else self.proto.node
+                )
+            )
         )
         self.rt_inits_ = (
-            {init.name: to_array(init) for init in proto.graph.initializer}
-            if hasattr(proto, "graph")
+            {init.name: to_array(init) for init in self.proto.graph.initializer}
+            if hasattr(self.proto, "graph")
             else {}
         )
         self.rt_nodes_ = self.nodes.copy()
         self.verbose = verbose
-        self.local_functions = (
-            {(f.domain, f.name): self.__class__(f) for f in proto.functions}
-            if hasattr(proto, "functions")
+        self.local_functions: Dict[Tuple[str, str], "OnnxruntimeEvaluator"] = (  # noqa: UP037
+            {(f.domain, f.name): self.__class__(f) for f in self.proto.functions}
+            if hasattr(self.proto, "functions")
             else {}
         )
         if local_functions:
@@ -128,11 +139,6 @@ class OnnxruntimeEvaluator:
             )
         ]
 
-    def _log(self, level: int, pattern: str, *args: List[Any]) -> None:
-        if level < self.verbose:
-            new_args = [self._log_arg(a) for a in args]
-            print(pattern % tuple(new_args))
-
     def _log_arg(self, a: Any) -> Any:
         if isinstance(a, (str, int, float)):
             return a
@@ -153,7 +159,7 @@ class OnnxruntimeEvaluator:
             return ", ".join(map(self._log_arg, a))
         return a
 
-    def _log(self, level: int, pattern: str, *args: List[Any]) -> None:
+    def _log(self, level: int, pattern: str, *args: Any) -> None:
         if level < self.verbose:
             new_args = [self._log_arg(a) for a in args]
             print(pattern % tuple(new_args))
@@ -179,7 +185,7 @@ class OnnxruntimeEvaluator:
         """
         if outputs is None:
             outputs = self.output_names
-        results = self.rt_inits_.copy()
+        results: Dict[str, Any] = self.rt_inits_.copy()
 
         for k, v in self.rt_inits_.items():
             self._log(2, " +C %s: %s", k, v)
@@ -207,6 +213,7 @@ class OnnxruntimeEvaluator:
                 if name == "":
                     continue
                 self._log(2, " + %s: %s", name, value)  # type: ignore[arg-type]
+                assert isinstance(name, str), f"unexpected type for name {type(name)}"
                 results[name] = value
 
         if intermediate:
@@ -218,12 +225,15 @@ class OnnxruntimeEvaluator:
             if name not in results:
                 raise RuntimeError(
                     f"Unable to find output name {name!r} "
-                    f"in {sorted(results)}, proto is\n{self.proto_}"
+                    f"in {sorted(results)}, proto is\n{pretty_onnx(self.proto)}"
                 )
         return [results[name] for name in output_names if name != ""]
 
     def _make_model_proto(
-        self, nodes: Sequence[NodeProto], vinputs: ValueInfoProto, voutputs: ValueInfoProto
+        self,
+        nodes: Sequence[NodeProto],
+        vinputs: Sequence[ValueInfoProto],
+        voutputs: Sequence[ValueInfoProto],
     ) -> ModelProto:
         onx = oh.make_model(
             oh.make_graph(nodes, "-", vinputs, voutputs),
@@ -288,13 +298,13 @@ class OnnxruntimeEvaluator:
             if i == "" or i in unique_names:
                 continue
             unique_names.add(i)
-            value = oh.make_tensor_value_info(i, self._get_itype(it.dtype), it.shape)
+            value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(it.dtype), it.shape)
             vinputs.append(value)
 
         for i, v in context.items():
             if i not in unique_names:
                 unique_names.add(i)
-                value = oh.make_tensor_value_info(i, self._get_itype(v.dtype), v.shape)
+                value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(v.dtype), v.shape)
                 vinputs.append(value)
 
         for att in node.attribute:
@@ -316,17 +326,17 @@ class OnnxruntimeEvaluator:
 
     def _get_sess_local(
         self, node: NodeProto, inputs: List[Any]
-    ) -> Tuple[ModelProto, "OnnxruntimeEvaluator"]:
-        onx = self.local_functions[node.domain, node.op_type]
+    ) -> Tuple[FunctionProto, "OnnxruntimeEvaluator"]:
+        ev = self.local_functions[node.domain, node.op_type]
         sess = OnnxruntimeEvaluator(
-            onx,
+            ev,
             local_functions=self.local_functions,
             verbose=self.verbose,
             ir_version=self.ir_version,
             opsets=self.opsets,
             **self.session_kwargs,
         )
-        return onx, sess
+        return ev.proto, sess
 
     def _run(self, node: NodeProto, inputs: List[Any], results: Dict[str, Any]) -> List[Any]:
         """Runs a node."""
@@ -335,13 +345,16 @@ class OnnxruntimeEvaluator:
         if key in self._cache:
             sess = self._cache[key][1]
         else:
-            self._cache[key] = onx, sess = self._get_sess(node, inputs)
+            onx, sess = self._get_sess(node, inputs)
+            self._cache[key] = onx, sess
 
         feeds = dict(zip(node.input, inputs))
         if "" in feeds:
             feeds[""] = np.array([0], dtype=np.float32)
 
+        assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
         outputs = sess.run(None, feeds)
+        assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs
 
     def _run_if(
@@ -361,7 +374,9 @@ class OnnxruntimeEvaluator:
         else:
             self._cache[key] = onx, sess = self._get_sess_if(node, name, inputs, results)
 
+        assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
         outputs = sess.run(None, feeds)
+        assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs
 
     def _run_local(
@@ -373,7 +388,8 @@ class OnnxruntimeEvaluator:
         if key in self._cache:
             sess = self._cache[key][1]
         else:
-            self._cache[key] = onx, sess = self._get_sess_local(node, inputs)
+            onx, sess = self._get_sess_local(node, inputs)
+            self._cache[key] = onx, sess
 
         replace = dict(zip(node.input, sess.input_names))
         assert len(node.input) == len(sess.input_names), (
@@ -385,5 +401,7 @@ class OnnxruntimeEvaluator:
         if "" in feeds:
             feeds[""] = np.array([0], dtype=np.float32)
 
+        assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
         outputs = sess.run(None, feeds)
+        assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs
