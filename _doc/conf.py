@@ -177,6 +177,7 @@ epkg_dictionary = {
     "GraphModule": "https://pytorch.org/docs/stable/fx.html#torch.fx.GraphModule",
     "HuggingFace": "https://huggingface.co/docs/hub/en/index",
     "Linux": "https://www.linux.org/",
+    "ml_dtypes": "https://github.com/jax-ml/ml_dtypes",
     "monai": "https://monai.io/",
     "numpy": "https://numpy.org/",
     "onnx": "https://onnx.ai/onnx/",

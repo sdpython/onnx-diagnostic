@@ -43,13 +43,13 @@ class ExtendedReferenceEvaluatorBackendRep(onnx.backend.base.BackendRep):
 
 class ExtendedReferenceEvaluatorBackend(onnx.backend.base.Backend):
     @classmethod
-    def is_opset_supported(cls, model):  # pylint: disable=unused-argument
-        return True, ""
+    def is_compatible(cls, model) -> bool:
+        return True
 
     @classmethod
     def supports_device(cls, device: str) -> bool:
         d = Device(device)
-        return d.type == DeviceType.CPU  # type: ignore[no-any-return]
+        return d.type == DeviceType.CPU
 
     @classmethod
     def create_inference_session(cls, model):

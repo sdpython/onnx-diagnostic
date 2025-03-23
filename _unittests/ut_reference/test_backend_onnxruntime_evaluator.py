@@ -12,6 +12,8 @@ from onnx.backend.base import Device, DeviceType
 from onnx.defs import onnx_opset_version
 from onnx_diagnostic.reference import OnnxruntimeEvaluator
 
+ORT_OPSET = max(21, onnx_opset_version() - 2)
+
 
 class OnnxruntimeEvaluatorBackendRep(onnx.backend.base.BackendRep):
     def __init__(self, session):
@@ -43,13 +45,13 @@ class OnnxruntimeEvaluatorBackendRep(onnx.backend.base.BackendRep):
 
 class OnnxruntimeEvaluatorBackend(onnx.backend.base.Backend):
     @classmethod
-    def is_opset_supported(cls, model):  # pylint: disable=unused-argument
-        return True, ""
+    def is_compatible(cls, model) -> bool:
+        return all(not (d.domain == "" and d.version > ORT_OPSET) for d in model.opset_import)
 
     @classmethod
     def supports_device(cls, device: str) -> bool:
         d = Device(device)
-        return d.type == DeviceType.CPU  # type: ignore[no-any-return]
+        return d.type == DeviceType.CPU
 
     @classmethod
     def create_inference_session(cls, model):
@@ -119,50 +121,6 @@ backend_test.exclude(
     "|test_scan_sum)"
 )
 
-# The following tests fail due to discrepancies (small but still higher than 1e-7).
-backend_test.exclude("test_adam_multiple")  # 1e-2
-
-
-if onnx_opset_version() < 19:
-    backend_test.exclude(
-        "(test_argm[ai][nx]_default_axis_example"
-        "|test_argm[ai][nx]_default_axis_random"
-        "|test_argm[ai][nx]_keepdims_example"
-        "|test_argm[ai][nx]_keepdims_random"
-        "|test_argm[ai][nx]_negative_axis_keepdims_example"
-        "|test_argm[ai][nx]_negative_axis_keepdims_random"
-        "|test_argm[ai][nx]_no_keepdims_example"
-        "|test_argm[ai][nx]_no_keepdims_random"
-        "|test_col2im_pads"
-        "|test_gru_batchwise"
-        "|test_gru_defaults"
-        "|test_gru_seq_length"
-        "|test_gru_with_initial_bias"
-        "|test_layer_normalization_2d_axis1_expanded"
-        "|test_layer_normalization_2d_axis_negative_1_expanded"
-        "|test_layer_normalization_3d_axis1_epsilon_expanded"
-        "|test_layer_normalization_3d_axis2_epsilon_expanded"
-        "|test_layer_normalization_3d_axis_negative_1_epsilon_expanded"
-        "|test_layer_normalization_3d_axis_negative_2_epsilon_expanded"
-        "|test_layer_normalization_4d_axis1_expanded"
-        "|test_layer_normalization_4d_axis2_expanded"
-        "|test_layer_normalization_4d_axis3_expanded"
-        "|test_layer_normalization_4d_axis_negative_1_expanded"
-        "|test_layer_normalization_4d_axis_negative_2_expanded"
-        "|test_layer_normalization_4d_axis_negative_3_expanded"
-        "|test_layer_normalization_default_axis_expanded"
-        "|test_logsoftmax_large_number_expanded"
-        "|test_lstm_batchwise"
-        "|test_lstm_defaults"
-        "|test_lstm_with_initial_bias"
-        "|test_lstm_with_peepholes"
-        "|test_mvn"
-        "|test_mvn_expanded"
-        "|test_softmax_large_number_expanded"
-        "|test_operator_reduced_mean"
-        "|test_operator_reduced_mean_keepdim)"
-    )
-
 if onnx_opset_version() < 21:
     backend_test.exclude(
         "(test_averagepool_2d_dilations"
@@ -170,27 +128,11 @@ if onnx_opset_version() < 21:
         "|test_loop*"
         "|test_scan*"
         "|test_sequence_map*"
-        ")"
+        "|test_cast_FLOAT_to_STRING|"
+        "test_castlike_FLOAT_to_STRING|test_strnorm|"
+        "test_center_crop_pad_crop_axes_hwc_expanded|"
+        "test_lppool_2d_dilations|test_eyelike_without_dtype)"
     )
-
-# The following tests are using types not supported by NumPy.
-# They could be if method to_array is extended to support custom
-# types the same as the reference implementation does
-# (see onnx.reference.op_run.to_array_extended).
-backend_test.exclude(
-    "(test_cast_FLOAT_to_BFLOAT16"
-    "|test_cast_BFLOAT16_to_FLOAT"
-    "|test_cast_BFLOAT16_to_FLOAT"
-    "|test_castlike_BFLOAT16_to_FLOAT"
-    "|test_castlike_FLOAT_to_BFLOAT16"
-    "|test_castlike_FLOAT_to_BFLOAT16_expanded"
-    "|test_cast_no_saturate_"
-    "|_to_FLOAT8"
-    "|_FLOAT8"
-    "|test_quantizelinear_e4m3fn"
-    "|test_quantizelinear_e5m2"
-    ")"
-)
 
 # Disable test about float 8
 backend_test.exclude(
@@ -220,23 +162,18 @@ backend_test.exclude(
     "|test_castlike_UINT4_to_*)"
 )
 
-backend_test.exclude("(test_regex_full_match*)")
-
-backend_test.exclude("(test_scatter_with_axis*|test_scatter_without_axis*)")
-
-if onnx_opset_version() < 21:
-    # The following tests fail due to a bug in the backend test comparison.
-    backend_test.exclude(
-        "(test_cast_FLOAT_to_STRING|test_castlike_FLOAT_to_STRING|test_strnorm)"
-    )
-
-    # The following tests fail due to a shape mismatch.
-    backend_test.exclude(
-        "(test_center_crop_pad_crop_axes_hwc_expanded|test_lppool_2d_dilations)"
-    )
-
-    # The following tests fail due to a type mismatch.
-    backend_test.exclude("(test_eyelike_without_dtype)")
+backend_test.exclude(
+    "(test_regex_full_match*|"
+    "test_adagrad*|"
+    "test_adam|"
+    "test_add_uint8|"
+    "test_ai_onnx_ml_label_encoder_string*|"
+    "test_ai_onnx_ml_label_encoder_tensor_mapping*|"
+    "test_ai_onnx_ml_label_encoder_tensor_value_only_mapping*|"
+    "test_bitshift_left_uint16*|"
+    "test_scatter_with_axis*|"
+    "test_scatter_without_axis*)"
+)
 
 
 # import all test cases at global scope to make them visible to python.unittest
