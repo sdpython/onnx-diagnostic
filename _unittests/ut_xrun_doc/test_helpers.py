@@ -5,7 +5,12 @@ import ml_dtypes
 import onnx
 import onnx.helper as oh
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, skipif_ci_windows, hide_stdout
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    skipif_ci_windows,
+    hide_stdout,
+    requires_onnx,
+)
 from onnx_diagnostic.helpers import (
     string_type,
     string_sig,
@@ -256,6 +261,7 @@ class TestHelpers(ExtTestCase):
             self.assertEqualArray(t, arr)
             convert_endian(proto)
 
+    @requires_onnx("1.18.0")
     def test_from_array_ml_dtypes(self):
         for dt in {
             ml_dtypes.bfloat16,
