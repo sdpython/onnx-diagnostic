@@ -422,8 +422,9 @@ class TestHelpers(ExtTestCase):
             torch.uint32,
             torch.uint64,
         }:
-            t = torch.rand((4, 3), dtype=torch.dtype)
-            proto = from_array_extended(t)
+            t = torch.arange(12).reshape((4, 3)).to(dt)
+            from_array_extended(t)
+            proto = from_array_extended(t, name="a")
             self.assertIsInstance(proto, onnx.TensorProto)
             convert_endian(proto)
             dtype_to_tensor_dtype(dt)

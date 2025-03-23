@@ -64,11 +64,13 @@ class OnnxruntimeEvaluator:
     ):
         if isinstance(proto, str):
             self.proto: Proto = load(proto)
-        if isinstance(proto, OnnxruntimeEvaluator):
+        elif isinstance(proto, OnnxruntimeEvaluator):
             assert isinstance(
                 proto.proto, PROTO
             ), f"Unexpected type for proto.proto {type(proto.proto)}"
             self.proto = proto.proto
+        else:
+            self.proto = proto
         assert isinstance(
             self.proto, PROTO
         ), f"Unexpected type for self.proto {type(self.proto)}"
@@ -353,7 +355,7 @@ class OnnxruntimeEvaluator:
             feeds[""] = np.array([0], dtype=np.float32)
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
-        outputs = sess.run(None, feeds)
+        outputs = list(sess.run(None, feeds))
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs
 

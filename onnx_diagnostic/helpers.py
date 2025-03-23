@@ -1,4 +1,5 @@
 import ast
+import ctypes
 import enum
 import functools
 import inspect
@@ -709,6 +710,82 @@ def from_array_ml_dtypes(arr: npt.ArrayLike, name: Optional[str] = None) -> Tens
     return tensor
 
 
+_STORAGE_TYPE = {
+    TensorProto.FLOAT16: np.int16,
+    TensorProto.BFLOAT16: np.int16,
+}
+
+
+def proto_from_tensor(
+    arr: "torch.Tensor",  # noqa: F821
+    name: Optional[str] = None,
+    verbose: int = 0,
+) -> TensorProto:
+    """
+    Converts a torch Tensor into a TensorProto.
+
+    :param arr: tensor
+    :param verbose: display the type and shape
+    :return: a TensorProto
+    """
+    import torch
+
+    if not isinstance(arr, torch.Tensor):
+        raise TypeError(f"Unexpected type {type(arr)}.")
+    if arr.is_sparse:
+        raise NotImplementedError(
+            f"Sparse tensor is not supported yet but initializer {name!r} is."
+        )
+
+    # arr.contiguous() is slow after a transpose, maybe there is a way to optimize this.
+    if arr.is_contiguous():
+        arr_cpu = arr.cpu()
+    else:
+        arr_cpu = arr.contiguous().cpu()
+
+    numel = torch.numel(arr_cpu)
+    element_size = arr_cpu.element_size()
+
+    if arr_cpu.dtype in {torch.bfloat16}:
+        np_arr = arr_cpu
+    elif arr_cpu.data_ptr() == arr.data_ptr():
+        copy = arr_cpu.clone().detach().requires_grad_(False)
+        assert (
+            arr_cpu.data_ptr() == 0 or arr_cpu.data_ptr() != copy.data_ptr()
+        ), f"Pointers are not null and different {arr_cpu.data_ptr()} != {copy.data_ptr()}"
+        np_arr = np.from_dlpack(copy)
+    else:
+        np_arr = np.from_dlpack(arr_cpu.detach())
+
+    tensor = TensorProto()
+    tensor.dims.extend(arr_cpu.shape)
+    if name:
+        tensor.name = name
+    itype = torch_dtype_to_onnx_dtype(arr_cpu.dtype)
+    assert not hasattr(TensorProto, "INT4") or itype not in {
+        TensorProto.INT4,
+        TensorProto.UINT4,
+    }, f"Type {arr.dtype} is not supported yet for name={name!r}"
+    tensor.data_type = itype
+
+    if verbose > 1 and numel > 100:
+        print(f"[proto_from_array] {tensor.data_type}[{arr_cpu.shape}]")
+
+    if isinstance(np_arr, torch.Tensor):
+        byte_data = (ctypes.c_ubyte * numel * element_size).from_address(np_arr.data_ptr())
+        tensor.raw_data = bytes(byte_data)
+        if sys.byteorder == "big":
+            np_dtype = _STORAGE_TYPE[tensor.data_type]  # type: ignore
+            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)
+    else:
+        tensor.raw_data = np_arr.tobytes()
+        if sys.byteorder == "big":
+            np_dtype = tensor_dtype_to_np_dtype(tensor.data_type)
+            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)
+
+    return tensor
+
+
 def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
     """
     Converts an array into a :class:`onnx.TensorProto`.
@@ -722,7 +799,7 @@ def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> Te
     except ImportError:
         torch = None
     if torch is not None and isinstance(tensor, torch.Tensor):
-        raise NotImplementedError()
+        return proto_from_tensor(tensor, name=name)
 
     from onnx.reference.ops.op_cast import (
         bfloat16,
