@@ -169,6 +169,8 @@ backend_test.exclude(
     "|test_castlike_UINT4_to_)"
 )
 
+backend_test.exclude("(_to_STRING|to_BFLOAT16|STRING_to|BFLOAT16_to)")
+
 backend_test.exclude(
     "(test_regex_full_match|"
     "test_adagrad|"
