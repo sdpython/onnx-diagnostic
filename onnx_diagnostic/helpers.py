@@ -317,6 +317,7 @@ def string_type(
         if not with_shape:
             return f"{prefix}F{i}r{len(obj.shape)}"
         return f"{prefix}F{i}s{'x'.join(map(str, obj.shape))}"
+
     if isinstance(obj, torch.Tensor):
         if with_min_max:
             s = string_type(obj, with_shape=with_shape, with_device=with_device)
@@ -341,6 +342,25 @@ def string_type(
         if not with_shape:
             return f"{prefix}T{i}r{len(obj.shape)}"
         return f"{prefix}T{i}s{'x'.join(map(str, obj.shape))}"
+
+    if obj.__class__.__name__ == "OrtValue":
+        if not obj.has_value():
+            return "OV(<novalue>)"
+        if not obj.is_tensor():
+            return "OV(NOTENSOR)"
+        if with_min_max:
+            try:
+                t = obj.numpy()
+            except Exception:
+                # pass unable to convert into numpy (bfloat16, ...)
+                return "OV(NO-NUMPY:FIXIT)"
+            return f"OV({string_type(t, with_shape=with_shape, with_min_max=with_min_max)})"
+        dt = obj.element_type()
+        shape = obj.shape()
+        if with_shape:
+            return f"OV{dt}s{'x'.join(map(str, shape))}"
+        return f"OV{dt}r{len(shape)}"
+
     if isinstance(obj, bool):
         if with_min_max:
             return f"bool={obj}"
@@ -442,6 +462,7 @@ def string_type(
 
     if ignore:
         return f"{obj.__class__.__name__}(...)"
+
     raise AssertionError(f"Unsupported type {type(obj).__name__!r} - {type(obj)}")
 
 

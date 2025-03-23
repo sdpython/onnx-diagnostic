@@ -204,6 +204,8 @@ class InferenceSessionForNumpy(_InferenceSession):
         """
         new_feeds = {}
         for k, v in feeds.items():
+            if not k:
+                continue
             new_feeds[k] = (
                 ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
                     v, np_dtype_to_tensor_dtype(v.dtype)
