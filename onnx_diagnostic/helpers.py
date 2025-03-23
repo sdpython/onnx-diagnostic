@@ -889,6 +889,51 @@ def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821
     )
 
 
+def onnx_dtype_to_np_dtype(itype: int) -> Any:
+    """
+    Converts an onnx type into a to numpy dtype.
+    That includes :epkg:`ml_dtypes` dtypes.
+
+    :param to: onnx dtype
+    :return: numpy dtype
+    """
+    if itype == TensorProto.FLOAT:
+        return np.float32
+    if itype == TensorProto.FLOAT16:
+        return np.float16
+    if itype == TensorProto.BFLOAT16:
+        import ml_dtypes
+
+        return ml_dtypes.bfloat16
+    if itype == TensorProto.DOUBLE:
+        return np.float64
+    if itype == TensorProto.INT32:
+        return np.int32
+    if itype == TensorProto.INT64:
+        return np.int64
+    if itype == TensorProto.UINT32:
+        return np.uint32
+    if itype == TensorProto.UINT64:
+        return np.uint64
+    if itype == TensorProto.BOOL:
+        return np.bool
+    if itype == TensorProto.INT16:
+        return np.int16
+    if itype == TensorProto.UINT16:
+        return np.uint16
+    if itype == TensorProto.INT8:
+        return np.int16
+    if itype == TensorProto.UINT8:
+        return np.uint16
+    if itype == TensorProto.COMPLEX64:
+        return np.complex64
+    if itype == TensorProto.COMPLEX128:
+        return np.complex128
+    raise NotImplementedError(
+        f"Unable to convert onnx type {onnx_dtype_name(itype)} to torch.type."
+    )
+
+
 def torch_dtype_to_onnx_dtype(to: "torch.dtype") -> int:  # noqa: F821
     """
     Converts a torch dtype into a onnx element type.

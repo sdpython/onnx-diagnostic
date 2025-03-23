@@ -74,7 +74,7 @@ except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
 
 ref = OnnxruntimeEvaluator(model, verbose=10)
 feeds = dict(
-    X=torch.rand((3, 4), dtype=torch.blofat16), Y=torch.rand((3, 4), dtype=torch.blofat16)
+    X=torch.rand((3, 4), dtype=torch.bfloat16), Y=torch.rand((3, 4), dtype=torch.bfloat16)
 )
 try:
     ref.run(None, feeds)

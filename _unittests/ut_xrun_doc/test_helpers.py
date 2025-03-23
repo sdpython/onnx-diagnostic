@@ -19,6 +19,7 @@ from onnx_diagnostic.helpers import (
     string_signature,
     make_hash,
     onnx_dtype_to_torch_dtype,
+    onnx_dtype_to_np_dtype,
     np_dtype_to_tensor_dtype,
     torch_dtype_to_onnx_dtype,
     from_array_extended,
@@ -213,6 +214,7 @@ class TestHelpers(ExtTestCase):
                     "FLOAT8E4M3FNUZ",
                 }:
                     onnx_dtype_to_torch_dtype(i)
+                    onnx_dtype_to_np_dtype(i)
 
     def test_size_type_numpy(self):
         for dt in {
