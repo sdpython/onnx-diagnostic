@@ -140,6 +140,22 @@ class OnnxruntimeEvaluator:
             )
         ]
 
+    @property
+    def input_types(self) -> List[TypeProto]:
+        "Returns input types."
+        if not isinstance(self.proto, (ModelProto, GraphProto)):
+            raise ValueError(f"Cannot guess input types for type {type(self.proto)}")
+        g = self.proto.graph if hasattr(self.proto, "graph") else self.proto
+        return [i.type for i in g.input]
+
+    @property
+    def output_types(self) -> List[TypeProto]:
+        "Returns output types."
+        if not isinstance(self.proto, (ModelProto, GraphProto)):
+            raise ValueError(f"Cannot guess output types for type {type(self.proto)}")
+        g = self.proto.graph if hasattr(self.proto, "graph") else self.proto
+        return [i.type for i in g.output]
+
     def _log_arg(self, a: Any) -> Any:
         if isinstance(a, (str, int, float)):
             return a
