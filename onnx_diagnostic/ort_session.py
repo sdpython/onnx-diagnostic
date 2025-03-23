@@ -188,15 +188,15 @@ class InferenceSessionForNumpy(_InferenceSession):
 
     def run(
         self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
-    ) -> List[npt.ArrayLike]:
+    ) -> List[Optional[npt.ArrayLike]]:
         """Calls :meth:`onnxruntime.InferenceSession.run`."""
         # sess.run does not support blfoat16
         # res = self.sess.run(output_names, feeds)
-        return self.run_dlpack(output_names, feeds)
+        return list(self.run_dlpack(output_names, feeds))
 
     def run_dlpack(
-        self, output_names: Optional[List[str]], feeds: Dict[str, np.ndarray]
-    ) -> Tuple[torch.Tensor, ...]:
+        self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
+    ) -> Tuple[Optional[npt.ArrayLike], ...]:
         """
         Same as :meth:`onnxruntime.InferenceSession.run` except that
         feeds is a dictionary of :class:`np.ndarray`.
@@ -224,13 +224,13 @@ class InferenceSessionForNumpy(_InferenceSession):
     def _ortvalues_to_numpy_tensor(
         self,
         ortvalues: Union[List[ORTC.OrtValue], ORTC.OrtValueVector],
-    ) -> Tuple[np.ndarray, ...]:
+    ) -> Tuple[Optional[npt.ArrayLike], ...]:
         if len(ortvalues) == 0:
             return tuple()
 
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("_ortvalues_to_numpy_tensor")
-        res = []
+        res: List[Optional[npt.ArrayLike]] = []  # noqa: F823
         for i in range(len(ortvalues)):
             if not ortvalues[i].has_value():
                 res.append(None)

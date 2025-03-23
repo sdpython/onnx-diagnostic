@@ -235,7 +235,7 @@ class TestOnnxruntimeEvaluatoruator(ExtTestCase):
             model, providers="cpu", graph_optimization_level=False, verbose=10
         )
         got = wrap.run(None, feeds)
-        self.assertIsInstance(got[0], torch.Tensor)
+        self.assertIsInstance(got[0], (torch.Tensor, np.ndarray))
         self.assertEqualArray(expected[0], got[0])
 
     @hide_stdout()
@@ -245,7 +245,7 @@ class TestOnnxruntimeEvaluatoruator(ExtTestCase):
             model, providers="cpu", graph_optimization_level=False, verbose=10
         )
         got = wrap.run(None, feeds)
-        self.assertIsInstance(got[0], torch.Tensor)
+        self.assertIsInstance(got[0], (torch.Tensor, np.ndarray))
         self.assertEqualArray(expected[0], got[0])
 
 
