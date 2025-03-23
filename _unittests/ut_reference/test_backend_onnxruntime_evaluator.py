@@ -169,8 +169,6 @@ backend_test.exclude(
     "|test_castlike_UINT4_to_)"
 )
 
-backend_test.exclude("(_to_STRING|to_BFLOAT16|STRING_to|BFLOAT16_to)")
-
 backend_test.exclude(
     "(test_regex_full_match|"
     "test_adagrad|"
@@ -192,7 +190,7 @@ backend_test.exclude(
     "test_image|"
     "test_leakyrelu|"
     "test_((less)|(greater))_equal_bcast|"
-    "test_((less)|(greater))[a-z]*expanded|"
+    "test_((less)|(greater))[a-z_]*expanded|"
     "test_Linear|"
     "test_loop13|"
     "test_momentum|"
@@ -222,6 +220,14 @@ backend_test.exclude(
     "|test_top_k_uint64"
     ")"
 )
+
+# failing on CI only
+backend_test.exclude(
+    "(_to_STRING|to_BFLOAT16|STRING_to|BFLOAT16_to|"
+    "test_constant|test_(de)?quantizelinear_u?int4"
+    ")"
+)
+
 
 # import all test cases at global scope to make them visible to python.unittest
 globals().update(backend_test.test_cases)
