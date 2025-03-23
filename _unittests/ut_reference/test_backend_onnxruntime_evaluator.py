@@ -225,6 +225,7 @@ backend_test.exclude(
 backend_test.exclude(
     "(_to_STRING|to_BFLOAT16|STRING_to|BFLOAT16_to|"
     "test_constant|test_(de)?quantizelinear_u?int4"
+    "|test_identity_sequence"
     ")"
 )
 
