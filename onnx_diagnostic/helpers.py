@@ -22,8 +22,7 @@ from onnx.helper import (
     np_dtype_to_tensor_dtype as onnx_np_dtype_to_tensor_dtype,
     tensor_dtype_to_np_dtype as onnx_tensor_dtype_to_np_dtype,
 )
-from onnx.numpy_helper import from_array as onnx_from_array
-from onnx.reference.op_run import to_array_extended
+from onnx.numpy_helper import from_array as onnx_from_array, to_array
 
 
 def size_type(dtype: Any) -> int:
@@ -843,6 +842,16 @@ def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> Te
     t = onnx_from_array(tensor.astype(dt_to), name)
     t.data_type = to
     return t
+
+
+def to_array_extended(proto: TensorProto) -> npt.ArrayLike:
+    """Converts :class:`onnx.TensorProto` into a numpy array."""
+    arr = to_array(proto)
+    if proto.data_type >= onnx.TensorProto.BFLOAT16:
+        # Types not supported by numpy
+        ml_dtypes = onnx_dtype_to_np_dtype(proto.data_type)
+        return arr.view(ml_dtypes)
+    return arr
 
 
 def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821

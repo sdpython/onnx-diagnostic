@@ -28,6 +28,7 @@ import onnx
 import onnx.helper as oh
 import torch
 import onnxruntime
+from onnx_diagnostic.ext_test_case import has_cuda
 from onnx_diagnostic.helpers import from_array_extended
 from onnx_diagnostic.reference import OnnxruntimeEvaluator
 
@@ -80,6 +81,21 @@ try:
     ref.run(None, feeds)
 except Exception as e:
     print("ERROR", type(e), e)
+
+
+# %%
+# :epkg:`onnxruntime` may not support bfloat16 on CPU.
+# See :epkg:`onnxruntime kernels`.
+
+if has_cuda():
+    ref = OnnxruntimeEvaluator(model, providers="cuda", verbose=10)
+    feeds = dict(
+        X=torch.rand((3, 4), dtype=torch.bfloat16), Y=torch.rand((3, 4), dtype=torch.bfloat16)
+    )
+    try:
+        ref.run(None, feeds)
+    except Exception as e:
+        print("ERROR", type(e), e)
 
 # %%
 # We can see it run until it reaches `Cast` and stops.

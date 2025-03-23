@@ -186,6 +186,7 @@ epkg_dictionary = {
     "onnxrt backend": "https://pytorch.org/docs/stable/onnx_dynamo_onnxruntime_backend.html",
     "onnxruntime": "https://onnxruntime.ai/",
     "onnxruntime-training": "https://onnxruntime.ai/docs/get-started/training-on-device.html",
+    "onnxruntime kernels": "https://onnxruntime.ai/docs/reference/operators/OperatorKernels.html",
     "onnx-array-api": "https://sdpython.github.io/doc/onnx-array-api/dev/",
     "onnx-diagnostic": "https://sdpython.github.io/doc/onnx-diagnostic/dev/",
     "onnx-extended": "https://sdpython.github.io/doc/onnx-extended/dev/",

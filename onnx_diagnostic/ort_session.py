@@ -190,18 +190,9 @@ class InferenceSessionForNumpy(_InferenceSession):
         self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
     ) -> List[npt.ArrayLike]:
         """Calls :meth:`onnxruntime.InferenceSession.run`."""
-        if any(
-            (np_dtype_to_tensor_dtype(v.dtype) >= onnx.TensorProto.BFLOAT16)
-            for v in feeds.values()
-        ):
-            # bfloat16 not supported by onnxruntime
-            return self.run_dlpack(output_names, feeds)
-        if self.nvtx:
-            self.torch.cuda.nvtx.range_push("run")
-        res = self.sess.run(output_names, feeds)
-        if self.nvtx:
-            self.torch.cuda.nvtx.range_pop()
-        return res
+        # sess.run does not support blfoat16
+        # res = self.sess.run(output_names, feeds)
+        return self.run_dlpack(output_names, feeds)
 
     def run_dlpack(
         self, output_names: Optional[List[str]], feeds: Dict[str, np.ndarray]
@@ -213,8 +204,12 @@ class InferenceSessionForNumpy(_InferenceSession):
         """
         new_feeds = {}
         for k, v in feeds.items():
-            new_feeds[k] = ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
-                v, np_dtype_to_tensor_dtype(v.dtype)
+            new_feeds[k] = (
+                ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
+                    v, np_dtype_to_tensor_dtype(v.dtype)
+                )
+                if isinstance(v, np.ndarray)
+                else ORTC.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
             )
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("run_with_ort_values")

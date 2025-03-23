@@ -23,6 +23,7 @@ from onnx_diagnostic.helpers import (
     np_dtype_to_tensor_dtype,
     torch_dtype_to_onnx_dtype,
     from_array_extended,
+    to_array_extended,
     convert_endian,
     from_array_ml_dtypes,
     dtype_to_tensor_dtype,
@@ -250,16 +251,20 @@ class TestHelpers(ExtTestCase):
             t = np.random.rand(4, 3).astype(dt)
             proto = from_array_extended(t)
             self.assertIsInstance(proto, onnx.TensorProto)
-            convert_endian(proto)
             dtype_to_tensor_dtype(dt)
+            arr = to_array_extended(proto)
+            self.assertEqualArray(t, arr)
+            convert_endian(proto)
 
     def test_from_array_ml_dtypes(self):
         for dt in {
             ml_dtypes.bfloat16,
         }:
             t = np.random.rand(4, 3).astype(dt)
-            from_array_ml_dtypes(t)
+            proto = from_array_ml_dtypes(t)
             from_array_extended(t)
+            arr = to_array_extended(proto)
+            self.assertEqualArray(t, arr)
 
     def test_size_type_mldtypes(self):
         for dt in {

@@ -11,9 +11,8 @@ from onnx import (
     load,
 )
 from onnx.defs import onnx_opset_version
-from onnx.numpy_helper import to_array
 import onnxruntime
-from ..helpers import pretty_onnx, dtype_to_tensor_dtype, string_type
+from ..helpers import pretty_onnx, dtype_to_tensor_dtype, string_type, to_array_extended
 from ..ort_session import InferenceSessionForTorch, InferenceSessionForNumpy, _InferenceSession
 
 PROTO = (FunctionProto, ModelProto, GraphProto, NodeProto)
@@ -54,7 +53,7 @@ class OnnxruntimeEvaluator:
         log_verbosity_level: Optional[int] = None,
         optimized_model_filepath: Optional[str] = None,
         disable_aot_function_inlining: Optional[bool] = None,
-        use_training_api: Optional[bool] = None,
+        use_training_api: bool = False,
         verbose: int = 0,
         local_functions: Optional[
             Dict[Tuple[str, str], Union[Proto, "OnnxruntimeEvaluator"]]
@@ -103,7 +102,7 @@ class OnnxruntimeEvaluator:
             )
         )
         self.rt_inits_ = (
-            {init.name: to_array(init) for init in self.proto.graph.initializer}
+            {init.name: to_array_extended(init) for init in self.proto.graph.initializer}
             if hasattr(self.proto, "graph")
             else {}
         )
@@ -144,12 +143,8 @@ class OnnxruntimeEvaluator:
     def _log_arg(self, a: Any) -> Any:
         if isinstance(a, (str, int, float)):
             return a
-        if hasattr(a, "detach"):
-            device = f"D{a.get_device()}:"
-            a = a.detach().cpu().numpy()
-        else:
-            device = ""
-        if isinstance(a, np.ndarray):
+        device = f"D{a.get_device()}:" if hasattr(a, "detach") else ""
+        if hasattr(a, "shape"):
             if self.verbose < 4:  # noqa: PLR2004
                 return f"{device}{a.dtype}:{a.shape} in [{a.min()}, {a.max()}]"
             elements = a.ravel().tolist()

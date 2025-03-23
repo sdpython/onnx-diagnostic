@@ -1,6 +1,7 @@
 import unittest
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 import numpy as np
+import ml_dtypes
 from onnx import ModelProto, TensorProto
 from onnx.checker import check_model
 import onnx.helper as oh
@@ -11,6 +12,11 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     ignore_warnings,
     requires_cuda,
+)
+from onnx_diagnostic.helpers import (
+    from_array_extended,
+    onnx_dtype_to_torch_dtype,
+    onnx_dtype_to_np_dtype,
 )
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 
@@ -161,6 +167,85 @@ class TestOnnxruntimeEvaluatoruator(ExtTestCase):
         ort_eval = OnnxruntimeEvaluator(onnx_model, verbose=10, opsets=20)
         expected = ref.run(None, feeds)
         got = ort_eval.run(None, feeds)
+        self.assertEqualArray(expected[0], got[0])
+
+    @classmethod
+    def _trange(cls, *shape, bias: Optional[float] = None):
+        n = np.prod(shape)
+        x = np.arange(n).astype(np.float32) / n
+        if bias:
+            x = x + bias
+        return torch.from_numpy(x.reshape(tuple(shape)).astype(np.float32))
+
+    @classmethod
+    def _get_model_init(cls, itype) -> Tuple[ModelProto, Dict[str, Any], Tuple[Any, ...]]:
+        dtype = onnx_dtype_to_np_dtype(itype)
+        ttype = onnx_dtype_to_torch_dtype(itype)
+        cst = np.arange(6).astype(dtype)
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("IsNaN", ["x"], ["xi"]),
+                    oh.make_node("IsNaN", ["y"], ["yi"]),
+                    oh.make_node("Cast", ["xi"], ["xii"], to=TensorProto.INT64),
+                    oh.make_node("Cast", ["yi"], ["yii"], to=TensorProto.INT64),
+                    oh.make_node("Add", ["xii", "yii"], ["gggg"]),
+                    oh.make_node("Cast", ["gggg"], ["final"], to=itype),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("x", itype, [None, None])],
+                [oh.make_tensor_value_info("final", itype, [None, None])],
+                [from_array_extended(cst, name="y")],
+            ),
+            opset_imports=[oh.make_opsetid("", 20)],
+            ir_version=10,
+        )
+        feeds = {"x": cls._trange(5, 6).to(ttype)}
+        expected = torch.isnan(feeds["x"]).to(int) + torch.isnan(
+            torch.from_numpy(cst.astype(float))
+        ).to(int)
+        return (model, feeds, (expected.to(ttype),))
+
+    @hide_stdout()
+    def test_init_numpy_afloat32(self):
+        model, feeds, expected = self._get_model_init(TensorProto.FLOAT)
+        wrap = OnnxruntimeEvaluator(
+            model, providers="cpu", graph_optimization_level=False, verbose=10
+        )
+        got = wrap.run(None, {k: v.numpy() for k, v in feeds.items()})
+        self.assertIsInstance(got[0], np.ndarray)
+        self.assertEqualArray(expected[0], got[0])
+
+    @hide_stdout()
+    def test_init_numpy_bfloat16(self):
+        model, feeds, expected = self._get_model_init(TensorProto.BFLOAT16)
+        wrap = OnnxruntimeEvaluator(
+            model, providers="cpu", graph_optimization_level=False, verbose=10
+        )
+        got = wrap.run(
+            None, {k: v.to(float).numpy().astype(ml_dtypes.bfloat16) for k, v in feeds.items()}
+        )
+        self.assertIsInstance(got[0], np.ndarray)
+        self.assertEqualArray(expected[0], got[0])
+
+    @hide_stdout()
+    def test_init_torch_afloat32(self):
+        model, feeds, expected = self._get_model_init(TensorProto.FLOAT)
+        wrap = OnnxruntimeEvaluator(
+            model, providers="cpu", graph_optimization_level=False, verbose=10
+        )
+        got = wrap.run(None, feeds)
+        self.assertIsInstance(got[0], torch.Tensor)
+        self.assertEqualArray(expected[0], got[0])
+
+    @hide_stdout()
+    def test_init_torch_bfloat16(self):
+        model, feeds, expected = self._get_model_init(TensorProto.BFLOAT16)
+        wrap = OnnxruntimeEvaluator(
+            model, providers="cpu", graph_optimization_level=False, verbose=10
+        )
+        got = wrap.run(None, feeds)
+        self.assertIsInstance(got[0], torch.Tensor)
         self.assertEqualArray(expected[0], got[0])
 
 
