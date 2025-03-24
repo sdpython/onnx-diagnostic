@@ -301,6 +301,16 @@ class ModelInputs:
                 shapes.append(self.guess_dynamic_shape_object(*[o[i] for o in objs]))
             return shapes
 
+        if isinstance(obj, dict):
+            kl = set(len(o) for o in objs)
+            assert (
+                len(kl) == 1
+            ), f"Unexpected variety of dict lengths {kl}{msg() if msg else ''}"
+            shapes = {}
+            for i in obj:
+                shapes[i] = self.guess_dynamic_shape_object(*[o[i] for o in objs])
+            return shapes
+
         if obj.__class__.__name__ in ("DynamicCache", "patched_DynamicCache"):
             kc = set(len(o.key_cache) for o in objs)
             assert (
