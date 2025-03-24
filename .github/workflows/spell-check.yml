@@ -1,4 +1,4 @@
-ame: Spell Check
+name: Spell Check
 
 on:
   push:
@@ -17,10 +17,8 @@ jobs:
 
       # Install codespell
       - name: Install codespell
-        run: |
-          pip install codespell
+        run: pip install codespell
 
       # Run codespell
       - name: Run codespell
-        run: |
-          codespell --skip="*.png,*.jpg,*.jpeg,*.gif,*.svg,*.ico,*.pdf,*.js" --ignore-words-list="nd,te,OT" --check-filenames
+        run: codespell --skip="*.png,*.jpg,*.jpeg,*.gif,*.svg,*.ico,*.pdf,*.js" --ignore-words-list="nd,te,OT" --check-filenames
