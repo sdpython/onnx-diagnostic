@@ -45,14 +45,14 @@ class ModelInputs:
         ds = mi.guess_dynamic_shapes()
         pprint.pprint(ds)
 
-        import pprint
-        import torch
-        from onnx_diagnostic.export import ModelInputs
-
     **kwargs**
 
     .. runpython::
         :showcode:
+
+        import pprint
+        import torch
+        from onnx_diagnostic.export import ModelInputs
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -69,14 +69,14 @@ class ModelInputs:
         ds = mi.guess_dynamic_shapes()
         pprint.pprint(ds)
 
-        import pprint
-        import torch
-        from onnx_diagnostic.export import ModelInputs
-
     **and and kwargs**
 
     .. runpython::
         :showcode:
+
+        import pprint
+        import torch
+        from onnx_diagnostic.export import ModelInputs
 
         class Model(torch.nn.Module):
             def forward(self, x, y):

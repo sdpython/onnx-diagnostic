@@ -10,7 +10,7 @@ onnx_diagnostic.export
 ModelInputs
 +++++++++++
 
-.. autoclass:: onnx_diagnostic.dyanmic_shapes.ModelInputs
+.. autoclass:: onnx_diagnostic.export.ModelInputs
     :members:
 
 Other functions
