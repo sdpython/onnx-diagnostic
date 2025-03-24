@@ -40,6 +40,7 @@ setup(
     version=version_str,
     description="Investigate ONNX models",
     long_description=long_description,
+    long_description_content_type="text/x-rst",
     author="Xavier Dupré",
     author_email="xavier.dupre@gmail.com",
     url="https://github.com/sdpython/onnx-diagnostic",

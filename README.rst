@@ -26,7 +26,7 @@ onnx-diagnostic: investigate onnx models
     :target: https://codecov.io/gh/sdpython/onnx-diagnostic
 
 Helps investigating onnx models, exporting modes into onnx.
-See :epkg:`documentation of onnx-diagnostic <https://sdpython.github.io/doc/onnx-diagnostic/dev/>`_.
+See `documentation of onnx-diagnostic <https://sdpython.github.io/doc/onnx-diagnostic/dev/>`_.
 
 Getting started
 +++++++++++++++
