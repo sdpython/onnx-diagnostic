@@ -25,6 +25,9 @@ onnx-diagnostic: investigate onnx models
 .. image:: https://codecov.io/gh/sdpython/onnx-diagnostic/branch/main/graph/badge.svg?token=Wb9ZGDta8J 
     :target: https://codecov.io/gh/sdpython/onnx-diagnostic
 
+Helps investigating onnx models, exporting modes into onnx.
+See :epkg:`documentation of onnx-diagnostic <https://sdpython.github.io/doc/onnx-diagnostic/dev/>`_.
+
 Getting started
 +++++++++++++++
 
@@ -95,8 +98,3 @@ Snapshot of usefuls tools
 **max_diff**
 
 Returns the maximum discrancies accross nested containers containing tensors.
-
-Documentation
-+++++++++++++
-
-See `onnx-diagnostic <https://sdpython.github.io/doc/onnx-diagnostic/dev/>`_.
