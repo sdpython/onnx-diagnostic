@@ -286,7 +286,7 @@ class ModelInputs:
             assert (
                 len(kl) == 1
             ), f"Unexpected variety of tuple lengths {kl}{msg() if msg else ''}"
-            shapes = []
+            shapes: Any = []
             for i in range(kl.pop()):
                 shapes.append(self.guess_dynamic_shape_object(*[o[i] for o in objs]))
             return tuple(shapes)
