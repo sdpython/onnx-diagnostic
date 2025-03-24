@@ -1,8 +1,8 @@
 """
 .. _l-plot-failing-reference-evaluator:
 
-Running ReferenceEvaluator on a failing model
-=============================================
+Intermediate results with (ONNX) ReferenceEvaluator
+===================================================
 
 Let's assume :epkg:`onnxruntime` crashes without telling why or where.
 The first thing is do is to locate where. For that, we run a python runtime

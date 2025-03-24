@@ -43,7 +43,10 @@ or
 
     pip install onnx-diagnostic
 
-**Enlightening Examples**
+Enlightening Examples
++++++++++++++++++++++
+
+**Torch Export**
 
 * `Use DYNAMIC or AUTO when exporting if dynamic shapes has constraints
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_with_dynamic_shapes_auto.html>`_
@@ -51,10 +54,15 @@ or
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_with_dynamic_cache.html>`_
 * `Steel method forward to guess the dynamic shapes
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_tiny_llm.html>`_
-* `Running ReferenceEvaluator on a failing model
-  <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_failing_reference_evaluator.html>`_
+
+**Investigate ONNX models**
+
 * `Find where a model is failing by running submodels
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_failing_model_extract.html>`_
+* `Intermediate results with (ONNX) ReferenceEvaluator
+  <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_failing_reference_evaluator.html>`_
+* `Intermediate results with onnxruntime
+  <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_failing_onnxruntime_evaluator.html>`_
 
 Snapshot of usefuls tools
 +++++++++++++++++++++++++

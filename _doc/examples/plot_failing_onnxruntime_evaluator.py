@@ -1,8 +1,8 @@
 """
 .. _l-plot-failing-onnxruntime-evaluator:
 
-Running OnnxruntimeEvaluator on a failing model
-===============================================
+Intermediate results with onnxruntime
+=====================================
 
 Example :ref:`l-plot-failing-reference-evaluator` demonstrated
 how to run a python runtime on a model but it may very slow sometimes
