@@ -6,7 +6,126 @@ from ..helpers import string_type
 
 
 class ModelInputs:
-    """ """
+    """
+    Wraps a model and a couple of sets of valid inputs.
+    Based on that information, the class is able to infer the dynamic shapes
+    for :func:`torch.export.export`.
+
+    :param model: model to export
+    :param inputs: list of valid set of inputs
+    :param level: if this module is a submodule, it is the level of submodule
+    :param method_name: by default, the forward method is processed but it
+        could be another one
+    :param name: a name, mostly for debugging purposes
+
+    Examples:
+
+    **args**
+
+    .. runpython::
+        :showcode:
+
+        import pprint
+        import torch
+        from onnx_diagnostic.export import ModelInputs
+
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return x + y
+
+
+        model = Model()
+        x = torch.randn((5, 6))
+        y = torch.randn((1, 6))
+        model(x, y)  # to check it works
+
+        inputs = [(x, y), (torch.randn((7, 8)), torch.randn((1, 8)))]
+        mi = ModelInputs(Model(), inputs)
+        ds = mi.guess_dynamic_shapes()
+        pprint.pprint(ds)
+
+        import pprint
+        import torch
+        from onnx_diagnostic.export import ModelInputs
+
+    **kwargs**
+
+    .. runpython::
+        :showcode:
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return x + y
+
+
+        model = Model()
+        x = torch.randn((5, 6))
+        y = torch.randn((1, 6))
+        model(x=x, y=y)  # to check it works
+
+        inputs = [dict(x=x, y=y), dict(x=torch.randn((7, 8)), y=torch.randn((1, 8)))]
+        mi = ModelInputs(Model(), inputs)
+        ds = mi.guess_dynamic_shapes()
+        pprint.pprint(ds)
+
+        import pprint
+        import torch
+        from onnx_diagnostic.export import ModelInputs
+
+    **and and kwargs**
+
+    .. runpython::
+        :showcode:
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return x + y
+
+
+        model = Model()
+        x = torch.randn((5, 6))
+        y = torch.randn((1, 6))
+        model(x, y=y)  # to check it works
+
+        inputs = [((x,), dict(y=y)), ((torch.randn((7, 8)),), dict(y=torch.randn((1, 8))))]
+        mi = ModelInputs(Model(), inputs)
+        ds = mi.guess_dynamic_shapes()
+        pprint.pprint(ds)
+
+    :func:`torch.export.export` does not like dynamic shapes defined both as args and kwargs.
+    kwargs must be used. ``move_to_kwargs`` modifies the inputs and the dynamic shapes
+    to make the model and the given inputs exportable.
+
+    .. runpython::
+        :showcode:
+
+        import pprint
+        import torch
+        from onnx_diagnostic.export import ModelInputs
+        from onnx_diagnostic.helpers import string_type
+
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return x + y
+
+
+        model = Model()
+        x = torch.randn((5, 6))
+        y = torch.randn((1, 6))
+        model(x, y=y)  # to check it works
+
+        inputs = [((x,), dict(y=y)), ((torch.randn((7, 8)),), dict(y=torch.randn((1, 8))))]
+        mi = ModelInputs(Model(), inputs)
+        ds = mi.guess_dynamic_shapes()
+
+        a, kw, nds = mi.move_to_kwargs(*mi.inputs[0], ds)
+        print("moved args:", string_type(a, with_shape=True))
+        print("moved kwargs:", string_type(kw, with_shape=True))
+        print("dynamic shapes:")
+        pprint.pprint(nds)
+    """
 
     def __init__(
         self,
@@ -70,7 +189,10 @@ class ModelInputs:
             List[Tuple[Tuple[Any, ...], Dict[str, Any]]],
         ],
     ) -> List[Tuple[Tuple[Any, ...], Dict[str, Any]]]:
-        """ """
+        """
+        Transforms a list of valid inputs, list of args, list of kwargs or list of both
+        into a list of (args, kwargs).
+        """
         if not isinstance(inputs, list):
             raise ValueError(
                 f"inputs should be specifed as a list of sets of "
@@ -111,7 +233,14 @@ class ModelInputs:
             return f"{self.name}:{self.true_model_name}"
         return f"{self.name}:{self.true_model_name}.{self.method_name}"
 
-    def guess_dynamic_dimensions(self, *tensors) -> Any:
+    @property
+    def module_name_type(self):
+        "Returns name and module type."
+        if self.method_name == "forward":
+            return f"type({self.name})={self.true_model_name}"
+        return f"type({self.name})={self.true_model_name}.{self.method_name}"
+
+    def guess_dynamic_dimensions(self, *tensors) -> Dict[int, Any]:
         """Infers the dynamic dimension from multiple shapes."""
         if len(tensors) == 1:
             return {}
@@ -122,7 +251,7 @@ class ModelInputs:
             f"shapes={shapes} for module {self.name!r}, "
             f"class={self.true_model_name!r}"
         )
-        dynamic = torch.export.Dim.DYNAMIC
+        dynamic: Any = torch.export.Dim.DYNAMIC  # type: ignore
         rk = set_length.pop()
         res = {}
         for i in range(rk):
@@ -198,18 +327,20 @@ class ModelInputs:
             f"{string_type(objs)}{msg() if msg else ''} in {self.module_name_type}"
         )
 
-    def guess_dynamic_shapes(self) -> Any:
+    def guess_dynamic_shapes(
+        self,
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
         """
         Guesses the dynamic shapes for that module from two execution.
         If there is only one execution, then that would be static dimensions.
         """
         if len(self.inputs) == 0:
             # No inputs, unable to guess.
-            return None
+            return (tuple(), {})
         if len(self.inputs) == 1:
             # No dynamic shapes.
             return tuple(self.guess_dynamic_shape_object(a) for a in self.inputs[0][0]), {
-                k: self.guess_dynamic_shape_object(v) for k, v in self.inputs[0][1]
+                k: self.guess_dynamic_shape_object(v) for k, v in self.inputs[0][1].items()
             }
 
         # Otherwise.
@@ -241,8 +372,11 @@ class ModelInputs:
         return tuple(args), kwargs
 
     def move_to_kwargs(
-        self, args: Tuple[Any, ...], kwargs: Dict[str, Any], dynamic_shapes: Any
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any], Dict[str, Any]]:
+        self,
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any],
+        dynamic_shapes: Tuple[Tuple[Any, ...], Dict[str, Any]],
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any], Tuple[Tuple[Any, ...], Dict[str, Any]]]:
         """
         Uses the signatures to move positional arguments (args) to named arguments (kwargs)
         with the corresponding dynamic shapes.

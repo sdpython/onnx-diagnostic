@@ -21,6 +21,7 @@ class TestDynamicShapes(ExtTestCase):
         self.assertEqual(mi.name, "main")
         self.assertEqual(mi.true_model_name, "Model")
         self.assertEqual(mi.full_name, "main:Model")
+        self.assertEqual(mi.module_name_type, "type(main)=Model")
 
     def test_guess_dynamic_shapes_none(self):
         class Model(torch.nn.Module):
@@ -35,7 +36,7 @@ class TestDynamicShapes(ExtTestCase):
 
         mi = ModelInputs(Model(), [])
         ds = mi.guess_dynamic_shapes()
-        self.assertEmpty(ds)
+        self.assertEqual(ds, ((), {}))
 
     def test_guess_dynamic_shapes_1args(self):
         class Model(torch.nn.Module):
@@ -85,6 +86,9 @@ class TestDynamicShapes(ExtTestCase):
                 {},
             ),
         )
+        self.assertEqual(
+            (({}, {}), {}), ModelInputs(Model(), inputs[:1]).guess_dynamic_shapes()
+        )
 
     def test_guess_dynamic_shapes_kwargs(self):
         class Model(torch.nn.Module):
@@ -113,6 +117,9 @@ class TestDynamicShapes(ExtTestCase):
                 },
             ),
         )
+        self.assertEqual(
+            ((), {"x": {}, "y": {}}), ModelInputs(Model(), inputs[:1]).guess_dynamic_shapes()
+        )
 
     def test_guess_dynamic_shapes_args_kwargs(self):
         class Model(torch.nn.Module):
@@ -139,6 +146,9 @@ class TestDynamicShapes(ExtTestCase):
                 {"y": {1: torch.export.Dim.DYNAMIC}},
             ),
         )
+        self.assertEqual(
+            (({},), {"y": {}}), ModelInputs(Model(), inputs[:1]).guess_dynamic_shapes()
+        )
 
     def test_guess_dynamic_shapes_kwargs_as_kwargs(self):
         class Model(torch.nn.Module):
@@ -162,6 +172,9 @@ class TestDynamicShapes(ExtTestCase):
         self.assertEqual(ds, (tuple(), {"x": {0: torch.export.Dim.DYNAMIC}}))
         _a, _kw, ds = mi.move_to_kwargs(*mi.inputs[0], ds)
         self.assertEqual(ds, (tuple(), {"kwargs": {"x": {0: torch.export.Dim.DYNAMIC}}}))
+        self.assertEqual(
+            ((), {"x": {}}), ModelInputs(Model(), inputs[:1]).guess_dynamic_shapes()
+        )
 
 
 if __name__ == "__main__":
