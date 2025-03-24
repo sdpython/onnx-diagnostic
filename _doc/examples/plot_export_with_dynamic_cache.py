@@ -5,7 +5,7 @@
 Export with DynamicCache and dynamic shapes
 ===========================================
 
-Every LLMs implemented in :epkg:`trasnformers` use cache.
+Every LLMs implemented in :epkg:`transformers` use cache.
 One of the most used is :class:`transformers.cache_utils.DynamicCache`.
 The cache size is dynamic to cope with the growing context.
 The example shows a tool which determines the dynamic shapes
