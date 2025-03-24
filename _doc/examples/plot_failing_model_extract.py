@@ -39,7 +39,7 @@ model = oh.make_model(
             oh.make_node("Cast", ["C"], ["X999"], to=999, name="failing"),
             oh.make_node("CastLike", ["X999", "Y"], ["Z"], name="n4"),
         ],
-        "nd",
+        "-nd-",
         [
             oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"]),
             oh.make_tensor_value_info("Y", TFLOAT, ["a", "b", "c"]),

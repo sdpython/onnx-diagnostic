@@ -123,7 +123,7 @@ def _unregister(cls: type, verbose: int = 0):
         torch.utils._pytree._deregister_pytree_node(cls)
     optree.unregister_pytree_node(cls, namespace="torch")
     assert cls not in torch.utils._pytree.SUPPORTED_NODES, (
-        f"{cls} was not successfull unregistered "
+        f"{cls} was not successful unregistered "
         f"from torch.utils._pytree.SUPPORTED_NODES="
         f"{pprint.pformat(list(torch.utils._pytree.SUPPORTED_NODES))}"
     )
@@ -201,8 +201,8 @@ def bypass_export_some_errors(
     * ``torch._subclasses.fake_impls.infer_size``
     * fix missing method ``name`` for ``sympy.S.IntegerConstant``
     * ``AttentionMaskConverter._make_causal_mask``
-    * Serialialization of ``MambaCache`` (in :epkg:`transformers`)
-    * Serialialization of ``DynamicCache`` (in :epkg:`transformers`)
+    * Serialization of ``MambaCache`` (in :epkg:`transformers`)
+    * Serialization of ``DynamicCache`` (in :epkg:`transformers`)
     * reduce errors due to shape inference
     * replaces :class:`transformers.cache_utils.DynamicCache` with
       :class:`patched_DynamicCache

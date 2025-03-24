@@ -18,7 +18,7 @@ onnx-diagnostic: investigate onnx models
 .. image:: https://codecov.io/gh/sdpython/onnx-diagnostic/branch/main/graph/badge.svg?token=Wb9ZGDta8J 
     :target: https://codecov.io/gh/sdpython/onnx-diagnostic
 
-**onnx-diagnostic** helps investgating onnx models, exporting models into onnx.
+**onnx-diagnostic** helps investigating onnx models, exporting models into onnx.
 It implements tools used to understand issues.
 
 Source are `sdpython/onnx-diagnostic
@@ -38,12 +38,33 @@ Source are `sdpython/onnx-diagnostic
     CHANGELOGS
     license
 
-**Enlightening Examples**
+Getting started
++++++++++++++++
+
+::
+
+    git clone https://github.com/sdpython/onnx-diagnostic.git
+    cd onnx-diagnostic
+    pip install -e .
+
+or
+
+::
+
+    pip install onnx-diagnostic
+
+Enlightening Examples
++++++++++++++++++++++
+
+**Torch Export**
 
 * :ref:`l-plot-export-cond`
 * :ref:`l-plot-sxport-with-dynamio-shapes-auto`
 * :ref:`l-plot-export-with-dynamic-shape`
 * :ref:`l-plot-tiny-llm-export`
+
+**Investigate ONNX models**
+
 * :ref:`l-plot-failing-reference-evaluator`
 * :ref:`l-plot-failing-onnxruntime-evaluator`
 * :ref:`l-plot-failing-model-extract`
@@ -137,6 +158,8 @@ Size of the package:
     gr = df[["dir", "ext", "lines", "chars"]].groupby(["ext", "dir"]).sum()
     print(gr)
 
-**Older versions**
+Older versions
+++++++++++++++
 
+* `0.2.0 <../v0.2.0/index.html>`_
 * `0.1.0 <../v0.1.0/index.html>`_

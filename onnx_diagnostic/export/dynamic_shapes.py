@@ -144,7 +144,7 @@ class ModelInputs:
         ), f"unexpected type for model={type(model)}, it must be a torch.nn.Module"
         assert name, (
             f"name={name!r} cannot be empty this string is used to "
-            f"display meaningfull error messages"
+            f"display meaningful error messages"
         )
         self.name = name
         self.model = model
@@ -195,7 +195,7 @@ class ModelInputs:
         """
         if not isinstance(inputs, list):
             raise ValueError(
-                f"inputs should be specifed as a list of sets of "
+                f"inputs should be specified as a list of sets of "
                 f"inputs but type(inputs) is {type(inputs)}"
             )
         new_inputs = []

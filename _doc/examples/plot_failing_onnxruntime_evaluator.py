@@ -1,14 +1,14 @@
 """
 .. _l-plot-failing-onnxruntime-evaluator:
 
-Running OnnxruntimeEvaluator on a failing model
-===============================================
+Intermediate results with onnxruntime
+=====================================
 
 Example :ref:`l-plot-failing-reference-evaluator` demonstrated
 how to run a python runtime on a model but it may very slow sometimes
 and it could show some discrepancies if the only provider is not CPU.
 Let's use :class:`OnnxruntimeEvaluator <onnx_diagnostic.reference.OnnxruntimeEvaluator>`.
-It splits the model into node and runs them independantly until it succeeds
+It splits the model into node and runs them independently until it succeeds
 or fails. This class converts every node into model based on the types
 discovered during the execution. It relies on :class:`InferenceSessionForTorch
 <onnx_diagnostic.ort_session.InferenceSessionForTorch>` or
@@ -43,7 +43,7 @@ model = oh.make_model(
             oh.make_node("Cast", ["C"], ["X999"], to=999, name="failing"),
             oh.make_node("CastLike", ["X999", "Y"], ["Z"], name="n4"),
         ],
-        "nd",
+        "-nd-",
         [
             oh.make_tensor_value_info("X", TBFLOAT16, ["a", "b", "c"]),
             oh.make_tensor_value_info("Y", TBFLOAT16, ["a", "b", "c"]),
@@ -100,7 +100,7 @@ if has_cuda():
 # %%
 # We can see it run until it reaches `Cast` and stops.
 # The error message is not always obvious to interpret.
-# It gets improved everytime from time to time.
+# It gets improved every time from time to time.
 # This runtime is useful when it fails for a numerical reason.
 # It is possible to insert prints in the python code to print
 # more information or debug if needed.

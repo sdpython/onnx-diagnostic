@@ -54,9 +54,9 @@ ds = mi.guess_dynamic_shapes()
 pprint.pprint(ds)
 
 # %%
-# The function returns a tuple with two objets.
+# The function returns a tuple with two objects.
 # The first one for the positional arguments, the other one
-# for the named arguments. There is no named argements. We
+# for the named arguments. There is no named arguments. We
 # we used the first result to export.
 
 ep = torch.export.export(model, (x, y), dynamic_shapes=ds[0])
@@ -66,7 +66,7 @@ print(ep)
 # kwargs
 # ++++++
 #
-# We do the same with named argments.
+# We do the same with named arguments.
 
 
 class Model(torch.nn.Module):

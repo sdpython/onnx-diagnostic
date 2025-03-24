@@ -1210,7 +1210,7 @@ def max_diff(
         allow a comparison between a single tensor and a list of one tensor
     :return: dictionary with many values
 
-    * abs: max abolute error
+    * abs: max absolute error
     * rel: max relative error
     * sum: sum of the errors
     * n: number of outputs values, if there is one

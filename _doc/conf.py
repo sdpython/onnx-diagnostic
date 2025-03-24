@@ -50,6 +50,7 @@ html_theme = "furo"
 html_theme_path = ["_static"]
 html_theme_options = {}
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
 html_sourcelink_suffix = ""
 
 issues_github_path = "sdpython/onnx-diagnostic"

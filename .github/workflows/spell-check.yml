@@ -1,0 +1,24 @@
+name: Spell Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  spell-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Install codespell
+      - name: Install codespell
+        run: pip install codespell
+
+      # Run codespell
+      - name: Run codespell
+        run: codespell --skip="*.png,*.jpg,*.jpeg,*.gif,*.svg,*.ico,*.pdf,*.js" --ignore-words-list="nd,te,OT" --check-filenames

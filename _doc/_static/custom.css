@@ -1,0 +1,13 @@
+.output {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0078d4;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+.sphx-glr-script-out {
+    padding: 10px;
+    font-family: monospace;
+    font-size: 0.9em;
+    overflow-x: auto;
+}

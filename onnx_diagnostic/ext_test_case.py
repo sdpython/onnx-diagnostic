@@ -179,7 +179,7 @@ def measure_time(
         real measurement
     :param div_by_number: divide by the number of executions
     :param max_time: execute the statement until the total goes
-        beyond this time (approximatively), *repeat* is ignored,
+        beyond this time (approximately), *repeat* is ignored,
         *div_by_number* must be set to True
     :return: dictionary
 
@@ -678,7 +678,7 @@ def requires_cuda(msg: str = "", version: str = "", memory: int = 0):
 
     :param msg: to overwrite the message
     :param version: minimum version
-    :param memory: minimun number of Gb to run the test
+    :param memory: minimum number of Gb to run the test
     """
     import torch
 
@@ -1073,9 +1073,11 @@ def statistics_on_folder(
     """
     if isinstance(folder, list):
         rows = []
-        for fo in folder:
-            last = fo.replace("\\", "/").split("/")[-1]
-            r = statistics_on_folder(fo, pattern=pattern, aggregation=max(aggregation - 1, 0))
+        for fold in folder:
+            last = fold.replace("\\", "/").split("/")[-1]
+            r = statistics_on_folder(
+                fold, pattern=pattern, aggregation=max(aggregation - 1, 0)
+            )
             if aggregation == 0:
                 rows.extend(r)
                 continue
