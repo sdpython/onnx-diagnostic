@@ -113,10 +113,6 @@ print("input type after-", string_type(inputs, with_shape=True))
 
 print("result type", string_type(expected_output, with_shape=True))
 
-ep = torch.export.export(
-    untrained_model, (), kwargs=cloned_inputs, dynamic_shapes=dynamic_shapes
-)
-
 # %%
 # It works.
 #
