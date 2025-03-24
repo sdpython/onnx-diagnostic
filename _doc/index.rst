@@ -18,7 +18,8 @@ onnx-diagnostic: investigate onnx models
 .. image:: https://codecov.io/gh/sdpython/onnx-diagnostic/branch/main/graph/badge.svg?token=Wb9ZGDta8J 
     :target: https://codecov.io/gh/sdpython/onnx-diagnostic
 
-**onnx-diagnostic** is mostly to experiment ideas.
+**onnx-diagnostic** helps investgating onnx models, exporting models into onnx.
+It implements tools used to understand issues.
 
 Source are `sdpython/onnx-diagnostic
 <https://github.com/sdpython/onnx-diagnostic>`_.
