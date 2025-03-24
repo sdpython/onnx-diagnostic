@@ -99,4 +99,4 @@ Snapshot of usefuls tools
 
 **max_diff**
 
-Returns the maximum discrancies accross nested containers containing tensors.
+Returns the maximum discrancies across nested containers containing tensors.

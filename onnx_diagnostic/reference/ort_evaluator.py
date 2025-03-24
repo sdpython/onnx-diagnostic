@@ -24,7 +24,7 @@ class OnnxruntimeEvaluator:
     This class loads an onnx model and the executes one by one the nodes
     with onnxruntime. This class is mostly meant for debugging.
 
-    :param proto: proto or filaname
+    :param proto: proto or filename
     :param session_options: options
     :param providers: providers
     :param nvtx: enable nvidia events
@@ -37,7 +37,7 @@ class OnnxruntimeEvaluator:
     :param use_training_api: use onnxruntime-traning API
     :param verbose: verbosity
     :param local_functions: additional local function
-    :param ir_version: ir verions to use when unknown
+    :param ir_version: ir version to use when unknown
     :param opsets: opsets to use when unknown
     """
 

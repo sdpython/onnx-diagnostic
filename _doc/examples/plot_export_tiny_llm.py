@@ -4,7 +4,7 @@
 Steel method forward to guess the dynamic shapes
 ================================================
 
-Inputs are always dynamic with LLMs that is why dyanmic shapes
+Inputs are always dynamic with LLMs that is why dynamic shapes
 needs to be specified when a LLM is exported with:func:`torch.export.export`.
 Most of the examples on :epkg:`HuggingFace` use method
 :meth:`transformers.GenerationMixin.generate` but we only want to
@@ -15,7 +15,7 @@ is executed through meth ``generate``.
 
 We focus on the model
 `Tiny-LLM <https://huggingface.co/arnir0/Tiny-LLM>`_.
-To avoid downloading any weigths, we write a function creating a
+To avoid downloading any weights, we write a function creating a
 random model based on the same architecture.
 
 Steel the forward method

@@ -11,7 +11,7 @@ from .helpers import pretty_onnx
 
 def to_numpy(tensor: "torch.Tensor"):  # noqa: F821
     """
-    Convets a torch tensor to numy.
+    Converts a torch tensor to numy.
     """
     try:
         return tensor.numpy()

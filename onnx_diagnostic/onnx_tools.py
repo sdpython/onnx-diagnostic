@@ -101,7 +101,7 @@ def onnx_unlighten(
     The model is modified inplace.
 
     :param onx: model
-    :param stats: statics, can be None if onx is a file,
+    :param stats: statistics, can be None if onx is a file,
         then it loads the file ``<filename>.stats``,
         it assumes it is json format
     :param verbose: verbosity

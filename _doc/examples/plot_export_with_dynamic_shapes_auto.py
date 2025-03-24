@@ -4,7 +4,7 @@
 Use DYNAMIC or AUTO when exporting if dynamic shapes has constraints
 ====================================================================
 
-Settings the dynamic shapes is not always easy.
+Setting the dynamic shapes is not always easy.
 Here are a few tricks to make it work.
 
 dx + dy not allowed?
