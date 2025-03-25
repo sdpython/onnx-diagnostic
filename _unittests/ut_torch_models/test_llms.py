@@ -30,8 +30,9 @@ class TestLlms(ExtTestCase):
         model, inputs = data["model"], data["inputs"]
         self.assertEqual({"attention_mask", "past_key_values", "input_ids"}, set(inputs))
         with bypass_export_some_errors(
-            patch_transformers=True, replace_dynamic_cache=True, verbose=10
-        ):
+            patch_transformers=True, replace_dynamic_cache=True
+        ) as modificator:
+            inputs = modificator(inputs)
             ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=data["dynamic_shapes"]
             )

@@ -18,7 +18,10 @@ class TestLlmsOnnx(ExtTestCase):
         data = get_tiny_llm()
         model, inputs = data["model"], data["inputs"]
         self.assertEqual({"attention_mask", "past_key_values", "input_ids"}, set(inputs))
-        with bypass_export_some_errors(patch_transformers=True, replace_dynamic_cache=True):
+        with bypass_export_some_errors(
+            patch_transformers=True, replace_dynamic_cache=True
+        ) as modificator:
+            inputs = modificator(inputs)
             ep = torch.onnx.export(
                 model,
                 (),
@@ -38,7 +41,10 @@ class TestLlmsOnnx(ExtTestCase):
         data = get_tiny_llm()
         model, inputs = data["model"], data["inputs"]
         self.assertEqual({"attention_mask", "past_key_values", "input_ids"}, set(inputs))
-        with bypass_export_some_errors(patch_transformers=True, replace_dynamic_cache=True):
+        with bypass_export_some_errors(
+            patch_transformers=True, replace_dynamic_cache=True
+        ) as modificator:
+            inputs = modificator(inputs)
             onx = to_onnx(model, (), kwargs=inputs, dynamic_shapes=data["dynamic_shapes"])
         self.assert_onnx_disc(
             inspect.currentframe().f_code.co_name, onx, model, inputs, verbose=1
