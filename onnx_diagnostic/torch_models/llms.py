@@ -1,1 +1,1 @@
-from .untrained.tiny_ll import get_tiny_llm
+from .untrained.tiny_llm import get_tiny_llm
