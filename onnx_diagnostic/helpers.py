@@ -408,7 +408,7 @@ def string_type(
     if type(obj).__name__ == "ValueInfoProto":
         return f"OT{obj.type.tensor_type.elem_type}"
 
-    if obj.__class__.__name__ in ("DynamicCache", "patched_DynamicCache"):
+    if obj.__class__.__name__ == "DynamicCache":
         kc = string_type(
             obj.key_cache,
             with_shape=with_shape,
@@ -1693,8 +1693,8 @@ def max_diff(
             flatten=flatten,
         )
 
-    if expected.__class__.__name__ in ("DynamicCache", "patched_DynamicCache"):
-        if got.__class__.__name__ in ("DynamicCache", "patched_DynamicCache"):
+    if expected.__class__.__name__ == "DynamicCache":
+        if got.__class__.__name__ == "DynamicCache":
             if verbose >= 6:
                 print(f"[max_diff] DynamicCache: {string_type(expected)} ? {string_type(got)}")
             return max_diff(

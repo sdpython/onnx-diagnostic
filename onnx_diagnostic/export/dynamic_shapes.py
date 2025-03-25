@@ -311,7 +311,7 @@ class ModelInputs:
                 shapes[i] = self.guess_dynamic_shape_object(*[o[i] for o in objs])
             return shapes
 
-        if obj.__class__.__name__ in ("DynamicCache", "patched_DynamicCache"):
+        if obj.__class__.__name__ == "DynamicCache":
             kc = set(len(o.key_cache) for o in objs)
             assert (
                 len(kc) == 1

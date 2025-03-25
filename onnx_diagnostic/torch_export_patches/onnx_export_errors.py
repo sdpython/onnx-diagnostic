@@ -5,11 +5,64 @@ from .onnx_export_serialization import (
     flatten_with_keys_dynamic_cache,
     flatten_dynamic_cache,
     unflatten_dynamic_cache,
-    unflatten_pached_dynamic_cache,
     flatten_mamba_cache,
     flatten_with_keys_mamba_cache,
     unflatten_mamba_cache,
 )
+from .patches import patch_transformers as patch_transformers_list
+
+
+def patch_module(mod, verbose: int = 0) -> Dict[type, Dict[type, Callable]]:
+    """
+    Applies all patches defined in classes prefixed by ``patched_``
+    ``cls._PATCHED_CLASS_`` defines the class to patch,
+    ``cls._PATCHES_`` defines the method to patch.
+    The returns information needs to be sent to :func:`unpatch_module`
+    to revert the changes.
+    """
+    to_patch = []
+    for k in dir(mod):
+        if k.startswith("patched_"):
+            v = getattr(mod, k)
+            if hasattr(v, "_PATCHED_CLASS_") and hasattr(v, "_PATCHES_"):
+                to_patch.append(v)
+
+    res = {}
+    for cls in to_patch:
+        original = cls._PATCHED_CLASS_
+        methods = cls._PATCHES_
+        if verbose:
+            print(f"[patch_module] {mod.__name__} - {cls.__name__}: {', '.join(methods)}")
+
+        keep = {n: getattr(original, n, None) for n in methods}
+        for n in methods:
+            setattr(original, n, getattr(cls, n))
+        res[cls] = keep
+
+    return res
+
+
+def unpatch_module(mod, info: Dict[type, Dict[type, Callable]], verbose: int = 0):
+    """Reverts modification made by :func:`patch_module`."""
+    to_patch = []
+    for k in dir(mod):
+        if k.startswith("patched_"):
+            v = getattr(mod, k)
+            if hasattr(v, "_PATCHED_CLASS_") and hasattr(v, "_PATCHES_"):
+                to_patch.append(v)
+    set_patch = set(to_patch)
+
+    for cls, methods in info.items():
+        assert cls in set_patch, f"No patch registered for {cls} in {mod} (found {set_patch})"
+        if verbose:
+            print(f"[unpatch_module] {mod.__name__} - {cls.__name__}: {', '.join(methods)}")
+        original = cls._PATCHED_CLASS_
+        for n, v in methods.items():
+            if v is None:
+                # The method did not exist. We remove it.
+                delattr(original, n)
+            else:
+                setattr(original, n, v)
 
 
 def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
@@ -76,37 +129,7 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
         # torch.fx._pytree.tree_flatten(cache)
         assert len(cache2.key_cache) == 1
 
-    # patched_DynamicCache
-    from .patches.patch_transformers import patched_DynamicCache
-
-    unregistered_patched_dynamic_cache = True
-    if (
-        patched_DynamicCache is not None
-        and patched_DynamicCache in torch.utils._pytree.SUPPORTED_NODES
-    ):
-        if verbose > 1:
-            print(f"[_register_cache_serialization] {patched_DynamicCache} already registered")
-        unregistered_patched_dynamic_cache = False
-    else:
-        if verbose:
-            print("[_register_cache_serialization] register patched_DynamicCache")
-
-        torch.utils._pytree.register_pytree_node(
-            patched_DynamicCache,
-            flatten_dynamic_cache,
-            unflatten_pached_dynamic_cache,
-            serialized_type_name=f"{patched_DynamicCache.__module__}.{patched_DynamicCache.__name__}",
-            flatten_with_keys_fn=flatten_with_keys_dynamic_cache,
-        )
-        torch.fx._pytree.register_pytree_flatten_spec(
-            patched_DynamicCache, lambda x, _: [x.key_cache, x.value_cache]
-        )
-
-    return dict(
-        DynamicCache=unregistered_dynamic_cache,
-        MambaCache=unregistered_mamba_cache,
-        patched_DynamicCache=unregistered_patched_dynamic_cache,
-    )
+    return dict(DynamicCache=unregistered_dynamic_cache, MambaCache=unregistered_mamba_cache)
 
 
 def _unregister(cls: type, verbose: int = 0):
@@ -147,20 +170,13 @@ def _unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
     elif verbose > 1:
         print("[_unregister_cache_serialization] skip unregister DynamicCache")
 
-    if undo.get("patched_DynamicCache", False):
-        from .patches.patch_transformers import patched_DynamicCache
-
-        _unregister(patched_DynamicCache, verbose)
-    elif verbose > 1:
-        print("[_unregister_cache_serialization] skip unregister patched_DynamicCache")
-
 
 @contextlib.contextmanager
 def register_additional_serialization_functions(
-    verbose: int = 0, replace_dynamic_cache: bool = False
+    patch_transformers: bool = False, verbose: int = 0
 ) -> Callable:
     """The necessary modification to run the fx Graph."""
-    fct_callable = replacement_before_exporting if replace_dynamic_cache else (lambda x: x)
+    fct_callable = replacement_before_exporting if patch_transformers else (lambda x: x)
     done = _register_cache_serialization(verbose=verbose)
     try:
         yield fct_callable
@@ -173,7 +189,6 @@ def bypass_export_some_errors(
     patch_sympy: bool = True,
     patch_torch: bool = True,
     patch_transformers: bool = False,
-    replace_dynamic_cache: bool = False,
     catch_constraints: bool = True,
     verbose: int = 0,
     patch: bool = True,
@@ -184,9 +199,6 @@ def bypass_export_some_errors(
     :param patch_sympy: fix missing method ``name`` for IntegerConstant
     :param patch_torch: patches :epkg:`torch` with supported implementation
     :param patch_transformers: patches :epkg:`transformers` with supported implementation
-    :param replace_dynamic_cache: replaces DynamicCache by a patched class
-        avoiding issues with the dynamic shapes inferences,
-        it should be True with LLM using that class and only during the export
     :param catch_constraints: catch constraints related to dynamic shapes,
         as a result, some dynamic dimension may turn into static ones,
         the environment variable ``SKIP_SOLVE_CONSTRAINTS=0``
@@ -204,9 +216,8 @@ def bypass_export_some_errors(
     * Serialization of ``MambaCache`` (in :epkg:`transformers`)
     * Serialization of ``DynamicCache`` (in :epkg:`transformers`)
     * reduce errors due to shape inference
-    * replaces :class:`transformers.cache_utils.DynamicCache` with
-      :class:`patched_DynamicCache
-      <onnx_diagnostic.torch_export_patches.patches.patch_transformers.patched_DynamicCache>`
+    * fixes some transformers classes,
+      see :mod:`onnx_diagnostic.torch_export_patches.patches.patch_transformers`
 
     Serialization issues happen when a module takes one input or output
     has a type :func:`torch.export.export` cannot serialize.
@@ -215,19 +226,13 @@ def bypass_export_some_errors(
 
     ::
 
-        with bypass_export_some_errors(
-            patch_transformers=True,
-            replace_dynamic_cache=True,
-        ) as modificator:
+        with bypass_export_some_errors(patch_transformers=True) as modificator:
             inputs = modificator(inputs)
             onx = to_onnx(..., inputs, ...)
 
     ::
 
-        with bypass_export_some_errors(
-            patch_transformers=True,
-            replace_dynamic_cache=True,
-        ) as modificator:
+        with bypass_export_some_errors(patch_transformers=True) as modificator:
             inputs = modificator(inputs)
             onx = torch.onnx.export(..., inputs, ...)
 
@@ -235,10 +240,7 @@ def bypass_export_some_errors(
 
     ::
 
-        with bypass_export_some_errors(
-            patch_transformers=True,
-            replace_dynamic_cache=True,
-        ) as modificator:
+        with bypass_export_some_errors(patch_transformers=True) as modificator:
             inputs = modificator(inputs)
             ep = torch.export.export(..., inputs, ...)
 
@@ -256,7 +258,7 @@ def bypass_export_some_errors(
     It can be avoided by setting ``strict=False`` when call :func:`torch.export.export`.
     """
     if not patch:
-        fct_callable = replacement_before_exporting if replace_dynamic_cache else (lambda x: x)
+        fct_callable = lambda x: x  # noqa: E731
         done = _register_cache_serialization(verbose=verbose)
         try:
             yield fct_callable
@@ -351,45 +353,13 @@ def bypass_export_some_errors(
         ####################
 
         if patch_transformers:
-            import transformers
-            from transformers.modeling_attn_mask_utils import AttentionMaskConverter
-            from .patches.patch_transformers import patched_AttentionMaskConverter
-
-            if verbose:
-                print(
-                    f"[bypass_export_some_errors] patch transformers "
-                    f"{transformers.__version__}"
-                )
-            keep__make_causal_mask = AttentionMaskConverter._make_causal_mask
-            AttentionMaskConverter._make_causal_mask = (
-                patched_AttentionMaskConverter._make_causal_mask
-            )
-
-        if replace_dynamic_cache:
-            import transformers
-            from transformers.modeling_attn_mask_utils import AttentionMaskConverter
-            from .patches.patch_transformers import patched_DynamicCache
-
-            def raise_assert():
-                raise AssertionError("One replacement of DynamicCache was not patched.")
-
-            if verbose:
-                print("[bypass_export_some_errors] replace DynamicCache")
-            keep_DynamicCache = transformers.cache_utils.DynamicCache
-            keep_DynamicCache_init = keep_DynamicCache.__init__
-            keep_DynamicCache.__init__ = lambda *args, **kwargs: raise_assert()
-
-            transformers.cache_utils.DynamicCache = patched_DynamicCache
-            transformers.generation.utils.DynamicCache = patched_DynamicCache
-            transformers.models.llama.modeling_llama.DynamicCache = patched_DynamicCache
-            transformers.models.phi.modeling_phi.DynamicCache = patched_DynamicCache
-            transformers.models.phi3.modeling_phi3.DynamicCache = patched_DynamicCache
+            revert_patches_info = patch_module(patch_transformers_list, verbose=verbose)
 
         ########
         # export
         ########
 
-        fct_callable = replacement_before_exporting if replace_dynamic_cache else (lambda x: x)
+        fct_callable = replacement_before_exporting if patch_transformers else (lambda x: x)
 
         if verbose:
             print("[bypass_export_some_errors] done patching")
@@ -447,19 +417,7 @@ def bypass_export_some_errors(
             ##############
 
             if patch_transformers:
-                AttentionMaskConverter._make_causal_mask = keep__make_causal_mask
-                if verbose:
-                    print("[bypass_export_some_errors] restored transformer")
-
-            if replace_dynamic_cache:
-                keep_DynamicCache.__init__ = keep_DynamicCache_init
-                transformers.cache_utils.DynamicCache = keep_DynamicCache
-                transformers.generation.utils.DynamicCache = keep_DynamicCache
-                transformers.models.llama.modeling_llama.DynamicCache = keep_DynamicCache
-                transformers.models.phi.modeling_phi.DynamicCache = keep_DynamicCache
-                transformers.models.phi3.modeling_phi3.DynamicCache = keep_DynamicCache
-                if verbose:
-                    print("[bypass_export_some_errors] restored DynamicCache")
+                unpatch_module(patch_transformers_list, revert_patches_info, verbose=verbose)
 
             ########
             # caches
@@ -470,9 +428,7 @@ def bypass_export_some_errors(
 
 def replacement_before_exporting(args: Any) -> Any:
     """
-    Does replacements on the given inputs such replacing
-    :class:`transformers.cache_utils.DynamicCache` by
-    :class:`onnx_diagnostic.torch_export_patches.patches.patch_transformers.patched_DynamicCache`.
+    Does replacements on the given inputs if needed.
     """
     if args is None:
         return None
@@ -484,14 +440,5 @@ def replacement_before_exporting(args: Any) -> Any:
         return tuple(replacement_before_exporting(v) for v in args)
     if isinstance(args, list):
         return [replacement_before_exporting(v) for v in args]
-
-    if args.__class__.__name__ == "DynamicCache":
-        # Do not use isinstance, the class may have been replaced.
-        from .patches.patch_transformers import patched_DynamicCache
-
-        patched = patched_DynamicCache()
-        for k in ["_seen_tokens", "key_cache", "value_cache"]:
-            setattr(patched, k, getattr(args, k))
-        return patched
 
     return args

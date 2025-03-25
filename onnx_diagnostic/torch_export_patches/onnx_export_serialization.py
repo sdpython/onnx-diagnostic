@@ -129,21 +129,3 @@ def unflatten_dynamic_cache(
     for k, v in values.items():
         setattr(cache, k, v)
     return cache
-
-
-def unflatten_pached_dynamic_cache(
-    values: List[Any],
-    context: torch.utils._pytree.Context,
-    output_type=None,
-) -> transformers.cache_utils.DynamicCache:
-    """Restores a :class:`patched_DynamicCache
-    <onnx_diagnostic.torch_export_patches.patches.patch_transformers.patched_DynamicCache>`
-    from python objects."""
-
-    from .patches.patch_transformers import patched_DynamicCache
-
-    cache = patched_DynamicCache()
-    values = dict(zip(context, values))
-    for k, v in values.items():
-        setattr(cache, k, v)
-    return cache
