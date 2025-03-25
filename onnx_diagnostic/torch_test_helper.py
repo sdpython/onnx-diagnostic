@@ -9,10 +9,23 @@ import onnxruntime
 from .helpers import pretty_onnx
 
 
+def is_torchdynamo_exporting() -> bool:
+    """Tells if torch is exporting a model."""
+    import torch
+
+    try:
+        return torch.compiler.is_exporting()
+    except Exception:
+        try:
+            import torch._dynamo as dynamo
+
+            return dynamo.is_exporting()
+        except Exception:
+            return False
+
+
 def to_numpy(tensor: "torch.Tensor"):  # noqa: F821
-    """
-    Converts a torch tensor to numy.
-    """
+    """Converts a torch tensor to numy."""
     try:
         return tensor.numpy()
     except TypeError:
