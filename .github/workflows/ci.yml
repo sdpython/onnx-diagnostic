@@ -82,3 +82,73 @@ jobs:
           export PYTHONPATH=.
           UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --maxfail=15
           export PYTHONPATH=
+
+  run:
+    name: tr4.48-ci ${{ matrix.os }}-${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python: ['3.12']
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install pytorch
+        run: python -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cpu
+
+      - name: Install transformers
+        run: pip install transformers==4.48
+
+      - name: Install requirements
+        run: python -m pip install -r requirements.txt
+
+      - name: Install requirements dev
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            ${{ runner.os }}-
+
+      - name: pip freeze
+        run: python -m pip freeze
+
+      - name: tiny-llm torch.export.export
+        run: |
+          export PYTHONPATH=.
+          python _unittests/ut_torch_models/test_llms.py
+
+      - name: tiny-llm onnx
+        run: |
+          export PYTHONPATH=.
+          python _unittests/ut_torch_models/test_llms_onnx.py
+
+      - name: run tests
+        run: |
+          pip install pytest
+          export PYTHONPATH=.
+          UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py --ignore _unittests/ut_reference/test_backend_onnxruntime_evaluator.py
+          export PYTHONPATH=
+
+      - name: run backend tests python
+        run: |
+          pip install pytest
+          export PYTHONPATH=.
+          UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_extended_reference_evaluator.py
+          export PYTHONPATH=
+
+      - name: run backend tests onnxruntime
+        run: |
+          pip install pytest
+          export PYTHONPATH=.
+          UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --maxfail=15
+          export PYTHONPATH=

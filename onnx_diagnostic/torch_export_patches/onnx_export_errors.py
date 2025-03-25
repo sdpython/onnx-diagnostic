@@ -356,7 +356,10 @@ def bypass_export_some_errors(
             from .patches.patch_transformers import patched_AttentionMaskConverter
 
             if verbose:
-                print("[bypass_export_some_errors] patch transformers")
+                print(
+                    f"[bypass_export_some_errors] patch transformers "
+                    f"{transformers.__version__}"
+                )
             keep__make_causal_mask = AttentionMaskConverter._make_causal_mask
             AttentionMaskConverter._make_causal_mask = (
                 patched_AttentionMaskConverter._make_causal_mask
