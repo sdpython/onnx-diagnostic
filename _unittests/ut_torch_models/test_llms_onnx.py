@@ -14,7 +14,7 @@ except ImportError:
 class TestLlmsOnnx(ExtTestCase):
     @ignore_warnings((UserWarning, DeprecationWarning, FutureWarning))
     @hide_stdout()
-    def test_onnx_export_tiny_llm(self):
+    def test_onnx__export_tiny_llm(self):
         data = get_tiny_llm()
         model, inputs = data["model"], data["inputs"]
         self.assertEqual({"attention_mask", "past_key_values", "input_ids"}, set(inputs))
