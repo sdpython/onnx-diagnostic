@@ -10,7 +10,7 @@ on:
 
 jobs:
   run:
-    name: t${{ matrix.torch }}-tr-${{ matrix.transformers }}-ci ${{ matrix.os }}-${{ matrix.python }}
+    name: to-${{ matrix.torch }}-tr-${{ matrix.transformers }}-ci ${{ matrix.os }}-${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
