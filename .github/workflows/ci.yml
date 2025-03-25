@@ -15,8 +15,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python: ['3.12']
-        transformers: ['4.48', 'main']
+        python: ['3.11', '3.12']
+        transformers: ['4.48', '4.50', 'main']
 
     steps:
       - uses: actions/checkout@v3
@@ -68,6 +68,16 @@ jobs:
         run: |
           export PYTHONPATH=.
           python _unittests/ut_torch_models/test_tiny_llms_onnx.py
+
+      - name: tiny-llm example
+        run: |
+          export PYTHONPATH=.
+          python _doc/examples/plot_export_tiny_llm.py
+
+      - name: tiny-llm bypass
+        run: |
+          export PYTHONPATH=.
+          python _doc/examples/plot_export_tiny_llm_patched.py
 
       - name: run tests
         run: |

@@ -62,6 +62,7 @@ Enlightening Examples
 * :ref:`l-plot-sxport-with-dynamio-shapes-auto`
 * :ref:`l-plot-export-with-dynamic-shape`
 * :ref:`l-plot-tiny-llm-export`
+* :ref:`l-plot-tiny-llm-export-patched`
 
 **Investigate ONNX models**
 

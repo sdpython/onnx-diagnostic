@@ -63,6 +63,16 @@ jobs:
           export PYTHONPATH=.
           python _unittests/ut_torch_models/test_tiny_llms_onnx.py
 
+      - name: tiny-llm example
+        run: |
+          export PYTHONPATH=.
+          python _doc/examples/plot_export_tiny_llm.py
+
+      - name: tiny-llm bypass
+        run: |
+          export PYTHONPATH=.
+          python _doc/examples/plot_export_tiny_llm_patched.py
+
       - name: Generate coverage report
         run: |
           pip install pytest

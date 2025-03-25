@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.2.1
++++++
+
+* :pr:`16`: refactors patches
+
 0.2.0
 +++++
 

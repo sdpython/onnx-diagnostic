@@ -32,7 +32,7 @@ disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.torch_export_patches.*"]
-disable_error_code = ["arg-type", "assignment", "attr-defined", "index", "misc", "name-defined", "operator", "return-value"]
+disable_error_code = ["arg-type", "assignment", "attr-defined", "index", "misc", "name-defined", "operator", "return-value", "union-attr"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.torch_models.*"]
