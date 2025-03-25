@@ -22,7 +22,7 @@ sphinx-issues
 sphinx-runpython
 tabulate
 timm
-transformers>=4.49
+transformers>=4.45
 tqdm
 wheel
 xlsxwriter

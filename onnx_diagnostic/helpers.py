@@ -189,6 +189,7 @@ def string_type(
     """
     if obj is None:
         return "None"
+    # tuple
     if isinstance(obj, tuple):
         if len(obj) == 1:
             s = string_type(
@@ -225,6 +226,7 @@ def string_type(
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
             return f"#{len(obj)}({tt},...)[{mini},{maxi}:A[{avg}]]"
         return f"#{len(obj)}({tt},...)"
+    # list
     if isinstance(obj, list):
         if len(obj) < limit:
             js = ",".join(
@@ -251,6 +253,7 @@ def string_type(
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
             return f"#{len(obj)}[{tt},...][{mini},{maxi}:{avg}]"
         return f"#{len(obj)}[{tt},...]"
+    # set
     if isinstance(obj, set):
         if len(obj) < 10:
             js = ",".join(
@@ -269,6 +272,7 @@ def string_type(
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
             return f"{{...}}#{len(obj)}[{mini},{maxi}:A{avg}]"
         return f"{{...}}#{len(obj)}" if with_shape else "{...}"
+    # dict
     if isinstance(obj, dict):
         if len(obj) == 0:
             return "{}"
@@ -281,6 +285,7 @@ def string_type(
         )
         s = ",".join(f"{kv[0]}:{string_type(kv[1],**kws)}" for kv in obj.items())
         return f"dict({s})"
+    # arrat
     if isinstance(obj, np.ndarray):
         if with_min_max:
             s = string_type(obj, with_shape=with_shape)
@@ -303,6 +308,7 @@ def string_type(
 
     import torch
 
+    # Dim, SymInt
     if isinstance(obj, torch.export.dynamic_shapes._DerivedDim):
         return "DerivedDim"
     if isinstance(obj, torch.export.dynamic_shapes._Dim):
@@ -311,13 +317,13 @@ def string_type(
         return "SymInt"
     if isinstance(obj, torch.SymFloat):
         return "SymFloat"
+    # Tensors
     if isinstance(obj, torch._subclasses.fake_tensor.FakeTensor):
         i = torch_dtype_to_onnx_dtype(obj.dtype)
         prefix = ("G" if obj.get_device() >= 0 else "C") if with_device else ""
         if not with_shape:
             return f"{prefix}F{i}r{len(obj.shape)}"
         return f"{prefix}F{i}s{'x'.join(map(str, obj.shape))}"
-
     if isinstance(obj, torch.Tensor):
         if with_min_max:
             s = string_type(obj, with_shape=with_shape, with_device=with_device)

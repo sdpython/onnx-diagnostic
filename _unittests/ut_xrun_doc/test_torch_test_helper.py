@@ -6,12 +6,20 @@ import onnx.helper as oh
 import onnx.numpy_helper as onh
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.torch_test_helper import dummy_llm, check_model_ort, to_numpy
+from onnx_diagnostic.torch_test_helper import (
+    dummy_llm,
+    check_model_ort,
+    to_numpy,
+    is_torchdynamo_exporting,
+)
 
 TFLOAT = onnx.TensorProto.FLOAT
 
 
 class TestOrtSession(ExtTestCase):
+
+    def test_is_torchdynamo_exporting(self):
+        self.assertFalse(is_torchdynamo_exporting())
 
     def test_dummy_llm(self):
         for cls_name in ["AttentionBlock", "MultiAttentionBlock", "DecoderLayer", "LLM"]:

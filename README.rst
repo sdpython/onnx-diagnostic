@@ -52,7 +52,7 @@ Enlightening Examples
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_with_dynamic_shapes_auto.html>`_
 * `Export with DynamicCache and dynamic shapes
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_with_dynamic_cache.html>`_
-* `Steel method forward to guess the dynamic shapes
+* `Steel method forward to guess the dynamic shapes (with Tiny-LLM)
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_tiny_llm.html>`_
 
 **Investigate ONNX models**
