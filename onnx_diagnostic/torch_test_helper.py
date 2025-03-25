@@ -19,7 +19,7 @@ def is_torchdynamo_exporting() -> bool:
         try:
             import torch._dynamo as dynamo
 
-            return dynamo.is_exporting()
+            return dynamo.is_exporting()  # type: ignore
         except Exception:
             return False
 
