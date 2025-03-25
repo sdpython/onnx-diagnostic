@@ -1090,3 +1090,7 @@ class ExtTestCase(unittest.TestCase):
             and not numpy.isnan(diff["rel"])
             and diff["rel"] <= rtol
         ), f"discrepancies in {test_name!r}, diff={string_diff(diff)}"
+
+    def _debug(self):
+        "Tells if DEBUG=1 is set up."
+        return os.environ.get("DEBUG") in BOOLEAN_VALUES

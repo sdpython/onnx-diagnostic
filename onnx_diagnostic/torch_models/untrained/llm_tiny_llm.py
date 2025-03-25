@@ -6,18 +6,23 @@ from ...cache_helpers import make_dynamic_cache
 
 def get_tiny_llm(
     batch_size: int = 2,
+    sequence_length: int = 30,
+    sequence_length2: int = 3,
     dynamic_rope: bool = False,
     **kwargs,
 ) -> Dict[str, Any]:
     """
-    Gets a non initialized model.
+    Gets a non initialized model
+    similar to `arnir0/Tiny-LLM <https://huggingface.co/arnir0/Tiny-LLM>`_
 
     :param batch_size: batch size
+    :param sequence_length: sequence length
+    :param sequence_length2: new sequence length
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
     :return: dictionary
 
-    See :ref:`l-plot-tiny-llm-export` for an example.
+    See :ref:`l-plot-tiny-llm-export` or :ref:`l-plot-tiny-llm-export-patched` for examples.
     """
     config = {
         "architectures": ["LlamaForCausalLM"],
@@ -49,11 +54,9 @@ def get_tiny_llm(
 
     # now the inputs
     cache_last_dim = 96
-    sequence_length = 30
-    sequence_length2 = 3
-    num_key_value_heads = 1
     max_token_id = config["vocab_size"] - 1
     n_layers = config["num_hidden_layers"]
+    num_key_value_heads = config["num_key_value_heads"]
 
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = torch.export.Dim("seq_length", min=1, max=4096)
@@ -61,7 +64,10 @@ def get_tiny_llm(
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
-        "position_ids": {0: torch.export.Dim.DYNAMIC},
+        "position_ids": {
+            0: batch,
+            1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
+        },
         "attention_mask": {
             0: batch,
             1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
