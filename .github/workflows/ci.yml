@@ -1,4 +1,4 @@
-name: nightly-ci
+name: ci
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   run:
-    name: tr==${{ matrix.transformers }}-ci ${{ matrix.os }}-${{ matrix.python }}
+    name: tr-${{ matrix.transformers }}-ci ${{ matrix.os }}-${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
