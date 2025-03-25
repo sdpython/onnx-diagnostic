@@ -56,12 +56,12 @@ jobs:
       - name: tiny-llm torch.export.export
         run: |
           export PYTHONPATH=.
-          python _unittests/ut_torch_models/test_llms.py
+          python _unittests/ut_torch_models/test_tiny_llms.py
 
       - name: tiny-llm onnx
         run: |
           export PYTHONPATH=.
-          python _unittests/ut_torch_models/test_llms_onnx.py
+          python _unittests/ut_torch_models/test_tiny_llms_onnx.py
 
       - name: Generate coverage report
         run: |

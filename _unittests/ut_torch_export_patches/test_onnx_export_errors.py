@@ -6,6 +6,7 @@ from onnx_diagnostic.ext_test_case import (
     skipif_ci_windows,
     ignore_warnings,
     hide_stdout,
+    has_transformers,
 )
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
@@ -68,10 +69,12 @@ class TestOnnxExportErrors(ExtTestCase):
                 return x2
 
         cache = MambaCache(_config(), max_batch_size=1, device="cpu")
-        self.assertEqual(
-            string_type(cache),
-            "MambaCache(conv_states=#64[T10r3,...], ssm_states=#64[T10r3,...])",
-        )
+        if has_transformers("4.50"):
+            # MambaCache was updated in 4.50
+            self.assertEqual(
+                "MambaCache(conv_states=#64[T10r3,...], ssm_states=#64[T10r3,...])",
+                string_type(cache),
+            )
         x = torch.ones(2, 8, 16).to(torch.float16)
         model = Model()
         model(x, cache)
