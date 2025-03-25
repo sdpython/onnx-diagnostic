@@ -102,7 +102,7 @@ class patched_DynamicCache:
     `transformers/#36652 <https://github.com/huggingface/transformers/pull/36652>`_.
     """
 
-    _PATCHES_ = ["reorder_cache", "update", "crop", "from_batch_splits"]
+    _PATCHES_ = ["reorder_cache", "update", "crop", "from_batch_splits", "get_seq_length"]
     _PATCHED_CLASS_ = transformers.cache_utils.DynamicCache
 
     def get_seq_length(self, layer_idx: Optional[int] = 0) -> int:

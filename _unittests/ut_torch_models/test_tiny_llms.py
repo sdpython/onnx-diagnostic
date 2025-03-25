@@ -1,9 +1,13 @@
 import unittest
 import torch
+from transformers.cache_utils import DynamicCache
 from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, requires_transformers
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+    patched_DynamicCache,
+)
 
 
 class TestTinyLlm(ExtTestCase):
@@ -35,8 +39,12 @@ class TestTinyLlm(ExtTestCase):
         )
 
         with bypass_export_some_errors(
-            patch_torch=False, patch_transformers=True, catch_constraints=False
+            patch_torch=False, patch_transformers=True, catch_constraints=False, verbose=10
         ) as modificator:
+
+            for k in patched_DynamicCache._PATCHES_:
+                self.assertEqual(getattr(patched_DynamicCache, k), getattr(DynamicCache, k))
+
             inputs = modificator(inputs)
 
             def debug():
