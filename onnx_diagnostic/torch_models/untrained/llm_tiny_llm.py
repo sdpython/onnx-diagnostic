@@ -64,11 +64,11 @@ def get_tiny_llm(
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
-        "position_ids": {
+        "attention_mask": {
             0: batch,
             1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
         },
-        "attention_mask": {
+        "position_ids": {
             0: batch,
             1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
         },

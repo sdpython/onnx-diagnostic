@@ -17,27 +17,23 @@ class TestLlmPhi(ExtTestCase):
     @requires_transformers("4.52")
     def test_export_phi2_1(self):
         data = get_phi2(num_hidden_layers=2)
-        model, inputs = data["model"], data["inputs"]
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        ep = torch.export.export(
-            model, (), kwargs=inputs, dynamic_shapes=data["dynamic_shapes"]
-        )
+        ep = torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds)
         assert ep
 
     @ignore_warnings(UserWarning)
     def test_export_phi2_2_bypassed(self):
         data = get_phi2(num_hidden_layers=2)
-        model, inputs = data["model"], data["inputs"]
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
         with bypass_export_some_errors(patch_transformers=True) as modificator:
             inputs = modificator(inputs)
-            ep = torch.export.export(
-                model, (), kwargs=inputs, dynamic_shapes=data["dynamic_shapes"], strict=False
-            )
+            ep = torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
             assert ep
 
 
