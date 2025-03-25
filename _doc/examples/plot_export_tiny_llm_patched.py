@@ -63,8 +63,10 @@ with replaces the part causing these issues.
 """
 
 import copy
+import pprint
 import torch
 import transformers
+from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import bypass_export_some_errors
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 
@@ -78,6 +80,18 @@ untrained_model, inputs, dynamic_shapes = (
 
 cloned_inputs = copy.deepcopy(inputs)
 
+# %%
+# Let's show this inputs, this was inferred in
+# example :ref:`l-plot-tiny-llm-export`.
+
+print(string_type(inputs, with_shape=True))
+
+# %%
+# And the dynamic shapes
+pprint.pprint(dynamic_shapes)
+
+# %%
+# We are ready to export.
 
 with bypass_export_some_errors(patch_transformers=True) as modificator:
     ep = torch.export.export(
