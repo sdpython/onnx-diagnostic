@@ -31,7 +31,6 @@ import pprint
 import torch
 import transformers
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.torch_export_patches.onnx_export_errors import bypass_export_some_errors
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 
 
@@ -166,53 +165,5 @@ except Exception as e:
     print("It failed:", e)
 
 # %%
-# Patching to export with transformers < 4.51
-# ===========================================
-#
-# ``transformers>=4.40,<4.50`` cannot serialize DynamicCache and cannot
-# map dynamic shapes to instances of DynamicCache. The following errors
-# would appear:
-#
-# ::
-#
-#   torch._dynamo.exc.UserError: Cannot associate shape
-#       [[{0: <class '....batch'>, 2: <class '....cache_length'>}],
-#        [{0: <class '....batch'>, 2: <class '....cache_length'>}]]
-#       specified at `dynamic_shapes['past_key_values']`
-#       to non-tensor type <class 'transformers.cache_utils.DynamicCache'>
-#       at `inputs['past_key_values']` (expected None)
-#   For more information about this error, see: https://pytorch.org/docs/main/generated/exportdb/index.html#dynamic-shapes-validation
-#
-# With ``transformers==4.50``, it shows the following:
-#
-# ::
-#
-#   torch._dynamo.exc.UserError: Constraints violated (batch)!
-#   For more information, run with TORCH_LOGS="+dynamic".
-#       - Not all values of batch = L['args'][1]['input_ids'].size()[0]
-#           in the specified range batch <= 1024 are valid
-#           because batch was inferred to be a constant (2).
-#       - Not all values of batch = L['args'][1]['attention_mask'].size()[0]
-#           in the specified range batch <= 1024 are valid
-#           because batch was inferred to be a constant (2).
-#       - Not all values of batch = L['args'][1]['past_key_values']['key_cache'][0].size()[0]
-#           in the specified range batch <= 1024 are valid
-#           because batch was inferred to be a constant (2).
-#       - Not all values of batch = L['args'][1]['past_key_values']['value_cache'][0].size()[0]
-#           in the specified range batch <= 1024 are valid
-#           because batch was inferred to be a constant (2).
-#   Suggested fixes:
-#       batch = 2
-#
-# However, this package implements a patch mechanism
-# with replaces the part causing these issues.
-
-with bypass_export_some_errors(patch_transformers=True) as modificator:
-    ep = torch.export.export(
-        model,
-        (),
-        kwargs=modificator(cloned_inputs),
-        dynamic_shapes=dynamic_shapes,
-    )
-    print("It worked:")
-    print(ep)
+# If you have any error, then look at example
+# :ref:`l-plot-tiny-llm-export-patched`.

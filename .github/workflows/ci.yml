@@ -74,6 +74,11 @@ jobs:
           export PYTHONPATH=.
           python _doc/examples/plot_export_tiny_llm.py
 
+      - name: tiny-llm bypass
+        run: |
+          export PYTHONPATH=.
+          python _doc/examples/plot_export_tiny_llm_patched.py
+
       - name: run tests
         run: |
           pip install pytest
