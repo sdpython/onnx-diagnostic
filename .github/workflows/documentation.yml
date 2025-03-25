@@ -54,10 +54,14 @@ jobs:
         run: python -m pip freeze
 
       - name: tiny-llm torch.export.export
-        run: python _unittests/ut_torch_models/test_llms.py
+        run: |
+          export PYTHONPATH=.
+          python _unittests/ut_torch_models/test_llms.py
 
       - name: tiny-llm onnx
-        run: python _unittests/ut_torch_models/test_llms_onnx.py
+        run: |
+          export PYTHONPATH=.
+          python _unittests/ut_torch_models/test_llms_onnx.py
 
       - name: Generate coverage report
         run: |
