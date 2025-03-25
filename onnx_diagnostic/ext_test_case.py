@@ -1048,6 +1048,7 @@ class ExtTestCase(unittest.TestCase):
         import torch.utils._pytree as py_pytree
         from .helpers import string_type, string_diff, max_diff
         from .ort_session import InferenceSessionForTorch
+        from .torch_export_patches import register_additional_serialization_functions
 
         if verbose:
             vname = test_name or "assert_onnx_disc"
@@ -1059,6 +1060,14 @@ class ExtTestCase(unittest.TestCase):
         if verbose:
             print(f"[{vname}] flatten inputs {string_type(inputs, with_shape=True)}")
         flat_inputs, _spec = py_pytree.tree_flatten(inputs)
+        if not all(hasattr(t, "__dlpack__") for t in flat_inputs):
+            # Serialization functions should be used.
+            with register_additional_serialization_functions(verbose=verbose):
+                flat_inputs, _spec = py_pytree.tree_flatten(inputs)
+                assert all(hasattr(t, "__dlpack__") for t in flat_inputs), (
+                    f"Serialization failed, inputs={string_type(inputs)}, "
+                    f"flattened={string_type(flat_inputs)}"
+                )
         onnx_names = [i.name for i in proto.graph.input]
         feeds = dict(zip(onnx_names, flat_inputs))
         if verbose:
