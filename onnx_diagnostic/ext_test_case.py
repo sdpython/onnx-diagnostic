@@ -4,7 +4,6 @@ specific functionalities to this project.
 """
 
 import glob
-import importlib.util
 import logging
 import os
 import re
@@ -276,6 +275,390 @@ def measure_time(
         mes["context_size"] = sys.getsizeof(context)
     mes["warmup_time"] = warmup_time
     return mes
+
+
+def statistics_on_folder(
+    folder: Union[str, List[str]],
+    pattern: str = ".*[.]((py|rst))$",
+    aggregation: int = 0,
+) -> List[Dict[str, Union[int, float, str]]]:
+    """
+    Computes statistics on files in a folder.
+
+    :param folder: folder or folders to investigate
+    :param pattern: file pattern
+    :param aggregation: show the first subfolders
+    :return: list of dictionaries
+
+    .. runpython::
+        :showcode:
+        :toggle:
+
+        import os
+        import pprint
+        from onnx_diagnostic.ext_test_case import statistics_on_folder, __file__
+
+        pprint.pprint(statistics_on_folder(os.path.dirname(__file__)))
+
+    Aggregated:
+
+    .. runpython::
+        :showcode:
+        :toggle:
+
+        import os
+        import pprint
+        from onnx_diagnostic.ext_test_case import statistics_on_folder, __file__
+
+        pprint.pprint(statistics_on_folder(os.path.dirname(__file__), aggregation=1))
+    """
+    if isinstance(folder, list):
+        rows = []
+        for fold in folder:
+            last = fold.replace("\\", "/").split("/")[-1]
+            r = statistics_on_folder(
+                fold, pattern=pattern, aggregation=max(aggregation - 1, 0)
+            )
+            if aggregation == 0:
+                rows.extend(r)
+                continue
+            for line in r:
+                line["dir"] = os.path.join(last, line["dir"])
+            rows.extend(r)
+        return rows
+
+    rows = []
+    reg = re.compile(pattern)
+    for name in glob.glob("**/*", root_dir=folder, recursive=True):
+        if not reg.match(name):
+            continue
+        if os.path.isdir(os.path.join(folder, name)):
+            continue
+        n = name.replace("\\", "/")
+        spl = n.split("/")
+        level = len(spl)
+        stat = statistics_on_file(os.path.join(folder, name))
+        stat["name"] = name
+        if aggregation <= 0:
+            rows.append(stat)
+            continue
+        spl = os.path.dirname(name).replace("\\", "/").split("/")
+        level = "/".join(spl[:aggregation])
+        stat["dir"] = level
+        rows.append(stat)
+    return rows
+
+
+def get_figure(ax):
+    """Returns the figure of a matplotlib figure."""
+    if hasattr(ax, "get_figure"):
+        return ax.get_figure()
+    if len(ax.shape) == 0:
+        return ax.get_figure()
+    if len(ax.shape) == 1:
+        return ax[0].get_figure()
+    if len(ax.shape) == 2:
+        return ax[0, 0].get_figure()
+    raise RuntimeError(f"Unexpected shape {ax.shape} for axis.")
+
+
+def has_cuda() -> bool:
+    """Returns ``torch.cuda.device_count() > 0``."""
+    import torch
+
+    return torch.cuda.device_count() > 0
+
+
+def requires_cuda(msg: str = "", version: str = "", memory: int = 0):
+    """
+    Skips a test if cuda is not available.
+
+    :param msg: to overwrite the message
+    :param version: minimum version
+    :param memory: minimum number of Gb to run the test
+    """
+    import torch
+
+    if torch.cuda.device_count() == 0:
+        msg = msg or "only runs on CUDA but torch does not have it"
+        return unittest.skip(msg or "cuda not installed")
+    if version:
+        import packaging.versions as pv
+
+        if pv.Version(torch.version.cuda) < pv.Version(version):
+            msg = msg or f"CUDA older than {version}"
+        return unittest.skip(msg or f"cuda not recent enough {torch.version.cuda} < {version}")
+
+    if memory:
+        m = torch.cuda.get_device_properties(0).total_memory / 2**30
+        if m < memory:
+            msg = msg or f"available memory is not enough {m} < {memory} (Gb)"
+            return unittest.skip(msg)
+
+    return lambda x: x
+
+
+def requires_zoo(msg: str = "") -> Callable:
+    """Skips a unit test if environment variable ZOO is not equal to 1."""
+    var = os.environ.get("ZOO", "0") in BOOLEAN_VALUES
+
+    if not var:
+        msg = f"ZOO not set up or != 1. {msg}"
+        return unittest.skip(msg or "zoo not installed")
+    return lambda x: x
+
+
+def requires_sklearn(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`scikit-learn` is not recent enough."""
+    import packaging.version as pv
+    import sklearn
+
+    if pv.Version(sklearn.__version__) < pv.Version(version):
+        msg = f"scikit-learn version {sklearn.__version__} < {version}: {msg}"
+        return unittest.skip(msg)
+    return lambda x: x
+
+
+def has_torch(version: str) -> bool:
+    "Returns True if torch transformers is higher."
+    import packaging.version as pv
+    import torch
+
+    return pv.Version(torch.__version__) >= pv.Version(version)
+
+
+def has_transformers(version: str) -> bool:
+    "Returns True if transformers version is higher."
+    import packaging.version as pv
+    import transformers
+
+    return pv.Version(transformers.__version__) >= pv.Version(version)
+
+
+def requires_torch(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`pytorch` is not recent enough."""
+    import packaging.version as pv
+    import torch
+
+    if pv.Version(torch.__version__) < pv.Version(version):
+        msg = f"torch version {torch.__version__} < {version}: {msg}"
+        return unittest.skip(msg)
+    return lambda x: x
+
+
+def requires_numpy(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`numpy` is not recent enough."""
+    import packaging.version as pv
+    import numpy
+
+    if pv.Version(numpy.__version__) < pv.Version(version):
+        msg = f"numpy version {numpy.__version__} < {version}: {msg}"
+        return unittest.skip(msg)
+    return lambda x: x
+
+
+def requires_transformers(
+    version: str, msg: str = "", or_older_than: Optional[str] = None
+) -> Callable:
+    """Skips a unit test if :epkg:`transformers` is not recent enough."""
+    import packaging.version as pv
+
+    try:
+        import transformers
+    except ImportError:
+        msg = f"diffusers not installed {msg}"
+        return unittest.skip(msg)
+
+    v = pv.Version(transformers.__version__)
+    if v < pv.Version(version):
+        msg = f"transformers version {transformers.__version__} < {version}: {msg}"
+        return unittest.skip(msg)
+    if or_older_than and v > pv.Version(or_older_than):
+        msg = (
+            f"transformers version {or_older_than} < "
+            f"{transformers.__version__} < {version}: {msg}"
+        )
+        return unittest.skip(msg)
+    return lambda x: x
+
+
+def requires_diffusers(
+    version: str, msg: str = "", or_older_than: Optional[str] = None
+) -> Callable:
+    """Skips a unit test if :epkg:`transformers` is not recent enough."""
+    import packaging.version as pv
+
+    try:
+        import diffusers
+    except ImportError:
+        msg = f"diffusers not installed {msg}"
+        return unittest.skip(msg)
+
+    v = pv.Version(diffusers.__version__)
+    if v < pv.Version(version):
+        msg = f"diffusers version {diffusers.__version__} < {version} {msg}"
+        return unittest.skip(msg)
+    if or_older_than and v > pv.Version(or_older_than):
+        msg = (
+            f"diffusers version {or_older_than} < "
+            f"{diffusers.__version__} < {version} {msg}"
+        )
+        return unittest.skip(msg)
+    return lambda x: x
+
+
+def requires_onnxscript(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`onnxscript` is not recent enough."""
+    import packaging.version as pv
+    import onnxscript
+
+    if not hasattr(onnxscript, "__version__"):
+        # development version
+        return lambda x: x
+
+    if pv.Version(onnxscript.__version__) < pv.Version(version):
+        msg = f"onnxscript version {onnxscript.__version__} < {version}: {msg}"
+        return unittest.skip(msg)
+    return lambda x: x
+
+
+def has_onnxscript(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`onnxscript` is not recent enough."""
+    import packaging.version as pv
+    import onnxscript
+
+    if not hasattr(onnxscript, "__version__"):
+        # development version
+        return True
+
+    if pv.Version(onnxscript.__version__) < pv.Version(version):
+        msg = f"onnxscript version {onnxscript.__version__} < {version}: {msg}"
+        return False
+    return True
+
+
+def requires_onnxruntime(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`onnxruntime` is not recent enough."""
+    import packaging.version as pv
+    import onnxruntime
+
+    if pv.Version(onnxruntime.__version__) < pv.Version(version):
+        msg = f"onnxruntime version {onnxruntime.__version__} < {version}: {msg}"
+        return unittest.skip(msg)
+    return lambda x: x
+
+
+def has_onnxruntime_training(push_back_batch: bool = False):
+    """Tells if onnxruntime_training is installed."""
+    try:
+        from onnxruntime import training
+    except ImportError:
+        # onnxruntime not training
+        training = None
+    if training is None:
+        return False
+
+    if push_back_batch:
+        try:
+            from onnxruntime.capi.onnxruntime_pybind11_state import OrtValueVector
+        except ImportError:
+            return False
+
+        if not hasattr(OrtValueVector, "push_back_batch"):
+            return False
+    return True
+
+
+def requires_onnxruntime_training(
+    push_back_batch: bool = False, ortmodule: bool = False, msg: str = ""
+) -> Callable:
+    """Skips a unit test if :epkg:`onnxruntime` is not onnxruntime_training."""
+    try:
+        from onnxruntime import training
+    except ImportError:
+        # onnxruntime not training
+        training = None
+    if training is None:
+        msg = msg or "onnxruntime_training is not installed"
+        return unittest.skip(msg)
+
+    if push_back_batch:
+        try:
+            from onnxruntime.capi.onnxruntime_pybind11_state import OrtValueVector
+        except ImportError:
+            msg = msg or "OrtValue has no method push_back_batch"
+            return unittest.skip(msg)
+
+        if not hasattr(OrtValueVector, "push_back_batch"):
+            msg = msg or "OrtValue has no method push_back_batch"
+            return unittest.skip(msg)
+    if ortmodule:
+        try:
+            import onnxruntime.training.ortmodule  # noqa: F401
+        except (AttributeError, ImportError):
+            msg = msg or "ortmodule is missing in onnxruntime-training"
+            return unittest.skip(msg)
+    return lambda x: x
+
+
+def requires_onnx(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`onnx` is not recent enough."""
+    import packaging.version as pv
+    import onnx
+
+    if pv.Version(onnx.__version__) < pv.Version(version):
+        msg = f"onnx version {onnx.__version__} < {version}: {msg}"
+        return unittest.skip(msg)
+    return lambda x: x
+
+
+def requires_onnx_array_api(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`onnx-array-api` is not recent enough."""
+    import packaging.version as pv
+    import onnx_array_api
+
+    if pv.Version(onnx_array_api.__version__) < pv.Version(version):
+        msg = f"onnx-array-api version {onnx_array_api.__version__} < {version}: {msg}"
+        return unittest.skip(msg)
+    return lambda x: x
+
+
+def statistics_on_file(filename: str) -> Dict[str, Union[int, float, str]]:
+    """
+    Computes statistics on a file.
+
+    .. runpython::
+        :showcode:
+
+        import pprint
+        from onnx_diagnostic.ext_test_case import statistics_on_file, __file__
+
+        pprint.pprint(statistics_on_file(__file__))
+    """
+    assert os.path.exists(filename), f"File {filename!r} does not exists."
+
+    ext = os.path.splitext(filename)[-1]
+    if ext not in {".py", ".rst", ".md", ".txt"}:
+        size = os.stat(filename).st_size
+        return {"size": size}
+    alpha = set("abcdefghijklmnopqrstuvwxyz0123456789")
+    with open(filename, "r", encoding="utf-8") as f:
+        n_line = 0
+        n_ch = 0
+        for line in f.readlines():
+            s = line.strip("\n\r\t ")
+            if s:
+                n_ch += len(s.replace(" ", ""))
+                ch = set(s.lower()) & alpha
+                if ch:
+                    # It avoid counting line with only a bracket, a comma.
+                    n_line += 1
+
+    stat = dict(lines=n_line, chars=n_ch, ext=ext)
+    if ext != ".py":
+        return stat
+    # add statistics on python syntax?
+    return stat
 
 
 class ExtTestCase(unittest.TestCase):
@@ -634,475 +1017,67 @@ class ExtTestCase(unittest.TestCase):
                 raise
             raise AssertionError(msg) from e
 
-
-def get_figure(ax):
-    """Returns the figure of a matplotlib figure."""
-    if hasattr(ax, "get_figure"):
-        return ax.get_figure()
-    if len(ax.shape) == 0:
-        return ax.get_figure()
-    if len(ax.shape) == 1:
-        return ax[0].get_figure()
-    if len(ax.shape) == 2:
-        return ax[0, 0].get_figure()
-    raise RuntimeError(f"Unexpected shape {ax.shape} for axis.")
-
-
-def dump_dort_onnx(fn):
-    """Context manager to dump onnx model created by dort."""
-    prefix = fn.__name__
-    folder = "tests_dump"
-    if not os.path.exists(folder):
-        os.mkdir(folder)
-
-    def wrapped(self):
-        value = os.environ.get("ONNXRT_DUMP_PATH", None)
-        os.environ["ONNXRT_DUMP_PATH"] = os.path.join(folder, f"{prefix}_")
-        res = fn(self)
-        os.environ["ONNXRT_DUMP_PATH"] = value or ""
-        return res
-
-    return wrapped
-
-
-def has_cuda() -> bool:
-    """Returns ``torch.cuda.device_count() > 0``."""
-    import torch
-
-    return torch.cuda.device_count() > 0
-
-
-def requires_cuda(msg: str = "", version: str = "", memory: int = 0):
-    """
-    Skips a test if cuda is not available.
-
-    :param msg: to overwrite the message
-    :param version: minimum version
-    :param memory: minimum number of Gb to run the test
-    """
-    import torch
-
-    if torch.cuda.device_count() == 0:
-        msg = msg or "only runs on CUDA but torch does not have it"
-        return unittest.skip(msg or "cuda not installed")
-    if version:
-        import packaging.versions as pv
-
-        if pv.Version(torch.version.cuda) < pv.Version(version):
-            msg = msg or f"CUDA older than {version}"
-        return unittest.skip(msg or f"cuda not recent enough {torch.version.cuda} < {version}")
-
-    if memory:
-        m = torch.cuda.get_device_properties(0).total_memory / 2**30
-        if m < memory:
-            msg = msg or f"available memory is not enough {m} < {memory} (Gb)"
-            return unittest.skip(msg)
-
-    return lambda x: x
-
-
-def requires_zoo(msg: str = "") -> Callable:
-    """Skips a unit test if environment variable ZOO is not equal to 1."""
-    var = os.environ.get("ZOO", "0") in BOOLEAN_VALUES
-
-    if not var:
-        msg = f"ZOO not set up or != 1. {msg}"
-        return unittest.skip(msg or "zoo not installed")
-    return lambda x: x
-
-
-def has_executorch(version: str = "", msg: str = "") -> Callable:
-    """Tells if :epkg:`ExecuTorch` is installed."""
-    if not version:
-        return importlib.util.find_spec("executorch")
-
-    import packaging.version as pv
-    import executorch
-
-    return pv.Version(executorch.__version__) < pv.Version(version)
-
-
-def requires_sklearn(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`scikit-learn` is not recent enough."""
-    import packaging.version as pv
-    import sklearn
-
-    if pv.Version(sklearn.__version__) < pv.Version(version):
-        msg = f"scikit-learn version {sklearn.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def has_torch(version: str) -> bool:
-    "Returns True if torch transformers is higher."
-    import packaging.version as pv
-    import torch
-
-    return pv.Version(torch.__version__) >= pv.Version(version)
-
-
-def has_transformers(version: str) -> bool:
-    "Returns True if transformers version is higher."
-    import packaging.version as pv
-    import transformers
-
-    return pv.Version(transformers.__version__) >= pv.Version(version)
-
-
-def requires_torch(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`pytorch` is not recent enough."""
-    import packaging.version as pv
-    import torch
-
-    if pv.Version(torch.__version__) < pv.Version(version):
-        msg = f"torch version {torch.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def requires_executorch(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`executorch` is not recent enough."""
-    if not has_executorch():
-        msg = f"executorch is not installed: {msg}"
-        return unittest.skip(msg)
-
-    import packaging.version as pv
-    import executorch
-
-    if hasattr(executorch, "__version__") and pv.Version(executorch.__version__) < pv.Version(
-        version
+    def assert_onnx_disc(
+        self,
+        test_name: str,
+        proto: "onnx.ModelProto",  # noqa: F821
+        model: "torch.nn.Module",  # noqa: F821
+        inputs: Union[Tuple[Any], Dict[str, Any]],
+        verbose: int = 0,
+        atol: float = 1e-5,
+        rtol: float = 1e-3,
+        copy_inputs: bool = True,
+        **kwargs,
     ):
-        msg = f"torch version {executorch.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def requires_monai(version: str = "", msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`monai` is not recent enough."""
-    import packaging.version as pv
-
-    try:
-        import monai
-    except ImportError:
-        return unittest.skip(msg or "monai is not installed")
-
-    if version and pv.Version(monai.__version__) < pv.Version(version):
-        return unittest.skip(f"monai version {monai.__version__} < {version}: {msg}")
-    return lambda x: x
-
-
-def requires_vocos(version: str = "", msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`vocos` is not recent enough."""
-    import packaging.version as pv
-
-    try:
-        import vocos
-    except ImportError:
-        return unittest.skip(msg or "vocos not installed")
-
-    if version and pv.Version(vocos.__version__) < pv.Version(version):
-        msg = f"vocos version {vocos.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def requires_pyinstrument(version: str = "", msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`pyinstrument` is not recent enough."""
-    import packaging.version as pv
-
-    try:
-        import pyinstrument
-    except ImportError:
-        return unittest.skip(msg or "pyinstrument is not installed")
-
-    if version and pv.Version(pyinstrument.__version__) < pv.Version(version):
-        msg = f"torch version {pyinstrument.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def requires_numpy(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`numpy` is not recent enough."""
-    import packaging.version as pv
-    import numpy
-
-    if pv.Version(numpy.__version__) < pv.Version(version):
-        msg = f"numpy version {numpy.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def requires_transformers(
-    version: str, msg: str = "", or_older_than: Optional[str] = None
-) -> Callable:
-    """Skips a unit test if :epkg:`transformers` is not recent enough."""
-    import packaging.version as pv
-
-    try:
-        import transformers
-    except ImportError:
-        msg = f"diffusers not installed {msg}"
-        return unittest.skip(msg)
-
-    v = pv.Version(transformers.__version__)
-    if v < pv.Version(version):
-        msg = f"transformers version {transformers.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    if or_older_than and v > pv.Version(or_older_than):
-        msg = (
-            f"transformers version {or_older_than} < "
-            f"{transformers.__version__} < {version}: {msg}"
-        )
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def requires_diffusers(
-    version: str, msg: str = "", or_older_than: Optional[str] = None
-) -> Callable:
-    """Skips a unit test if :epkg:`transformers` is not recent enough."""
-    import packaging.version as pv
-
-    try:
-        import diffusers
-    except ImportError:
-        msg = f"diffusers not installed {msg}"
-        return unittest.skip(msg)
-
-    v = pv.Version(diffusers.__version__)
-    if v < pv.Version(version):
-        msg = f"diffusers version {diffusers.__version__} < {version} {msg}"
-        return unittest.skip(msg)
-    if or_older_than and v > pv.Version(or_older_than):
-        msg = (
-            f"diffusers version {or_older_than} < "
-            f"{diffusers.__version__} < {version} {msg}"
-        )
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def requires_onnxscript(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`onnxscript` is not recent enough."""
-    import packaging.version as pv
-    import onnxscript
-
-    if not hasattr(onnxscript, "__version__"):
-        # development version
-        return lambda x: x
-
-    if pv.Version(onnxscript.__version__) < pv.Version(version):
-        msg = f"onnxscript version {onnxscript.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def has_onnxscript(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`onnxscript` is not recent enough."""
-    import packaging.version as pv
-    import onnxscript
-
-    if not hasattr(onnxscript, "__version__"):
-        # development version
-        return True
-
-    if pv.Version(onnxscript.__version__) < pv.Version(version):
-        msg = f"onnxscript version {onnxscript.__version__} < {version}: {msg}"
-        return False
-    return True
-
-
-def requires_onnxruntime(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`onnxruntime` is not recent enough."""
-    import packaging.version as pv
-    import onnxruntime
-
-    if pv.Version(onnxruntime.__version__) < pv.Version(version):
-        msg = f"onnxruntime version {onnxruntime.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def has_onnxruntime_training(push_back_batch: bool = False):
-    """Tells if onnxruntime_training is installed."""
-    try:
-        from onnxruntime import training
-    except ImportError:
-        # onnxruntime not training
-        training = None
-    if training is None:
-        return False
-
-    if push_back_batch:
-        try:
-            from onnxruntime.capi.onnxruntime_pybind11_state import OrtValueVector
-        except ImportError:
-            return False
-
-        if not hasattr(OrtValueVector, "push_back_batch"):
-            return False
-    return True
-
-
-def requires_onnxruntime_training(
-    push_back_batch: bool = False, ortmodule: bool = False, msg: str = ""
-) -> Callable:
-    """Skips a unit test if :epkg:`onnxruntime` is not onnxruntime_training."""
-    try:
-        from onnxruntime import training
-    except ImportError:
-        # onnxruntime not training
-        training = None
-    if training is None:
-        msg = msg or "onnxruntime_training is not installed"
-        return unittest.skip(msg)
-
-    if push_back_batch:
-        try:
-            from onnxruntime.capi.onnxruntime_pybind11_state import OrtValueVector
-        except ImportError:
-            msg = msg or "OrtValue has no method push_back_batch"
-            return unittest.skip(msg)
-
-        if not hasattr(OrtValueVector, "push_back_batch"):
-            msg = msg or "OrtValue has no method push_back_batch"
-            return unittest.skip(msg)
-    if ortmodule:
-        try:
-            import onnxruntime.training.ortmodule  # noqa: F401
-        except (AttributeError, ImportError):
-            msg = msg or "ortmodule is missing in onnxruntime-training"
-            return unittest.skip(msg)
-    return lambda x: x
-
-
-def requires_onnx(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`onnx` is not recent enough."""
-    import packaging.version as pv
-    import onnx
-
-    if pv.Version(onnx.__version__) < pv.Version(version):
-        msg = f"onnx version {onnx.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def requires_onnx_array_api(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`onnx-array-api` is not recent enough."""
-    import packaging.version as pv
-    import onnx_array_api
-
-    if pv.Version(onnx_array_api.__version__) < pv.Version(version):
-        msg = f"onnx-array-api version {onnx_array_api.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
-
-
-def statistics_on_file(filename: str) -> Dict[str, Union[int, float, str]]:
-    """
-    Computes statistics on a file.
-
-    .. runpython::
-        :showcode:
-
-        import pprint
-        from onnx_diagnostic.ext_test_case import statistics_on_file, __file__
-
-        pprint.pprint(statistics_on_file(__file__))
-    """
-    assert os.path.exists(filename), f"File {filename!r} does not exists."
-
-    ext = os.path.splitext(filename)[-1]
-    if ext not in {".py", ".rst", ".md", ".txt"}:
-        size = os.stat(filename).st_size
-        return {"size": size}
-    alpha = set("abcdefghijklmnopqrstuvwxyz0123456789")
-    with open(filename, "r", encoding="utf-8") as f:
-        n_line = 0
-        n_ch = 0
-        for line in f.readlines():
-            s = line.strip("\n\r\t ")
-            if s:
-                n_ch += len(s.replace(" ", ""))
-                ch = set(s.lower()) & alpha
-                if ch:
-                    # It avoid counting line with only a bracket, a comma.
-                    n_line += 1
-
-    stat = dict(lines=n_line, chars=n_ch, ext=ext)
-    if ext != ".py":
-        return stat
-    # add statistics on python syntax?
-    return stat
-
-
-def statistics_on_folder(
-    folder: Union[str, List[str]],
-    pattern: str = ".*[.]((py|rst))$",
-    aggregation: int = 0,
-) -> List[Dict[str, Union[int, float, str]]]:
-    """
-    Computes statistics on files in a folder.
-
-    :param folder: folder or folders to investigate
-    :param pattern: file pattern
-    :param aggregation: show the first subfolders
-    :return: list of dictionaries
-
-    .. runpython::
-        :showcode:
-        :toggle:
-
-        import os
-        import pprint
-        from onnx_diagnostic.ext_test_case import statistics_on_folder, __file__
-
-        pprint.pprint(statistics_on_folder(os.path.dirname(__file__)))
-
-    Aggregated:
-
-    .. runpython::
-        :showcode:
-        :toggle:
-
-        import os
-        import pprint
-        from onnx_diagnostic.ext_test_case import statistics_on_folder, __file__
-
-        pprint.pprint(statistics_on_folder(os.path.dirname(__file__), aggregation=1))
-    """
-    if isinstance(folder, list):
-        rows = []
-        for fold in folder:
-            last = fold.replace("\\", "/").split("/")[-1]
-            r = statistics_on_folder(
-                fold, pattern=pattern, aggregation=max(aggregation - 1, 0)
-            )
-            if aggregation == 0:
-                rows.extend(r)
-                continue
-            for line in r:
-                line["dir"] = os.path.join(last, line["dir"])
-            rows.extend(r)
-        return rows
-
-    rows = []
-    reg = re.compile(pattern)
-    for name in glob.glob("**/*", root_dir=folder, recursive=True):
-        if not reg.match(name):
-            continue
-        if os.path.isdir(os.path.join(folder, name)):
-            continue
-        n = name.replace("\\", "/")
-        spl = n.split("/")
-        level = len(spl)
-        stat = statistics_on_file(os.path.join(folder, name))
-        stat["name"] = name
-        if aggregation <= 0:
-            rows.append(stat)
-            continue
-        spl = os.path.dirname(name).replace("\\", "/").split("/")
-        level = "/".join(spl[:aggregation])
-        stat["dir"] = level
-        rows.append(stat)
-    return rows
+        """
+        Checks for discrepancies.
+        Runs the onnx models, computes expected outputs, in that order.
+        The inputs may be modified by this functions if the torch model
+        modifies them inplace.
+
+        :param test_name: test name, dumps the model if not empty
+        :param proto: onnx model
+        :param model: torch model
+        :param inputs: inputs
+        :param verbose: verbosity
+        :param atol: absolute tolerance
+        :param rtol: relative tolerance
+        :param kwargs: arguments sent to
+            :class:`onnx_diagnostic.ort_session.InferenceSessionForTorch`
+        """
+        import torch.utils._pytree as py_pytree
+        from .helpers import string_type, string_diff, max_diff
+        from .ort_session import InferenceSessionForTorch
+
+        if verbose:
+            vname = test_name or "assert_onnx_disc"
+        if test_name:
+            name = f"{test_name}.onnx"
+            print(f"[{vname}] save the onnx model into {name!r}")
+            name = self.dump_onnx(name, proto)
+            print(f"[{vname}] file size {os.stat(name).st_size // 2**10:1.3f} kb")
+        if verbose:
+            print(f"[{vname}] flatten inputs {string_type(inputs, with_shape=True)}")
+        flat_inputs, _spec = py_pytree.tree_flatten(inputs)
+        onnx_names = [i.name for i in proto.graph.input]
+        feeds = dict(zip(onnx_names, flat_inputs))
+        if verbose:
+            print(f"[{vname}] flattened inputs {string_type(flat_inputs, with_shape=True)}")
+            print(f"[{vname}] feeds {string_type(feeds, with_shape=True)}")
+        sess = InferenceSessionForTorch(proto, **kwargs)
+        got = sess.run(None, feeds)
+        if verbose:
+            print(f"[{vname}] compute expected values")
+        expected = model(*inputs) if isinstance(inputs, tuple) else model(**inputs)
+        if verbose:
+            print(f"[{vname}] expected {string_type(expected, with_shape=True)}")
+            print(f"[{vname}] obtained {string_type(got, with_shape=True)}")
+        diff = max_diff(expected, got, flatten=True)
+        if verbose:
+            print(f"[{vname}] diff {string_diff(diff)}")
+        assert (
+            not numpy.isnan(diff["abs"])
+            and diff["abs"] <= atol
+            and not numpy.isnan(diff["rel"])
+            and diff["rel"] <= rtol
+        ), f"discrepancies in {test_name!r}, diff={string_diff(diff)}"
