@@ -1,12 +1,11 @@
 from typing import Any, Dict
 import torch
 import transformers
-from ..cache_helpers import make_dynamic_cache
+from ...cache_helpers import make_dynamic_cache
 
 
 def get_tiny_llm(
     batch_size: int = 2,
-    input_cache: bool = True,
     dynamic_rope: bool = False,
     **kwargs,
 ) -> Dict[str, Any]:
@@ -14,7 +13,6 @@ def get_tiny_llm(
     Gets a non initialized model.
 
     :param batch_size: batch size
-    :param input_cache: generate data for this iteration with or without cache
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
     :return: dictionary
@@ -63,6 +61,7 @@ def get_tiny_llm(
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
+        "position_ids": {0: torch.export.Dim.DYNAMIC},
         "attention_mask": {
             0: batch,
             1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
@@ -79,6 +78,9 @@ def get_tiny_llm(
         attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
             torch.int64
         ),
+        position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
+        .to(torch.int64)
+        .expand((batch_size, -1)),
         past_key_values=make_dynamic_cache(
             [
                 (

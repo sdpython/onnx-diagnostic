@@ -67,7 +67,8 @@ outputs = model.generate(
 )
 
 generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-print(generated_text)
+print("-- prompt", prompt)
+print("-- answer", generated_text)
 
 # %%
 # Let's restore the forward as it was.
