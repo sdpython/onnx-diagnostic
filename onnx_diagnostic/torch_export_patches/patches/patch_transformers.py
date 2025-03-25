@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 import transformers
 import transformers.modeling_attn_mask_utils
-from transformers.cache_utils import StaticCache, Cache
+from transformers.cache_utils import StaticCache, Cache, DynamicCache
 from ...torch_test_helper import is_torchdynamo_exporting
 
 
@@ -193,7 +193,7 @@ class patched_DynamicCache:
                 self.value_cache[idx] = self.value_cache[idx][..., :max_length, :]
 
     @classmethod
-    def from_batch_splits(cls, splits: List["DynamicCache"]) -> "DynamicCache":  # noqa: F821
+    def from_batch_splits(cls, splits: List[DynamicCache]) -> DynamicCache:
         """This is the opposite of the above `batch_split()` method.
         This will be used by `stack_model_outputs` in
         `generation.utils`"""

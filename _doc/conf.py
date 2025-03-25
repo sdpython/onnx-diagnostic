@@ -113,6 +113,7 @@ nitpick_ignore = [
     ("py:class", "pipeline.Pipeline"),
     ("py:class", "torch.fx.passes.operator_support.OperatorSupport"),
     ("py:class", "torch.fx.proxy.TracerBase"),
+    ("py:class", "torch.LongTensor"),
     ("py:class", "torch.utils._pytree.Context"),
     ("py:class", "torch.utils._pytree.KeyEntry"),
     ("py:class", "torch.utils._pytree.TreeSpec"),
