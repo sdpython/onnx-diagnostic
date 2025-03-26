@@ -152,7 +152,6 @@ sphinx_gallery_conf = {
     "within_subsection_order": "ExampleTitleSortKey",
     # errors
     "abort_on_example_error": True,
-    "expected_failing_examples": ["examples/plot_export_locate_issue.py"],
     # recommendation
     "recommender": {"enable": True, "n_examples": 3, "min_df": 3, "max_df": 0.9},
     # ignore capture for matplotib axes

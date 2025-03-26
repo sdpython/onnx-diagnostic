@@ -210,7 +210,7 @@ def bypass_export_some_errors(
         the environment variable ``SKIP_SOLVE_CONSTRAINTS=0``
         can be put to stop at that stage.
     :param stop_if_static: see example :ref:`l-plot-export-locale-issue`,
-        to stop the export as soon as an issue is detected with dyanmic shapes
+        to stop the export as soon as an issue is detected with dynamic shapes
         and show a stack trace indicating the exact location of the issue
     :param patch: if False, disable all patches except the registration of
         serialization function
@@ -361,7 +361,7 @@ def bypass_export_some_errors(
         if stop_if_static:
             if verbose:
                 print(
-                    "[bypass_export_some_errors] assert when a dynamic dimnension turns static"
+                    "[bypass_export_some_errors] assert when a dynamic dimension turns static"
                 )
 
             from torch.fx.experimental.symbolic_shapes import ShapeEnv

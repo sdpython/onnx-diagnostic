@@ -5,6 +5,14 @@
 Find and fix an export issue due to dynamic shapes
 ==================================================
 
+LLMs must be exported with dynamic shapes and it is common that
+a static dimension turns into a static ones. The error message from
+:epkg:`pytorch` tells the user to define ``TORCH_LOGS="+dynamic"``
+but it shows a very long list of messages where we need
+to find the string ``range_refined_to_singleton`` and that
+does not really indicates where it comes from. The example
+shows how to tweak pytorch to get that information until
+it gets better.
 
 A model with an export issue
 ============================
@@ -15,6 +23,7 @@ It is not really dynamic. It looks obvious here but
 it is difficult to find deep inside a big model.
 """
 
+import traceback
 import torch
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
@@ -69,10 +78,17 @@ except Exception as e:
 # Stop when a dynamic dimension turns static
 # ==========================================
 #
-#
+# We use :func:`bypass_export_some_errors
+# <onnx_diagnostic.torch_export_patches.bypass_export_some_errors>`
+# to replace torch implementation by a new one raising the exception
+# mentioned in previous section.
 
 with bypass_export_some_errors(stop_if_static=True, verbose=1):
-    torch.export.export(model, inputs, dynamic_shapes=dyn_shapes)
+    try:
+        torch.export.export(model, inputs, dynamic_shapes=dyn_shapes)
+    except AssertionError:
+        print("-- It failed as excepted. Let's print the stack trace.")
+        print(traceback.format_exc())
 
 # The stack trace is quite long but the first line referring to this example
 # is the following one. It points out the line turing a dynamic dimension into
