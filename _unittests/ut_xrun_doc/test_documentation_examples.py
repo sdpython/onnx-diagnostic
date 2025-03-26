@@ -77,7 +77,12 @@ class TestDocumentationExamples(ExtTestCase):
             ):
                 reason = "transformers<4.51"
 
-            if not reason and name in {"plot_export_locate_issue.py"} and not has_torch("4.7"):
+            if (
+                not reason
+                and name
+                in {"plot_export_locate_issue.py", "plot_export_with_dynamic_shapes_auto.py"}
+                and not has_torch("4.7")
+            ):
                 reason = "torch<2.7"
 
             if reason:
