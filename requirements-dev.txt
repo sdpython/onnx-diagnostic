@@ -1,6 +1,7 @@
 black
 diffusers>=0.30.0
 furo
+huggingface_hub
 matplotlib
 onnx-array-api
 git+https://github.com/microsoft/onnxscript.git
