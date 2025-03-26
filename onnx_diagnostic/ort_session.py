@@ -241,7 +241,7 @@ class InferenceSessionForNumpy(_InferenceSession):
             el_type = ortvalues[i].element_type()
             if el_type < onnx.TensorProto.BFLOAT16:
                 try:
-                    a = np.from_dlpack(ortvalues[i].to_dlpack())
+                    a = np.from_dlpack(ortvalues[i])
                 except RuntimeError as e:
                     assert "ORT only supports contiguous tensor for now." in str(e), (
                         f"As it says, non-contiguous OrtValue are not supported "
