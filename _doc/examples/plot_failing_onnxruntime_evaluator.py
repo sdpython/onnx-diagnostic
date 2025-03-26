@@ -28,6 +28,7 @@ import onnx
 import onnx.helper as oh
 import torch
 import onnxruntime
+from onnx_diagnostic import doc
 from onnx_diagnostic.ext_test_case import has_cuda
 from onnx_diagnostic.helpers import from_array_extended
 from onnx_diagnostic.reference import OnnxruntimeEvaluator
@@ -104,3 +105,5 @@ if has_cuda():
 # This runtime is useful when it fails for a numerical reason.
 # It is possible to insert prints in the python code to print
 # more information or debug if needed.
+
+doc.plot_legend("onnxruntime running step by step", "OnnxruntimeEvaluator", "lightgrey")

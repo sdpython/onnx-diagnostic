@@ -25,6 +25,7 @@ it is difficult to find deep inside a big model.
 
 import traceback
 import torch
+from onnx_diagnostic import doc
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
 
@@ -99,3 +100,6 @@ with bypass_export_some_errors(stop_if_static=True, verbose=1):
 #
 #   File "onnx-diagnostic/_doc/examples/plot_export_locate_issue.py", line 25, in forward
 #       z = x * caty
+
+
+doc.plot_legend("was inferred to be a constant", "torch.export.export", "tomato")

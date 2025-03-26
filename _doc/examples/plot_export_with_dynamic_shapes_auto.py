@@ -12,6 +12,7 @@ dx + dy not allowed?
 """
 
 import torch
+from onnx_diagnostic import doc
 
 
 class Model(torch.nn.Module):
@@ -90,3 +91,7 @@ print(
         dynamic_shapes=({0: AUTO, 1: AUTO}, {0: AUTO, 1: AUTO}, {0: AUTO, 1: AUTO}),
     )
 )
+
+# %%
+
+doc.plot_legend("dynamic shapes inferred", "torch.export.export", "tomato")

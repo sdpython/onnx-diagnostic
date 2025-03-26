@@ -30,6 +30,7 @@ import copy
 import pprint
 import torch
 import transformers
+from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 
@@ -170,3 +171,5 @@ except Exception as e:
 # %%
 # If you have any error, then look at example
 # :ref:`l-plot-tiny-llm-export-patched`.
+
+doc.plot_legend("Tiny-LLM fails", "torch.export.export", "tomato")

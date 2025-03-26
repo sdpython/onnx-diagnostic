@@ -23,6 +23,7 @@ args
 
 import pprint
 import torch
+from onnx_diagnostic import doc
 from onnx_diagnostic.cache_helpers import make_dynamic_cache
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.export import ModelInputs
@@ -221,3 +222,7 @@ else:
             model, modificator(inputs[0]), dynamic_shapes=ds[0], strict=False
         )
 print(ep)
+
+# %%
+
+doc.plot_legend("dynamic shapes", "torch.export.export", "tomato")
