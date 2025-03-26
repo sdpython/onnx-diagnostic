@@ -106,4 +106,4 @@ if has_cuda():
 # It is possible to insert prints in the python code to print
 # more information or debug if needed.
 
-doc.plot_legend("onnxruntime running\nstep by step", "OnnxruntimeEvaluator", "lightgrey")
+doc.plot_legend("onnxruntime\nrunning\nstep by step", "OnnxruntimeEvaluator", "lightgrey")

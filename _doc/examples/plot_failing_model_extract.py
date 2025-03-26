@@ -100,4 +100,4 @@ except onnx.onnx_cpp2py_export.shape_inference.InferenceError as e:
 
 # %%
 
-doc.plot_legend("Run until it fails", "onnxruntime.InferenceSession", "lightgrey")
+doc.plot_legend("run onnx model\nuntil it fails", "onnxruntime.InferenceSession", "lightgrey")

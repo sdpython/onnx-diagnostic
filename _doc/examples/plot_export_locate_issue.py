@@ -105,4 +105,6 @@ with bypass_export_some_errors(stop_if_static=True, verbose=1):
 
 # %%
 
-doc.plot_legend("was inferred\nto be a constant", "torch.export.export", "tomato")
+doc.plot_legend(
+    "dynamic dimension\nwas inferred\nto be a constant", "torch.export.export", "tomato"
+)
