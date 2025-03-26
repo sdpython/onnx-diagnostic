@@ -61,6 +61,7 @@ Enlightening Examples
 * :ref:`l-plot-export-cond`
 * :ref:`l-plot-sxport-with-dynamio-shapes-auto`
 * :ref:`l-plot-export-with-dynamic-shape`
+* :ref:`l-plot-export-locale-issue`
 * :ref:`l-plot-tiny-llm-export`
 * :ref:`l-plot-tiny-llm-export-patched`
 
@@ -162,5 +163,7 @@ Size of the package:
 Older versions
 ++++++++++++++
 
+* `0.2.2 <../v0.2.2/index.html>`_
+* `0.2.1 <../v0.2.1/index.html>`_
 * `0.2.0 <../v0.2.0/index.html>`_
 * `0.1.0 <../v0.1.0/index.html>`_

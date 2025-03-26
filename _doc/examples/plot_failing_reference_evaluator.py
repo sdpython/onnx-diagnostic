@@ -19,6 +19,7 @@ import numpy as np
 import onnx
 import onnx.helper as oh
 import onnxruntime
+from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import from_array_extended
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 
@@ -79,3 +80,5 @@ except Exception as e:
 # This runtime is useful when it fails for a numerical reason.
 # It is possible to insert prints in the python code to print
 # more information or debug if needed.
+
+doc.plot_legend("Python Runtime for ONNX", "ExtendedReferenceEvalutor", "lightgrey")

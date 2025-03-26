@@ -30,6 +30,7 @@ import copy
 import pprint
 import torch
 import transformers
+from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 
@@ -44,10 +45,11 @@ model = transformers.AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 
 def _forward_(*args, _f=None, **kwargs):
     assert _f is not None
-    if not torch.compiler.is_exporting():
+    if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
+        # torch.compiler.is_exporting requires torch>=2.7
         print("<-", string_type((args, kwargs), with_shape=True, with_min_max=True))
     res = _f(*args, **kwargs)
-    if not torch.compiler.is_exporting():
+    if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
         print("->", string_type((args, kwargs), with_shape=True, with_min_max=True))
     return res
 
@@ -67,7 +69,8 @@ outputs = model.generate(
 )
 
 generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-print(generated_text)
+print("-- prompt", prompt)
+print("-- answer", generated_text)
 
 # %%
 # Let's restore the forward as it was.
@@ -168,3 +171,5 @@ except Exception as e:
 # %%
 # If you have any error, then look at example
 # :ref:`l-plot-tiny-llm-export-patched`.
+
+doc.plot_legend("Tiny-LLM fails", "torch.export.export", "tomato")

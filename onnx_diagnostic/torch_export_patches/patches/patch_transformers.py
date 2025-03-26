@@ -102,8 +102,21 @@ class patched_DynamicCache:
     `transformers/#36652 <https://github.com/huggingface/transformers/pull/36652>`_.
     """
 
-    _PATCHES_ = ["reorder_cache", "update", "crop", "from_batch_splits"]
+    _PATCHES_ = ["reorder_cache", "update", "crop", "from_batch_splits", "get_seq_length"]
     _PATCHED_CLASS_ = transformers.cache_utils.DynamicCache
+
+    def get_seq_length(self, layer_idx: Optional[int] = 0) -> int:
+        """Returns the sequence length of the cached states.
+        A layer index can be optionally passed."""
+        # TODO: deprecate this function in favor of `cache_position`
+        is_empty_layer = (
+            len(self.key_cache) == 0  # no cache in any layer
+            or len(self.key_cache)
+            <= layer_idx  # skipped `layer_idx` and hasn't run a layer with cache after it
+            or self.key_cache[layer_idx].numel() == 0  # the layer has no cache
+        )
+        layer_seq_length = self.key_cache[layer_idx].shape[-2] if not is_empty_layer else 0
+        return layer_seq_length
 
     def reorder_cache(self, beam_idx: torch.LongTensor):
         """Reorders the cache for beam search, given the selected beam indices."""

@@ -50,6 +50,8 @@ Enlightening Examples
 
 * `Use DYNAMIC or AUTO when exporting if dynamic shapes has constraints
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_with_dynamic_shapes_auto.html>`_
+* `Find and fix an export issue due to dynamic shapes
+  <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_locate_issue.html>`_
 * `Export with DynamicCache and dynamic shapes
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_with_dynamic_cache.html>`_
 * `Steel method forward to guess the dynamic shapes (with Tiny-LLM)

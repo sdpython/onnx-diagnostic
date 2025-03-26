@@ -13,6 +13,7 @@ A model with a test
 """
 
 import torch
+from onnx_diagnostic import doc
 
 
 # %%
@@ -84,3 +85,8 @@ for name, mod in model.named_modules():
 
 ep = torch.export.export(model, (x,))
 print(ep.graph)
+
+
+# %%
+
+doc.plot_legend("If -> torch.cond", "torch.export.export", "tomato")

@@ -25,6 +25,7 @@ import numpy as np
 import onnx
 import onnx.helper as oh
 import onnxruntime
+from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import from_array_extended
 from onnx_diagnostic.ort_session import investigate_onnxruntime_issue
 
@@ -96,3 +97,7 @@ try:
     onnx.shape_inference.infer_shapes(model, strict_mode=True)
 except onnx.onnx_cpp2py_export.shape_inference.InferenceError as e:
     print(e)
+
+# %%
+
+doc.plot_legend("Run until it fails", "onnxruntime.InferenceSession", "lightgrey")

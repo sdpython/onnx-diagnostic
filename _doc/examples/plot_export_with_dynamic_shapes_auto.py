@@ -12,6 +12,7 @@ dx + dy not allowed?
 """
 
 import torch
+from onnx_diagnostic import doc
 
 
 class Model(torch.nn.Module):
@@ -57,7 +58,7 @@ try:
         },
     )
     print(ep)
-    raise AssertionError("able to export this moel, please update the tutorial")
+    raise AssertionError("able to export this model, please update the tutorial")
 except torch._dynamo.exc.UserError as e:
     print(f"unable to use Dim('dz') because {type(e)}, {e}")
 
@@ -90,3 +91,7 @@ print(
         dynamic_shapes=({0: AUTO, 1: AUTO}, {0: AUTO, 1: AUTO}, {0: AUTO, 1: AUTO}),
     )
 )
+
+# %%
+
+doc.plot_legend("dynamic shapes inferred", "torch.export.export", "tomato")

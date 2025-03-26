@@ -66,6 +66,7 @@ import copy
 import pprint
 import torch
 import transformers
+from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import bypass_export_some_errors
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
@@ -122,3 +123,6 @@ with bypass_export_some_errors(patch_transformers=True) as modificator:
     )
     print("It worked:")
     print(ep)
+
+# %%
+doc.plot_legend("Tiny-LLM patched", "torch.export.export", "green")

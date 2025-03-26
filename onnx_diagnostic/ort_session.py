@@ -240,7 +240,16 @@ class InferenceSessionForNumpy(_InferenceSession):
 
             el_type = ortvalues[i].element_type()
             if el_type < onnx.TensorProto.BFLOAT16:
-                res.append(np.from_dlpack(ortvalues[i]))
+                try:
+                    a = np.from_dlpack(ortvalues[i])
+                except RuntimeError as e:
+                    assert "ORT only supports contiguous tensor for now." in str(e), (
+                        f"As it says, non-contiguous OrtValue are not supported "
+                        f"though DLPack, i={i}, the error is different {e}"
+                    )
+                    # We make a copy in that case.
+                    a = ortvalues[i].numpy()
+                res.append(a)
                 continue
 
             # no easy conversion, let's use torch
@@ -430,6 +439,8 @@ class InferenceSessionForTorch(_InferenceSession):
         new_feeds = {}
         for k, v in feeds.items():
             assert hasattr(v, "__dlpack__"), f"class {type(v)} should be serialized"
+            if not v.is_contiguous():
+                v = v.contiguous()
             new_feeds[k] = ORTC.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("run_with_ort_values")
