@@ -1,5 +1,16 @@
 from typing import List, Optional, Union
+import transformers
 from huggingface_hub import HfApi
+
+
+def get_task(model_id: str) -> str:
+    """
+    Returns the task attached to a model id.
+
+    :param model_id: model id
+    :return: task
+    """
+    return transformers.pipelines.get_task(model_id)
 
 
 def enumerate_model_list(
