@@ -225,4 +225,4 @@ print(ep)
 
 # %%
 
-doc.plot_legend("dynamic shapes", "torch.export.export", "tomato")
+doc.plot_legend("dynamic shapes\nfor cache", "torch.export.export", "tomato")

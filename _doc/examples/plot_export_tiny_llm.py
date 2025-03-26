@@ -174,4 +174,4 @@ except Exception as e:
 # If you have any error, then look at example
 # :ref:`l-plot-tiny-llm-export-patched`.
 
-doc.plot_legend("Tiny-LLM fails", "torch.export.export", "tomato")
+doc.plot_legend("Tiny-LLM\nforward inputs\nbehind generate", "torch.export.export", "tomato")
