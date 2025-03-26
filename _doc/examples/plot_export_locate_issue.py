@@ -88,8 +88,10 @@ except Exception as e:
 with bypass_export_some_errors(stop_if_static=True, verbose=1):
     try:
         torch.export.export(model, inputs, dynamic_shapes=dyn_shapes)
-    except AssertionError:
-        print("-- It failed as excepted. Let's print the stack trace.")
+    except (AssertionError, torch._dynamo.exc.TorchRuntimeError) as e:
+        print("-- It failed as excepted.")
+        print(f"-- final error is {e}")
+        print("-- Stack Trace")
         print(traceback.format_exc())
 
 # The stack trace is quite long but the first line referring to this example

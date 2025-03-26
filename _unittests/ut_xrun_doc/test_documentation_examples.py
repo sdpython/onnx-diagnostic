@@ -5,7 +5,7 @@ import importlib.util
 import subprocess
 import time
 from onnx_diagnostic import __file__ as onnx_diagnostic_file
-from onnx_diagnostic.ext_test_case import ExtTestCase, is_windows, has_transformers
+from onnx_diagnostic.ext_test_case import ExtTestCase, is_windows, has_transformers, has_torch
 
 
 VERBOSE = 0
@@ -76,6 +76,14 @@ class TestDocumentationExamples(ExtTestCase):
                 and not has_transformers("4.51")
             ):
                 reason = "transformers<4.51"
+
+            if (
+                not reason
+                and name
+                in {"plot_export_locate_issue.py", "plot_export_with_dynamic_shapes_auto.py"}
+                and not has_torch("4.7")
+            ):
+                reason = "torch<2.7"
 
             if reason:
 

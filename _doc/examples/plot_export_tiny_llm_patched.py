@@ -29,7 +29,8 @@ would appear:
       specified at `dynamic_shapes['past_key_values']`
       to non-tensor type <class 'transformers.cache_utils.DynamicCache'>
       at `inputs['past_key_values']` (expected None)
-  For more information about this error, see: https://pytorch.org/docs/main/generated/exportdb/index.html#dynamic-shapes-validation
+  For more information about this error,
+  see: https://pytorch.org/docs/main/generated/exportdb/index.html#dynamic-shapes-validation
 
 With ``transformers==4.50``, it shows the following:
 
@@ -67,8 +68,9 @@ import pprint
 import torch
 import transformers
 from onnx_diagnostic import doc
+from onnx_diagnostic.cache_helpers import is_cache_dynamic_registered
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.torch_export_patches.onnx_export_errors import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 
 
@@ -92,14 +94,25 @@ print(string_type(inputs, with_shape=True))
 pprint.pprint(dynamic_shapes)
 
 # %%
-# We are ready to export.
+# Before exporting, we check :class:`transformers.cache_utils.DynamicCache`
+# can serialized and deserialized otherwise :func:`torch.export.export`
+# fails.
 
-with bypass_export_some_errors(patch_transformers=True) as modificator:
+print("-- DynamicCache registered: ", is_cache_dynamic_registered())
+
+# %%
+# If they are not registered, function
+# func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
+# should take care of it. Then we export.
+
+with bypass_export_some_errors(patch_transformers=True, verbose=10) as modificator:
+    assert is_cache_dynamic_registered()  # it must be true here
     ep = torch.export.export(
         untrained_model,
         (),
         kwargs=modificator(cloned_inputs),
         dynamic_shapes=dynamic_shapes,
+        strict=False,  # mandatory for torch==2.6
     )
     print("It worked:")
     print(ep)
@@ -114,12 +127,13 @@ model = transformers.AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 
 cloned_inputs = copy.deepcopy(inputs)
 
-with bypass_export_some_errors(patch_transformers=True) as modificator:
+with bypass_export_some_errors(patch_transformers=True, verbose=10) as modificator:
     ep = torch.export.export(
         model,
         (),
         kwargs=modificator(cloned_inputs),
         dynamic_shapes=dynamic_shapes,
+        strict=False,  # mandatory for torch==2.6
     )
     print("It worked:")
     print(ep)

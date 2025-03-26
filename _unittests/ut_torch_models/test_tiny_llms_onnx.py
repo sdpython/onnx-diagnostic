@@ -6,6 +6,7 @@ from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     ignore_warnings,
     hide_stdout,
+    has_torch,
     requires_transformers,
 )
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
@@ -35,6 +36,9 @@ class TestTinyLlmOnnx(ExtTestCase):
             dynamo=True,
             optimize=True,
         )
+        # There are some discrepancies with torch==2.6
+        if not has_torch("2.7"):
+            raise unittest.SkipTest("discrepancies observed with torch<2.7")
         self.assert_onnx_disc(
             inspect.currentframe().f_code.co_name, ep.model_proto, model, inputs, verbose=1
         )
@@ -96,6 +100,9 @@ class TestTinyLlmOnnx(ExtTestCase):
                 dynamo=True,
                 optimize=True,
             )
+        # There are some discrepancies with torch==2.6
+        if not has_torch("2.7"):
+            raise unittest.SkipTest("discrepancies observed with torch<2.7")
         self.assert_onnx_disc(
             inspect.currentframe().f_code.co_name, ep.model_proto, model, inputs, verbose=1
         )

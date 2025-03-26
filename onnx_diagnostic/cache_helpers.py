@@ -4,6 +4,28 @@ import torch
 import transformers
 import transformers.cache_utils
 
+
+def is_cache_dynamic_registered() -> bool:
+    """
+    Tells class :class:`transformers.cache_utils.DynamicCache` can be
+    serialized and deserialized. Only then, :func:`torch.export.export`
+    can export a model.
+    """
+    bsize, nheads, slen, dim = 2, 4, 3, 7
+    cache = make_dynamic_cache(
+        [
+            (
+                torch.randn(bsize, nheads, slen, dim),
+                torch.randn(bsize, nheads, slen, dim),
+            )
+            for i in range(2)
+        ]
+    )
+    values, spec = torch.utils._pytree.tree_flatten(cache)
+    cache2 = torch.utils._pytree.tree_unflatten(values, spec)
+    return len(cache2.key_cache) == len(cache.value_cache)
+
+
 if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
 
     def make_dynamic_cache(
