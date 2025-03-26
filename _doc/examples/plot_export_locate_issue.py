@@ -55,7 +55,8 @@ except Exception as e:
 # %%
 # The error shows:
 #
-# ::
+# .. code-block::
+#
 #       Constraints violated (L['args'][0][0].size()[0])!
 #           For more information, run with TORCH_LOGS="+dynamic".
 #       - Not all values of RelaxedUnspecConstraint(L['args'][0][0].size()[0])
@@ -68,7 +69,7 @@ except Exception as e:
 # One way to find the exact location is to retrieve a stack trace
 # by inserting an assert such as the following:
 #
-# ::
+# .. code-block::
 #
 #   assert msg != "range_refined_to_singleton", (
 #       f"A dynamic dimension becomes static! "
@@ -94,7 +95,7 @@ with bypass_export_some_errors(stop_if_static=True, verbose=1):
 # is the following one. It points out the line turing a dynamic dimension into
 # static.
 #
-# ::
+# .. code-block::
 #
 #   File "onnx-diagnostic/_doc/examples/plot_export_locate_issue.py", line 25, in forward
 #       z = x * caty

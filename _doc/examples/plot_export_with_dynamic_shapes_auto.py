@@ -57,7 +57,7 @@ try:
         },
     )
     print(ep)
-    raise AssertionError("able to export this moel, please update the tutorial")
+    raise AssertionError("able to export this model, please update the tutorial")
 except torch._dynamo.exc.UserError as e:
     print(f"unable to use Dim('dz') because {type(e)}, {e}")
 

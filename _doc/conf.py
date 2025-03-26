@@ -158,7 +158,7 @@ sphinx_gallery_conf = {
     "ignore_repr_types": "matplotlib\\.(text|axes)",
     # robubstness
     "reset_modules_order": "both",
-    "reset_modules": ("matplotlib", "onnx_diagnostic.reset_torch_transformers"),
+    "reset_modules": ("matplotlib", "onnx_diagnostic.doc.reset_torch_transformers"),
 }
 
 if int(os.environ.get("UNITTEST_GOING", "0")):

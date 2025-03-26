@@ -15,6 +15,10 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
+module = ["onnx_diagnostic.doc"]
+disable_error_code = ["call-overload", "name-defined"]
+
+[[tool.mypy.overrides]]
 module = ["onnx_diagnostic.args"]
 disable_error_code = ["arg-type", "call-overload", "index"]
 
