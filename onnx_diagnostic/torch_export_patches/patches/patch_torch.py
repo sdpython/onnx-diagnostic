@@ -313,7 +313,10 @@ class patched_ShapeEnv:
             #         "Specializing %s to %s", self.var_to_sources[a][0].name(), tgt
             #     )
             #     self.log.debug("SPECIALIZATION", stack_info=True)
-        assert msg != "range_refined_to_singleton", f"{[a, tgt, msg, tgt_bound]}"
+        assert msg != "range_refined_to_singleton", (
+            f"A dynamic dimension becomes static! "
+            f"a={a!r}, tgt={tgt!r}, msg={msg!r}, tgt_bound={tgt_bound}"
+        )
         # log.info("set_replacement %s = %s (%s) %s", a, tgt, msg, tgt_bound)
         self.replacements[a] = tgt
         # NB: the replacement may get refined, but the user will find the

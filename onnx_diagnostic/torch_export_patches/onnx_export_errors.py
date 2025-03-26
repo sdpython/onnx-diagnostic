@@ -145,6 +145,11 @@ def _unregister(cls: type, verbose: int = 0):
         # torch >= 2.7
         torch.utils._pytree._deregister_pytree_node(cls)
     optree.unregister_pytree_node(cls, namespace="torch")
+    if cls in torch.utils._pytree.SUPPORTED_NODES:
+        import packaging.version as pv
+
+        if pv.Version(torch.__version__) < pv.Version("2.7.0"):
+            del torch.utils._pytree.SUPPORTED_NODES[cls]
     assert cls not in torch.utils._pytree.SUPPORTED_NODES, (
         f"{cls} was not successful unregistered "
         f"from torch.utils._pytree.SUPPORTED_NODES="
@@ -190,6 +195,7 @@ def bypass_export_some_errors(
     patch_torch: bool = True,
     patch_transformers: bool = False,
     catch_constraints: bool = True,
+    stop_if_static: bool = False,
     verbose: int = 0,
     patch: bool = True,
 ) -> Callable:
@@ -203,8 +209,12 @@ def bypass_export_some_errors(
         as a result, some dynamic dimension may turn into static ones,
         the environment variable ``SKIP_SOLVE_CONSTRAINTS=0``
         can be put to stop at that stage.
+    :param stop_if_static: see example :ref:`l-plot-export-locale-issue`,
+        to stop the export as soon as an issue is detected with dyanmic shapes
+        and show a stack trace indicating the exact location of the issue
     :param patch: if False, disable all patches except the registration of
         serialization function
+    :param verbose: to show which patches is applied
 
     The list of available patches.
 
@@ -348,6 +358,18 @@ def bypass_export_some_errors(
                 )
             )
 
+        if stop_if_static:
+            if verbose:
+                print(
+                    "[bypass_export_some_errors] assert when a dynamic dimnension turns static"
+                )
+
+            from torch.fx.experimental.symbolic_shapes import ShapeEnv
+            from .patches.patch_torch import patched_ShapeEnv
+
+            f_shape_env__set_replacement = ShapeEnv._set_replacement
+            ShapeEnv._set_replacement = patched_ShapeEnv._set_replacement
+
         ####################
         # patch transformers
         ####################
@@ -400,6 +422,12 @@ def bypass_export_some_errors(
 
                 if verbose:
                     print("[bypass_export_some_errors] restored pytorch functions")
+
+            if stop_if_static:
+                if verbose:
+                    print("[bypass_export_some_errors] restored ShapeEnv._set_replacement")
+
+                ShapeEnv._set_replacement = f_shape_env__set_replacement
 
             if catch_constraints:
                 # to catch or skip dynamic_shapes issues
