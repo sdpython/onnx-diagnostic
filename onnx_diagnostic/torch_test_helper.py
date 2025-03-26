@@ -13,6 +13,10 @@ def is_torchdynamo_exporting() -> bool:
     """Tells if torch is exporting a model."""
     import torch
 
+    if not hasattr(torch.compiler, "is_exporting"):
+        # torch.compiler.is_exporting requires torch>=2.7
+        return False
+
     try:
         return torch.compiler.is_exporting()
     except Exception:

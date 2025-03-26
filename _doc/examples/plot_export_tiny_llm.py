@@ -44,10 +44,11 @@ model = transformers.AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 
 def _forward_(*args, _f=None, **kwargs):
     assert _f is not None
-    if not torch.compiler.is_exporting():
+    if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
+        # torch.compiler.is_exporting requires torch>=2.7
         print("<-", string_type((args, kwargs), with_shape=True, with_min_max=True))
     res = _f(*args, **kwargs)
-    if not torch.compiler.is_exporting():
+    if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
         print("->", string_type((args, kwargs), with_shape=True, with_min_max=True))
     return res
 
