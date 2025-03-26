@@ -19,7 +19,7 @@ class TestHuggingFaceHub(ExtTestCase):
         df = pandas.read_csv("test_enumerate_model_list.csv")
         self.assertEqual(df.shape, (2, 11))
         tasks = [get_task(c) for c in df.id]
-        self.assertEqual(['text-generation', 'text-generation'], tasks)
+        self.assertEqual(["text-generation", "text-generation"], tasks)
 
     @never_test()
     def test_hf_all_models(self):
