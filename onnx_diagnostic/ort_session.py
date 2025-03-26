@@ -439,6 +439,8 @@ class InferenceSessionForTorch(_InferenceSession):
         new_feeds = {}
         for k, v in feeds.items():
             assert hasattr(v, "__dlpack__"), f"class {type(v)} should be serialized"
+            if not v.is_contiguous():
+                v = v.contiguous()
             new_feeds[k] = ORTC.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("run_with_ort_values")
