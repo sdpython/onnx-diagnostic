@@ -94,4 +94,4 @@ print(
 
 # %%
 
-doc.plot_legend("dynamic shapes inferred", "torch.export.export", "tomato")
+doc.plot_legend("dynamic shapes\ninferred", "torch.export.export", "tomato")

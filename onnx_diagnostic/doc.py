@@ -12,7 +12,7 @@ def plot_legend(
 ) -> "matplotlib.axes.Axes":  # noqa: F821
     import matplotlib.pyplot as plt
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(2, 2))
     ax = fig.add_subplot()
     ax.axis([0, 5, 0, 5])
     ax.text(2.5, 4, "END", fontsize=50, horizontalalignment="center")

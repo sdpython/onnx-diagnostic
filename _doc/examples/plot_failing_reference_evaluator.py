@@ -81,4 +81,4 @@ except Exception as e:
 # It is possible to insert prints in the python code to print
 # more information or debug if needed.
 
-doc.plot_legend("Python Runtime for ONNX", "ExtendedReferenceEvalutor", "lightgrey")
+doc.plot_legend("Python Runtime\nfor ONNX", "ExtendedReferenceEvalutor", "lightgrey")
