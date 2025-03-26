@@ -125,7 +125,7 @@ print("result type", string_type(expected_output, with_shape=True))
 
 try:
     ep = torch.export.export(
-        untrained_model, (), kwargs=cloned_inputs, dynamic_shapes=dynamic_shapes
+        untrained_model, (), kwargs=cloned_inputs, dynamic_shapes=dynamic_shapes, strict=False
     )
     print("It worked:")
     print(ep)
@@ -159,7 +159,9 @@ pprint.pprint(dynamic_shapes)
 # And Let's finally export.
 
 try:
-    ep = torch.export.export(model, (), kwargs=cloned_inputs, dynamic_shapes=dynamic_shapes)
+    ep = torch.export.export(
+        model, (), kwargs=cloned_inputs, dynamic_shapes=dynamic_shapes, strict=False
+    )
     print("It worked:")
     print(ep)
 except Exception as e:
