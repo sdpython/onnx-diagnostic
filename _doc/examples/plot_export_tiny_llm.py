@@ -13,8 +13,7 @@ export the model and its method ``forward``.
 That example shows to guess the inputs of this method even though the model
 is executed through meth ``generate``.
 
-We focus on the model
-`Tiny-LLM <https://huggingface.co/arnir0/Tiny-LLM>`_.
+We focus on the model :epkg:`arnir0/Tiny-LLM`.
 To avoid downloading any weights, we write a function creating a
 random model based on the same architecture.
 

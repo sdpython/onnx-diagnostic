@@ -100,6 +100,7 @@ select = [
 "_unittests/*/test*.py" = ["B008", "B904", "PIE808", "SIM117", "SIM105", "UP008"]
 "onnx_diagnostic/export/__init__.py" = ["F401"]
 "onnx_diagnostic/reference/__init__.py" = ["F401"]
+"onnx_diagnostic/torch_models/hghub/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_export_patches/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_export_patches/patches/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_models/llms.py" = ["F401"]

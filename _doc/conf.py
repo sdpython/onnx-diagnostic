@@ -124,6 +124,7 @@ nitpick_ignore = [
     ("py:class", "transformers.cache_utils.MambaCache"),
     ("py:func", "torch.export._draft_export.draft_export"),
     ("py:func", "torch._export.tools.report_exportability"),
+    ("py:meth", "huggingface_hub.HfApi.list_models"),
     ("py:meth", "transformers.GenerationMixin.generate"),
 ]
 
@@ -182,6 +183,7 @@ epkg_dictionary = {
     "graph break": "https://pytorch.org/docs/stable/torch.compiler_faq.html#graph-breaks",
     "GraphModule": "https://pytorch.org/docs/stable/fx.html#torch.fx.GraphModule",
     "HuggingFace": "https://huggingface.co/docs/hub/en/index",
+    "huggingface_hub": "https://github.com/huggingface/huggingface_hub",
     "Linux": "https://www.linux.org/",
     "ml_dtypes": "https://github.com/jax-ml/ml_dtypes",
     "monai": "https://monai.io/",
@@ -224,3 +226,13 @@ epkg_dictionary = {
     "vocos": "https://github.com/gemelo-ai/vocos",
     "Windows": "https://www.microsoft.com/windows",
 }
+
+# models
+epkg_dictionary.update(
+    {
+        "arnir0/Tiny-LLM": "https://huggingface.co/arnir0/Tiny-LLM",
+        "microsoft/phi-2": "https://huggingface.co/microsoft/phi-2",
+        "microsoft/Phi-3.5-mini-instruct": "https://huggingface.co/microsoft/Phi-3.5-mini-instruct",
+        "microsoft/Phi-3.5-vision-instruct": "https://huggingface.co/microsoft/Phi-3.5-vision-instruct",
+    }
+)

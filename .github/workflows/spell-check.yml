@@ -21,4 +21,4 @@ jobs:
 
       # Run codespell
       - name: Run codespell
-        run: codespell --skip="*.png,*.jpg,*.jpeg,*.gif,*.svg,*.ico,*.pdf,*.js" --ignore-words-list="nd,te,OT" --check-filenames
+        run: codespell --skip="*.png,*.jpg,*.jpeg,*.gif,*.svg,*.ico,*.pdf,*.js,*.css,*.map" --ignore-words-list="nd,te,OT" --check-filenames

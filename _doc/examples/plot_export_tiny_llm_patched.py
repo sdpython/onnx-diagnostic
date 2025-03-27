@@ -6,8 +6,7 @@ Export Tiny-LLM with patches
 
 Many models from :epkg:`transformers` cannot be converted because
 the implementation uses cache classes. Let's see how to get around that.
-We focus on the model
-`Tiny-LLM <https://huggingface.co/arnir0/Tiny-LLM>`_.
+We focus on the model :epkg:`arnir0/Tiny-LLM`.
 To avoid downloading any weights, we write a function creating a
 random model based on the same architecture.
 This continues example :ref:`l-plot-tiny-llm-export`.

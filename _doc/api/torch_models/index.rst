@@ -5,6 +5,7 @@ onnx_diagnostic.torch_models
     :maxdepth: 1
     :caption: submodules
 
+    hghub/index
     llms
 
 .. automodule:: onnx_diagnostic.torch_models
