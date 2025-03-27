@@ -37,25 +37,32 @@ def task_from_arch(arch: str) -> str:
     return data[arch]
 
 
-def task_from_id(model_id: str, pretrained: bool = False) -> str:
+def task_from_id(
+    model_id: str, pretrained: bool = False, fall_back_to_pretrained: bool = True
+) -> str:
     """
     Returns the task attached to a model id.
 
     :param model_id: model id
     :param pretrained: uses the config
+    :param fall_back_to_pretrained: balls back to pretrained config
     :return: task
     """
-    if pretrained:
-        config = get_pretrained_config(model_id)
+    if not pretrained:
         try:
-            return config.pipeline_tag
-        except AttributeError:
-            assert config.architectures is not None and len(config.architectures) == 1, (
-                f"Cannot return the task of {model_id!r}, pipeline_tag is not setup, "
-                f"architectures={config.architectures} in config={config}"
-            )
-            return task_from_arch(config.architectures[0])
-    return transformers.pipelines.get_task(model_id)
+            transformers.pipelines.get_task(model_id)
+        except RuntimeError:
+            if not fall_back_to_pretrained:
+                raise
+    config = get_pretrained_config(model_id)
+    try:
+        return config.pipeline_tag
+    except AttributeError:
+        assert config.architectures is not None and len(config.architectures) == 1, (
+            f"Cannot return the task of {model_id!r}, pipeline_tag is not setup, "
+            f"architectures={config.architectures} in config={config}"
+        )
+        return task_from_arch(config.architectures[0])
 
 
 def task_from_tags(tags: Union[str, List[str]]) -> str:

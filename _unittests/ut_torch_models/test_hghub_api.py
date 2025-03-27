@@ -3,6 +3,7 @@ import pandas
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     hide_stdout,
+    long_test,
     never_test,
     requires_torch,
     requires_transformers,
@@ -15,7 +16,10 @@ from onnx_diagnostic.torch_models.hghub.hub_api import (
     task_from_arch,
     task_from_tags,
 )
-from onnx_diagnostic.torch_models.hghub.hub_data import load_architecture_task
+from onnx_diagnostic.torch_models.hghub.hub_data import (
+    load_architecture_task,
+    load_models_testing,
+)
 
 
 class TestHuggingFaceHubApi(ExtTestCase):
@@ -110,6 +114,17 @@ class TestHuggingFaceHubApi(ExtTestCase):
             with self.subTest(tags=tags, task=etask):
                 task = task_from_tags(tags)
                 self.assertEqual(etask, task)
+
+    def test_model_testings(self):
+        models = load_models_testing()
+        self.assertNotEmpty(models)
+
+    @long_test()
+    def test_model_testings_and_architctures(self):
+        models = load_models_testing()
+        for mid in models:
+            task = task_from_id(mid)
+            self.assertNotEmpty(task)
 
 
 if __name__ == "__main__":

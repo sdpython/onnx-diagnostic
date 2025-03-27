@@ -1,29 +1,8 @@
 import io
 import functools
+from typing import Dict, List
 
 __date__ = "2025-03-26"
-
-__data_tasks__ = [
-    "automatic-speech-recognition",
-    "image-text-to-text",
-    "image-to-text",
-    "text-generation",
-    "object-detection",
-    "document-question-answering",
-    "feature-extraction",
-    "text-to-audio",
-    "zero-shot-image-classification",
-    "image-segmentation",
-    "reinforcement-learning",
-    "no-pipeline-tag",
-    "image-classification",
-    "text2text-generation",
-    "mask-generation",
-    "keypoint-detection",
-    "audio-classification",
-    "image-feature-extraction",
-    "fill-mask",
-]
 
 __data_arch__ = """
 architecture,task
@@ -143,9 +122,61 @@ YolosForObjectDetection,object-detection
 YolosModel,image-feature-extraction
 """
 
+__data_tasks__ = [
+    "automatic-speech-recognition",
+    "image-text-to-text",
+    "image-to-text",
+    "text-generation",
+    "object-detection",
+    "document-question-answering",
+    "feature-extraction",
+    "text-to-audio",
+    "zero-shot-image-classification",
+    "image-segmentation",
+    "reinforcement-learning",
+    "no-pipeline-tag",
+    "image-classification",
+    "text2text-generation",
+    "mask-generation",
+    "keypoint-detection",
+    "audio-classification",
+    "image-feature-extraction",
+    "fill-mask",
+]
+
+__models_testing__ = """
+hf-internal-testing/tiny-random-BeitForImageClassification
+hf-internal-testing/tiny-random-convnext
+fxmarty/tiny-random-GemmaForCausalLM
+hf-internal-testing/tiny-random-GPTNeoXForCausalLM
+hf-internal-testing/tiny-random-GraniteForCausalLM
+hf-internal-testing/tiny-random-HieraForImageClassification
+fxmarty/tiny-llama-fast-tokenizer
+sshleifer/tiny-marian-en-de
+hf-internal-testing/tiny-random-MaskFormerForInstanceSegmentation
+echarlaix/tiny-random-mistral
+hf-internal-testing/tiny-random-mobilevit
+hf-internal-testing/tiny-random-MoonshineForConditionalGeneration
+hf-internal-testing/tiny-random-OlmoForCausalLM
+hf-internal-testing/tiny-random-Olmo2ForCausalLM
+echarlaix/tiny-random-PhiForCausalLM
+Xenova/tiny-random-Phi3ForCausalLM
+fxmarty/pix2struct-tiny-random
+fxmarty/tiny-dummy-qwen2
+hf-internal-testing/tiny-random-ViTMSNForImageClassification
+hf-internal-testing/tiny-random-YolosModel
+hf-internal-testing/tiny-xlm-roberta
+"""
+
 
 @functools.cache
-def load_architecture_task():
+def load_models_testing() -> List[str]:
+    """Returns model ids for testing."""
+    return [_.strip() for _ in __models_testing__.split("\n") if _.strip()]
+
+
+@functools.cache
+def load_architecture_task() -> Dict[str, str]:
     """
     Returns a dictionary mapping architecture to task.
 

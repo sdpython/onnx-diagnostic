@@ -62,7 +62,7 @@ def get_untrained_model_with_inputs(
     :param model_kwargs: to change the model generation
     :param verbose: display found information
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
-    :return: dictionary
+    :return: dictionary with a model, inputs, dynamic shapes, and the configuration
 
     Example:
 
@@ -79,6 +79,7 @@ def get_untrained_model_with_inputs(
         print("-- number of parameters:", data["n_weights"])
         print("-- inputs:", string_type(data["inputs"], with_shape=True))
         print("-- dynamic shapes:", pprint.pformat(data["dynamic_shapes"]))
+        print("-- configuration:", pprint.pformat(data["configuration"]))
     """
     if verbose:
         print(f"[get_untrained_model_with_inputs] model_id={model_id!r}")
@@ -139,7 +140,7 @@ def get_untrained_model_with_inputs(
         if inputs_kwargs:
             kwargs.update(inputs_kwargs)
 
-        return get_inputs_for_text_generation(model, **kwargs)
+        return get_inputs_for_text_generation(model, config, **kwargs)
     raise NotImplementedError(f"Input generation for task {task!r} not implemented yet.")
 
 
@@ -155,6 +156,7 @@ def compute_model_size(model: torch.nn.Module) -> Tuple[int, int]:
 
 def get_inputs_for_text_generation(
     model: torch.nn.Module,
+    config: Optional[Any],
     max_token_id: int,
     num_key_value_heads: int,
     num_hidden_layers: int,
@@ -167,6 +169,7 @@ def get_inputs_for_text_generation(
 ):
     """
     :param model: model to get the missing information
+    :param config: configuration used to generate the model
     :param head_dim: last dimension of the cache
     :param batch_size: batch size
     :param sequence_length: sequence length
@@ -216,5 +219,10 @@ def get_inputs_for_text_generation(
     )
     sizes = compute_model_size(model)
     return dict(
-        model=model, inputs=inputs, dynamic_shapes=shapes, size=sizes[0], n_weights=sizes[1]
+        model=model,
+        inputs=inputs,
+        dynamic_shapes=shapes,
+        size=sizes[0],
+        n_weights=sizes[1],
+        configuration=config,
     )

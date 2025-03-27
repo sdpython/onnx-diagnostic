@@ -23,6 +23,10 @@ class TestHuggingFaceHubModel(ExtTestCase):
     def test_get_untrained_model_with_inputs_tiny_llm(self):
         mid = "arnir0/Tiny-LLM"
         data = get_untrained_model_with_inputs(mid, verbose=1)
+        self.assertEqual(
+            set(data),
+            {"model", "inputs", "dynamic_shapes", "configuration", "size", "n_weights"},
+        )
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
         self.assertEqual((1858125824, 464531456), (data["size"], data["n_weights"]))
