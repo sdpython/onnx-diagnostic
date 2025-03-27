@@ -25,7 +25,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
-        self.assertEqual((data["size"], data["n_weights"]), (1858125824, 464531456))
+        self.assertEqual((1858125824, 464531456), (data["size"], data["n_weights"]))
 
     @hide_stdout()
     def test_get_untrained_model_with_inputs_tiny_xlm_roberta(self):
@@ -33,14 +33,23 @@ class TestHuggingFaceHubModel(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
-        self.assertEqual((data["size"], data["n_weights"]), (126190824, 31547706))
+        self.assertEqual((126190824, 31547706), (data["size"], data["n_weights"]))
 
+    @hide_stdout()
     def test_get_untrained_model_with_inputs_tiny_gpt_neo(self):
         mid = "hf-internal-testing/tiny-random-GPTNeoXForCausalLM"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
-        self.assertEqual((data["size"], data["n_weights"]), (4291141632, 1072785408))
+        self.assertEqual((4291141632, 1072785408), (data["size"], data["n_weights"]))
+
+    @hide_stdout()
+    def test_get_untrained_model_with_inputs_phi_2(self):
+        mid = "microsoft/phi-2"
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        model, inputs = data["model"], data["inputs"]
+        model(**inputs)
+        self.assertEqual((1040498688, 260124672), (data["size"], data["n_weights"]))
 
 
 if __name__ == "__main__":
