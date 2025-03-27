@@ -111,7 +111,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 # different expected value for different version of transformers
                 if data["size"] > 2**30:
                     raise AssertionError(
-                        f"Model is too big, size={data["size"] // 2**20} Mb,"
+                        f"Model is too big, size={data['size'] // 2**20} Mb,"
                         f"config is\n{data['configuration']}"
                     )
                 self.assertLess(data["size"], 2**30)
