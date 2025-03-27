@@ -69,7 +69,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         # different expected value for different version of transformers
         self.assertIn(
             (data["size"], data["n_weights"]),
-            [(453330944, 113332736)],
+            [(453330944, 113332736), (453126144, 113281536)],
         )
 
     @hide_stdout()
