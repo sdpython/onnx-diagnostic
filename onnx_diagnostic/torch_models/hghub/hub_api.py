@@ -25,7 +25,7 @@ def task_from_arch(arch: str) -> str:
 
     .. runpython::
 
-        from onnx_diagnostic.torch_models.hub_data import __date__
+        from onnx_diagnostic.torch_models.hghub.hub_data import __date__
         print("last refresh", __date__)
 
     List of supported architectures, see

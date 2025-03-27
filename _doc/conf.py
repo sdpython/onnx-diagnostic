@@ -124,6 +124,7 @@ nitpick_ignore = [
     ("py:class", "transformers.cache_utils.MambaCache"),
     ("py:func", "torch.export._draft_export.draft_export"),
     ("py:func", "torch._export.tools.report_exportability"),
+    ("py:meth", "huggingface_hub.HfApi.list_models"),
     ("py:meth", "transformers.GenerationMixin.generate"),
 ]
 
