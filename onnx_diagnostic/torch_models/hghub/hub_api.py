@@ -1,7 +1,8 @@
+import functools
 from typing import List, Optional, Union
 import transformers
-from huggingface_hub import HfApi
-from .hub_data import __date__, load_architecture_task
+from huggingface_hub import HfApi, model_info
+from .hub_data import __date__, __data_tasks__, load_architecture_task
 
 
 def get_pretrained_config(model_id) -> str:
@@ -9,6 +10,12 @@ def get_pretrained_config(model_id) -> str:
     return transformers.AutoConfig.from_pretrained(model_id)
 
 
+def get_model_info(model_id) -> str:
+    """Returns the model info for a model_id."""
+    return model_info(model_id)
+
+
+@functools.cache
 def task_from_arch(arch: str) -> str:
     """
     This function relies on stored information. That information needs to be refresh.
@@ -49,6 +56,20 @@ def task_from_id(model_id: str, pretrained: bool = False) -> str:
             )
             return task_from_arch(config.architectures[0])
     return transformers.pipelines.get_task(model_id)
+
+
+def task_from_tags(tags: Union[str, List[str]]) -> str:
+    """
+    Guesses the task from the list of tags.
+    If given by a string, ``|`` should be the separater.
+    """
+    if isinstance(tags, str):
+        tags = tags.split("|")
+    stags = set(tags)
+    for task in __data_tasks__:
+        if task in stags:
+            return task
+    raise ValueError(f"Unable to guess the task from tags={tags!r}")
 
 
 def enumerate_model_list(
@@ -92,6 +113,7 @@ def enumerate_model_list(
                 ",".join(
                     [
                         "id",
+                        "model_name",
                         "author",
                         "created_at",
                         "last_modified",
@@ -123,6 +145,7 @@ def enumerate_model_list(
                         str,
                         [
                             m.id,
+                            getattr(m, "model_name", "") or "",
                             m.author or "",
                             str(m.created_at or "").split(" ")[0],
                             str(m.last_modified or "").split(" ")[0],

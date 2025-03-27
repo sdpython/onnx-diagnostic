@@ -3,6 +3,27 @@ import functools
 
 __date__ = "2025-03-26"
 
+__data_tasks__ = [
+    "automatic-speech-recognition",
+    "image-to-text",
+    "text-generation",
+    "object-detection",
+    "document-question-answering",
+    "feature-extraction",
+    "text-to-audio",
+    "zero-shot-image-classification",
+    "image-segmentation",
+    "reinforcement-learning",
+    "no-pipeline-tag",
+    "image-classification",
+    "text2text-generation",
+    "mask-generation",
+    "keypoint-detection",
+    "audio-classification",
+    "image-feature-extraction",
+    "fill-mask",
+]
+
 __data_arch__ = """
 architecture,task
 ASTModel,feature-extraction

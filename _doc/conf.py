@@ -232,5 +232,6 @@ epkg_dictionary.update(
         "arnir0/Tiny-LLM": "https://huggingface.co/arnir0/Tiny-LLM",
         "microsoft/phi-2": "https://huggingface.co/microsoft/phi-2",
         "microsoft/Phi-3.5-mini-instruct": "https://huggingface.co/microsoft/Phi-3.5-mini-instruct",
+        "microsoft/Phi-3.5-vision-instruct": "https://huggingface.co/microsoft/Phi-3.5-vision-instruct",
     }
 )
