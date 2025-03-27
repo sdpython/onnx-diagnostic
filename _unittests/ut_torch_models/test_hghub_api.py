@@ -120,7 +120,7 @@ class TestHuggingFaceHubApi(ExtTestCase):
         self.assertNotEmpty(models)
 
     @long_test()
-    def test_model_testings_and_architctures(self):
+    def test_model_testings_and_architectures(self):
         models = load_models_testing()
         for mid in models:
             task = task_from_id(mid)

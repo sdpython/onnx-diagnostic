@@ -3,6 +3,7 @@ import transformers
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     hide_stdout,
+    long_test,
     requires_torch,
     requires_transformers,
 )
@@ -10,6 +11,7 @@ from onnx_diagnostic.torch_models.hghub.model_inputs import (
     config_class_from_architecture,
     get_untrained_model_with_inputs,
 )
+from onnx_diagnostic.torch_models.hghub.hub_data import load_models_testing
 
 
 class TestHuggingFaceHubModel(ExtTestCase):
@@ -58,6 +60,33 @@ class TestHuggingFaceHubModel(ExtTestCase):
             (data["size"], data["n_weights"]),
             [(1040293888, 260073472), (1040498688, 260124672)],
         )
+
+    @hide_stdout()
+    def test_get_untrained_model_with_inputs_beit(self):
+        mid = "hf-internal-testing/tiny-random-BeitForImageClassification"
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        model, inputs = data["model"], data["inputs"]
+        model(**inputs)
+        # different expected value for different version of transformers
+        self.assertIn((data["size"], data["n_weights"]), [(30732296, 7683074)])
+
+    @hide_stdout()
+    @long_test()
+    def test_get_untrained_model_Ltesting_models(self):
+        # UNHIDE=1 LONGTEST=1 python _unittests/ut_torch_models/test_hghub_model.py -k L -f
+        for mid in load_models_testing():
+            with self.subTest(mid=mid):
+                data = get_untrained_model_with_inputs(mid, verbose=1)
+                model, inputs = data["model"], data["inputs"]
+                model(**inputs)
+                # different expected value for different version of transformers
+                if data["size"] > 2**30:
+                    raise AssertionError(
+                        f"Model is too big, size={data["size"] // 2**20} Mb,"
+                        f"config is\n{data['configuration']}"
+                    )
+                self.assertLess(data["size"], 2**30)
+                self.assertLess(data["n_weights"], 2**28)
 
 
 if __name__ == "__main__":
