@@ -5,7 +5,7 @@ from huggingface_hub import HfApi, model_info
 from .hub_data import __date__, __data_tasks__, load_architecture_task
 
 
-def get_pretrained_config(model_id) -> str:
+def get_pretrained_config(model_id: str) -> str:
     """Returns the config for a model_id."""
     return transformers.AutoConfig.from_pretrained(model_id)
 
@@ -61,7 +61,7 @@ def task_from_id(model_id: str, pretrained: bool = False) -> str:
 def task_from_tags(tags: Union[str, List[str]]) -> str:
     """
     Guesses the task from the list of tags.
-    If given by a string, ``|`` should be the separater.
+    If given by a string, ``|`` should be the separator.
     """
     if isinstance(tags, str):
         tags = tags.split("|")

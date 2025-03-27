@@ -98,7 +98,7 @@ class TestHuggingFaceHubApi(ExtTestCase):
         ]
         for tags, etask in _tags:
             with self.subTest(tags=tags, task=etask):
-                task = task_from_tags(tags, True)
+                task = task_from_tags(tags)
                 self.assertEqual(etask, task)
 
 

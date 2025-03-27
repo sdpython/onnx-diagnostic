@@ -20,13 +20,27 @@ class TestHuggingFaceHubModel(ExtTestCase):
         self.assertEqual(config, transformers.LlamaConfig)
 
     @hide_stdout()
-    def test_get_untrained_model_with_inputs(self):
+    def test_get_untrained_model_with_inputs_tiny_llm(self):
         mid = "arnir0/Tiny-LLM"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
-        self.assertEqual(data["size"], 1858125824)
-        self.assertEqual(data["n_weights"], 464531456)
+        self.assertEqual((data["size"], data["n_weights"]), (1858125824, 464531456))
+
+    @hide_stdout()
+    def test_get_untrained_model_with_inputs_tiny_xlm_roberta(self):
+        mid = "hf-internal-testing/tiny-xlm-roberta"  # XLMRobertaConfig
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        model, inputs = data["model"], data["inputs"]
+        model(**inputs)
+        self.assertEqual((data["size"], data["n_weights"]), (126190824, 31547706))
+
+    def test_get_untrained_model_with_inputs_tiny_gpt_neo(self):
+        mid = "hf-internal-testing/tiny-random-GPTNeoXForCausalLM"
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        model, inputs = data["model"], data["inputs"]
+        model(**inputs)
+        self.assertEqual((data["size"], data["n_weights"]), (4291141632, 1072785408))
 
 
 if __name__ == "__main__":

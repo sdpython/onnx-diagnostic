@@ -10,9 +10,13 @@ from .hub_api import task_from_arch, get_pretrained_config
 
 
 @functools.cache
-def config_class_from_architecture(arch: str) -> type:
+def config_class_from_architecture(arch: str, exc: bool = False) -> type:
     """
     Retrieves the configuration class for a given architecture.
+
+    :param arch: architecture (clas name)
+    :param exc: raise an exception if not found
+    :return: type
     """
     cls = getattr(transformers, arch)
     mod_name = cls.__module__
@@ -20,10 +24,17 @@ def config_class_from_architecture(arch: str) -> type:
     source = inspect.getsource(mod)
     reg = re.compile("config: ([A-Za-z0-9]+)")
     fall = reg.findall(source)
+    if len(fall) == 0:
+        assert not exc, (
+            f"Unable to guess Configuration class name for arch={arch!r}, "
+            f"module={mod_name!r}, no candidate, source is\n{source}"
+        )
+        return None
     unique = set(fall)
     assert len(unique) == 1, (
         f"Unable to guess Configuration class name for arch={arch!r}, "
-        f"module={mod_name!r}, source is\n{source}"
+        f"module={mod_name!r}, found={unique} (#{len(unique)}), "
+        f"source is\n{source}"
     )
     cls_name = unique.pop()
     return getattr(transformers, cls_name)
@@ -81,7 +92,14 @@ def get_untrained_model_with_inputs(
     arch = archs[0]
     if verbose:
         print(f"[get_untrained_model_with_inputs] architecture={arch!r}")
-    cls = config_class_from_architecture(arch)
+    cls = config_class_from_architecture(arch, exc=False)
+    if cls is None:
+        if verbose:
+            print(
+                "[get_untrained_model_with_inputs] no found config name in the code, loads it"
+            )
+        config = get_pretrained_config(model_id)
+        cls = config.__class__
     if verbose:
         print(f"[get_untrained_model_with_inputs] cls={cls.__name__!r}")
 
@@ -107,12 +125,16 @@ def get_untrained_model_with_inputs(
             batch_size=2,
             sequence_length=30,
             sequence_length2=3,
-            num_hidden_layers=config.num_hidden_layers,
-            num_key_value_heads=config.num_key_value_heads,
             head_dim=getattr(
                 config, "head_dim", config.hidden_size // config.num_attention_heads
             ),
             max_token_id=config.vocab_size - 1,
+            num_hidden_layers=config.num_hidden_layers,
+            num_key_value_heads=(
+                config.num_key_value_heads
+                if hasattr(config, "num_key_value_heads")
+                else config.num_attention_heads
+            ),
         )
         if inputs_kwargs:
             kwargs.update(inputs_kwargs)

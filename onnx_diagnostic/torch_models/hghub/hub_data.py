@@ -5,6 +5,7 @@ __date__ = "2025-03-26"
 
 __data_tasks__ = [
     "automatic-speech-recognition",
+    "image-text-to-text",
     "image-to-text",
     "text-generation",
     "object-detection",
