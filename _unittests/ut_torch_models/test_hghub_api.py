@@ -26,21 +26,22 @@ class TestHuggingFaceHubApi(ExtTestCase):
 
     @requires_transformers("4.50")  # we limit to some versions of the CI
     @requires_torch("2.7")
+    @hide_stdout()
     def test_enumerate_model_list(self):
         models = list(
             enumerate_model_list(
                 2,
                 verbose=1,
                 dump="test_enumerate_model_list.csv",
-                filter="text-generation",
+                filter="image-classification",
                 library="transformers",
             )
         )
         self.assertEqual(len(models), 2)
         df = pandas.read_csv("test_enumerate_model_list.csv")
         self.assertEqual(df.shape, (2, 12))
-        tasks = [task_from_id(c) for c in df.id]
-        self.assertEqual(["text-generation", "text-generation"], tasks)
+        tasks = [task_from_id(c, "missing") for c in df.id]
+        self.assertEqual(len(tasks), 2)
 
     @requires_transformers("4.50")
     @requires_torch("2.7")

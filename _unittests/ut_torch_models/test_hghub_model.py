@@ -29,11 +29,20 @@ class TestHuggingFaceHubModel(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertEqual(
             set(data),
-            {"model", "inputs", "dynamic_shapes", "configuration", "size", "n_weights"},
+            {
+                "model",
+                "inputs",
+                "dynamic_shapes",
+                "configuration",
+                "size",
+                "n_weights",
+                "input_kwargs",
+                "model_kwargs",
+            },
         )
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
-        self.assertEqual((1858125824, 464531456), (data["size"], data["n_weights"]))
+        self.assertEqual((51955968, 12988992), (data["size"], data["n_weights"]))
 
     @hide_stdout()
     def test_get_untrained_model_with_inputs_tiny_xlm_roberta(self):
@@ -41,7 +50,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
-        self.assertEqual((126190824, 31547706), (data["size"], data["n_weights"]))
+        self.assertEqual((8642088, 2160522), (data["size"], data["n_weights"]))
 
     @hide_stdout()
     def test_get_untrained_model_with_inputs_tiny_gpt_neo(self):
@@ -49,7 +58,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
-        self.assertEqual((4291141632, 1072785408), (data["size"], data["n_weights"]))
+        self.assertEqual((316712, 79178), (data["size"], data["n_weights"]))
 
     @hide_stdout()
     def test_get_untrained_model_with_inputs_phi_2(self):
@@ -60,7 +69,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         # different expected value for different version of transformers
         self.assertIn(
             (data["size"], data["n_weights"]),
-            [(1040293888, 260073472), (1040498688, 260124672)],
+            [(453330944, 113332736)],
         )
 
     @hide_stdout()
@@ -70,7 +79,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
         # different expected value for different version of transformers
-        self.assertIn((data["size"], data["n_weights"]), [(30732296, 7683074)])
+        self.assertIn((data["size"], data["n_weights"]), [(111448, 27862)])
 
     @hide_stdout()
     @long_test()
@@ -81,7 +90,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 if isinstance(v, (str, dict, list, tuple, int, float)) and v != getattr(
                     c2, k, None
                 ):
-                    rows.append(f"{k} :: -- {v} ++ {getattr(c2, k, "MISS")}")
+                    rows.append(f"{k} :: -- {v} ++ {getattr(c2, k, 'MISS')}")
             return "\n".join(rows)
 
         # UNHIDE=1 LONGTEST=1 python _unittests/ut_torch_models/test_hghub_model.py -k L -f
