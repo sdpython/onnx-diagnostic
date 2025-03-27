@@ -12,8 +12,7 @@ def get_tiny_llm(
     **kwargs,
 ) -> Dict[str, Any]:
     """
-    Gets a non initialized model
-    similar to `arnir0/Tiny-LLM <https://huggingface.co/arnir0/Tiny-LLM>`_
+    Gets a non initialized model similar to :epkg:`arnir0/Tiny-LLM`.
 
     :param batch_size: batch size
     :param sequence_length: sequence length

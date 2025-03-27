@@ -12,8 +12,7 @@ def get_phi2(
     **kwargs,
 ) -> Dict[str, Any]:
     """
-    Gets a non initialized model
-    similar to `microsoft/phi-2 <https://huggingface.co/microsoft/phi-2>`_
+    Gets a non initialized model similar to :epkg:`microsoft/phi-2`.
 
     :param batch_size: batch size
     :param sequence_length: sequence length
