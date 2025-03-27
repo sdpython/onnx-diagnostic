@@ -21,7 +21,7 @@ def task_from_arch(arch: str) -> str:
         from onnx_diagnostic.torch_models.hub_data import __date__
         print("last refresh", __date__)
 
-    List of supported architecturs, see
+    List of supported architectures, see
     :func:`load_architecture_task
     <onnx_diagnostic.torch_models.hghub.hub_data.load_architecture_task>`.
     """
@@ -116,7 +116,7 @@ def enumerate_model_list(
                 f"[enumerate_model_list]     id={m.id!r}, "
                 f"library={m.library_name!r}, task={m.task!r}"
             )
-        with open(dump, "a") as f:
+        with open(dump, "a") as f:  # type: ignore
             f.write(
                 ",".join(
                     map(
