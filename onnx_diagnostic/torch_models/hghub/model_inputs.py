@@ -53,9 +53,9 @@ def get_untrained_model_with_inputs(
     Gets a non initialized model similar to the original model
     based on the model id given to the function.
     The model size is reduced compare to the original model.
-    No weights download is required.
+    No weight is downloaded, only the configuration file sometimes.
 
-    :param model_id: model id, ex:`arnir0/Tiny-LLM`
+    :param model_id: model id, ex: :epkg:`arnir0/Tiny-LLM`
     :param config: to overwrite the configuration
     :param task: model task, can be overwritten, otherwise, it is automatically determined
     :param input_kwargs: parameters sent to input generation

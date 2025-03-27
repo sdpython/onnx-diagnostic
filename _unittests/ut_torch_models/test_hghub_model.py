@@ -49,7 +49,11 @@ class TestHuggingFaceHubModel(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
-        self.assertEqual((1040498688, 260124672), (data["size"], data["n_weights"]))
+        # different expected value for different version of transformers
+        self.assertIn(
+            (data["size"], data["n_weights"]),
+            [(1040293888, 260073472), (1040498688, 260124672)],
+        )
 
 
 if __name__ == "__main__":
