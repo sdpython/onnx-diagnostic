@@ -44,6 +44,16 @@ class TestHuggingFaceHubApi(ExtTestCase):
         for name, etask in [
             ("arnir0/Tiny-LLM", "text-generation"),
             ("microsoft/phi-2", "text-generation"),
+        ]:
+            with self.subTest(name=name, task=etask):
+                task = task_from_id(name, True)
+                self.assertEqual(etask, task)
+
+    @requires_transformers("4.50")
+    @requires_torch("2.7")
+    @never_test()
+    def test_task_from_id_long(self):
+        for name, etask in [
             ("microsoft/Phi-3.5-mini-instruct", "text-generation"),
             ("microsoft/Phi-3.5-vision-instruct", "text-generation"),
         ]:

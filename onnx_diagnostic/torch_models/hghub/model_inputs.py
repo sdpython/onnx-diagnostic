@@ -10,7 +10,7 @@ from .hub_api import task_from_arch, get_pretrained_config
 
 
 @functools.cache
-def config_class_from_architecture(arch: str, exc: bool = False) -> type:
+def config_class_from_architecture(arch: str, exc: bool = False) -> Optional[type]:
     """
     Retrieves the configuration class for a given architecture.
 
