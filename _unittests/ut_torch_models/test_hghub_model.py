@@ -96,7 +96,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(473928, 118482)])
         model, inputs = data["model"], data["inputs"]
-        raise unittest.SkipTest(f"not wroking for {mid!r}")
+        raise unittest.SkipTest(f"not working for {mid!r}")
         model(**inputs)
 
     @hide_stdout()

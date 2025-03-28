@@ -101,7 +101,7 @@ def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
     return kwargs
 
 
-def check_hasattr(config: Any, *args: Union[str, Tuple[str, ...]]):
+def check_hasattr(config: Any, *args: Union[str, Tuple[Any, ...]]):
     """
     Checks the confiugation has all the attributes in ``args``.
     Raises an exception otherwise.
@@ -185,7 +185,7 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
             ),
             encoder_dim=_pick(config, "n_positions", "d_model"),
         )
-        fct = get_inputs_for_text2text_generation
+        fct = get_inputs_for_text2text_generation  # type: ignore
     elif task == "image-classification":
         check_hasattr(config, "image_size", "num_channels")
         if isinstance(config.image_size, int):
