@@ -135,6 +135,23 @@ def check_model_ort(
         )
 
 
+def replace_string_by_dynamic(dynamic_shapes: Any) -> Any:
+    """Replaces strings by ``torch.export.Dim.DYNAMIC``."""
+    import torch
+
+    if isinstance(dynamic_shapes, torch.export.dynamic_shapes._Dim):
+        return dynamic_shapes
+    if isinstance(dynamic_shapes, str):
+        return torch.export.Dim.DYNAMIC
+    if not dynamic_shapes:
+        return dynamic_shapes
+    if isinstance(dynamic_shapes, (tuple, list)):
+        return type(dynamic_shapes)(replace_string_by_dynamic(i) for i in dynamic_shapes)
+    if isinstance(dynamic_shapes, dict):
+        return {k: replace_string_by_dynamic(v) for k, v in dynamic_shapes.items()}
+    raise AssertionError(f"Unexpected type {type(dynamic_shapes)} for dynamic_shapes")
+
+
 def dummy_llm(
     cls_name: Optional[str] = None,
     dynamic_shapes: bool = False,

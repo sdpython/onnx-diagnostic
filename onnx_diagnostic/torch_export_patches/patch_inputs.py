@@ -50,6 +50,7 @@ def convert_dynamic_axes_into_dynamic_shapes(
     args: Optional[Tuple[Any, ...]] = None,
     kwargs: Optional[Dict[str, Any]] = None,
     dynamic_axes: Optional[Dict[str, Dict[int, str]]] = None,
+    prefix_mapping: Optional[Dict[str, str]] = None,
     verbose: int = 0,
 ) -> Tuple[Tuple[Any, ...], Dict[str, Any], Dict[str, Any]]:
     """
@@ -59,17 +60,19 @@ def convert_dynamic_axes_into_dynamic_shapes(
     :param args: positional arguments
     :param kwargs: named arguments
     :param dynamic_axes: dynamic axes
+    :param prefix_mapping: prefix mapping
     :param verbose: verbosity
     :return: (args, kwargs, dynamic shapes)
     """
     new_kwargs = {}
     if args:
         assert hasattr(model, "forward"), f"Missing method 'forward' for {model!r}"
+        plus = 0 if isinstance(model, torch.nn.Module) else 1
         print(
             f"[convert_dynamic_axes_into_dynamic_shapes] "
-            f"mapping args to kwargs for model={model}"
+            f"mapping args to kwargs for model="
+            f"{model if plus else model.__class__.__name__}"
         )
-        plus = 0 if isinstance(model, torch.nn.Module) else 1
         pars = inspect.signature(model.forward).parameters
         assert len(pars) >= len(
             args
@@ -129,17 +132,22 @@ def convert_dynamic_axes_into_dynamic_shapes(
                 prefix = k.split(".")[0]
                 if prefix in done:
                     continue
-                if prefix in updated_kwargs and prefix in changes:
+                args_prefix = (
+                    prefix_mapping[prefix]
+                    if prefix_mapping and prefix in prefix_mapping
+                    else prefix
+                )
+                if args_prefix in updated_kwargs and args_prefix in changes:
                     # A cache.
-                    cls = changes[prefix]
-                    dynamic_shapes[prefix] = _make_shape(
+                    cls = changes[args_prefix]
+                    dynamic_shapes[args_prefix] = _make_shape(
                         {
                             _: __
                             for _, __ in dynamic_axes.items()
                             if _.startswith(f"{prefix}.")
                         },
                         cls,
-                        updated_kwargs[prefix],
+                        updated_kwargs[args_prefix],
                     )
                     done.add(prefix)
                     continue

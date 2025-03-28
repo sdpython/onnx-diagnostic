@@ -12,6 +12,7 @@ from onnx_diagnostic.torch_test_helper import (
     to_numpy,
     is_torchdynamo_exporting,
     steel_forward,
+    replace_string_by_dynamic,
 )
 
 TFLOAT = onnx.TensorProto.FLOAT
@@ -82,6 +83,23 @@ class TestOrtSession(ExtTestCase):
         model = Model()
         with steel_forward(model):
             model(*inputs)
+
+    def test_replace_string_by_dynamic(self):
+        example = {
+            "input_ids": {0: "batch_size", 1: "sequence_length"},
+            "attention_mask": ({0: "batch_size", 1: "sequence_length"},),
+            "position_ids": [{0: "batch_size", 1: "sequence_length"}],
+        }
+        proc = replace_string_by_dynamic(example)
+        sproc = (
+            str(proc)
+            .replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>", "DYN")
+            .replace(" ", "")
+        )
+        self.assertEqual(
+            "{'input_ids':{0:DYN),1:DYN)},'attention_mask':({0:DYN),1:DYN)},),'position_ids':[{0:DYN),1:DYN)}]}",
+            sproc,
+        )
 
 
 if __name__ == "__main__":
