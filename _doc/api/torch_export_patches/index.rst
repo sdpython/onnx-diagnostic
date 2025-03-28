@@ -6,6 +6,8 @@ onnx_diagnostic.torch_export_patches
     :caption: submodules
 
     patches/index
+    patch_inputs
+
 
 .. automodule:: onnx_diagnostic.torch_export_patches
     :members:
