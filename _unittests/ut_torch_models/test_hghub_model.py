@@ -78,7 +78,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
         # different expected value for different version of transformers
-        self.assertIn((data["size"], data["n_weights"]), [(111448, 27862)])
+        self.assertIn((data["size"], data["n_weights"]), [(111448, 27862), (56880, 14220)])
 
     @hide_stdout()
     def test_get_untrained_model_with_inputs_codellama(self):
