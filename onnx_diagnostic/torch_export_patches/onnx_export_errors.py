@@ -180,7 +180,7 @@ def _unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
 def register_additional_serialization_functions(
     patch_transformers: bool = False, verbose: int = 0
 ) -> Callable:
-    """The necessary modification to run the fx Graph."""
+    """The necessary modifications to run the fx Graph."""
     fct_callable = replacement_before_exporting if patch_transformers else (lambda x: x)
     done = _register_cache_serialization(verbose=verbose)
     try:

@@ -5,12 +5,13 @@ import onnx
 import onnx.helper as oh
 import onnx.numpy_helper as onh
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.torch_test_helper import (
     dummy_llm,
     check_model_ort,
     to_numpy,
     is_torchdynamo_exporting,
+    steel_forward,
 )
 
 TFLOAT = onnx.TensorProto.FLOAT
@@ -70,6 +71,17 @@ class TestOrtSession(ExtTestCase):
         t = torch.tensor([0, 1], dtype=torch.bfloat16)
         a = to_numpy(t)
         self.assertEqual(a.dtype, ml_dtypes.bfloat16)
+
+    @hide_stdout()
+    def test_steel_forward(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return x + y
+
+        inputs = torch.rand(3, 4), torch.rand(3, 4)
+        model = Model()
+        with steel_forward(model):
+            model(*inputs)
 
 
 if __name__ == "__main__":

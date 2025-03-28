@@ -425,6 +425,26 @@ def string_type(
         )
         return f"{obj.__class__.__name__}(key_cache={kc}, value_cache={vc})"
 
+    if obj.__class__.__name__ == "EncoderDecoderCache":
+        att = string_type(
+            obj.self_attention_cache,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+        )
+        cross = string_type(
+            obj.cross_attention_cache,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+        )
+        return (
+            f"{obj.__class__.__name__}(self_attention_cache={att}, "
+            f"cross_attention_cache={cross})"
+        )
+
     if obj.__class__.__name__ == "BatchFeature":
         s = string_type(
             obj.data,
