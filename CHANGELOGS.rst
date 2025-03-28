@@ -1,6 +1,14 @@
 Change Logs
 ===========
 
+0.3.0
++++++
+
+* :pr:`23`: dummy inputs for ``image-classification``
+* :pr:`22`: api to create untrained model copying the architecture
+  of the trained models and dummy inputs for them,
+  support for ``text-generation``
+
 0.2.1
 +++++
 

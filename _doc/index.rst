@@ -64,6 +64,7 @@ Enlightening Examples
 * :ref:`l-plot-export-locale-issue`
 * :ref:`l-plot-tiny-llm-export`
 * :ref:`l-plot-tiny-llm-export-patched`
+* :ref:`l-plot-export-hub-codellama`
 
 **Investigate ONNX models**
 
