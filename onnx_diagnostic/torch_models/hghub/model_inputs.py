@@ -2,7 +2,7 @@ import functools
 import importlib
 import inspect
 import re
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 import torch
 import transformers
 from ...cache_helpers import make_dynamic_cache
@@ -40,6 +40,110 @@ def config_class_from_architecture(arch: str, exc: bool = False) -> Optional[typ
     return getattr(transformers, cls_name)
 
 
+def _update_config(config: Any, kwargs: Dict[str, Any]):
+    for k, v in kwargs.items():
+        if hasattr(config, k):
+            setattr(config, k, v)
+
+
+def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
+    """Reduces a model size."""
+    if task == "text-generation":
+        kwargs = dict(
+            head_dim=getattr(
+                config, "head_dim", config.hidden_size // config.num_attention_heads
+            ),
+            num_hidden_layers=min(config.num_hidden_layers, 2),
+            num_key_value_heads=(
+                config.num_key_value_heads
+                if hasattr(config, "num_key_value_heads")
+                else config.num_attention_heads
+            ),
+            intermediate_size=(
+                min(config.intermediate_size, 24576 // 4)
+                if config.intermediate_size % 4 == 0
+                else config.intermediate_size
+            ),
+            hidden_size=(
+                min(config.hidden_size, 3072 // 4)
+                if config.hidden_size % 4 == 0
+                else config.hidden_size
+            ),
+        )
+    elif task == "image-classification":
+        if isinstance(config.image_size, int):
+            kwargs = dict(
+                batch_size=2,
+                input_width=config.image_size,
+                input_height=config.image_size,
+                input_channels=config.num_channels,
+            )
+        else:
+            kwargs = dict(
+                batch_size=2,
+                input_width=config.image_size[0],
+                input_height=config.image_size[1],
+                input_channels=config.num_channels,
+            )
+    else:
+        raise NotImplementedError(f"Input generation for task {task!r} not implemented yet.")
+
+    for k, v in kwargs.items():
+        setattr(config, k, v)
+    return kwargs
+
+
+def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callable]:
+    """Inputs kwargs"""
+    if task == "text-generation":
+        kwargs = dict(
+            batch_size=2,
+            sequence_length=30,
+            sequence_length2=3,
+            head_dim=getattr(
+                config, "head_dim", config.hidden_size // config.num_attention_heads
+            ),
+            dummy_max_token_id=config.vocab_size - 1,
+            num_hidden_layers=min(config.num_hidden_layers, 2),
+            num_key_value_heads=(
+                config.num_key_value_heads
+                if hasattr(config, "num_key_value_heads")
+                else config.num_attention_heads
+            ),
+            intermediate_size=(
+                min(config.intermediate_size, 24576 // 4)
+                if config.intermediate_size % 4 == 0
+                else config.intermediate_size
+            ),
+            hidden_size=(
+                min(config.hidden_size, 3072 // 4)
+                if config.hidden_size % 4 == 0
+                else config.hidden_size
+            ),
+        )
+        fct = get_inputs_for_text_generation
+    elif task == "image-classification":
+        if isinstance(config.image_size, int):
+            kwargs = dict(
+                batch_size=2,
+                input_width=config.image_size,
+                input_height=config.image_size,
+                input_channels=config.num_channels,
+            )
+        else:
+            kwargs = dict(
+                batch_size=2,
+                input_width=config.image_size[0],
+                input_height=config.image_size[1],
+                input_channels=config.num_channels,
+            )
+        fct = get_inputs_for_image_classification  # type: ignore
+    else:
+        raise NotImplementedError(f"Input generation for task {task!r} not implemented yet.")
+
+    return kwargs, fct
+
+
 def get_untrained_model_with_inputs(
     model_id: str,
     config: Optional[Any] = None,
@@ -48,6 +152,7 @@ def get_untrained_model_with_inputs(
     model_kwargs: Optional[Dict[str, Any]] = None,
     verbose: int = 0,
     dynamic_rope: Optional[bool] = None,
+    same_as_pretrained: bool = False,
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
@@ -62,7 +167,9 @@ def get_untrained_model_with_inputs(
     :param model_kwargs: to change the model generation
     :param verbose: display found information
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
-    :return: dictionary
+    :param same_as_pretrained: if True, do not change the default values
+        to get a smaller model
+    :return: dictionary with a model, inputs, dynamic shapes, and the configuration
 
     Example:
 
@@ -79,6 +186,7 @@ def get_untrained_model_with_inputs(
         print("-- number of parameters:", data["n_weights"])
         print("-- inputs:", string_type(data["inputs"], with_shape=True))
         print("-- dynamic shapes:", pprint.pformat(data["dynamic_shapes"]))
+        print("-- configuration:", pprint.pformat(data["configuration"]))
     """
     if verbose:
         print(f"[get_untrained_model_with_inputs] model_id={model_id!r}")
@@ -92,55 +200,38 @@ def get_untrained_model_with_inputs(
     arch = archs[0]
     if verbose:
         print(f"[get_untrained_model_with_inputs] architecture={arch!r}")
-    cls = config_class_from_architecture(arch, exc=False)
-    if cls is None:
-        if verbose:
-            print(
-                "[get_untrained_model_with_inputs] no found config name in the code, loads it"
-            )
-        config = get_pretrained_config(model_id)
-        cls = config.__class__
+    config = get_pretrained_config(model_id)
     if verbose:
-        print(f"[get_untrained_model_with_inputs] cls={cls.__name__!r}")
-
-    # model creation
-    kwargs: Dict[str, Any] = dict(
-        num_hidden_layers=1,
-    )
-    if dynamic_rope is not None:
-        kwargs["rope_scaling"] = (
-            {"rope_type": "dynamic", "factor": 10.0} if dynamic_rope else None
-        )
-    if model_kwargs:
-        kwargs.update(model_kwargs)
-    config = cls(**kwargs)
-    model = getattr(transformers, arch)(config)
-
+        print(f"[get_untrained_model_with_inputs] cls={config.__class__.__name__!r}")
     task = task_from_arch(arch)
     if verbose:
         print(f"[get_untrained_model_with_inputs] task={task!r}")
 
-    if task == "text-generation":
-        kwargs = dict(
-            batch_size=2,
-            sequence_length=30,
-            sequence_length2=3,
-            head_dim=getattr(
-                config, "head_dim", config.hidden_size // config.num_attention_heads
-            ),
-            max_token_id=config.vocab_size - 1,
-            num_hidden_layers=config.num_hidden_layers,
-            num_key_value_heads=(
-                config.num_key_value_heads
-                if hasattr(config, "num_key_value_heads")
-                else config.num_attention_heads
-            ),
+    # model kwagrs
+    if dynamic_rope is not None:
+        config.rope_scaling = (
+            {"rope_type": "dynamic", "factor": 10.0} if dynamic_rope else None
         )
-        if inputs_kwargs:
-            kwargs.update(inputs_kwargs)
 
-        return get_inputs_for_text_generation(model, **kwargs)
-    raise NotImplementedError(f"Input generation for task {task!r} not implemented yet.")
+    # updating the configuration
+    if not same_as_pretrained:
+        mkwargs = reduce_model_config(config, task)
+    else:
+        mkwargs = {}
+    if model_kwargs:
+        for k, v in model_kwargs.items():
+            setattr(config, k, v)
+            mkwargs[k] = v
+    # input kwargs
+    kwargs, fct = random_input_kwargs(config, task)
+    if inputs_kwargs:
+        kwargs.update(inputs_kwargs)
+
+    model = getattr(transformers, arch)(config)
+    res = fct(model, config, **kwargs)
+    res["input_kwargs"] = kwargs
+    res["model_kwargs"] = mkwargs
+    return res
 
 
 def compute_model_size(model: torch.nn.Module) -> Tuple[int, int]:
@@ -155,7 +246,8 @@ def compute_model_size(model: torch.nn.Module) -> Tuple[int, int]:
 
 def get_inputs_for_text_generation(
     model: torch.nn.Module,
-    max_token_id: int,
+    config: Optional[Any],
+    dummy_max_token_id: int,
     num_key_value_heads: int,
     num_hidden_layers: int,
     head_dim: int,
@@ -166,8 +258,12 @@ def get_inputs_for_text_generation(
     **kwargs,
 ):
     """
+    Generates input for task ``text-generation``.
+
     :param model: model to get the missing information
+    :param config: configuration used to generate the model
     :param head_dim: last dimension of the cache
+    :param dummy_max_token_id: dummy max token id
     :param batch_size: batch size
     :param sequence_length: sequence length
     :param sequence_length2: new sequence length
@@ -195,7 +291,7 @@ def get_inputs_for_text_generation(
         ],
     }
     inputs = dict(
-        input_ids=torch.randint(0, max_token_id, (batch_size, sequence_length2)).to(
+        input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
             torch.int64
         ),
         attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
@@ -216,5 +312,62 @@ def get_inputs_for_text_generation(
     )
     sizes = compute_model_size(model)
     return dict(
-        model=model, inputs=inputs, dynamic_shapes=shapes, size=sizes[0], n_weights=sizes[1]
+        model=model,
+        inputs=inputs,
+        dynamic_shapes=shapes,
+        size=sizes[0],
+        n_weights=sizes[1],
+        configuration=config,
+    )
+
+
+def get_inputs_for_image_classification(
+    model: torch.nn.Module,
+    config: Optional[Any],
+    input_width: int,
+    input_height: int,
+    input_channels: int,
+    batch_size: int = 2,
+    dynamic_rope: bool = False,
+    **kwargs,
+):
+    """
+    Generates inputs for task ``image-classification``.
+
+    :param model: model to get the missing information
+    :param config: configuration used to generate the model
+    :param batch_size: batch size
+    :param input_channel: input channel
+    :param input_width: input width
+    :param input_height: input height
+    :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
+    :return: dictionary
+    """
+    assert isinstance(
+        input_width, int
+    ), f"Unexpected type for input_width {type(input_width)}{config}"
+    assert isinstance(
+        input_width, int
+    ), f"Unexpected type for input_height {type(input_height)}{config}"
+
+    shapes = {
+        "pixel_values": {
+            0: torch.export.Dim("batch", min=1, max=1024),
+            2: torch.export.Dim("width", min=1, max=4096),
+            3: torch.export.Dim("height", min=1, max=4096),
+        },
+    }
+    inputs = dict(
+        pixel_values=torch.randn(batch_size, input_channels, input_width, input_height).clamp(
+            -1, 1
+        ),
+    )
+    sizes = compute_model_size(model)
+    return dict(
+        model=model,
+        inputs=inputs,
+        dynamic_shapes=shapes,
+        size=sizes[0],
+        n_weights=sizes[1],
+        configuration=config,
     )

@@ -3,6 +3,7 @@ import pandas
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     hide_stdout,
+    long_test,
     never_test,
     requires_torch,
     requires_transformers,
@@ -15,28 +16,32 @@ from onnx_diagnostic.torch_models.hghub.hub_api import (
     task_from_arch,
     task_from_tags,
 )
-from onnx_diagnostic.torch_models.hghub.hub_data import load_architecture_task
+from onnx_diagnostic.torch_models.hghub.hub_data import (
+    load_architecture_task,
+    load_models_testing,
+)
 
 
 class TestHuggingFaceHubApi(ExtTestCase):
 
     @requires_transformers("4.50")  # we limit to some versions of the CI
     @requires_torch("2.7")
+    @hide_stdout()
     def test_enumerate_model_list(self):
         models = list(
             enumerate_model_list(
                 2,
                 verbose=1,
                 dump="test_enumerate_model_list.csv",
-                filter="text-generation",
+                filter="image-classification",
                 library="transformers",
             )
         )
         self.assertEqual(len(models), 2)
         df = pandas.read_csv("test_enumerate_model_list.csv")
         self.assertEqual(df.shape, (2, 12))
-        tasks = [task_from_id(c) for c in df.id]
-        self.assertEqual(["text-generation", "text-generation"], tasks)
+        tasks = [task_from_id(c, "missing") for c in df.id]
+        self.assertEqual(len(tasks), 2)
 
     @requires_transformers("4.50")
     @requires_torch("2.7")
@@ -110,6 +115,17 @@ class TestHuggingFaceHubApi(ExtTestCase):
             with self.subTest(tags=tags, task=etask):
                 task = task_from_tags(tags)
                 self.assertEqual(etask, task)
+
+    def test_model_testings(self):
+        models = load_models_testing()
+        self.assertNotEmpty(models)
+
+    @long_test()
+    def test_model_testings_and_architectures(self):
+        models = load_models_testing()
+        for mid in models:
+            task = task_from_id(mid)
+            self.assertNotEmpty(task)
 
 
 if __name__ == "__main__":

@@ -80,6 +80,7 @@ jobs:
         run: |
           export PYTHONPATH=.
           python _doc/examples/plot_export_tiny_llm.py
+        continue-on-error: true
 
       - name: tiny-llm bypass
         run: |

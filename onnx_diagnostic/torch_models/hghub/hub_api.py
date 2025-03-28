@@ -5,9 +5,11 @@ from huggingface_hub import HfApi, model_info
 from .hub_data import __date__, __data_tasks__, load_architecture_task
 
 
-def get_pretrained_config(model_id: str) -> str:
+def get_pretrained_config(model_id: str, trust_remote_code: bool = True) -> str:
     """Returns the config for a model_id."""
-    return transformers.AutoConfig.from_pretrained(model_id)
+    return transformers.AutoConfig.from_pretrained(
+        model_id, trust_remote_code=trust_remote_code
+    )
 
 
 def get_model_info(model_id) -> str:
@@ -16,11 +18,12 @@ def get_model_info(model_id) -> str:
 
 
 @functools.cache
-def task_from_arch(arch: str) -> str:
+def task_from_arch(arch: str, default_value: Optional[str] = None) -> str:
     """
     This function relies on stored information. That information needs to be refresh.
 
     :param arch: architecture name
+    :param default_value: default value in case the task cannot be determined
     :return: task
 
     .. runpython::
@@ -33,29 +36,43 @@ def task_from_arch(arch: str) -> str:
     <onnx_diagnostic.torch_models.hghub.hub_data.load_architecture_task>`.
     """
     data = load_architecture_task()
+    if default_value is not None:
+        return data.get(arch, default_value)
     assert arch in data, f"Architecture {arch!r} is unknown, last refresh in {__date__}"
     return data[arch]
 
 
-def task_from_id(model_id: str, pretrained: bool = False) -> str:
+def task_from_id(
+    model_id: str,
+    default_value: Optional[str] = None,
+    pretrained: bool = False,
+    fall_back_to_pretrained: bool = True,
+) -> str:
     """
     Returns the task attached to a model id.
 
     :param model_id: model id
+    :param default_value: if specified, the function returns this value
+        if the task cannot be determined
     :param pretrained: uses the config
+    :param fall_back_to_pretrained: balls back to pretrained config
     :return: task
     """
-    if pretrained:
-        config = get_pretrained_config(model_id)
+    if not pretrained:
         try:
-            return config.pipeline_tag
-        except AttributeError:
-            assert config.architectures is not None and len(config.architectures) == 1, (
-                f"Cannot return the task of {model_id!r}, pipeline_tag is not setup, "
-                f"architectures={config.architectures} in config={config}"
-            )
-            return task_from_arch(config.architectures[0])
-    return transformers.pipelines.get_task(model_id)
+            transformers.pipelines.get_task(model_id)
+        except RuntimeError:
+            if not fall_back_to_pretrained:
+                raise
+    config = get_pretrained_config(model_id)
+    try:
+        return config.pipeline_tag
+    except AttributeError:
+        assert config.architectures is not None and len(config.architectures) == 1, (
+            f"Cannot return the task of {model_id!r}, pipeline_tag is not setup, "
+            f"architectures={config.architectures} in config={config}"
+        )
+        return task_from_arch(config.architectures[0], default_value=default_value)
 
 
 def task_from_tags(tags: Union[str, List[str]]) -> str:
