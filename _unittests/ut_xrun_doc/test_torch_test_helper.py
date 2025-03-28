@@ -94,6 +94,7 @@ class TestOrtSession(ExtTestCase):
         sproc = (
             str(proc)
             .replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>", "DYN")
+            .replace("<_DimHint.DYNAMIC:3>", "DYN")
             .replace(" ", "")
         )
         self.assertEqual(
