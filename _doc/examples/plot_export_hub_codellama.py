@@ -93,7 +93,11 @@ print("outputs:", string_type(expected_outputs, with_shape=True))
 
 with bypass_export_some_errors(patch_transformers=True) as f:
     ep = torch.export.export(
-        model, (), kwargs=f(data["inputs"]), dynamic_shapes=data["dynamic_shapes"]
+        model,
+        (),
+        kwargs=f(data["inputs"]),
+        dynamic_shapes=data["dynamic_shapes"],
+        strict=False,
     )
     print(ep)
 
