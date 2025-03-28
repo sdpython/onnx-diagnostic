@@ -299,7 +299,7 @@ def get_untrained_model_with_inputs(
 
     sizes = compute_model_size(model)
     res["model"] = model
-    res["config"] = config
+    res["configuration"] = config
     res["size"] = sizes[0]
     res["n_weights"] = sizes[1]
 
