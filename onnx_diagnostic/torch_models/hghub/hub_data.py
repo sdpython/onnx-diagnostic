@@ -105,6 +105,7 @@ SqueezeBertModel,feature-extraction
 Swin2SRModel,image-feature-extraction
 SwinModel,image-feature-extraction
 Swinv2Model,image-feature-extraction
+T5ForConditionalGeneration,text2text-generation
 TableTransformerModel,image-feature-extraction
 UniSpeechForSequenceClassification,audio-classification
 ViTForImageClassification,image-classification

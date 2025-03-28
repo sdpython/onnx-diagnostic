@@ -425,6 +425,26 @@ def string_type(
         )
         return f"{obj.__class__.__name__}(key_cache={kc}, value_cache={vc})"
 
+    if obj.__class__.__name__ == "EncoderDecoderCache":
+        att = string_type(
+            obj.self_attention_cache,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+        )
+        cross = string_type(
+            obj.cross_attention_cache,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+        )
+        return (
+            f"{obj.__class__.__name__}(self_attention_cache={att}, "
+            f"cross_attention_cache={cross})"
+        )
+
     if obj.__class__.__name__ == "BatchFeature":
         s = string_type(
             obj.data,
@@ -1172,6 +1192,9 @@ def flatten_object(x: Any, drop_keys: bool = False) -> Any:
     if x.__class__.__name__ == "DynamicCache":
         res = flatten_object(x.key_cache) + flatten_object(x.value_cache)
         return tuple(res)
+    if x.__class__.__name__ == "EncoderDecoderCache":
+        res = flatten_object(x.self_attention_cache) + flatten_object(x.cross_attention_cache)
+        return tuple(res)
     if x.__class__.__name__ == "MambaCache":
         if isinstance(x.conv_states, list):
             res = flatten_object(x.conv_states) + flatten_object(x.ssm_states)
@@ -1710,6 +1733,31 @@ def max_diff(
             )
         raise AssertionError(
             f"DynamicCache not fully implemented with classes "
+            f"{expected.__class__.__name__!r} and {got.__class__.__name__!r}, "
+            f"and expected={string_type(expected)}, got={string_type(got)},\n"
+            f"level={level}"
+        )
+
+    if expected.__class__.__name__ == "EncoderDecoderCache":
+        if got.__class__.__name__ == "EncoderDecoderCache":
+            if verbose >= 6:
+                print(
+                    f"[max_diff] EncoderDecoderCache: "
+                    f"{string_type(expected)} ? {string_type(got)}"
+                )
+            return max_diff(
+                [expected.self_attention_cache, expected.cross_attention_cache],
+                [got.self_attention_cache, got.cross_attention_cache],
+                verbose=verbose,
+            )
+        if isinstance(got, tuple) and len(got) == 2:
+            return max_diff(
+                [expected.self_attention_cache, expected.cross_attention_cache],
+                [got[0], got[1]],
+                verbose=verbose,
+            )
+        raise AssertionError(
+            f"EncoderDecoderCache not fully implemented with classes "
             f"{expected.__class__.__name__!r} and {got.__class__.__name__!r}, "
             f"and expected={string_type(expected)}, got={string_type(got)},\n"
             f"level={level}"

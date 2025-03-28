@@ -2,11 +2,54 @@
 More complex helpers used in unit tests.
 """
 
+import contextlib
 from typing import Any, List, Optional, Tuple, Union
 from onnx import ModelProto, save
 import torch
 import onnxruntime
-from .helpers import pretty_onnx
+from .helpers import pretty_onnx, string_type
+
+
+def _forward_(*args, _f=None, _context=None, **kwargs):
+    assert _f is not None, "_f cannot be None"
+    assert _context is not None, "_context cannot be None"
+    print(f"---- stolen forward for class {_context['class_name']}")
+    kws = dict(
+        with_shape=_context.get("with_shape", False),
+        with_min_max=_context.get("with_min_max", False),
+    )
+    if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
+        # torch.compiler.is_exporting requires torch>=2.7
+        print(f"  <- args={string_type(args, **kws)} --- kwargs={string_type(kwargs, **kws)}")
+    res = _f(*args, **kwargs)
+    if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
+        print("  --")
+        print(f"  -> {string_type(res, **kws)}")
+        print(".")
+    _context["iteration"] += 1
+    return res
+
+
+@contextlib.contextmanager
+def steel_forward(model: torch.nn.Module, with_shape: bool = True, with_min_max: bool = False):
+    """
+    The necessary modification to steem forward method and prints out inputs
+    and outputs. See example :ref:`l-plot-tiny-llm-export`.
+    """
+    context = dict(
+        iteration=0,
+        class_name=model.__class__.__name__,
+        with_shape=with_shape,
+        with_min_max=with_min_max,
+    )
+    keep_model_forward = model.forward
+    model.forward = lambda *args, _f=keep_model_forward, _context=context, **kwargs: _forward_(
+        *args, _f=_f, _context=_context, **kwargs
+    )
+    try:
+        yield
+    finally:
+        model.forward = keep_model_forward
 
 
 def is_torchdynamo_exporting() -> bool:
@@ -90,6 +133,23 @@ def check_model_ort(
         raise AssertionError(  # noqa: B904
             f"onnxruntime cannot load the modeldue to {e}\n{pretty_onnx(onx)}"
         )
+
+
+def replace_string_by_dynamic(dynamic_shapes: Any) -> Any:
+    """Replaces strings by ``torch.export.Dim.DYNAMIC``."""
+    import torch
+
+    if isinstance(dynamic_shapes, torch.export.dynamic_shapes._Dim):
+        return dynamic_shapes
+    if isinstance(dynamic_shapes, str):
+        return torch.export.Dim.DYNAMIC
+    if not dynamic_shapes:
+        return dynamic_shapes
+    if isinstance(dynamic_shapes, (tuple, list)):
+        return type(dynamic_shapes)(replace_string_by_dynamic(i) for i in dynamic_shapes)
+    if isinstance(dynamic_shapes, dict):
+        return {k: replace_string_by_dynamic(v) for k, v in dynamic_shapes.items()}
+    raise AssertionError(f"Unexpected type {type(dynamic_shapes)} for dynamic_shapes")
 
 
 def dummy_llm(
