@@ -147,7 +147,7 @@ def convert_dynamic_axes_into_dynamic_shapes(
                 # dynamic axes not in the given inputs, should be raise an exception?
                 if verbose:
                     print(
-                        f"[convert_dynamic_axes_into_dynamic_shapes] droping axes "
+                        f"[convert_dynamic_axes_into_dynamic_shapes] dropping axes "
                         f"{k!r}-{v!r}, not found in {set(updated_kwargs)}"
                     )
                 continue
