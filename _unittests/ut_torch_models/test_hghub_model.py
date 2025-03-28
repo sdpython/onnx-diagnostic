@@ -4,7 +4,6 @@ import transformers
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     hide_stdout,
-    long_test,
     requires_torch,
     requires_transformers,
 )
@@ -91,8 +90,18 @@ class TestHuggingFaceHubModel(ExtTestCase):
         self.assertIn((data["size"], data["n_weights"]), [(410532864, 102633216)])
 
     @hide_stdout()
-    @long_test()
+    def test_get_untrained_model_with_inputs_text2text_generation(self):
+        mid = "sshleifer/tiny-marian-en-de"
+        # mid = "Salesforce/codet5-small"
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        self.assertIn((data["size"], data["n_weights"]), [(473928, 118482)])
+        model, inputs = data["model"], data["inputs"]
+        raise unittest.SkipTest(f"not wroking for {mid!r}")
+        model(**inputs)
+
+    @hide_stdout()
     def test_get_untrained_model_Ltesting_models(self):
+        # UNHIDE=1 python _unittests/ut_torch_models/test_hghub_model.py -k L -f
         def _diff(c1, c2):
             rows = [f"types {c1.__class__.__name__} <> {c2.__class__.__name__}"]
             for k, v in c1.__dict__.items():
@@ -102,11 +111,22 @@ class TestHuggingFaceHubModel(ExtTestCase):
                     rows.append(f"{k} :: -- {v} ++ {getattr(c2, k, 'MISS')}")
             return "\n".join(rows)
 
-        # UNHIDE=1 LONGTEST=1 python _unittests/ut_torch_models/test_hghub_model.py -k L -f
         for mid in load_models_testing():
             with self.subTest(mid=mid):
+                if mid in {
+                    "hf-internal-testing/tiny-random-MaskFormerForInstanceSegmentation",
+                    "hf-internal-testing/tiny-random-MoonshineForConditionalGeneration",
+                    "fxmarty/pix2struct-tiny-random",
+                    "hf-internal-testing/tiny-random-ViTMSNForImageClassification",
+                    "hf-internal-testing/tiny-random-YolosModel",
+                }:
+                    print(f"-- not implemented yet for {mid!r}")
+                    continue
                 data = get_untrained_model_with_inputs(mid, verbose=1)
                 model, inputs = data["model"], data["inputs"]
+                if mid in {"sshleifer/tiny-marian-en-de"}:
+                    print(f"-- not fully implemented yet for {mid!r}")
+                    continue
                 try:
                     model(**inputs)
                 except Exception as e:

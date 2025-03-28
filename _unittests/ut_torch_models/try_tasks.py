@@ -29,6 +29,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
     def test_text2text_generation(self):
         # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k text2t
 
+        import torch
         from transformers import RobertaTokenizer, T5ForConditionalGeneration
 
         tokenizer = RobertaTokenizer.from_pretrained("Salesforce/codet5-small")
@@ -36,13 +37,18 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
         text = "def greet(user): print(f'hello <extra_id_0>!')"
         input_ids = tokenizer(text, return_tensors="pt").input_ids
+        mask = (
+            torch.tensor([1 for i in range(input_ids.shape[1])])
+            .to(torch.int64)
+            .reshape((1, -1))
+        )
 
         # simply generate a single sequence
         print()
-        print("-- inputs", string_type(input_ids, with_shape=True, with_min_max=True))
         with steel_forward(model):
-            generated_ids = model.generate(input_ids, max_length=100)
-        print("-- outputs", string_type(generated_ids, with_shape=True, with_min_max=True))
+            generated_ids = model.generate(
+                decoder_input_ids=input_ids, attention_mask=mask, max_length=100
+            )
         print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
 
 

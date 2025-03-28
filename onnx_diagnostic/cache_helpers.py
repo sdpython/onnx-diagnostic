@@ -102,3 +102,15 @@ else:
         for i, (key, value) in enumerate(key_value_pairs):
             cache.update(key, value, i)
         return cache
+
+
+def make_encoder_decoder_cache(
+    self_attention_cache: transformers.cache_utils.DynamicCache,
+    cross_attention_cache: transformers.cache_utils.DynamicCache,
+) -> transformers.cache_utils.EncoderDecoderCache:
+    """
+    Creates an EncoderDecoderCache.
+    """
+    return transformers.cache_utils.EncoderDecoderCache(
+        self_attention_cache=self_attention_cache, cross_attention_cache=cross_attention_cache
+    )

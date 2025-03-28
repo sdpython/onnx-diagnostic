@@ -36,7 +36,7 @@ from onnx_diagnostic.helpers import (
     rename_dynamic_dimensions,
     rename_dynamic_expression,
 )
-from onnx_diagnostic.cache_helpers import make_dynamic_cache
+from onnx_diagnostic.cache_helpers import make_dynamic_cache, make_encoder_decoder_cache
 
 TFLOAT = onnx.TensorProto.FLOAT
 
@@ -164,6 +164,8 @@ class TestHelpers(ExtTestCase):
                 },
             ],
         )
+        diff = max_diff(inputs, inputs, flatten=True, verbose=10)
+        self.assertEqual(diff["abs"], 0)
         flat = flatten_object(inputs, drop_keys=True)
         diff = max_diff(inputs, flat, flatten=True, verbose=10)
         self.assertEqual(diff["abs"], 0)
@@ -441,6 +443,32 @@ class TestHelpers(ExtTestCase):
             self.assertIsInstance(proto, onnx.TensorProto)
             convert_endian(proto)
             dtype_to_tensor_dtype(dt)
+
+    @hide_stdout()
+    def test_flatten_encoder_decoder_cache(self):
+        inputs = (
+            torch.rand((3, 4), dtype=torch.float16),
+            [
+                torch.rand((5, 6), dtype=torch.float16),
+                torch.rand((5, 6, 7), dtype=torch.float16),
+                {
+                    "a": torch.rand((2,), dtype=torch.float16),
+                    "cache": make_encoder_decoder_cache(
+                        make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
+                        make_dynamic_cache([(torch.rand((5, 5, 5)), torch.rand((5, 5, 5)))]),
+                    ),
+                },
+            ],
+        )
+        diff = max_diff(inputs, inputs, flatten=True, verbose=10)
+        self.assertEqual(diff["abs"], 0)
+        flat = flatten_object(inputs, drop_keys=True)
+        diff = max_diff(inputs, flat, flatten=True, verbose=10)
+        self.assertEqual(diff["abs"], 0)
+        d = string_diff(diff)
+        self.assertIsInstance(d, str)
+        s = string_type(inputs)
+        self.assertIn("EncoderDecoderCache", s)
 
 
 if __name__ == "__main__":
