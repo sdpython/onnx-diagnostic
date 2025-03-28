@@ -71,7 +71,7 @@ print("dynamic shapes:", pprint.pformat(data["dynamic_shapes"]))
 # %%
 # Let's check the model runs. We still needs to
 # copy the inputs before using the models, the cache
-# is usually modifed inplace.
+# is usually modified inplace.
 # Expected outputs can be used later to compute
 # discrepancies.
 
