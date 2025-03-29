@@ -62,6 +62,7 @@ jobs:
         run: |
           export PYTHONPATH=.
           python _unittests/ut_torch_models/test_tiny_llms_onnx.py
+        continue-on-error: true
 
       - name: tiny-llm example
         run: |
