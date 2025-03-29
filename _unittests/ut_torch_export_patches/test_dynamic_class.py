@@ -82,6 +82,11 @@ class TestOnnxExportErrors(ExtTestCase):
                 self.assertEqualAny(expected, got)
 
     @ignore_warnings(UserWarning)
+    @requires_torch(
+        "2.7",
+        "MyCache78'> does not have a flatten_fn_spec, "
+        "use torch.fx._pytree.register_pytree_flatten_spec",
+    )
     def test_export_mycache_list_cat(self):
         TreeContext = torch.utils._pytree.Context
         MappingKey = torch.utils._pytree.MappingKey
@@ -151,6 +156,11 @@ class TestOnnxExportErrors(ExtTestCase):
         self.assertEqualArray(expected, got)
 
     @ignore_warnings(UserWarning)
+    @requires_torch(
+        "2.7",
+        "MyCache78'> does not have a flatten_fn_spec, "
+        "use torch.fx._pytree.register_pytree_flatten_spec",
+    )
     def test_export_mycache_dict_cat(self):
         TreeContext = torch.utils._pytree.Context
 
