@@ -1,3 +1,4 @@
+import copy
 import unittest
 import torch
 from transformers.cache_utils import DynamicCache
@@ -22,18 +23,21 @@ class TestTinyLlm(ExtTestCase):
     def test_export_tiny_llm_1(self):
         data = get_tiny_llm()
         model, inputs = data["model"], data["inputs"]
+        expected = model(**copy.deepcopy(inputs))
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
         ep = torch.export.export(
-            model, (), kwargs=inputs, dynamic_shapes=data["dynamic_shapes"]
+            model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=data["dynamic_shapes"]
         )
-        assert ep
+        got = ep.module()(**inputs)
+        self.assertEqualArrayAny(expected, got)
 
     @ignore_warnings(UserWarning)
     def test_export_tiny_llm_2_bypassed(self):
         data = get_tiny_llm()
         model, inputs = data["model"], data["inputs"]
+        expected = model(**copy.deepcopy(inputs))
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
@@ -45,7 +49,7 @@ class TestTinyLlm(ExtTestCase):
             for k in patched_DynamicCache._PATCHES_:
                 self.assertEqual(getattr(patched_DynamicCache, k), getattr(DynamicCache, k))
 
-            inputs = modificator(inputs)
+            inputs = modificator(copy.deepcopy(inputs))
 
             def debug():
                 print("***", string_type(inputs, with_shape=True))
@@ -67,7 +71,8 @@ class TestTinyLlm(ExtTestCase):
             ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=data["dynamic_shapes"], strict=False
             )
-            assert ep
+            got = ep.module()(**inputs)
+            self.assertEqualArrayAny(expected, got)
 
 
 if __name__ == "__main__":

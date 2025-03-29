@@ -99,6 +99,8 @@ class TestTinyLlmOnnx(ExtTestCase):
                 dynamic_shapes=ds,
                 dynamo=True,
                 optimize=True,
+                report=True,
+                verify=True,
             )
         # There are some discrepancies with torch==2.6
         if not has_torch("2.7"):
