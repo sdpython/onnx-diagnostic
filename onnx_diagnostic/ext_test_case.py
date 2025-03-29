@@ -4,6 +4,7 @@ specific functionalities to this project.
 """
 
 import glob
+import itertools
 import logging
 import os
 import re
@@ -1094,3 +1095,18 @@ class ExtTestCase(unittest.TestCase):
     def _debug(self):
         "Tells if DEBUG=1 is set up."
         return os.environ.get("DEBUG") in BOOLEAN_VALUES
+
+    def subloop(self, *args, verbose: int = 0):
+        "Loops over elements and calls :meth:`unittests.TextCase.subTest`."
+        if len(args) == 1:
+            for it in args[0]:
+                with self.subTest(case=it):
+                    if verbose:
+                        print(f"[subloop] it={it!r}")
+                    yield it
+        else:
+            for it in itertools.product(*args):
+                with self.subTest(case=it):
+                    if verbose:
+                        print(f"[subloop] it={it!r}")
+                    yield it
