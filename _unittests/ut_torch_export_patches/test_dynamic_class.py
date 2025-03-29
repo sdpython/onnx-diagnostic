@@ -1,10 +1,13 @@
+import copy
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, hide_stdout
+from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.cache_helpers import make_dynamic_cache
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     bypass_export_some_errors,
 )
+from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 
 
 class TestOnnxExportErrors(ExtTestCase):
@@ -68,6 +71,97 @@ class TestOnnxExportErrors(ExtTestCase):
                 mod = ep2.module()
                 got = mod(*inputs)
                 self.assertEqualArray(expected, got)
+
+    @ignore_warnings(UserWarning)
+    def test_phi2_export_module(self):
+        data = get_untrained_model_with_inputs("microsoft/phi-2")
+        model, inputs, dyn_shapes = data["model"], data["inputs"], data["dynamic_shapes"]
+        str_inputs = string_type(inputs, with_shape=True, with_min_max=True)
+        inputs_copied = copy.deepcopy(inputs)
+        expected = model(**inputs_copied)
+        self.maxDiff = None
+        self.assertEqual(str_inputs, string_type(inputs, with_shape=True, with_min_max=True))
+
+        # The cache is modified inplace, that's why, we copied it.
+        self.assertNotEqual(
+            string_type(inputs, with_shape=True, with_min_max=True),
+            string_type(inputs_copied, with_shape=True, with_min_max=True),
+        )
+        inputs_copied = copy.deepcopy(inputs)
+        self.assertEqual(
+            str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
+        )
+
+        with bypass_export_some_errors(patch_transformers=True):
+            ep = torch.export.export(
+                model,
+                (),
+                kwargs=inputs,
+                dynamic_shapes=dyn_shapes,
+                strict=False,  # True works but then the it fails during the execution
+            )
+            mod = ep.module()
+            inputs_copied = copy.deepcopy(inputs)
+            self.assertEqual(
+                str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
+            )
+            got = mod(**inputs_copied)
+            self.assertEqualAny(expected, got)
+
+        inputs_copied = copy.deepcopy(inputs)
+        self.assertEqual(
+            str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
+        )
+        mod = ep.module()
+        got = mod(**inputs_copied)
+        self.assertEqualAny(expected, got)
+
+    @ignore_warnings(UserWarning)
+    def test_phi2_export_interpreter(self):
+        data = get_untrained_model_with_inputs("microsoft/phi-2")
+        model, inputs, dyn_shapes = data["model"], data["inputs"], data["dynamic_shapes"]
+        str_inputs = string_type(inputs, with_shape=True, with_min_max=True)
+        inputs_copied = copy.deepcopy(inputs)
+        expected = model(**inputs_copied)
+        self.maxDiff = None
+        self.assertEqual(str_inputs, string_type(inputs, with_shape=True, with_min_max=True))
+
+        # The cache is modified inplace, that's why, we copied it.
+        self.assertNotEqual(
+            string_type(inputs, with_shape=True, with_min_max=True),
+            string_type(inputs_copied, with_shape=True, with_min_max=True),
+        )
+        inputs_copied = copy.deepcopy(inputs)
+        self.assertEqual(
+            str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
+        )
+
+        with bypass_export_some_errors(patch_transformers=True):
+            ep = torch.export.export(
+                model,
+                (),
+                kwargs=inputs,
+                dynamic_shapes=dyn_shapes,
+                strict=False,  # True works but then the it fails during the execution
+            )
+
+        # from experimental_experiment.torch_interpreter.tracing import CustomTracer
+        # CustomTracer.remove_unnecessary_slices(ep.graph)
+        memorize = []
+
+        class MyInterpreter(torch.fx.Interpreter):
+            def call_function(self, target, args, kwargs):
+                res = super().call_function(target, args, kwargs)
+                memorize.append((target, args, kwargs, res))
+                return res
+
+        inputs_copied = copy.deepcopy(inputs)
+        self.assertEqual(
+            str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
+        )
+        args, _spec = torch.utils._pytree.tree_flatten(inputs_copied)
+        got = MyInterpreter(ep.module()).run(*args)
+        self.assertEqualAny(expected, got)
 
 
 if __name__ == "__main__":
