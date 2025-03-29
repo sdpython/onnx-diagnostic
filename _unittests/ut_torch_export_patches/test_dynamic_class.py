@@ -145,23 +145,23 @@ class TestOnnxExportErrors(ExtTestCase):
                 strict=False,  # True works but then the it fails during the execution
             )
 
-        # from experimental_experiment.torch_interpreter.tracing import CustomTracer
-        # CustomTracer.remove_unnecessary_slices(ep.graph)
-        memorize = []
+            # from experimental_experiment.torch_interpreter.tracing import CustomTracer
+            # CustomTracer.remove_unnecessary_slices(ep.graph)
+            memorize = []
 
-        class MyInterpreter(torch.fx.Interpreter):
-            def call_function(self, target, args, kwargs):
-                res = super().call_function(target, args, kwargs)
-                memorize.append((target, args, kwargs, res))
-                return res
+            class MyInterpreter(torch.fx.Interpreter):
+                def call_function(self, target, args, kwargs):
+                    res = super().call_function(target, args, kwargs)
+                    memorize.append((target, args, kwargs, res))
+                    return res
 
-        inputs_copied = copy.deepcopy(inputs)
-        self.assertEqual(
-            str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
-        )
-        args, _spec = torch.utils._pytree.tree_flatten(inputs_copied)
-        got = MyInterpreter(ep.module()).run(*args)
-        self.assertEqualAny(expected, got)
+            inputs_copied = copy.deepcopy(inputs)
+            self.assertEqual(
+                str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
+            )
+            args, _spec = torch.utils._pytree.tree_flatten(inputs_copied)
+            got = MyInterpreter(ep.module()).run(*args)
+            self.assertEqualAny(expected, got)
 
 
 if __name__ == "__main__":
