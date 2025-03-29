@@ -100,7 +100,19 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
             flatten_with_keys_fn=flatten_with_keys_mamba_cache,
         )
 
-    # DynamicCache
+    # DynamicCache serialization is different in transformers and does not
+    # play way with torch.export.export.
+    # see test test_export_dynamic_cache_cat with NOBYPASS=1
+    # :: NOBYBASS=1 python _unittests/ut_torch_export_patches/test_dynamic_class.py -k e_c
+    # This is caused by this line:
+    # torch.fx._pytree.register_pytree_flatten_spec(
+    #           DynamicCache, _flatten_dynamic_cache_for_fx)
+    # so we remove it anyway
+    if DynamicCache in torch.fx._pytree.SUPPORTED_NODES:
+        if verbose:
+            print("[_register_cache_serialization] DynamicCache is unregistered first.")
+        _unregister(DynamicCache)
+
     unregistered_dynamic_cache = True
     if DynamicCache is not None and DynamicCache in torch.utils._pytree.SUPPORTED_NODES:
         if verbose > 1:
