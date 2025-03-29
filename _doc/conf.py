@@ -127,6 +127,7 @@ nitpick_ignore = [
     ("py:func", "torch._export.tools.report_exportability"),
     ("py:meth", "huggingface_hub.HfApi.list_models"),
     ("py:meth", "transformers.GenerationMixin.generate"),
+    ("py:meth", "unittests.TestCase.subTest"),
 ]
 
 nitpick_ignore_regex = [

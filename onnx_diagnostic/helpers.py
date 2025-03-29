@@ -477,10 +477,7 @@ def string_type(
     if isinstance(obj, torch.nn.Module):
         return f"{obj.__class__.__name__}(...)"
 
-    if isinstance(obj, torch.dtype):
-        return f"{obj.__class__.__name__}({obj})"
-
-    if isinstance(obj, torch.memory_format):
+    if isinstance(obj, (torch.device, torch.dtype, torch.memory_format, torch.layout)):
         return f"{obj.__class__.__name__}({obj})"
 
     if isinstance(obj, torch.utils._pytree.TreeSpec):
