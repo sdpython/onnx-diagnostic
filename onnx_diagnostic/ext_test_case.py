@@ -1097,7 +1097,7 @@ class ExtTestCase(unittest.TestCase):
         return os.environ.get("DEBUG") in BOOLEAN_VALUES
 
     def subloop(self, *args, verbose: int = 0):
-        "Loops over elements and calls :meth:`unittests.TextCase.subTest`."
+        "Loops over elements and calls :meth:`unittests.TestCase.subTest`."
         if len(args) == 1:
             for it in args[0]:
                 with self.subTest(case=it):

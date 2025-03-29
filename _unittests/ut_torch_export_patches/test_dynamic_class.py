@@ -8,6 +8,7 @@ from onnx_diagnostic.ext_test_case import (
     ignore_warnings,
     hide_stdout,
     requires_torch,
+    has_transformers,
 )
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.cache_helpers import make_dynamic_cache
@@ -21,7 +22,8 @@ class TestOnnxExportErrors(ExtTestCase):
     @ignore_warnings(UserWarning)
     @hide_stdout()
     def test_export_dynamic_cache_update(self):
-        for strict in self.subloop([True, False], verbose=1):
+        values = [True, False] if has_transformers("4.50") else [False]
+        for strict in self.subloop(values, verbose=1):
 
             class SubModelCache(torch.nn.Module):
                 def forward(self, cache):
