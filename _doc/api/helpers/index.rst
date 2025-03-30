@@ -8,7 +8,6 @@ onnx_diagnostic.helpers
 
     args_helper
     cache_helper
-    ext_test_case
     helper
     onnx_helper
     ort_session
