@@ -67,8 +67,8 @@ import pprint
 import torch
 import transformers
 from onnx_diagnostic import doc
-from onnx_diagnostic.cache_helper import is_cache_dynamic_registered
-from onnx_diagnostic.helper import string_type
+from onnx_diagnostic.helpers.cache_helper import is_cache_dynamic_registered
+from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 

@@ -2,7 +2,7 @@ import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, requires_transformers
 from onnx_diagnostic.torch_models.llms import get_phi2
-from onnx_diagnostic.helper import string_type
+from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
 

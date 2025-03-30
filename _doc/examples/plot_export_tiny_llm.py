@@ -30,7 +30,7 @@ import pprint
 import torch
 import transformers
 from onnx_diagnostic import doc
-from onnx_diagnostic.helper import string_type
+from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.torch_test_helper import steel_forward
 

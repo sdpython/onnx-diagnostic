@@ -5,7 +5,7 @@ import onnx.numpy_helper as onh
 from onnx import TensorProto
 from onnx.checker import check_model
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
-from onnx_diagnostic.onnx_tools import (
+from onnx_diagnostic.helpers.onnx_helper import (
     onnx_lighten,
     onnx_unlighten,
     onnx_find,

@@ -2,8 +2,8 @@ import inspect
 from typing import Any, Dict, Optional, Tuple
 import torch
 import transformers
-from ..helper import string_type
-from ..cache_helper import make_dynamic_cache
+from ..helpers import string_type
+from ..helpers.cache_helper import make_dynamic_cache
 
 
 def _process_cache(k: str, v):

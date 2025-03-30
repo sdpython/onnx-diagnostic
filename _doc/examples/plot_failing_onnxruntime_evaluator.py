@@ -30,7 +30,7 @@ import torch
 import onnxruntime
 from onnx_diagnostic import doc
 from onnx_diagnostic.ext_test_case import has_cuda
-from onnx_diagnostic.helper import from_array_extended
+from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.reference import OnnxruntimeEvaluator
 
 TBFLOAT16 = onnx.TensorProto.BFLOAT16

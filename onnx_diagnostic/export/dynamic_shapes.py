@@ -2,7 +2,7 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import torch
-from ..helper import string_type
+from ..helpers import string_type
 
 
 class ModelInputs:
@@ -103,7 +103,7 @@ class ModelInputs:
         import pprint
         import torch
         from onnx_diagnostic.export import ModelInputs
-        from onnx_diagnostic.helper import string_type
+        from onnx_diagnostic.helpers import string_type
 
 
         class Model(torch.nn.Module):

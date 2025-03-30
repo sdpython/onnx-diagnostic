@@ -693,13 +693,13 @@ class ExtTestCase(unittest.TestCase):
 
     def print_model(self, model: "ModelProto"):  # noqa: F821
         "Prints a ModelProto"
-        from onnx_diagnostic.helper import pretty_onnx
+        from onnx_diagnostic.helpers.onnx_helper import pretty_onnx
 
         print(pretty_onnx(model))
 
     def print_onnx(self, model: "ModelProto"):  # noqa: F821
         "Prints a ModelProto"
-        from onnx_diagnostic.helper import pretty_onnx
+        from onnx_diagnostic.helpers.onnx_helper import pretty_onnx
 
         print(pretty_onnx(model))
 
@@ -806,7 +806,7 @@ class ExtTestCase(unittest.TestCase):
                 raise AssertionError("\n".join(rows))  # noqa: B904
             return
 
-        from .torch_test_helper import to_numpy
+        from .helpers.torch_test_helper import to_numpy
 
         if hasattr(expected, "detach"):
             expected = to_numpy(expected.detach().cpu())

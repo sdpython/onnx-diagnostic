@@ -3,7 +3,7 @@ import ml_dtypes
 import onnx
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
-from onnx_diagnostic.torch_test_helper import (
+from onnx_diagnostic.helpers.torch_test_helper import (
     dummy_llm,
     to_numpy,
     is_torchdynamo_exporting,

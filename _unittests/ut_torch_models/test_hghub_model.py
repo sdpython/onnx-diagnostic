@@ -100,6 +100,8 @@ class TestHuggingFaceHubModel(ExtTestCase):
         model(**inputs)
 
     @hide_stdout()
+    @requires_torch("2.7", "reduce test time")
+    @requires_transformers("4.50", "reduce test time")
     def test_get_untrained_model_Ltesting_models(self):
         # UNHIDE=1 python _unittests/ut_torch_models/test_hghub_model.py -k L -f
         def _diff(c1, c2):

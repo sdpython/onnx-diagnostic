@@ -20,7 +20,7 @@ import onnx
 import onnx.helper as oh
 import onnxruntime
 from onnx_diagnostic import doc
-from onnx_diagnostic.helper import from_array_extended
+from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 
 TFLOAT = onnx.TensorProto.FLOAT

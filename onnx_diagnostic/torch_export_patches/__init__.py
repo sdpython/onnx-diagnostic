@@ -27,7 +27,7 @@ def is_torchdynamo_exporting() -> bool:
 
 def string_type(anything, **args):
     # too long
-    # from onnx_diagnostic.helper import string_type
+    # from onnx_diagnostic.helpers import string_type
     return str(anything)
 
 
