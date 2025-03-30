@@ -130,7 +130,7 @@ onx = epo.model_proto
 # Let's make sure the ONNX model produces the same outputs.
 # It takes flatten inputs.
 
-feeds = make_feeds(onx, copy.deepcopy(inputs), use_numpy=True)
+feeds = make_feeds(onx, copy.deepcopy(inputs), use_numpy=True, copy=True)
 
 print(f"torch inputs: {string_type(inputs)}")
 print(f"onxrt inputs: {string_type(feeds)}")

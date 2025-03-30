@@ -19,15 +19,20 @@ DEVICES = {-1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memor
 
 
 def make_feeds(
-    proto: onnx.ModelProto, inputs: Any, use_numpy: bool = False
+    proto: Union[onnx.ModelProto, List[str]],
+    inputs: Any,
+    use_numpy: bool = False,
+    copy: bool = False,
 ) -> Dict[str, Union[torch.Tensor, np.ndarray]]:
     """
     Serializes the inputs to produce feeds expected
     by :class:`onnxruntime.InferenceSession`.
 
-    :param proto: onnx model
+    :param proto: onnx model or list of names
     :param inputs: any kind of inputs
     :param use_numpy: if True, converts torch tensors into numpy arrays
+    :param copy: a copy is made, this should be the case if the inputs is ingested
+        by ``OrtValue``
     :return: feeds dictionary
     """
     flat = flatten_object(inputs, drop_keys=True)
@@ -42,7 +47,11 @@ def make_feeds(
     )
     if use_numpy:
         flat = [t.detach().cpu().numpy() if isinstance(t, torch.Tensor) else t for t in flat]
-    names = [i.name for i in proto.graph.input]
+    names = (
+        [i.name for i in proto.graph.input] if isinstance(proto, onnx.ModelProto) else proto
+    )
+    if copy:
+        flat = [t.copy() if hasattr(t, "copy") else t.clone() for t in flat]
     return dict(zip(names, flat))
 
 
@@ -242,6 +251,7 @@ class InferenceSessionForNumpy(_InferenceSession):
                 if isinstance(v, np.ndarray)
                 else ORTC.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
             )
+
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("run_with_ort_values")
         ort_outputs = self.sess._sess.run_with_ort_values(

@@ -1066,7 +1066,7 @@ class ExtTestCase(unittest.TestCase):
         if verbose:
             print(f"[{vname}] make feeds {string_type(inputs, **kws)}")
         if use_ort:
-            feeds = make_feeds(proto, inputs, use_numpy=True)
+            feeds = make_feeds(proto, inputs, use_numpy=True, copy=True)
             if verbose:
                 print(f"[{vname}] feeds {string_type(feeds, **kws)}")
             import onnxruntime
@@ -1076,7 +1076,7 @@ class ExtTestCase(unittest.TestCase):
             )
             got = sess.run(None, feeds)
         else:
-            feeds = make_feeds(proto, inputs)
+            feeds = make_feeds(proto, inputs, copy=True)
             if verbose:
                 print(f"[{vname}] feeds {string_type(feeds, **kws)}")
             sess = InferenceSessionForTorch(proto, **kwargs)
