@@ -178,10 +178,9 @@ def run_aligned(
         import torch
         from onnx_diagnostic.reference import (
             # This can be replace by any runtime taking NodeProto as an input.
-            ExtendedReferenceEvaluator as ReferenceEvaluator
+            ExtendedReferenceEvaluator as ReferenceEvaluator,
         )
-        from onnx_diagnostic.torch_interpreter import to_onnx
-        from onnx_diagnostic.torch_interpreter.investigate_helper import run_aligned
+        from onnx_diagnostic.torch_onnx.sbs import run_aligned
 
 
         class Model(torch.nn.Module):
@@ -205,7 +204,9 @@ def run_aligned(
         ep = torch.export.export(
             Model(), (x,), dynamic_shapes=({0: torch.export.Dim("batch")},)
         )
-        onx = to_onnx(ep)
+        onx = torch.onnx.export(
+            Model(), (x,), dynamic_shapes=({0: torch.export.Dim("batch")},), dynamo=True
+        ).model_proto
         results = list(
             map(
                 post_process,
@@ -213,9 +214,7 @@ def run_aligned(
                     ep,
                     onx,
                     (x,),
-                    check_conversion_cls=dict(
-                        cls=ReferenceEvaluator, atol=1e-5, rtol=1e-5
-                    ),
+                    check_conversion_cls=dict(cls=ReferenceEvaluator, atol=1e-5, rtol=1e-5),
                     verbose=1,
                 ),
             ),
