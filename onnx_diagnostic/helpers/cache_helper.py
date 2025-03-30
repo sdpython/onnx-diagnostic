@@ -5,12 +5,17 @@ import transformers
 import transformers.cache_utils
 
 
-def is_cache_dynamic_registered() -> bool:
+def is_cache_dynamic_registered(fast: bool = False) -> bool:
     """
     Tells class :class:`transformers.cache_utils.DynamicCache` can be
     serialized and deserialized. Only then, :func:`torch.export.export`
     can export a model.
+
+    :param fast: if True, do not check the serialization is ok as well
+    :return: result
     """
+    if fast:
+        return transformers.cache_utils.DynamicCache in torch.utils._pytree.SUPPORTED_NODES
     bsize, nheads, slen, dim = 2, 4, 3, 7
     cache = make_dynamic_cache(
         [

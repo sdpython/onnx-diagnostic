@@ -293,6 +293,9 @@ def get_untrained_model_with_inputs(
         kwargs.update(inputs_kwargs)
 
     model = getattr(transformers, arch)(config)
+    # This line is important. Some models may produce different
+    # outputs even with the same inputs in training mode.
+    model.eval()
     res = fct(model, config, **kwargs)
     res["input_kwargs"] = kwargs
     res["model_kwargs"] = mkwargs
