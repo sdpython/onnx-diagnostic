@@ -98,7 +98,7 @@ Snapshot of usefuls tools
 .. code-block:: python
 
         import onnx
-        from onnx_diagnostic.helpers import onnx_dtype_name
+        from onnx_diagnostic.helpers.onnx_helper import onnx_dtype_name
 
         itype = onnx.TensorProto.BFLOAT16
         print(onnx_dtype_name(itype))

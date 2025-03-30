@@ -40,7 +40,12 @@ class TestTinyLlmOnnx(ExtTestCase):
         if not has_torch("2.7"):
             raise unittest.SkipTest("discrepancies observed with torch<2.7")
         self.assert_onnx_disc(
-            inspect.currentframe().f_code.co_name, ep.model_proto, model, inputs, verbose=1
+            inspect.currentframe().f_code.co_name,
+            ep.model_proto,
+            model,
+            inputs,
+            verbose=1,
+            use_ort=True,
         )
 
     @unittest.skipIf(not to_onnx, reason="missing experimental dependency")
@@ -58,7 +63,7 @@ class TestTinyLlmOnnx(ExtTestCase):
                 model, (), kwargs=inputs, dynamic_shapes=data["dynamic_shapes"], verbose=1
             )
         self.assert_onnx_disc(
-            inspect.currentframe().f_code.co_name, onx, model, inputs, verbose=1
+            inspect.currentframe().f_code.co_name, onx, model, inputs, verbose=1, use_ort=True
         )
 
     @ignore_warnings((UserWarning, DeprecationWarning, FutureWarning))
@@ -80,7 +85,12 @@ class TestTinyLlmOnnx(ExtTestCase):
                 optimize=True,
             )
         self.assert_onnx_disc(
-            inspect.currentframe().f_code.co_name, ep.model_proto, model, inputs, verbose=1
+            inspect.currentframe().f_code.co_name,
+            ep.model_proto,
+            model,
+            inputs,
+            verbose=1,
+            use_ort=True,
         )
 
     @ignore_warnings((UserWarning, DeprecationWarning, FutureWarning))
@@ -101,13 +111,18 @@ class TestTinyLlmOnnx(ExtTestCase):
                 dynamo=True,
                 optimize=True,
                 report=True,
-                verify=True,
+                verify=False,
             )
         # There are some discrepancies with torch==2.6
         if not has_torch("2.7"):
             raise unittest.SkipTest("discrepancies observed with torch<2.7")
         self.assert_onnx_disc(
-            inspect.currentframe().f_code.co_name, ep.model_proto, model, inputs, verbose=1
+            inspect.currentframe().f_code.co_name,
+            ep.model_proto,
+            model,
+            inputs,
+            verbose=1,
+            use_ort=True,
         )
 
     @unittest.skipIf(not to_onnx, reason="missing experimental dependency")
@@ -119,7 +134,7 @@ class TestTinyLlmOnnx(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with bypass_export_some_errors(patch_transformers=True, verbose=1) as modificator:
+        with bypass_export_some_errors(patch_transformers=True, verbose=2) as modificator:
             new_inputs = modificator(inputs)
             onx = to_onnx(
                 model,
@@ -130,7 +145,7 @@ class TestTinyLlmOnnx(ExtTestCase):
                 export_options=ExportOptions(strict=False),
             )
         self.assert_onnx_disc(
-            inspect.currentframe().f_code.co_name, onx, model, inputs, verbose=1
+            inspect.currentframe().f_code.co_name, onx, model, inputs, verbose=1, use_ort=True
         )
 
 

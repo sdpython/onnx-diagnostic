@@ -19,19 +19,23 @@ module = ["onnx_diagnostic.doc"]
 disable_error_code = ["call-overload", "name-defined"]
 
 [[tool.mypy.overrides]]
-module = ["onnx_diagnostic.args"]
-disable_error_code = ["arg-type", "call-overload", "index"]
-
-[[tool.mypy.overrides]]
-module = ["onnx_diagnostic.helpers"]
-disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr"]
-
-[[tool.mypy.overrides]]
 module = ["onnx_diagnostic.ext_test_case"]
 disable_error_code = ["arg-type", "assignment", "import-untyped", "misc", "name-defined", "override", "return-value", "truthy-function"]
 
 [[tool.mypy.overrides]]
-module = ["onnx_diagnostic.ort_session"]
+module = ["onnx_diagnostic.helpers.args_helper"]
+disable_error_code = ["arg-type", "call-overload", "index"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.helpers.helper"]
+disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.helpers.onnx_helper"]
+disable_error_code = ["assignment", "arg-type", "name-defined", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.helpers.ort_session"]
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
@@ -99,6 +103,7 @@ select = [
 "_doc/recipes/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_unittests/*/test*.py" = ["B008", "B904", "PIE808", "SIM117", "SIM105", "UP008"]
 "onnx_diagnostic/export/__init__.py" = ["F401"]
+"onnx_diagnostic/helpers/__init__.py" = ["F401"]
 "onnx_diagnostic/reference/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_models/hghub/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_export_patches/__init__.py" = ["F401"]

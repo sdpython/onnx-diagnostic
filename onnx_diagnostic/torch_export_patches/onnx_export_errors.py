@@ -68,6 +68,8 @@ def unpatch_module(mod, info: Dict[type, Dict[type, Callable]], verbose: int = 0
 def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     # Cache serialization: to be moved into appropriate packages
     import torch
+    import transformers
+    import packaging.version as pv
 
     try:
         from transformers.cache_utils import DynamicCache
@@ -108,7 +110,9 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     # torch.fx._pytree.register_pytree_flatten_spec(
     #           DynamicCache, _flatten_dynamic_cache_for_fx)
     # so we remove it anyway
-    if DynamicCache in torch.fx._pytree.SUPPORTED_NODES:
+    if DynamicCache in torch.fx._pytree.SUPPORTED_NODES and pv.Version(
+        transformers.__version__
+    ) >= pv.Version("2.7"):
         if verbose:
             print("[_register_cache_serialization] DynamicCache is unregistered first.")
         _unregister(DynamicCache)
@@ -133,7 +137,7 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
         )
 
         # check
-        from ..cache_helpers import make_dynamic_cache
+        from ..helpers.cache_helper import make_dynamic_cache
 
         cache = make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))])
         values, spec = torch.utils._pytree.tree_flatten(cache)

@@ -11,18 +11,23 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     requires_onnx,
 )
-from onnx_diagnostic.helpers import (
+from onnx_diagnostic.helpers.helper import (
     string_type,
     string_sig,
-    pretty_onnx,
-    get_onnx_signature,
-    flatten_object,
     max_diff,
-    type_info,
-    size_type,
-    onnx_dtype_name,
     string_signature,
     make_hash,
+    string_diff,
+    rename_dynamic_dimensions,
+    rename_dynamic_expression,
+    flatten_object,
+    size_type,
+)
+from onnx_diagnostic.helpers.onnx_helper import (
+    pretty_onnx,
+    get_onnx_signature,
+    type_info,
+    onnx_dtype_name,
     onnx_dtype_to_torch_dtype,
     onnx_dtype_to_np_dtype,
     np_dtype_to_tensor_dtype,
@@ -32,11 +37,8 @@ from onnx_diagnostic.helpers import (
     convert_endian,
     from_array_ml_dtypes,
     dtype_to_tensor_dtype,
-    string_diff,
-    rename_dynamic_dimensions,
-    rename_dynamic_expression,
 )
-from onnx_diagnostic.cache_helpers import make_dynamic_cache, make_encoder_decoder_cache
+from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 
 TFLOAT = onnx.TensorProto.FLOAT
 
@@ -171,6 +173,18 @@ class TestHelpers(ExtTestCase):
         self.assertEqual(diff["abs"], 0)
         d = string_diff(diff)
         self.assertIsInstance(d, str)
+
+    def test_flatten_cache(self):
+        cache = make_dynamic_cache([(torch.ones((5, 6, 5, 6)), torch.ones((5, 6, 5, 6)) + 2)])
+        flat = flatten_object(cache, drop_keys=True)
+        self.assertEqual(string_type(flat), "(T1r4,T1r4)")
+        cache = dict(
+            cache=make_dynamic_cache(
+                [(torch.ones((5, 6, 5, 6)), torch.ones((5, 6, 5, 6)) + 2)]
+            )
+        )
+        flat = flatten_object(cache, drop_keys=True)
+        self.assertEqual(string_type(flat), "#2[T1r4,T1r4]")
 
     @hide_stdout()
     def test_max_diff_verbose(self):

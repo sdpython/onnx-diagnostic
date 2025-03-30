@@ -1,7 +1,7 @@
 from typing import Any, Dict
 import torch
 import transformers
-from ...cache_helpers import make_dynamic_cache
+from ...helpers.cache_helper import make_dynamic_cache
 
 
 def get_tiny_llm(
@@ -100,4 +100,4 @@ def get_tiny_llm(
             ]
         ),
     )
-    return dict(inputs=inputs, model=model, dynamic_shapes=shapes)
+    return dict(inputs=inputs, model=model, dynamic_shapes=shapes, configuration=conf)

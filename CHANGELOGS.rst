@@ -4,6 +4,8 @@ Change Logs
 0.3.0
 +++++
 
+* :pr:`26`: creates a folder ``helpers`` to gather all the functions
+  used in many places
 * :pr:`25`: improve patches for DynamicCache
   (issue with register_pytree_flatten_spec being deprecated)
 * :pr:`24`: dummy inputs for ``text2text-generation``, add new function

@@ -3,6 +3,7 @@ The module contains the main class ``ExtTestCase`` which adds
 specific functionalities to this project.
 """
 
+import copy
 import glob
 import itertools
 import logging
@@ -97,6 +98,34 @@ def ignore_warnings(warns: List[Warning]) -> Callable:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", warns)
                 return fct(self)
+
+        try:  # noqa: SIM105
+            call_f.__name__ = fct.__name__
+        except AttributeError:
+            pass
+        return call_f
+
+    return wrapper
+
+
+def ignore_errors(errors: Union[Exception, Tuple[Exception]]) -> Callable:
+    """
+    Catches exception, skip the test if the error is expected sometimes.
+
+    :param errors: errors to ignore
+    """
+
+    def wrapper(fct):
+        if errors is None:
+            raise AssertionError(f"errors cannot be None for '{fct}'.")
+
+        def call_f(self):
+            try:
+                return fct(self)
+            except errors as e:
+                raise unittest.SkipTest(  # noqa: B904
+                    f"expecting error {e.__class__.__name__}: {e}"
+                )
 
         try:  # noqa: SIM105
             call_f.__name__ = fct.__name__
@@ -665,7 +694,7 @@ def statistics_on_file(filename: str) -> Dict[str, Union[int, float, str]]:
 class ExtTestCase(unittest.TestCase):
     """
     Inherits from :class:`unittest.TestCase` and adds specific comprison
-    functions and other helpers.
+    functions and other helper.
     """
 
     _warns: List[Tuple[str, int, Warning]] = []
@@ -693,13 +722,13 @@ class ExtTestCase(unittest.TestCase):
 
     def print_model(self, model: "ModelProto"):  # noqa: F821
         "Prints a ModelProto"
-        from onnx_diagnostic.helpers import pretty_onnx
+        from onnx_diagnostic.helpers.onnx_helper import pretty_onnx
 
         print(pretty_onnx(model))
 
     def print_onnx(self, model: "ModelProto"):  # noqa: F821
         "Prints a ModelProto"
-        from onnx_diagnostic.helpers import pretty_onnx
+        from onnx_diagnostic.helpers.onnx_helper import pretty_onnx
 
         print(pretty_onnx(model))
 
@@ -806,7 +835,7 @@ class ExtTestCase(unittest.TestCase):
                 raise AssertionError("\n".join(rows))  # noqa: B904
             return
 
-        from .torch_test_helper import to_numpy
+        from .helpers.torch_test_helper import to_numpy
 
         if hasattr(expected, "detach"):
             expected = to_numpy(expected.detach().cpu())
@@ -1028,6 +1057,8 @@ class ExtTestCase(unittest.TestCase):
         atol: float = 1e-5,
         rtol: float = 1e-3,
         copy_inputs: bool = True,
+        expected: Optional[Any] = None,
+        use_ort: bool = False,
         **kwargs,
     ):
         """
@@ -1043,14 +1074,16 @@ class ExtTestCase(unittest.TestCase):
         :param verbose: verbosity
         :param atol: absolute tolerance
         :param rtol: relative tolerance
+        :param expected: expected values
+        :param copy_inputs: to copy the inputs
+        :param use_ort: use :class:`onnxruntime.InferenceSession`
         :param kwargs: arguments sent to
-            :class:`onnx_diagnostic.ort_session.InferenceSessionForTorch`
+            :class:`onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch`
         """
-        import torch.utils._pytree as py_pytree
         from .helpers import string_type, string_diff, max_diff
-        from .ort_session import InferenceSessionForTorch
-        from .torch_export_patches import register_additional_serialization_functions
+        from .helpers.ort_session import InferenceSessionForTorch, make_feeds
 
+        kws = dict(with_shape=True, with_min_max=verbose > 1)
         if verbose:
             vname = test_name or "assert_onnx_disc"
         if test_name:
@@ -1059,29 +1092,37 @@ class ExtTestCase(unittest.TestCase):
             name = self.dump_onnx(name, proto)
             print(f"[{vname}] file size {os.stat(name).st_size // 2**10:1.3f} kb")
         if verbose:
-            print(f"[{vname}] flatten inputs {string_type(inputs, with_shape=True)}")
-        flat_inputs, _spec = py_pytree.tree_flatten(inputs)
-        if not all(hasattr(t, "__dlpack__") for t in flat_inputs):
-            # Serialization functions should be used.
-            with register_additional_serialization_functions(verbose=verbose):
-                flat_inputs, _spec = py_pytree.tree_flatten(inputs)
-                assert all(hasattr(t, "__dlpack__") for t in flat_inputs), (
-                    f"Serialization failed, inputs={string_type(inputs)}, "
-                    f"flattened={string_type(flat_inputs)}"
-                )
-        onnx_names = [i.name for i in proto.graph.input]
-        feeds = dict(zip(onnx_names, flat_inputs))
-        if verbose:
-            print(f"[{vname}] flattened inputs {string_type(flat_inputs, with_shape=True)}")
-            print(f"[{vname}] feeds {string_type(feeds, with_shape=True)}")
-        sess = InferenceSessionForTorch(proto, **kwargs)
-        got = sess.run(None, feeds)
+            print(f"[{vname}] make feeds {string_type(inputs, **kws)}")
+        if use_ort:
+            feeds = make_feeds(proto, inputs, use_numpy=True, copy=True)
+            if verbose:
+                print(f"[{vname}] feeds {string_type(feeds, **kws)}")
+            import onnxruntime
+
+            sess = onnxruntime.InferenceSession(
+                proto.SerializeToString(), providers=["CPUExecutionProvider"]
+            )
+            got = sess.run(None, feeds)
+        else:
+            feeds = make_feeds(proto, inputs, copy=True)
+            if verbose:
+                print(f"[{vname}] feeds {string_type(feeds, **kws)}")
+            sess = InferenceSessionForTorch(proto, **kwargs)
+            got = sess.run(None, feeds)
         if verbose:
             print(f"[{vname}] compute expected values")
-        expected = model(*inputs) if isinstance(inputs, tuple) else model(**inputs)
+        if expected is None:
+            if copy_inputs:
+                expected = (
+                    model(*copy.deepcopy(inputs))
+                    if isinstance(inputs, tuple)
+                    else model(**copy.deepcopy(inputs))
+                )
+            else:
+                expected = model(*inputs) if isinstance(inputs, tuple) else model(**inputs)
         if verbose:
-            print(f"[{vname}] expected {string_type(expected, with_shape=True)}")
-            print(f"[{vname}] obtained {string_type(got, with_shape=True)}")
+            print(f"[{vname}] expected {string_type(expected, **kws)}")
+            print(f"[{vname}] obtained {string_type(got, **kws)}")
         diff = max_diff(expected, got, flatten=True)
         if verbose:
             print(f"[{vname}] diff {string_diff(diff)}")

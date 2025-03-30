@@ -11,7 +11,7 @@ from onnx_diagnostic.ext_test_case import (
     has_transformers,
 )
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.cache_helpers import make_dynamic_cache
+from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     bypass_export_some_errors,
 )

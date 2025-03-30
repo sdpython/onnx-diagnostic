@@ -1,7 +1,7 @@
 import unittest
 from onnx_diagnostic.ext_test_case import ExtTestCase, never_test
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.torch_test_helper import steel_forward
+from onnx_diagnostic.helpers.torch_test_helper import steel_forward
 
 
 class TestHuggingFaceHubModel(ExtTestCase):

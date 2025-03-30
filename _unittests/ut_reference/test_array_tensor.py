@@ -3,7 +3,7 @@ import numpy as np
 from onnx import TensorProto
 from onnx.helper import make_graph, make_model, make_node, make_tensor_value_info
 from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
-from onnx_diagnostic.helpers import from_array_extended, to_array_extended
+from onnx_diagnostic.helpers.onnx_helper import from_array_extended, to_array_extended
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 
 

@@ -26,8 +26,8 @@ import onnx
 import onnx.helper as oh
 import onnxruntime
 from onnx_diagnostic import doc
-from onnx_diagnostic.helpers import from_array_extended
-from onnx_diagnostic.ort_session import investigate_onnxruntime_issue
+from onnx_diagnostic.helpers.onnx_helper import from_array_extended
+from onnx_diagnostic.helpers.ort_session import investigate_onnxruntime_issue
 
 TFLOAT = onnx.TensorProto.FLOAT
 

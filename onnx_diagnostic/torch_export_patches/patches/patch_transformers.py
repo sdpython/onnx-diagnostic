@@ -6,7 +6,7 @@ import torch
 import transformers
 import transformers.modeling_attn_mask_utils
 from transformers.cache_utils import StaticCache, Cache, DynamicCache
-from ...torch_test_helper import is_torchdynamo_exporting
+from ...helpers.torch_test_helper import is_torchdynamo_exporting
 
 
 def _patch_make_causal_mask(
@@ -47,7 +47,7 @@ def _patch_make_causal_mask(
 if sys.version_info[:2] <= (3, 11):
 
     @dataclass
-    class patched_AttentionMaskConverter:
+    class kkpatched_AttentionMaskConverter:
         """
         Patches
         ``transformers.modeling_attn_mask_utils.AttentionMaskConverter._make_causal_mask``.
@@ -72,7 +72,7 @@ if sys.version_info[:2] <= (3, 11):
 else:
 
     @dataclass
-    class patched_AttentionMaskConverter:
+    class kkpatched_AttentionMaskConverter:
         """
         Patches
         ``transformers.modeling_attn_mask_utils.AttentionMaskConverter._make_causal_mask``.
