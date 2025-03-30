@@ -31,8 +31,8 @@ import torch
 import transformers
 from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
+from onnx_diagnostic.helpers.torch_test_helper import steel_forward
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
-from onnx_diagnostic.torch_test_helper import steel_forward
 
 
 MODEL_NAME = "arnir0/Tiny-LLM"
@@ -77,7 +77,7 @@ print("-- answer", generated_text)
 model.forward = keep_model_forward
 
 # %%
-# Another syntax with :func:`onnx_diagnostic.torch_test_helper.steel_forward`.
+# Another syntax with :func:`onnx_diagnostic.helpers.torch_test_helper.steel_forward`.
 
 with steel_forward(model):
     model.generate(inputs, max_length=50, temperature=1, top_k=50, top_p=0.95, do_sample=True)

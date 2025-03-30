@@ -113,7 +113,7 @@ def dummy_llm(
     .. runpython::
         :showcode:
 
-        from onnx_diagnostic.torch_test_helper import dummy_llm
+        from onnx_diagnostic.helpers.torch_test_helper import dummy_llm
         print(dummy_llm())
     """
 
