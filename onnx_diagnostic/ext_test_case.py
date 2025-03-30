@@ -665,7 +665,7 @@ def statistics_on_file(filename: str) -> Dict[str, Union[int, float, str]]:
 class ExtTestCase(unittest.TestCase):
     """
     Inherits from :class:`unittest.TestCase` and adds specific comprison
-    functions and other helpers.
+    functions and other helper.
     """
 
     _warns: List[Tuple[str, int, Warning]] = []
@@ -693,13 +693,13 @@ class ExtTestCase(unittest.TestCase):
 
     def print_model(self, model: "ModelProto"):  # noqa: F821
         "Prints a ModelProto"
-        from onnx_diagnostic.helpers import pretty_onnx
+        from onnx_diagnostic.helper import pretty_onnx
 
         print(pretty_onnx(model))
 
     def print_onnx(self, model: "ModelProto"):  # noqa: F821
         "Prints a ModelProto"
-        from onnx_diagnostic.helpers import pretty_onnx
+        from onnx_diagnostic.helper import pretty_onnx
 
         print(pretty_onnx(model))
 
@@ -1047,7 +1047,7 @@ class ExtTestCase(unittest.TestCase):
             :class:`onnx_diagnostic.ort_session.InferenceSessionForTorch`
         """
         import torch.utils._pytree as py_pytree
-        from .helpers import string_type, string_diff, max_diff
+        from .helper import string_type, string_diff, max_diff
         from .ort_session import InferenceSessionForTorch
         from .torch_export_patches import register_additional_serialization_functions
 

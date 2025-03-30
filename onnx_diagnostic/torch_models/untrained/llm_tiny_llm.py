@@ -1,7 +1,7 @@
 from typing import Any, Dict
 import torch
 import transformers
-from ...cache_helpers import make_dynamic_cache
+from ...cache_helper import make_dynamic_cache
 
 
 def get_tiny_llm(

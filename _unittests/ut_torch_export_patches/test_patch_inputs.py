@@ -2,7 +2,7 @@ import unittest
 import torch
 import transformers
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
-from onnx_diagnostic.helpers import string_type
+from onnx_diagnostic.helper import string_type
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
 )

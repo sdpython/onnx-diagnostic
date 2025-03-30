@@ -5,7 +5,7 @@ import re
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 import torch
 import transformers
-from ...cache_helpers import make_dynamic_cache, make_encoder_decoder_cache
+from ...cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 from .hub_api import task_from_arch, get_pretrained_config
 
 
@@ -242,7 +242,7 @@ def get_untrained_model_with_inputs(
         :showcode:
 
         import pprint
-        from onnx_diagnostic.helpers import string_type
+        from onnx_diagnostic.helper import string_type
         from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM", verbose=1)

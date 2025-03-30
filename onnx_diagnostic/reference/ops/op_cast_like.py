@@ -8,7 +8,7 @@ from onnx.reference.ops.op_cast import (
     float8e5m2,
     float8e5m2fnuz,
 )
-from ...helpers import np_dtype_to_tensor_dtype
+from ...helper import np_dtype_to_tensor_dtype
 
 
 def _cast_like(x, y, saturate):

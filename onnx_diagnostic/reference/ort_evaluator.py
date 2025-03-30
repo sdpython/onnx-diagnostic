@@ -12,7 +12,7 @@ from onnx import (
 )
 from onnx.defs import onnx_opset_version
 import onnxruntime
-from ..helpers import pretty_onnx, dtype_to_tensor_dtype, string_type, to_array_extended
+from ..helper import pretty_onnx, dtype_to_tensor_dtype, string_type, to_array_extended
 from ..ort_session import InferenceSessionForTorch, InferenceSessionForNumpy, _InferenceSession
 
 PROTO = (FunctionProto, ModelProto, GraphProto, NodeProto)

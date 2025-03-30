@@ -77,7 +77,7 @@ Enlightening Examples
 .. code-block:: python
 
     import torch
-    from onnx_diagnostic.helpers import string_type
+    from onnx_diagnostic.helper import string_type
 
     inputs = (
         torch.rand((3, 4), dtype=torch.float16),
@@ -97,7 +97,7 @@ Enlightening Examples
 .. code-block:: python
 
         import onnx
-        from onnx_diagnostic.helpers import onnx_dtype_name
+        from onnx_diagnostic.helper import onnx_dtype_name
 
         itype = onnx.TensorProto.BFLOAT16
         print(onnx_dtype_name(itype))
@@ -108,7 +108,7 @@ Enlightening Examples
     >>> BFLOAT16
     >>> INT64
 
-:func:`onnx_diagnostic.helpers.max_diff`, ...
+:func:`onnx_diagnostic.helper.max_diff`, ...
 
 The documentation was updated on:
 

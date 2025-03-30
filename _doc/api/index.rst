@@ -18,9 +18,9 @@ API of onnx_diagnostic
     :caption: modules
 
     args
-    cache_helpers
+    cache_helper
     ext_test_case
-    helpers
+    helper
     onnx_tools
     ort_session
     torch_test_helper

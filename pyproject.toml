@@ -23,7 +23,7 @@ module = ["onnx_diagnostic.args"]
 disable_error_code = ["arg-type", "call-overload", "index"]
 
 [[tool.mypy.overrides]]
-module = ["onnx_diagnostic.helpers"]
+module = ["onnx_diagnostic.helper"]
 disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr"]
 
 [[tool.mypy.overrides]]

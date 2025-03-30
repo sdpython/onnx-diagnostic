@@ -11,7 +11,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     requires_onnx,
 )
-from onnx_diagnostic.helpers import (
+from onnx_diagnostic.helper import (
     string_type,
     string_sig,
     pretty_onnx,
@@ -36,7 +36,7 @@ from onnx_diagnostic.helpers import (
     rename_dynamic_dimensions,
     rename_dynamic_expression,
 )
-from onnx_diagnostic.cache_helpers import make_dynamic_cache, make_encoder_decoder_cache
+from onnx_diagnostic.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 
 TFLOAT = onnx.TensorProto.FLOAT
 

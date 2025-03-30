@@ -12,7 +12,7 @@ from onnx import (
     GraphProto,
     NodeProto,
 )
-from .helpers import (
+from .helper import (
     tensor_dtype_to_np_dtype,
     from_array_extended,
     np_dtype_to_tensor_dtype,

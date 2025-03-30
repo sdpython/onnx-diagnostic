@@ -20,7 +20,7 @@ import copy
 import pprint
 import torch
 from onnx_diagnostic import doc
-from onnx_diagnostic.helpers import string_type
+from onnx_diagnostic.helper import string_type
 from onnx_diagnostic.torch_models.hghub import (
     get_untrained_model_with_inputs,
 )

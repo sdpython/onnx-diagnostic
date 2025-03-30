@@ -9,7 +9,7 @@ from onnx.helper import (
     make_tensor_value_info,
     make_opsetid,
 )
-from onnx_diagnostic.helpers import from_array_extended
+from onnx_diagnostic.helper import from_array_extended
 from onnx_diagnostic.ext_test_case import ExtTestCase, has_cuda
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 

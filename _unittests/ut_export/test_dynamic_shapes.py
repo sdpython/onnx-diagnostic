@@ -1,8 +1,8 @@
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.cache_helpers import make_dynamic_cache
-from onnx_diagnostic.helpers import string_type
+from onnx_diagnostic.cache_helper import make_dynamic_cache
+from onnx_diagnostic.helper import string_type
 from onnx_diagnostic.export import ModelInputs
 
 

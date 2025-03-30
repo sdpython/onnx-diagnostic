@@ -1,7 +1,7 @@
 from typing import Any, Dict, Iterator, Optional, Tuple, Union
 import onnx
 import torch
-from ..helpers import string_type, string_diff, max_diff, to_array_extended
+from ..helper import string_type, string_diff, max_diff, to_array_extended
 
 
 def validate_fx_tensor(

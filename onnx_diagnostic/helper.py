@@ -161,7 +161,7 @@ def string_type(
     .. runpython::
         :showcode:
 
-        from onnx_diagnostic.helpers import string_type
+        from onnx_diagnostic.helper import string_type
 
         print(string_type((1, ["r", 6.6])))
 
@@ -171,7 +171,7 @@ def string_type(
         :showcode:
 
         import torch
-        from onnx_diagnostic.helpers import string_type
+        from onnx_diagnostic.helper import string_type
 
         inputs = (
             torch.rand((3, 4), dtype=torch.float16),
@@ -559,7 +559,7 @@ def onnx_dtype_name(itype: int) -> str:
         :showcode:
 
         import onnx
-        from onnx_diagnostic.helpers import onnx_dtype_name
+        from onnx_diagnostic.helper import onnx_dtype_name
 
         itype = onnx.TensorProto.BFLOAT16
         print(onnx_dtype_name(itype))

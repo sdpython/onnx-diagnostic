@@ -1,7 +1,7 @@
 import contextlib
 from typing import Any, Optional, Tuple, Union
 import torch
-from .helpers import string_type
+from .helper import string_type
 
 
 def _forward_(*args, _f=None, _context=None, **kwargs):

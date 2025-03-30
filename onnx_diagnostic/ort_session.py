@@ -6,7 +6,7 @@ import torch
 from torch._C import _from_dlpack
 import onnxruntime
 from onnxruntime.capi import _pybind_state as ORTC
-from .helpers import (
+from .helper import (
     torch_dtype_to_onnx_dtype,
     onnx_dtype_to_np_dtype,
     np_dtype_to_tensor_dtype,
