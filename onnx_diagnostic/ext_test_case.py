@@ -1047,7 +1047,7 @@ class ExtTestCase(unittest.TestCase):
             :class:`onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch`
         """
         import torch.utils._pytree as py_pytree
-        from .helper import string_type, string_diff, max_diff
+        from .helpers import string_type, string_diff, max_diff
         from .ort_session import InferenceSessionForTorch
         from .torch_export_patches import register_additional_serialization_functions
 

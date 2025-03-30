@@ -39,7 +39,7 @@ def size_type(dtype: Any) -> int:
             return 1
         if dtype in {TensorProto.COMPLEX128}:
             return 16
-        from .helper import onnx_dtype_name
+        from .helpers.onnx_helper import onnx_dtype_name
 
         raise AssertionError(
             f"Unable to return the element size for type {onnx_dtype_name(dtype)}"
@@ -272,7 +272,7 @@ def string_type(
         return "SymFloat"
     # Tensors
     if isinstance(obj, torch._subclasses.fake_tensor.FakeTensor):
-        from .helper import torch_dtype_to_onnx_dtype
+        from .helper.onnx_helper import torch_dtype_to_onnx_dtype
 
         i = torch_dtype_to_onnx_dtype(obj.dtype)
         prefix = ("G" if obj.get_device() >= 0 else "C") if with_device else ""
