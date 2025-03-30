@@ -1,13 +1,7 @@
-"""
-More complex helpers used in unit tests.
-"""
-
 import contextlib
-from typing import Any, List, Optional, Tuple, Union
-from onnx import ModelProto, save
+from typing import Any, Optional, Tuple, Union
 import torch
-import onnxruntime
-from .helpers import pretty_onnx, string_type
+from .helpers import string_type
 
 
 def _forward_(*args, _f=None, _context=None, **kwargs):
@@ -84,55 +78,6 @@ def to_numpy(tensor: "torch.Tensor"):  # noqa: F821
     conv = {torch.bfloat16: ml_dtypes.bfloat16}
     assert tensor.dtype in conv, f"Unsupported type {tensor.dtype}, not in {conv}"
     return tensor.to(torch.float32).numpy().astype(conv[tensor.dtype])
-
-
-def check_model_ort(
-    onx: ModelProto,
-    providers: Optional[Union[str, List[Any]]] = None,
-    dump_file: Optional[str] = None,
-) -> onnxruntime.InferenceSession:
-    """
-    Loads a model with onnxruntime.
-
-    :param onx: ModelProto
-    :param providers: list of providers, None fur CPU, cpu for CPU, cuda for CUDA
-    :param dump_file: if not empty, dumps the model into this file if
-        an error happened
-    :return: InferenceSession
-    """
-    from onnxruntime import InferenceSession
-
-    if providers is None or providers == "cpu":
-        providers = ["CPUExecutionProvider"]
-    elif not isinstance(providers, list) and providers.startswith("cuda"):
-        device_id = 0 if ":" not in providers else int(providers.split(":")[1])
-        providers = [
-            ("CUDAExecutionProvider", {"device_id": device_id}),
-            ("CPUExecutionProvider", {}),
-        ]
-
-    if isinstance(onx, str):
-        try:
-            return InferenceSession(onx, providers=providers)
-        except Exception as e:
-            import onnx
-
-            if dump_file:
-                save(onx, dump_file)
-
-            raise AssertionError(  # noqa: B904
-                f"onnxruntime cannot load the model "
-                f"due to {e}\n{pretty_onnx(onnx.load(onx))}"
-            )
-        return
-    try:
-        return InferenceSession(onx.SerializeToString(), providers=providers)
-    except Exception as e:
-        if dump_file:
-            save(onx, dump_file)
-        raise AssertionError(  # noqa: B904
-            f"onnxruntime cannot load the modeldue to {e}\n{pretty_onnx(onx)}"
-        )
 
 
 def replace_string_by_dynamic(dynamic_shapes: Any) -> Any:

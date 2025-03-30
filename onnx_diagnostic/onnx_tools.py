@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 import numpy as np
 import onnx.numpy_helper as onh
 from onnx import (
@@ -12,7 +12,12 @@ from onnx import (
     GraphProto,
     NodeProto,
 )
-from .helpers import tensor_dtype_to_np_dtype, from_array_extended, np_dtype_to_tensor_dtype
+from .helpers import (
+    tensor_dtype_to_np_dtype,
+    from_array_extended,
+    np_dtype_to_tensor_dtype,
+    pretty_onnx,
+)
 
 
 def _make_stat(init: TensorProto) -> Dict[str, float]:
@@ -258,3 +263,52 @@ def onnx_find(
     if verbose and found:
         print(f"-- found {len(found)} nodes")
     return found
+
+
+def check_model_ort(
+    onx: ModelProto,
+    providers: Optional[Union[str, List[Any]]] = None,
+    dump_file: Optional[str] = None,
+) -> "onnxruntime.InferenceSession":  # noqa: F821
+    """
+    Loads a model with onnxruntime.
+
+    :param onx: ModelProto
+    :param providers: list of providers, None fur CPU, cpu for CPU, cuda for CUDA
+    :param dump_file: if not empty, dumps the model into this file if
+        an error happened
+    :return: InferenceSession
+    """
+    from onnxruntime import InferenceSession
+
+    if providers is None or providers == "cpu":
+        providers = ["CPUExecutionProvider"]
+    elif not isinstance(providers, list) and providers.startswith("cuda"):
+        device_id = 0 if ":" not in providers else int(providers.split(":")[1])
+        providers = [
+            ("CUDAExecutionProvider", {"device_id": device_id}),
+            ("CPUExecutionProvider", {}),
+        ]
+
+    if isinstance(onx, str):
+        try:
+            return InferenceSession(onx, providers=providers)
+        except Exception as e:
+            import onnx
+
+            if dump_file:
+                onnx.save(onx, dump_file)
+
+            raise AssertionError(  # noqa: B904
+                f"onnxruntime cannot load the model "
+                f"due to {e}\n{pretty_onnx(onnx.load(onx))}"
+            )
+        return
+    try:
+        return InferenceSession(onx.SerializeToString(), providers=providers)
+    except Exception as e:
+        if dump_file:
+            onnx.save(onx, dump_file)
+        raise AssertionError(  # noqa: B904
+            f"onnxruntime cannot load the modeldue to {e}\n{pretty_onnx(onx)}"
+        )
