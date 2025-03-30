@@ -11,6 +11,7 @@ API of onnx_diagnostic
     reference/index
     torch_export_patches/index
     torch_models/index
+    torch_onnx/index
 
 .. toctree::
     :maxdepth: 1
