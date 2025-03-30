@@ -19,7 +19,7 @@ DEVICES = {-1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memor
 
 
 def make_feeds(
-    proto: onnx.ModelProto, inputs: Any, use_numpy: bool = True
+    proto: onnx.ModelProto, inputs: Any, use_numpy: bool = False
 ) -> Dict[str, Union[torch.Tensor, np.ndarray]]:
     """
     Serializes the inputs to produce feeds expected

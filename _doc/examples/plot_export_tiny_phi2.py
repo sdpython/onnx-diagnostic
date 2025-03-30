@@ -33,7 +33,7 @@ from onnx_diagnostic.torch_models.hghub import (
 
 warnings.simplefilter("ignore")
 
-
+# another tiny id: arnir0/Tiny-LLM
 data = get_untrained_model_with_inputs("microsoft/phi-2")
 untrained_model, inputs, dynamic_shapes, config, size, n_weights = (
     data["model"],

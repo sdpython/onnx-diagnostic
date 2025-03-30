@@ -100,4 +100,4 @@ def get_tiny_llm(
             ]
         ),
     )
-    return dict(inputs=inputs, model=model, dynamic_shapes=shapes)
+    return dict(inputs=inputs, model=model, dynamic_shapes=shapes, configuration=conf)
