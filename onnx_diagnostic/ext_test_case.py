@@ -108,6 +108,34 @@ def ignore_warnings(warns: List[Warning]) -> Callable:
     return wrapper
 
 
+def ignore_errors(errors: Union[Exception, Tuple[Exception]]) -> Callable:
+    """
+    Catches exception, skip the test if the error is expected sometimes.
+
+    :param errors: errors to ignore
+    """
+
+    def wrapper(fct):
+        if errors is None:
+            raise AssertionError(f"errors cannot be None for '{fct}'.")
+
+        def call_f(self):
+            try:
+                return fct(self)
+            except errors as e:
+                raise unittest.SkipTest(  # noqa: B904
+                    f"expecting error {e.__class__.__name__}: {e}"
+                )
+
+        try:  # noqa: SIM105
+            call_f.__name__ = fct.__name__
+        except AttributeError:
+            pass
+        return call_f
+
+    return wrapper
+
+
 def hide_stdout(f: Optional[Callable] = None) -> Callable:
     """
     Catches warnings, hides standard output.

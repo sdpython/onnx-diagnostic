@@ -6,6 +6,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     requires_torch,
     requires_transformers,
+    ignore_errors,
 )
 from onnx_diagnostic.torch_models.hghub.model_inputs import (
     config_class_from_architecture,
@@ -102,6 +103,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
     @hide_stdout()
     @requires_torch("2.7", "reduce test time")
     @requires_transformers("4.50", "reduce test time")
+    @ignore_errors(OSError)  # connectivity issues may happen
     def test_get_untrained_model_Ltesting_models(self):
         # UNHIDE=1 python _unittests/ut_torch_models/test_hghub_model.py -k L -f
         def _diff(c1, c2):
