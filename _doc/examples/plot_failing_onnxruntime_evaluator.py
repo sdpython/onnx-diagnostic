@@ -11,9 +11,9 @@ Let's use :class:`OnnxruntimeEvaluator <onnx_diagnostic.reference.OnnxruntimeEva
 It splits the model into node and runs them independently until it succeeds
 or fails. This class converts every node into model based on the types
 discovered during the execution. It relies on :class:`InferenceSessionForTorch
-<onnx_diagnostic.ort_session.InferenceSessionForTorch>` or
+<onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch>` or
 :class:`InferenceSessionForNumpy
-<onnx_diagnostic.ort_session.InferenceSessionForNumpy>`
+<onnx_diagnostic.helpers.ort_session.InferenceSessionForNumpy>`
 for the execution. This example uses torch tensor and
 bfloat16.
 

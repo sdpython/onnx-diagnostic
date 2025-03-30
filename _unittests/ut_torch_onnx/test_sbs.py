@@ -1,5 +1,5 @@
 import unittest
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_warnings
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 from onnx_diagnostic.torch_onnx.sbs import run_aligned
 
@@ -13,6 +13,7 @@ class TestSideBySide(ExtTestCase):
 
     @hide_stdout()
     @unittest.skipIf(to_onnx is None, "to_onnx not installed")
+    @ignore_warnings((UserWarning,))
     def test_ep_onnx_sync_exp(self):
         import torch
 
@@ -44,8 +45,9 @@ class TestSideBySide(ExtTestCase):
         self.assertEqual(len(results), 4)
 
     @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
     @unittest.skipIf(to_onnx is None, "to_onnx not installed")
-    def test_ep_onnx_sync(self):
+    def test_ep_onnx_sync_a(self):
         import torch
 
         class Model(torch.nn.Module):

@@ -1044,7 +1044,7 @@ class ExtTestCase(unittest.TestCase):
         :param atol: absolute tolerance
         :param rtol: relative tolerance
         :param kwargs: arguments sent to
-            :class:`onnx_diagnostic.ort_session.InferenceSessionForTorch`
+            :class:`onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch`
         """
         import torch.utils._pytree as py_pytree
         from .helper import string_type, string_diff, max_diff

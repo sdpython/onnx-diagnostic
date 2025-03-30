@@ -522,7 +522,7 @@ def investigate_onnxruntime_issue(
         import numpy as np
         import onnx
         import onnx.helper as oh
-        from onnx_diagnostic.ort_session import investigate_onnxruntime_issue
+        from onnx_diagnostic.helpers.ort_session import investigate_onnxruntime_issue
 
         TFLOAT = onnx.TensorProto.FLOAT
         model = oh.make_model(
