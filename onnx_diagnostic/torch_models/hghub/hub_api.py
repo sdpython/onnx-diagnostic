@@ -31,7 +31,7 @@ def get_cached_configuration(name: str) -> Optional[transformers.PretrainedConfi
     cached = _retrieve_cached_configurations()
     assert cached, "no cached configuration, which is weird"
     if name in cached:
-        return cached[name]
+        return cached[name]()
     return None
 
 

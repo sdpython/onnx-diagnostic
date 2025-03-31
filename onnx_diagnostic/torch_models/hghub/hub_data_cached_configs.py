@@ -32,7 +32,7 @@ Automatically generated:
         sconf = str(conf)
         sconf = sconf.replace(
             "Config {",
-            "Config ({",
+            "Config (**{",
         )
         rows = [f"def _cached_{name}():", f'    "{c}"', f"    return transformers.{sconf})"]
         srows = "\\n".join(rows)
@@ -65,7 +65,7 @@ false = False
 def _ccached_arnir0_tiny_LLM():
     "arnir0/Tiny-LLM"
     return transformers.LlamaConfig(
-        {
+        **{
             "architectures": ["LlamaForCausalLM"],
             "attention_bias": false,
             "attention_dropout": 0.0,
@@ -98,7 +98,7 @@ def _ccached_arnir0_tiny_LLM():
 def _ccached_microsoft_phi2():
     "microsoft/phi-2"
     return transformers.PhiConfig(
-        {
+        **{
             "_attn_implementation_autoset": true,
             "architectures": ["PhiForCausalLM"],
             "attention_dropout": 0.0,
@@ -133,7 +133,7 @@ def _ccached_microsoft_phi2():
 def _cached_hf_internal_testing_tiny_random_beitforimageclassification():
     "hf-internal-testing/tiny-random-BeitForImageClassification"
     return transformers.BeitConfig(
-        {
+        **{
             "add_fpn": false,
             "architectures": ["BeitForImageClassification"],
             "attention_probs_dropout_prob": 0.1,
@@ -1369,7 +1369,7 @@ def _cached_fxmarty_tiny_random_gemmaforcausallm():
 def _cached_hf_internal_testing_tiny_random_gptneoxforcausallm():
     "hf-internal-testing/tiny-random-GPTNeoXForCausalLM"
     return transformers.GPTNeoXConfig(
-        {
+        **{
             "architectures": ["GPTNeoXForCausalLM"],
             "attention_bias": true,
             "attention_dropout": 0.0,
@@ -1408,7 +1408,7 @@ def _cached_hf_internal_testing_tiny_random_gptneoxforcausallm():
 def _cached_hf_internal_testing_tiny_random_graniteforcausallm():
     "hf-internal-testing/tiny-random-GraniteForCausalLM"
     return transformers.GraniteConfig(
-        {
+        **{
             "architectures": ["GraniteForCausalLM"],
             "attention_bias": false,
             "attention_dropout": 0.0,
@@ -1444,7 +1444,7 @@ def _cached_hf_internal_testing_tiny_random_graniteforcausallm():
 def _cached_hf_internal_testing_tiny_random_hieraforimageclassification():
     "hf-internal-testing/tiny-random-HieraForImageClassification"
     return transformers.HieraConfig(
-        {
+        **{
             "architectures": ["HieraForImageClassification"],
             "decoder_depth": null,
             "decoder_hidden_size": null,
@@ -1485,7 +1485,7 @@ def _cached_hf_internal_testing_tiny_random_hieraforimageclassification():
 def _cached_fxmarty_tiny_llama_fast_tokenizer():
     "fxmarty/tiny-llama-fast-tokenizer"
     return transformers.LlamaConfig(
-        {
+        **{
             "architectures": ["LlamaForCausalLM"],
             "attention_bias": false,
             "attention_dropout": 0.0,
@@ -1519,7 +1519,7 @@ def _cached_fxmarty_tiny_llama_fast_tokenizer():
 def _cached_sshleifer_tiny_marian_en_de():
     "sshleifer/tiny-marian-en-de"
     return transformers.MarianConfig(
-        {
+        **{
             "_num_labels": 3,
             "activation_dropout": 0.0,
             "activation_function": "swish",
@@ -1628,7 +1628,7 @@ def _cached_hf_internal_testing_tiny_random_maskformerforinstancesegmentation():
 def _cached_echarlaix_tiny_random_mistral():
     "echarlaix/tiny-random-mistral"
     return transformers.MistralConfig(
-        {
+        **{
             "architectures": ["MistralForCausalLM"],
             "attention_dropout": 0.0,
             "attention_probs_dropout_prob": 0.1,
@@ -2826,7 +2826,7 @@ def _cached_hf_internal_testing_tiny_random_mobilevit():
 def _cached_hf_internal_testing_tiny_random_moonshineforconditionalgeneration():
     "hf-internal-testing/tiny-random-MoonshineForConditionalGeneration"
     return transformers.MoonshineConfig(
-        {
+        **{
             "architectures": ["MoonshineForConditionalGeneration"],
             "attention_bias": false,
             "attention_dropout": 0.0,
@@ -2862,7 +2862,7 @@ def _cached_hf_internal_testing_tiny_random_moonshineforconditionalgeneration():
 def _cached_hf_internal_testing_tiny_random_olmoforcausallm():
     "hf-internal-testing/tiny-random-OlmoForCausalLM"
     return transformers.OlmoConfig(
-        {
+        **{
             "architectures": ["OlmoForCausalLM"],
             "attention_bias": false,
             "attention_dropout": 0.0,
@@ -2892,7 +2892,7 @@ def _cached_hf_internal_testing_tiny_random_olmoforcausallm():
 def _cached_hf_internal_testing_tiny_random_olmo2forcausallm():
     "hf-internal-testing/tiny-random-Olmo2ForCausalLM"
     return transformers.Olmo2Config(
-        {
+        **{
             "architectures": ["Olmo2ForCausalLM"],
             "attention_bias": false,
             "attention_dropout": 0.0,
@@ -2922,7 +2922,7 @@ def _cached_hf_internal_testing_tiny_random_olmo2forcausallm():
 def _cached_echarlaix_tiny_random_phiforcausallm():
     "echarlaix/tiny-random-PhiForCausalLM"
     return transformers.PhiConfig(
-        {
+        **{
             "architectures": ["PhiForCausalLM"],
             "attention_dropout": 0.0,
             "attention_probs_dropout_prob": 0.1,
@@ -2960,7 +2960,7 @@ def _cached_echarlaix_tiny_random_phiforcausallm():
 def _cached_xenova_tiny_random_phi3forcausallm():
     "Xenova/tiny-random-Phi3ForCausalLM"
     return transformers.Phi3Config(
-        {
+        **{
             "architectures": ["Phi3ForCausalLM"],
             "attention_dropout": 0.0,
             "bos_token_id": 1,
@@ -2995,7 +2995,7 @@ def _cached_xenova_tiny_random_phi3forcausallm():
 def _cached_fxmarty_pix2struct_tiny_random():
     "fxmarty/pix2struct-tiny-random"
     return transformers.Pix2StructConfig(
-        {
+        **{
             "architectures": ["Pix2StructForConditionalGeneration"],
             "decoder_start_token_id": 0,
             "eos_token_id": 1,
@@ -3062,7 +3062,7 @@ def _cached_fxmarty_pix2struct_tiny_random():
 def _cached_fxmarty_tiny_dummy_qwen2():
     "fxmarty/tiny-dummy-qwen2"
     return transformers.Qwen2Config(
-        {
+        **{
             "architectures": ["Qwen2ForCausalLM"],
             "attention_dropout": 0.0,
             "bos_token_id": 151643,
@@ -3094,7 +3094,7 @@ def _cached_fxmarty_tiny_dummy_qwen2():
 def _cached_hf_internal_testing_tiny_random_vitmsnforimageclassification():
     "hf-internal-testing/tiny-random-ViTMSNForImageClassification"
     return transformers.ViTMSNConfig(
-        {
+        **{
             "architectures": ["ViTMSNForImageClassification"],
             "attention_probs_dropout_prob": 0.1,
             "hidden_act": "gelu",
@@ -3119,7 +3119,7 @@ def _cached_hf_internal_testing_tiny_random_vitmsnforimageclassification():
 def _cached_hf_internal_testing_tiny_random_yolosmodel():
     "hf-internal-testing/tiny-random-YolosModel"
     return transformers.YolosConfig(
-        {
+        **{
             "architectures": ["YolosModel"],
             "attention_probs_dropout_prob": 0.1,
             "auxiliary_loss": false,
@@ -3155,7 +3155,7 @@ def _cached_hf_internal_testing_tiny_random_yolosmodel():
 def _cached_hf_internal_testing_tiny_xlm_roberta():
     "hf-internal-testing/tiny-xlm-roberta"
     return transformers.XLMRobertaConfig(
-        {
+        **{
             "architectures": ["XLMRobertaForCausalLM"],
             "attention_probs_dropout_prob": 0.1,
             "bos_token_id": 0,
