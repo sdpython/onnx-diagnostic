@@ -1,12 +1,58 @@
 import functools
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 import transformers
 from huggingface_hub import HfApi, model_info
+from . import hub_data_cached_configs
 from .hub_data import __date__, __data_tasks__, load_architecture_task
 
 
-def get_pretrained_config(model_id: str, trust_remote_code: bool = True) -> str:
-    """Returns the config for a model_id."""
+@functools.cache
+def _retrieve_cached_configurations() -> Dict[str, transformers.PretrainedConfig]:
+    res = {}
+    for k, v in hub_data_cached_configs.__dict__:
+        if k.startswith("_ccached_"):
+            doc = v.__doc__
+            res[doc] = v
+    return res
+
+
+def get_cached_configuration(name: str) -> Optional[transformers.PretrainedConfig]:
+    """
+    Returns cached configuration to avoid having to many accesses to internet.
+    It returns None if not Cache. The list of cached models follows.
+
+    .. runpython::
+
+        from onnx_diagnostic.torch_models.hghub.hug_api import _retrieve_cached_configurations
+
+        configs = _retrieve_cached_configurations()
+        pprint.pprint(sorted(configs))
+    """
+    cached = _retrieve_cached_configurations()
+    assert cached, "no cached configuration, which is weird"
+    if name in cached:
+        return cached[name]
+    return None
+
+
+def get_pretrained_config(
+    model_id: str, trust_remote_code: bool = True, use_cached: bool = True
+) -> str:
+    """
+    Returns the config for a model_id.
+
+    :param model_id: model id
+    :param trust_remote_code: trust_remote_code,
+        see :meth:`transformers.AutoConfig.from_pretrained`
+    :param used_cached: if cached, uses this version to avoid
+        accessing the network, if available, it is returned by
+        :func:`get_cached_configuration`, the cached list is mostly for
+        unit tests
+    """
+    if use_cached:
+        conf = get_cached_configuration(model_id)
+        if conf is not None:
+            return conf
     return transformers.AutoConfig.from_pretrained(
         model_id, trust_remote_code=trust_remote_code
     )
