@@ -241,7 +241,7 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
             height=config.vision_config.image_size,
             num_channels=config.vision_config.num_channels,
         )
-        fct = get_inputs_for_image_text_to_text
+        fct = get_inputs_for_image_text_to_text  # type: ignore
     else:
         raise NotImplementedError(f"Input generation for task {task!r} not implemented yet.")
 
