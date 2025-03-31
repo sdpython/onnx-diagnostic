@@ -169,6 +169,7 @@ fxmarty/tiny-dummy-qwen2
 hf-internal-testing/tiny-random-ViTMSNForImageClassification
 hf-internal-testing/tiny-random-YolosModel
 hf-internal-testing/tiny-xlm-roberta
+HuggingFaceM4/tiny-random-idefics
 """
 
 
