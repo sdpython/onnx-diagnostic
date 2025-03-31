@@ -9,7 +9,7 @@ from .hub_data import __date__, __data_tasks__, load_architecture_task
 @functools.cache
 def _retrieve_cached_configurations() -> Dict[str, transformers.PretrainedConfig]:
     res = {}
-    for k, v in hub_data_cached_configs.__dict__:
+    for k, v in hub_data_cached_configs.__dict__.items():
         if k.startswith("_ccached_"):
             doc = v.__doc__
             res[doc] = v
