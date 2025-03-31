@@ -47,6 +47,7 @@ __data_arch__ = textwrap.dedent(
     HieraForImageClassification,image-classification
     HubertModel,feature-extraction
     IBertModel,feature-extraction
+    IdeficsForVisionText2Text,image-text-to-text
     ImageGPTModel,image-feature-extraction
     LayoutLMModel,feature-extraction
     LayoutLMv3Model,feature-extraction

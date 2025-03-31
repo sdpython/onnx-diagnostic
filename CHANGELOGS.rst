@@ -4,6 +4,8 @@ Change Logs
 0.3.0
 +++++
 
+* :pr:`28`: adds command line to print out the configuration for a model id,
+  support image-text-to-text
 * :pr:`26`: creates a folder ``helpers`` to gather all the functions
   used in many places
 * :pr:`25`: improve patches for DynamicCache
@@ -12,7 +14,7 @@ Change Logs
   ``convert_dynamic_axes_into_dynamic_shapes`` to convert dynamic axes
   into dynamic shapes, add support for ``T5ForConditionalGeneration``
 * :pr:`23`: dummy inputs for ``image-classification``
-* :pr:`22`: api to create untrained model copying the architecture
+* :pr:`22`, :pr:`27`: api to create untrained model copying the architecture
   of the trained models and dummy inputs for them,
   support for ``text-generation``
 

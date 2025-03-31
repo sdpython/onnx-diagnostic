@@ -3,7 +3,7 @@ import sys
 import textwrap
 import onnx
 from typing import Any, List, Optional
-from argparse import ArgumentParser, RawTextHelpFormatter
+from argparse import ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
 from textwrap import dedent
 
 
@@ -220,7 +220,8 @@ def get_parser_config() -> ArgumentParser:
         prog="config",
         description=dedent(
             """
-        Prints out a configuration for a model id
+        Prints out a configuration for a model id,
+        prints the associated task as well.
         """
         ),
         epilog="",
@@ -232,15 +233,25 @@ def get_parser_config() -> ArgumentParser:
         required=True,
         help="model id, usually <author>/<name>",
     )
+    parser.add_argument(
+        "-t",
+        "--task",
+        default=False,
+        action=BooleanOptionalAction,
+        help="displays the task as well",
+    )
     return parser
 
 
 def _cmd_config(argv: List[Any]):
-    from .torch_models.hghub.hub_api import get_pretrained_config
+    from .torch_models.hghub.hub_api import get_pretrained_config, task_from_id
 
     parser = get_parser_config()
     args = parser.parse_args(argv[1:])
     print(get_pretrained_config(args.mid))
+    if args.task:
+        print("------")
+        print(f"task: {task_from_id(args.mid)}")
 
 
 def main(argv: Optional[List[Any]] = None):
