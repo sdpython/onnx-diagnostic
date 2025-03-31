@@ -47,6 +47,7 @@ __data_arch__ = textwrap.dedent(
     HieraForImageClassification,image-classification
     HubertModel,feature-extraction
     IBertModel,feature-extraction
+    IdeficsForVisionText2Text,image-text-to-text
     ImageGPTModel,image-feature-extraction
     LayoutLMModel,feature-extraction
     LayoutLMv3Model,feature-extraction
@@ -169,6 +170,7 @@ fxmarty/tiny-dummy-qwen2
 hf-internal-testing/tiny-random-ViTMSNForImageClassification
 hf-internal-testing/tiny-random-YolosModel
 hf-internal-testing/tiny-xlm-roberta
+HuggingFaceM4/tiny-random-idefics
 """
 
 

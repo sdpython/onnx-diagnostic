@@ -7,7 +7,10 @@ from .helper import string_type
 def _forward_(*args, _f=None, _context=None, **kwargs):
     assert _f is not None, "_f cannot be None"
     assert _context is not None, "_context cannot be None"
-    print(f"---- stolen forward for class {_context['class_name']}")
+    print(
+        f"---- stolen forward for class {_context['class_name']} "
+        f"-- iteration {_context['iteration']}"
+    )
     kws = dict(
         with_shape=_context.get("with_shape", False),
         with_min_max=_context.get("with_min_max", False),

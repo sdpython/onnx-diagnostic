@@ -29,6 +29,7 @@ Source are `sdpython/onnx-diagnostic
     :caption: Contents
 
     api/index
+    cmds/index
     auto_examples/index
 
 .. toctree::
