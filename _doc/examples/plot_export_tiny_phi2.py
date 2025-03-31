@@ -44,7 +44,7 @@ untrained_model, inputs, dynamic_shapes, config, size, n_weights = (
     data["n_weights"],
 )
 
-print(f"model {size / 2**10:1.3f} Kb with {n_weights} parameters.")
+print(f"model {size / 2**20:1.3f} Mb with {n_weights // 1000} mille parameters.")
 # %%
 # The original model has 2.7 billion parameters. It was divided by more than 10.
 # Let's see the configuration.
@@ -156,4 +156,4 @@ print(f"onnx discrepancies: {string_diff(diff)}")
 # It looks good.
 
 # %%
-doc.plot_legend("untrained smaller\nmicrosoft/phi-2", "torch.onnx.export", "green")
+doc.plot_legend("untrained smaller\nmicrosoft/phi-2", "torch.onnx.export", "orange")

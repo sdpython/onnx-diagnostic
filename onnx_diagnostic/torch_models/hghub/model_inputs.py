@@ -260,7 +260,7 @@ def get_untrained_model_with_inputs(
     archs = config.architectures  # type: ignore
     assert archs is not None and len(archs) == 1, (
         f"Unable to determine the architecture for model {model_id!r}, "
-        f"architectures={archs!r}"
+        f"architectures={archs!r}, conf={config}"
     )
     arch = archs[0]
     if verbose:

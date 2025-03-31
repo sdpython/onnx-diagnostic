@@ -127,6 +127,14 @@ class TestHuggingFaceHubApi(ExtTestCase):
             task = task_from_id(mid)
             self.assertNotEmpty(task)
 
+    def test__ccached_config_64(self):
+        from onnx_diagnostic.torch_models.hghub.hub_data_cached_configs import (
+            _cached_hf_internal_testing_tiny_random_beitforimageclassification,
+        )
+
+        conf = _cached_hf_internal_testing_tiny_random_beitforimageclassification()
+        self.assertEqual(conf.auxiliary_channels, 256)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
