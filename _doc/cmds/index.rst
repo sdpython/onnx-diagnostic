@@ -9,3 +9,4 @@ Command Lines
     :maxdepth: 1
 
     config
+    validate
