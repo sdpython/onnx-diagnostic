@@ -65,7 +65,7 @@ def validate_model(
     assert not trained, f"trained={trained} not supported yet"
     assert not dtype, f"dtype={dtype} not supported yet"
     assert not device, f"device={device} not supported yet"
-    summary = {}
+    summary: Dict[str, Union[int, float, str]] = {}
     if verbose:
         print(f"[validate_model] validate model id {model_id!r}")
         print("[validate_model] get dummy inputs...")
@@ -75,7 +75,8 @@ def validate_model(
         try:
             data = get_untrained_model_with_inputs(model_id, verbose=verbose, task=task)
         except Exception as e:
-            summary["ERR_create"] = e
+            summary["ERR_create"] = str(e)
+            data["ERR_create"] = e
             summary["time_create"] = time.perf_counter() - begin
             return summary, {}
     else:
@@ -90,10 +91,10 @@ def validate_model(
         summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
     summary["model_id"] = model_id
     if verbose:
-        print(f"[validate_model] task={data["task"]}")
-        print(f"[validate_model] size={data["size"]}")
-        print(f"[validate_model] n_weights={data["n_weights"]}")
-        print(f"[validate_model] n_weights={data["n_weights"]}")
+        print(f"[validate_model] task={data['task']}")
+        print(f"[validate_model] size={data['size']}")
+        print(f"[validate_model] n_weights={data['n_weights']}")
+        print(f"[validate_model] n_weights={data['n_weights']}")
         for k, v in data["inputs"].items():
             print(f"[validate_model] +INPUT {k}={string_type(v, with_shape=True)}")
         for k, v in data["dynamic_shapes"].items():
@@ -106,7 +107,8 @@ def validate_model(
             try:
                 expected = data["model"](**data["inputs"])
             except Exception as e:
-                summary["ERR_run"] = e
+                summary["ERR_run"] = str(e)
+                data["ERR_run"] = e
                 summary["time_run"] = time.perf_counter() - begin
                 return summary, data
         else:

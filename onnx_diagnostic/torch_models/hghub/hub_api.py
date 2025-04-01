@@ -23,7 +23,8 @@ def get_cached_configuration(name: str) -> Optional[transformers.PretrainedConfi
 
     .. runpython::
 
-        from onnx_diagnostic.torch_models.hghub.hug_api import _retrieve_cached_configurations
+        import pprint
+        from onnx_diagnostic.torch_models.hghub.hub_api import _retrieve_cached_configurations
 
         configs = _retrieve_cached_configurations()
         pprint.pprint(sorted(configs))

@@ -37,7 +37,7 @@ html_logo = "_static/logo.png"
 source_suffix = ".rst"
 master_doc = "index"
 project = "onnx-diagnostic"
-copyright = "2023-2024"
+copyright = "2025"
 author = "Xavier Dupré"
 version = __version__
 release = __version__
@@ -123,9 +123,11 @@ nitpick_ignore = [
     ("py:class", "transformers.cache_utils.DynamicCache"),
     ("py:class", "transformers.cache_utils.EncoderDecoderCache"),
     ("py:class", "transformers.cache_utils.MambaCache"),
+    ("py:class", "transformers.configuration_utils.PretrainedConfig"),
     ("py:func", "torch.export._draft_export.draft_export"),
     ("py:func", "torch._export.tools.report_exportability"),
     ("py:meth", "huggingface_hub.HfApi.list_models"),
+    ("py:meth", "transformers.AutoConfig.from_pretrained"),
     ("py:meth", "transformers.GenerationMixin.generate"),
     ("py:meth", "unittests.TestCase.subTest"),
 ]
