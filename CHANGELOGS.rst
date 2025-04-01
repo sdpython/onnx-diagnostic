@@ -4,6 +4,8 @@ Change Logs
 0.3.0
 +++++
 
+* :pr:`29`: adds helpers to measure the memory peak and run benchmark
+  on different processes
 * :pr:`28`: adds command line to print out the configuration for a model id,
   support image-text-to-text
 * :pr:`26`: creates a folder ``helpers`` to gather all the functions

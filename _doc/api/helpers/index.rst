@@ -7,8 +7,10 @@ onnx_diagnostic.helpers
     :caption: submodules
 
     args_helper
+    bench_run
     cache_helper
     helper
+    memory_peak
     onnx_helper
     ort_session
     torch_test_helper
