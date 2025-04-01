@@ -62,6 +62,10 @@ class TestTorchTestHelper(ExtTestCase):
         proc = replace_string_by_dynamic(example)
         sproc = (
             str(proc)
+            .replace(
+                "_DimHint(type=<_DimHintType.DYNAMIC:3>,min=None,max=None,_factory=True)",
+                "DYN",
+            )
             .replace(",min=None,max=None,_factory=True", "")
             .replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>)", "DYN")
             .replace(" ", "")
