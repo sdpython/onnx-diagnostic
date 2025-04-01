@@ -62,14 +62,13 @@ class TestTorchTestHelper(ExtTestCase):
         proc = replace_string_by_dynamic(example)
         sproc = (
             str(proc)
+            .replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>)", "DYN")
+            .replace(" ", "")
+            .replace("<_DimHint.DYNAMIC:3>", "DYN")
             .replace(
                 "_DimHint(type=<_DimHintType.DYNAMIC:3>,min=None,max=None,_factory=True)",
                 "DYN",
             )
-            .replace(",min=None,max=None,_factory=True", "")
-            .replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>)", "DYN")
-            .replace(" ", "")
-            .replace("<_DimHint.DYNAMIC:3>", "DYN")
         )
         self.assertEqual(
             "{'input_ids':{0:DYN,1:DYN},'attention_mask':({0:DYN,1:DYN},),'position_ids':[{0:DYN,1:DYN}]}",
