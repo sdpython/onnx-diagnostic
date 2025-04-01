@@ -7,33 +7,6 @@ from argparse import ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
 from textwrap import dedent
 
 
-def get_main_parser() -> ArgumentParser:
-    parser = ArgumentParser(
-        prog="onnx_diagnostic",
-        description="onnx_diagnostic main command line.\n",
-        formatter_class=RawTextHelpFormatter,
-        epilog=textwrap.dedent(
-            """
-        Type 'python -m onnx_diagnostic <cmd> --help'
-        to get help for a specific command.
-
-        lighten    - makes an onnx model lighter by removing the weights,
-        unlighten  - restores an onnx model produces by the previous experiment
-        run        - runs a model and measure the inference time
-        print      - prints the model on standard output
-        find       - find node consuming or producing a result
-        config     - prints a configuration for a model id
-        """
-        ),
-    )
-    parser.add_argument(
-        "cmd",
-        choices=["lighten", "unlighten", "run", "print", "find", "config"],
-        help="Selects a command.",
-    )
-    return parser
-
-
 def get_parser_lighten() -> ArgumentParser:
     parser = ArgumentParser(
         prog="lighten",
@@ -252,6 +225,32 @@ def _cmd_config(argv: List[Any]):
     if args.task:
         print("------")
         print(f"task: {task_from_id(args.mid)}")
+
+
+def get_main_parser() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="onnx_diagnostic",
+        description="onnx_diagnostic main command line.\n",
+        formatter_class=RawTextHelpFormatter,
+        epilog=textwrap.dedent(
+            """
+        Type 'python -m onnx_diagnostic <cmd> --help'
+        to get help for a specific command.
+
+        lighten    - makes an onnx model lighter by removing the weights,
+        unlighten  - restores an onnx model produces by the previous experiment
+        print      - prints the model on standard output
+        find       - find node consuming or producing a result
+        config     - prints a configuration for a model id
+        """
+        ),
+    )
+    parser.add_argument(
+        "cmd",
+        choices=["lighten", "unlighten", "run", "print", "find", "config"],
+        help="Selects a command.",
+    )
+    return parser
 
 
 def main(argv: Optional[List[Any]] = None):
