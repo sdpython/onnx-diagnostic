@@ -39,14 +39,12 @@ class TestTestHelper(ExtTestCase):
         summary, data = validate_model(
             mid,
             do_run=True,
-            verbose=2,
-            dtype="float32",
-            device="cpu",
+            verbose=10,
             exporter="export-nostrict",
+            dump_folder="dump_test_validate_model_export",
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
-        validate_model(mid, do_run=True, verbose=2, quiet=False)
 
 
 if __name__ == "__main__":

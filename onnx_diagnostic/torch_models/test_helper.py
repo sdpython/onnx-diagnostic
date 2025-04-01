@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict, Optional, Tuple, Union
 import time
 import torch
@@ -11,7 +12,7 @@ from .hghub.model_inputs import random_input_kwargs
 def empty(value: Any) -> bool:
     """Tells if the value is empty."""
     if isinstance(value, (str, list, dict, tuple, set)):
-        return value
+        return bool(value)
     if value is None:
         return True
     return False
@@ -22,8 +23,8 @@ def _ds_clean(v):
         str(v)
         .replace("<class 'onnx_diagnostic.torch_models.hghub.model_inputs.", "")
         .replace("'>", "")
-        .replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>", "DYNAMIC")
-        .replace("_DimHint(type=<_DimHintType.AUTO: 3>", "AUTO")
+        .replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>)", "DYNAMIC")
+        .replace("_DimHint(type=<_DimHintType.AUTO: 3>)", "AUTO")
     )
 
 
@@ -52,6 +53,7 @@ def validate_model(
     optimization: Optional[str] = None,
     quiet: bool = False,
     patch: bool = False,
+    dump_folder: Optional[str] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -72,11 +74,23 @@ def validate_model(
         depend on the the exporter
     :param quiet: if quiet, catches exception if any issue
     :param patch: applies patches before exporting
+    :param dump_folder: dumps everything in a subfolder of this one
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
     assert not trained, f"trained={trained} not supported yet"
     summary: Dict[str, Union[int, float, str]] = {}
+    if dump_folder:
+        folder_name = f"{model_id.replace('/','-')}-{exporter}-{optimization or ''}"
+        dump_folder = os.path.join(dump_folder, folder_name)
+        if not os.path.exists(dump_folder):
+            os.makedirs(dump_folder)
+        summary["dump_folder"] = dump_folder
+        summary["dump_folder_name"] = folder_name
+        if verbose:
+            print(f"[validate_model] dump into {folder_name!r}")
+    else:
+        folder_name = None
     if verbose:
         print(f"[validate_model] validate model id {model_id!r}")
         print("[validate_model] get dummy inputs...")
@@ -98,15 +112,15 @@ def validate_model(
             dtype = getattr(torch, dtype)
         if verbose:
             print(f"[validate_model] dtype conversion to {dtype}")
-        data["model"] = to_any(data["model"], dtype)
-        data["inputs"] = to_any(data["inputs"], dtype)
+        data["model"] = to_any(data["model"], dtype)  # type: ignore
+        data["inputs"] = to_any(data["inputs"], dtype)  # type: ignore
         summary["model_dtype"] = str(dtype)
 
     if not empty(device):
         if verbose:
             print(f"[validate_model] device conversion to {device}")
-        data["model"] = to_any(data["model"], device)
-        data["inputs"] = to_any(data["inputs"], device)
+        data["model"] = to_any(data["model"], device)  # type: ignore
+        data["inputs"] = to_any(data["inputs"], device)  # type: ignore
         summary["model_device"] = str(device)
 
     summary["time_create"] = time.perf_counter() - begin
@@ -156,6 +170,7 @@ def validate_model(
             f"before: {hash_inputs}\n"
             f" after: {string_type(data["inputs"], with_shape=True)}"
         )
+
     if exporter:
         print(
             f"[validate_model] export the model with {exporter!r}, "
@@ -164,10 +179,10 @@ def validate_model(
         if patch:
             if verbose:
                 print("[validate_model] applies patches before exporting")
-            with bypass_export_some_errors(
+            with bypass_export_some_errors(  # type: ignore
                 patch_transformers=True, verbose=max(0, verbose - 1)
             ) as modificator:
-                data["inputs_export"] = modificator(data["inputs"])
+                data["inputs_export"] = modificator(data["inputs"])  # type: ignore
 
                 if do_run:
                     # We run a second time the model to check the patch did not
@@ -230,6 +245,25 @@ def validate_model(
             )
         summary.update(summary_export)
 
+    if dump_folder:
+        if "exported_program" in data:
+            ep = data["exported_program"]
+            if verbose:
+                print(f"[validate_model] dumps exported program in {dump_folder!r}...")
+            with open(os.path.join(dump_folder, f"{folder_name}.ep"), "w") as f:
+                f.write(str(ep))
+            with open(os.path.join(dump_folder, f"{folder_name}.graph"), "w") as f:
+                f.write(str(ep.graph))
+            if verbose:
+                print("[validate_model] done (dump ep)")
+        if verbose:
+            print(f"[validate_model] dumps statistics in {dump_folder!r}...")
+        with open(os.path.join(dump_folder, f"{folder_name}.stats"), "w") as f:
+            for k, v in sorted(summary.items()):
+                f.write(f":{k}:{v};\n")
+        if verbose:
+            print("[validate_model] done (dump)")
+
     if verbose:
         print("[validate_model] done (final)")
     return summary, data
@@ -281,7 +315,7 @@ def split_args_kwargs(inputs: Any) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
         return (), inputs
     if isinstance(inputs, tuple) and len(inputs) == 2 and isinstance(inputs[1], dict):
         return inputs
-    assert isinstance(inputs, tuple), f"Unexpectd inputs {string_type(inputs)}"
+    assert isinstance(inputs, tuple), f"Unexpected inputs {string_type(inputs)}"
     return inputs, {}
 
 
@@ -309,7 +343,7 @@ def call_torch_export_export(
     """
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
-    summary = {}
+    summary: Dict[str, Union[str, int, float]] = {}
     strict = "nostrict" not in exporter
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
@@ -323,7 +357,7 @@ def call_torch_export_export(
         print(f"[call_torch_export_export] dynamic_shapes={_ds_clean(ds)}")
         print("[call_torch_export_export] export...")
     summary["export_exporter"] = exporter
-    summary["export_optimization"] = optimization
+    summary["export_optimization"] = optimization or ""
     summary["export_strict"] = strict
     summary["export_args"] = string_type(args, with_shape=True)
     summary["export_kwargs"] = string_type(kwargs, with_shape=True)

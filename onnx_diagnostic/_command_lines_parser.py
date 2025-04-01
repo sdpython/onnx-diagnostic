@@ -239,28 +239,10 @@ def get_parser_validate() -> ArgumentParser:
         ),
         epilog="If the model id is specified, one untrained version of it is instantiated.",
     )
-    parser.add_argument(
-        "-m",
-        "--mid",
-        type=str,
-        help="model id, usually <author>/<name>",
-    )
-    parser.add_argument(
-        "-t",
-        "--task",
-        default=None,
-        help="force the task to use",
-    )
-    parser.add_argument(
-        "-e",
-        "--export",
-        help="export the model with this exporter",
-    )
-    parser.add_argument(
-        "-o",
-        "--opt",
-        help="optimization to apply after the export",
-    )
+    parser.add_argument("-m", "--mid", type=str, help="model id, usually <author>/<name>")
+    parser.add_argument("-t", "--task", default=None, help="force the task to use")
+    parser.add_argument("-e", "--export", help="export the model with this exporter")
+    parser.add_argument("--opt", help="optimization to apply after the export")
     parser.add_argument(
         "-r",
         "--run",
@@ -287,6 +269,12 @@ def get_parser_validate() -> ArgumentParser:
         default=False,
         action=BooleanOptionalAction,
         help="validate the trained model (requires downloading)",
+    )
+    parser.add_argument(
+        "-o",
+        "--dump-folder",
+        help="if not empty, a folder is created to dumps statistics, "
+        "exported program, onnx...",
     )
     parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
     parser.add_argument("--dtype", help="changes dtype if necessary")
@@ -328,6 +316,7 @@ def _cmd_validate(argv: List[Any]):
             patch=args.patch,
             optimization=args.opt,
             exporter=args.export,
+            dump_folder=args.dump_folder,
         )
         print("")
         print("-- summary --")
