@@ -7,33 +7,6 @@ from argparse import ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
 from textwrap import dedent
 
 
-def get_main_parser() -> ArgumentParser:
-    parser = ArgumentParser(
-        prog="onnx_diagnostic",
-        description="onnx_diagnostic main command line.\n",
-        formatter_class=RawTextHelpFormatter,
-        epilog=textwrap.dedent(
-            """
-        Type 'python -m onnx_diagnostic <cmd> --help'
-        to get help for a specific command.
-
-        lighten    - makes an onnx model lighter by removing the weights,
-        unlighten  - restores an onnx model produces by the previous experiment
-        run        - runs a model and measure the inference time
-        print      - prints the model on standard output
-        find       - find node consuming or producing a result
-        config     - prints a configuration for a model id
-        """
-        ),
-    )
-    parser.add_argument(
-        "cmd",
-        choices=["lighten", "unlighten", "run", "print", "find", "config"],
-        help="Selects a command.",
-    )
-    return parser
-
-
 def get_parser_lighten() -> ArgumentParser:
     parser = ArgumentParser(
         prog="lighten",
@@ -254,6 +227,130 @@ def _cmd_config(argv: List[Any]):
         print(f"task: {task_from_id(args.mid)}")
 
 
+def get_parser_validate() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="test",
+        description=dedent(
+            """
+        Prints out dummy inputs for a particular task or a model id.
+        If both mid and task are empty, the command line displays the list
+        of supported tasks.
+        """
+        ),
+        epilog="If the model id is specified, one untrained version of it is instantiated.",
+    )
+    parser.add_argument("-m", "--mid", type=str, help="model id, usually <author>/<name>")
+    parser.add_argument("-t", "--task", default=None, help="force the task to use")
+    parser.add_argument("-e", "--export", help="export the model with this exporter")
+    parser.add_argument("--opt", help="optimization to apply after the export")
+    parser.add_argument(
+        "-r",
+        "--run",
+        default=False,
+        action=BooleanOptionalAction,
+        help="runs the model to check it runs",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        default=False,
+        action=BooleanOptionalAction,
+        help="catches exception, report them in the summary",
+    )
+    parser.add_argument(
+        "-p",
+        "--patch",
+        default=True,
+        action=BooleanOptionalAction,
+        help="applies patches before exporting",
+    )
+    parser.add_argument(
+        "--trained",
+        default=False,
+        action=BooleanOptionalAction,
+        help="validate the trained model (requires downloading)",
+    )
+    parser.add_argument(
+        "-o",
+        "--dump-folder",
+        help="if not empty, a folder is created to dumps statistics, "
+        "exported program, onnx...",
+    )
+    parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
+    parser.add_argument("--dtype", help="changes dtype if necessary")
+    parser.add_argument("--device", help="changes the device if necessary")
+    return parser
+
+
+def _cmd_validate(argv: List[Any]):
+    from .helpers import string_type
+    from .torch_models.test_helper import get_inputs_for_task, validate_model, _ds_clean
+    from .torch_models.hghub.model_inputs import get_get_inputs_function_for_tasks
+
+    parser = get_parser_validate()
+    args = parser.parse_args(argv[1:])
+    if not args.task and not args.mid:
+        print("-- list of supported tasks:")
+        print("\n".join(sorted(get_get_inputs_function_for_tasks())))
+    elif not args.mid:
+        data = get_inputs_for_task(args.task)
+        if args.verbose:
+            print(f"task: {args.task}")
+        max_length = max(len(k) for k in data["inputs"]) + 1
+        print("-- inputs")
+        for k, v in data["inputs"].items():
+            print(f"  + {k.ljust(max_length)}: {string_type(v, with_shape=True)}")
+        print("-- dynamic_shapes")
+        for k, v in data["dynamic_shapes"].items():
+            print(f"  + {k.ljust(max_length)}: {_ds_clean(v)}")
+    else:
+        summary, _data = validate_model(
+            model_id=args.mid,
+            task=args.task,
+            do_run=args.run,
+            verbose=args.verbose,
+            quiet=args.quiet,
+            trained=args.trained,
+            dtype=args.dtype,
+            device=args.device,
+            patch=args.patch,
+            optimization=args.opt,
+            exporter=args.export,
+            dump_folder=args.dump_folder,
+        )
+        print("")
+        print("-- summary --")
+        for k, v in sorted(summary.items()):
+            print(f":{k},{v};")
+
+
+def get_main_parser() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="onnx_diagnostic",
+        description="onnx_diagnostic main command line.\n",
+        formatter_class=RawTextHelpFormatter,
+        epilog=textwrap.dedent(
+            """
+        Type 'python -m onnx_diagnostic <cmd> --help'
+        to get help for a specific command.
+
+        config     - prints a configuration for a model id
+        find       - find node consuming or producing a result
+        lighten    - makes an onnx model lighter by removing the weights,
+        unlighten  - restores an onnx model produces by the previous experiment
+        print      - prints the model on standard output
+        validate   - validate a model
+        """
+        ),
+    )
+    parser.add_argument(
+        "cmd",
+        choices=["config", "find", "lighten", "print", "unlighten", "validate"],
+        help="Selects a command.",
+    )
+    return parser
+
+
 def main(argv: Optional[List[Any]] = None):
     fcts = dict(
         lighten=_cmd_lighten,
@@ -261,6 +358,7 @@ def main(argv: Optional[List[Any]] = None):
         print=_cmd_print,
         find=_cmd_find,
         config=_cmd_config,
+        validate=_cmd_validate,
     )
 
     if argv is None:
@@ -280,6 +378,7 @@ def main(argv: Optional[List[Any]] = None):
                 print=get_parser_print,
                 find=get_parser_find,
                 config=get_parser_config,
+                validate=get_parser_validate,
             )
             cmd = argv[0]
             if cmd not in parsers:

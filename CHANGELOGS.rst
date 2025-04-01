@@ -4,6 +4,7 @@ Change Logs
 0.3.0
 +++++
 
+* :pr:`30`: adds command to test a model id, validate the export
 * :pr:`29`: adds helpers to measure the memory peak and run benchmark
   on different processes
 * :pr:`28`: adds command line to print out the configuration for a model id,

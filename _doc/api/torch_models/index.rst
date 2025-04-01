@@ -7,6 +7,7 @@ onnx_diagnostic.torch_models
 
     hghub/index
     llms
+    test_helper
 
 .. automodule:: onnx_diagnostic.torch_models
     :members:

@@ -141,69 +141,92 @@ def _pick(config, *atts):
 
 
 def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callable]:
-    """Inputs kwargs"""
+    """
+    Inputs kwargs.
+
+    If the configuration is None, the function selects typical dimensions.
+    """
+    fcts = get_get_inputs_function_for_tasks()
+    assert task in fcts, f"Unsupported task {task!r}, supported are {sorted(fcts)}"
     if task == "text-generation":
-        check_hasattr(
-            config,
-            "vocab_size",
-            "hidden_size",
-            "num_attention_heads",
-            ("num_key_value_heads", "num_attention_heads"),
-            "intermediate_size",
-            "hidden_size",
-        )
+        if config is not None:
+            check_hasattr(
+                config,
+                "vocab_size",
+                "hidden_size",
+                "num_attention_heads",
+                ("num_key_value_heads", "num_attention_heads"),
+                "intermediate_size",
+                "hidden_size",
+            )
         kwargs = dict(
             batch_size=2,
             sequence_length=30,
             sequence_length2=3,
-            head_dim=getattr(
-                config, "head_dim", config.hidden_size // config.num_attention_heads
+            head_dim=(
+                16
+                if config is None
+                else getattr(
+                    config, "head_dim", config.hidden_size // config.num_attention_heads
+                )
             ),
-            dummy_max_token_id=config.vocab_size - 1,
-            num_hidden_layers=config.num_hidden_layers,
-            num_key_value_heads=_pick(config, "num_key_value_heads", "num_attention_heads"),
-            intermediate_size=config.intermediate_size,
-            hidden_size=config.hidden_size,
+            dummy_max_token_id=31999 if config is None else (config.vocab_size - 1),
+            num_hidden_layers=4 if config is None else config.num_hidden_layers,
+            num_key_value_heads=(
+                24
+                if config is None
+                else _pick(config, "num_key_value_heads", "num_attention_heads")
+            ),
+            intermediate_size=1024 if config is None else config.intermediate_size,
+            hidden_size=512 if config is None else config.hidden_size,
         )
         fct = get_inputs_for_text_generation
     elif task == "text2text-generation":
-        check_hasattr(
-            config,
-            "vocab_size",
-            "hidden_size",
-            "num_attention_heads",
-            ("num_hidden_layers", "num_layers"),
-            ("n_positions", "d_model"),
-            (
-                "num_key_value_heads",
-                "num_heads",
-                ("decoder_attention_heads", "encoder_attention_heads"),
-            ),
-        )
+        if config is not None:
+            check_hasattr(
+                config,
+                "vocab_size",
+                "hidden_size",
+                "num_attention_heads",
+                ("num_hidden_layers", "num_layers"),
+                ("n_positions", "d_model"),
+                (
+                    "num_key_value_heads",
+                    "num_heads",
+                    ("decoder_attention_heads", "encoder_attention_heads"),
+                ),
+            )
         kwargs = dict(
             batch_size=2,
             sequence_length=30,
             sequence_length2=3,
-            head_dim=config.d_kv if hasattr(config, "d_kv") else 1,
-            dummy_max_token_id=config.vocab_size - 1,
-            num_hidden_layers=_pick(config, "num_hidden_layers", "num_layers"),
-            num_key_value_heads=_pick(
-                config,
-                "num_key_value_heads",
-                "num_heads",
-                (sum, "encoder_attention_heads", "decoder_attention_heads"),
+            head_dim=16 if config is None else (config.d_kv if hasattr(config, "d_kv") else 1),
+            dummy_max_token_id=31999 if config is None else config.vocab_size - 1,
+            num_hidden_layers=(
+                8 if config is None else _pick(config, "num_hidden_layers", "num_layers")
             ),
-            encoder_dim=_pick(config, "n_positions", "d_model"),
+            num_key_value_heads=(
+                16
+                if config is None
+                else _pick(
+                    config,
+                    "num_key_value_heads",
+                    "num_heads",
+                    (sum, "encoder_attention_heads", "decoder_attention_heads"),
+                )
+            ),
+            encoder_dim=512 if config is None else _pick(config, "n_positions", "d_model"),
         )
         fct = get_inputs_for_text2text_generation  # type: ignore
     elif task == "image-classification":
-        check_hasattr(config, "image_size", "num_channels")
-        if isinstance(config.image_size, int):
+        if config is not None:
+            check_hasattr(config, "image_size", "num_channels")
+        if config is None or isinstance(config.image_size, int):
             kwargs = dict(
                 batch_size=2,
-                input_width=config.image_size,
-                input_height=config.image_size,
-                input_channels=config.num_channels,
+                input_width=224 if config is None else config.image_size,
+                input_height=224 if config is None else config.image_size,
+                input_channels=3 if config is None else config.num_channels,
             )
         else:
             kwargs = dict(
@@ -214,32 +237,41 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
             )
         fct = get_inputs_for_image_classification  # type: ignore
     elif task == "image-text-to-text":
-        check_hasattr(
-            config,
-            "vocab_size",
-            "hidden_size",
-            "num_attention_heads",
-            ("num_key_value_heads", "num_attention_heads"),
-            "intermediate_size",
-            "hidden_size",
-            "vision_config",
-        )
-        check_hasattr(config.vision_config, "image_size", "num_channels")
+        if config is not None:
+            check_hasattr(
+                config,
+                "vocab_size",
+                "hidden_size",
+                "num_attention_heads",
+                ("num_key_value_heads", "num_attention_heads"),
+                "intermediate_size",
+                "hidden_size",
+                "vision_config",
+            )
+            check_hasattr(config.vision_config, "image_size", "num_channels")
         kwargs = dict(
             batch_size=2,
             sequence_length=30,
             sequence_length2=3,
-            head_dim=getattr(
-                config, "head_dim", config.hidden_size // config.num_attention_heads
+            head_dim=(
+                16
+                if config is None
+                else getattr(
+                    config, "head_dim", config.hidden_size // config.num_attention_heads
+                )
             ),
-            dummy_max_token_id=config.vocab_size - 1,
-            num_hidden_layers=config.num_hidden_layers,
-            num_key_value_heads=_pick(config, "num_key_value_heads", "num_attention_heads"),
-            intermediate_size=config.intermediate_size,
-            hidden_size=config.hidden_size,
-            width=config.vision_config.image_size,
-            height=config.vision_config.image_size,
-            num_channels=config.vision_config.num_channels,
+            dummy_max_token_id=31999 if config is None else config.vocab_size - 1,
+            num_hidden_layers=4 if config is None else config.num_hidden_layers,
+            num_key_value_heads=(
+                8
+                if config is None
+                else _pick(config, "num_key_value_heads", "num_attention_heads")
+            ),
+            intermediate_size=1024 if config is None else config.intermediate_size,
+            hidden_size=512 if config is None else config.hidden_size,
+            width=224 if config is None else config.vision_config.image_size,
+            height=224 if config is None else config.vision_config.image_size,
+            num_channels=3 if config is None else config.vision_config.num_channels,
         )
         fct = get_inputs_for_image_text_to_text  # type: ignore
     else:
@@ -344,6 +376,7 @@ def get_untrained_model_with_inputs(
     res["configuration"] = config
     res["size"] = sizes[0]
     res["n_weights"] = sizes[1]
+    res["task"] = task
 
     update = {}
     for k, v in res.items():
@@ -682,3 +715,13 @@ def get_inputs_for_text2text_generation(
         # encoder_outputs=torch.randn(batch_size, sequence_length2, encoder_dim),
     )
     return dict(inputs=inputs, dynamic_shapes=shapes)
+
+
+def get_get_inputs_function_for_tasks() -> Dict[str, Callable]:
+    """Returns all the function producing dummy inputs for every task."""
+    return {
+        "image-classification": get_inputs_for_image_classification,
+        "text-generation": get_inputs_for_text_generation,
+        "text2text-generation": get_inputs_for_text2text_generation,
+        "image-text-to-text": get_inputs_for_image_text_to_text,
+    }
