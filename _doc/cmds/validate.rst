@@ -77,10 +77,10 @@ the same model.
 
 .. code-block::
 
-    python -m onnx_diagnostic validate -m arnir0/Tiny-LLM --run -v 1 --export exporter-nostrict -o dump_models --patch
+    python -m onnx_diagnostic validate -m arnir0/Tiny-LLM --run -v 1 --export export-nostrict -o dump_models --patch
 
 .. runpython::
 
     from onnx_diagnostic._command_lines_parser import main
 
-    main("validate -m arnir0/Tiny-LLM --run -v 1 --export exporter-nostrict -o dump_models --patch".split())
+    main("validate -m arnir0/Tiny-LLM --run -v 1 --export export-nostrict -o dump_models --patch".split())

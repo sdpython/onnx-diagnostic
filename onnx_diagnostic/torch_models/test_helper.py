@@ -168,7 +168,7 @@ def validate_model(
         assert hash_inputs == string_type(data["inputs"], with_shape=True), (
             f"The model execution did modified the inputs:\n"
             f"before: {hash_inputs}\n"
-            f" after: {string_type(data["inputs"], with_shape=True)}"
+            f" after: {string_type(data['inputs'], with_shape=True)}"
         )
 
     if exporter:
@@ -220,7 +220,7 @@ def validate_model(
                     ), (
                         f"The model execution did modified the inputs:\n"
                         f"before: {hash_inputs}\n"
-                        f" after: {string_type(data["inputs_export"], with_shape=True)}"
+                        f" after: {string_type(data['inputs_export'], with_shape=True)}"
                     )
 
                 # data is modified inplace
@@ -425,6 +425,6 @@ def call_torch_export_export(
         assert hash_inputs == string_type(data["inputs_export"], with_shape=True), (
             f"The exported model execution did modified the inputs:\n"
             f"before: {hash_inputs}\n"
-            f" after: {string_type(data["inputs_export"], with_shape=True)}"
+            f" after: {string_type(data['inputs_export'], with_shape=True)}"
         )
     return summary, data
