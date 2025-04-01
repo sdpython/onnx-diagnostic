@@ -3,18 +3,22 @@ import ml_dtypes
 import onnx
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.torch_test_helper import (
     dummy_llm,
     to_numpy,
     is_torchdynamo_exporting,
     steel_forward,
     replace_string_by_dynamic,
+    to_any,
+    torch_deepcopy,
 )
+from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 
 TFLOAT = onnx.TensorProto.FLOAT
 
 
-class TestOrtSession(ExtTestCase):
+class TestTorchTestHelper(ExtTestCase):
 
     def test_is_torchdynamo_exporting(self):
         self.assertFalse(is_torchdynamo_exporting())
@@ -66,6 +70,29 @@ class TestOrtSession(ExtTestCase):
             "{'input_ids':{0:DYN,1:DYN},'attention_mask':({0:DYN,1:DYN},),'position_ids':[{0:DYN,1:DYN}]}",
             sproc,
         )
+
+    def test_to_any(self):
+        c1 = make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))])
+        c2 = make_encoder_decoder_cache(
+            make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
+            make_dynamic_cache([(torch.rand((5, 5, 5)), torch.rand((5, 5, 5)))]),
+        )
+        a = {"t": [(torch.tensor([1, 2]), c1, c2), {4, 5}]}
+        at = to_any(a, torch.float16)
+        self.assertIn("T10r", string_type(at))
+
+    def test_torch_deepcopy(self):
+        c1 = make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))])
+        c2 = make_encoder_decoder_cache(
+            make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
+            make_dynamic_cache([(torch.rand((5, 5, 5)), torch.rand((5, 5, 5)))]),
+        )
+        a = {"t": [(torch.tensor([1, 2]), c1, c2), {4, 5}]}
+        at = torch_deepcopy(a)
+        hash1 = string_type(at, with_shape=True, with_min_max=True)
+        c1.key_cache[0] += 1000
+        hash2 = string_type(at, with_shape=True, with_min_max=True)
+        self.assertEqual(hash1, hash2)
 
 
 if __name__ == "__main__":

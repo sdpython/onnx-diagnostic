@@ -254,9 +254,12 @@ def get_parser_validate() -> ArgumentParser:
     parser.add_argument(
         "-e",
         "--export",
-        default=False,
-        action=BooleanOptionalAction,
-        help="runs the model to check it runs",
+        help="export the model with this exporter",
+    )
+    parser.add_argument(
+        "-o",
+        "--opt",
+        help="optimization to apply after the export",
     )
     parser.add_argument(
         "-r",
@@ -273,17 +276,21 @@ def get_parser_validate() -> ArgumentParser:
         help="catches exception, report them in the summary",
     )
     parser.add_argument(
+        "-p",
+        "--patch",
+        default=True,
+        action=BooleanOptionalAction,
+        help="applies patches before exporting",
+    )
+    parser.add_argument(
         "--trained",
         default=False,
         action=BooleanOptionalAction,
         help="validate the trained model (requires downloading)",
     )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        default=0,
-        help="verbosity",
-    )
+    parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
+    parser.add_argument("--dtype", help="changes dtype if necessary")
+    parser.add_argument("--device", help="changes the device if necessary")
     return parser
 
 
@@ -316,9 +323,14 @@ def _cmd_validate(argv: List[Any]):
             verbose=args.verbose,
             quiet=args.quiet,
             trained=args.trained,
+            dtype=args.dtype,
+            device=args.device,
+            patch=args.patch,
+            optimization=args.opt,
+            exporter=args.export,
         )
         print("")
-        print("-- summary")
+        print("-- summary --")
         for k, v in sorted(summary.items()):
             print(f":{k},{v};")
 

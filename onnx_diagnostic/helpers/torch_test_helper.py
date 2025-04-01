@@ -1,7 +1,10 @@
 import contextlib
+from collections.abc import Iterable
 from typing import Any, Optional, Tuple, Union
+import numpy as np
 import torch
 from .helper import string_type
+from .cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 
 
 def _forward_(*args, _f=None, _context=None, **kwargs):
@@ -298,3 +301,66 @@ def dummy_llm(
         return dec, (x,)
 
     raise NotImplementedError(f"cls_name={cls_name}")
+
+
+def to_any(value: Any, to_value: Union[torch.dtype, torch.device]) -> Any:
+    """
+    Applies torch.to is applicables.
+    Goes recursively.
+    """
+    if isinstance(value, (torch.nn.Module, torch.Tensor)):
+        return value.to(to_value)
+    if isinstance(value, list):
+        return [to_any(t, to_value) for t in value]
+    if isinstance(value, tuple):
+        return tuple(to_any(t, to_value) for t in value)
+    if isinstance(value, set):
+        return {to_any(t, to_value) for t in value}
+    if isinstance(value, dict):
+        return {k: to_any(t, to_value) for k, t in value.items()}
+    if hasattr(value, "to"):
+        return value.to(to_value)
+    if value.__class__.__name__ == "DynamicCache":
+        return make_dynamic_cache(
+            list(
+                zip(
+                    [t.to(to_value) for t in value.key_cache],
+                    [t.to(to_value) for t in value.value_cache],
+                )
+            )
+        )
+
+    assert not isinstance(value, Iterable), f"Unsupported type {type(value)}"
+    return value
+
+
+def torch_deepcopy(value: Any) -> Any:
+    """
+    Makes a deepcopy.
+    """
+    if isinstance(value, (int, float, str)):
+        return value
+    if isinstance(value, tuple):
+        return tuple(torch_deepcopy(v) for v in value)
+    if isinstance(value, list):
+        return [torch_deepcopy(v) for v in value]
+    if isinstance(value, set):
+        return {torch_deepcopy(v) for v in value}
+    if isinstance(value, dict):
+        return {k: torch_deepcopy(v) for k, v in value.items()}
+    if isinstance(value, np.ndarray):
+        return value.copy()
+    if hasattr(value, "clone"):
+        return value.clone()
+    if value.__class__.__name__ == "DynamicCache":
+        return make_dynamic_cache(
+            torch_deepcopy(list(zip(value.key_cache, value.value_cache)))
+        )
+    if value.__class__.__name__ == "EncoderDecoderCache":
+        return make_encoder_decoder_cache(
+            torch_deepcopy(value.self_attention_cache),
+            torch_deepcopy(value.cross_attention_cache),
+        )
+    # We should have a code using serialization, deserialization assuming a model
+    # cannot be exported without them.
+    raise NotImplementedError(f"torch_deepcopy not implemented for type {type(value)}")
