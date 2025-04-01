@@ -4,11 +4,12 @@ from io import StringIO
 from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic._command_lines_parser import (
     get_main_parser,
+    get_parser_config,
     get_parser_find,
     get_parser_lighten,
     get_parser_print,
     get_parser_unlighten,
-    get_parser_config,
+    get_parser_validate,
 )
 
 
@@ -52,6 +53,13 @@ class TestCommandLines(ExtTestCase):
         st = StringIO()
         with redirect_stdout(st):
             get_parser_config().print_help()
+        text = st.getvalue()
+        self.assertIn("mid", text)
+
+    def test_parser_validate(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            get_parser_validate().print_help()
         text = st.getvalue()
         self.assertIn("mid", text)
 

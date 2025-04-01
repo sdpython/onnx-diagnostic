@@ -34,6 +34,13 @@ class TestCommandLines(ExtTestCase):
         text = st.getvalue()
         self.assertIn("LlamaForCausalLM", text)
 
+    def test_parser_validate(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            main(["validate", "-t", "text-generation"])
+        text = st.getvalue()
+        self.assertIn("dynamic_shapes", text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -227,7 +227,7 @@ def _cmd_config(argv: List[Any]):
         print(f"task: {task_from_id(args.mid)}")
 
 
-def get_parser_inputs() -> ArgumentParser:
+def get_parser_validate() -> ArgumentParser:
     parser = ArgumentParser(
         prog="test",
         description=dedent(
@@ -235,14 +235,12 @@ def get_parser_inputs() -> ArgumentParser:
         Prints out dummy inputs for a particular task or a model id.
         """
         ),
-        epilog="If the model id is specified, one untrained "
-        "version of it is instantiated.",
+        epilog="If the model id is specified, one untrained version of it is instantiated.",
     )
     parser.add_argument(
         "-m",
         "--mid",
         type=str,
-        required=True,
         help="model id, usually <author>/<name>",
     )
     parser.add_argument(
@@ -274,6 +272,29 @@ def get_parser_inputs() -> ArgumentParser:
     return parser
 
 
+def _cmd_validate(argv: List[Any]):
+    from .helpers import string_type
+    from .torch_models.test_helper import get_inputs_for_task
+
+    parser = get_parser_validate()
+    args = parser.parse_args(argv[1:])
+    assert args.task or args.mid, "A model id or a task needs to be specified."
+    if not args.mid:
+        data = get_inputs_for_task(args.task)
+        if args.verbose:
+            print(f"task: {args.task}")
+        max_length = max(len(k) for k in data["inputs"]) + 1
+        print("-- inputs")
+        for k, v in data["inputs"].items():
+            print(f"  + {k.ljust(max_length)}: {string_type(v, with_shape=True)}")
+        print("-- dynamic_shapes")
+        for k, v in data["dynamic_shapes"].items():
+            vs = str(v).replace("<class 'onnx_diagnostic.torch_models.hghub.model_inputs.", "").replace("'>", "").replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>", "DYNAMIC").replace("_DimHint(type=<_DimHintType.AUTO: 3>", "AUTO")
+            print(f"  + {k.ljust(max_length)}: {vs}")
+
+    # validate_model(args.input, verbose=args.verbose, watch=set(args.names.split(",")))
+
+
 def get_main_parser() -> ArgumentParser:
     parser = ArgumentParser(
         prog="onnx_diagnostic",
@@ -289,13 +310,13 @@ def get_main_parser() -> ArgumentParser:
         lighten    - makes an onnx model lighter by removing the weights,
         unlighten  - restores an onnx model produces by the previous experiment
         print      - prints the model on standard output
-        test       - tests a model
+        validate   - validate a model
         """
         ),
     )
     parser.add_argument(
         "cmd",
-        choices=["config", "find", "lighten", "print", "unlighten", "test"],
+        choices=["config", "find", "lighten", "print", "unlighten", "validate"],
         help="Selects a command.",
     )
     return parser
@@ -308,7 +329,7 @@ def main(argv: Optional[List[Any]] = None):
         print=_cmd_print,
         find=_cmd_find,
         config=_cmd_config,
-        text=_cmd_test,
+        validate=_cmd_validate,
     )
 
     if argv is None:
@@ -328,6 +349,7 @@ def main(argv: Optional[List[Any]] = None):
                 print=get_parser_print,
                 find=get_parser_find,
                 config=get_parser_config,
+                validate=get_parser_validate,
             )
             cmd = argv[0]
             if cmd not in parsers:
