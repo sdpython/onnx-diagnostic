@@ -42,6 +42,7 @@ class TestTestHelper(ExtTestCase):
             verbose=10,
             exporter="export-nostrict",
             dump_folder="dump_test_validate_model_export",
+            patch=True,
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)

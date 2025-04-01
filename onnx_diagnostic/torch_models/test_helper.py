@@ -21,6 +21,9 @@ def empty(value: Any) -> bool:
 def _ds_clean(v):
     return (
         str(v)
+        .replace(",min=None", "")
+        .replace(",max=None", "")
+        .replace(",_factory=True", "")
         .replace("<class 'onnx_diagnostic.torch_models.hghub.model_inputs.", "")
         .replace("'>", "")
         .replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>)", "DYNAMIC")
