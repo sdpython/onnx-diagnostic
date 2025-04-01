@@ -233,6 +233,8 @@ def get_parser_validate() -> ArgumentParser:
         description=dedent(
             """
         Prints out dummy inputs for a particular task or a model id.
+        If both mid and task are empty, the command line displays the list
+        of supported tasks.
         """
         ),
         epilog="If the model id is specified, one untrained version of it is instantiated.",
@@ -264,6 +266,19 @@ def get_parser_validate() -> ArgumentParser:
         help="runs the model to check it runs",
     )
     parser.add_argument(
+        "-q",
+        "--quiet",
+        default=False,
+        action=BooleanOptionalAction,
+        help="catches exception, report them in the summary",
+    )
+    parser.add_argument(
+        "--trained",
+        default=False,
+        action=BooleanOptionalAction,
+        help="validate the trained model (requires downloading)",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         default=0,
@@ -274,12 +289,15 @@ def get_parser_validate() -> ArgumentParser:
 
 def _cmd_validate(argv: List[Any]):
     from .helpers import string_type
-    from .torch_models.test_helper import get_inputs_for_task
+    from .torch_models.test_helper import get_inputs_for_task, validate_model, _ds_clean
+    from .torch_models.hghub.model_inputs import get_get_inputs_function_for_tasks
 
     parser = get_parser_validate()
     args = parser.parse_args(argv[1:])
-    assert args.task or args.mid, "A model id or a task needs to be specified."
-    if not args.mid:
+    if not args.task and not args.mid:
+        print("-- list of supported tasks:")
+        print("\n".join(sorted(get_get_inputs_function_for_tasks())))
+    elif not args.mid:
         data = get_inputs_for_task(args.task)
         if args.verbose:
             print(f"task: {args.task}")
@@ -289,10 +307,20 @@ def _cmd_validate(argv: List[Any]):
             print(f"  + {k.ljust(max_length)}: {string_type(v, with_shape=True)}")
         print("-- dynamic_shapes")
         for k, v in data["dynamic_shapes"].items():
-            vs = str(v).replace("<class 'onnx_diagnostic.torch_models.hghub.model_inputs.", "").replace("'>", "").replace("_DimHint(type=<_DimHintType.DYNAMIC: 3>", "DYNAMIC").replace("_DimHint(type=<_DimHintType.AUTO: 3>", "AUTO")
-            print(f"  + {k.ljust(max_length)}: {vs}")
-
-    # validate_model(args.input, verbose=args.verbose, watch=set(args.names.split(",")))
+            print(f"  + {k.ljust(max_length)}: {_ds_clean(v)}")
+    else:
+        summary, _data = validate_model(
+            model_id=args.mid,
+            task=args.task,
+            do_run=args.run,
+            verbose=args.verbose,
+            quiet=args.quiet,
+            trained=args.trained,
+        )
+        print("")
+        print("-- summary")
+        for k, v in sorted(summary.items()):
+            print(f":{k},{v};")
 
 
 def get_main_parser() -> ArgumentParser:

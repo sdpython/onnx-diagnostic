@@ -37,9 +37,16 @@ class TestCommandLines(ExtTestCase):
     def test_parser_validate(self):
         st = StringIO()
         with redirect_stdout(st):
+            main(["validate"])
             main(["validate", "-t", "text-generation"])
         text = st.getvalue()
         self.assertIn("dynamic_shapes", text)
+        st = StringIO()
+        with redirect_stdout(st):
+            main(["validate"])
+            main(["validate", "-m", "arnir0/Tiny-LLM", "--run", "-v", "1"])
+        text = st.getvalue()
+        self.assertIn("model_clas", text)
 
 
 if __name__ == "__main__":

@@ -147,7 +147,7 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
     If the configuration is None, the function selects typical dimensions.
     """
     fcts = get_get_inputs_function_for_tasks()
-    assert task in fcts, f"Unsupported task {task!r}, supprted are {sorted(fcts)}"
+    assert task in fcts, f"Unsupported task {task!r}, supported are {sorted(fcts)}"
     if task == "text-generation":
         if config is not None:
             check_hasattr(
@@ -376,6 +376,7 @@ def get_untrained_model_with_inputs(
     res["configuration"] = config
     res["size"] = sizes[0]
     res["n_weights"] = sizes[1]
+    res["task"] = task
 
     update = {}
     for k, v in res.items():
