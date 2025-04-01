@@ -1,3 +1,4 @@
+accelerate # transformers/src/transformers/modeling_utils.py -> init_empty_weights missing if this package is not installed
 black
 diffusers>=0.30.0
 furo

@@ -86,13 +86,13 @@ def _cmd_line(script_name: str, **kwargs: Dict[str, Union[str, int, float]]) -> 
     return args
 
 
-def _extract_metrics(text: str) -> Dict[str, str]:
+def _extract_metrics(text: str) -> Dict[str, Union[str, int, float]]:
     reg = re.compile(":(.*?),(.*.?);")
     res = reg.findall(text)
     if len(res) == 0:
         return {}
     kw = dict(res)
-    new_kw = {}
+    new_kw: Dict[str, Any] = {}
     for k, w in kw.items():
         assert isinstance(k, str) and isinstance(
             w, str
@@ -159,7 +159,7 @@ def run_benchmark(
     summary: Optional[Callable] = None,
     timeout: int = 600,
     missing: Optional[Dict[str, Union[str, Callable]]] = None,
-) -> List[Dict[str, Union[str, int, float, Tuple[int, int]]]]:
+) -> List[Dict[str, Union[str, int, float]]]:
     """
     Runs a script multiple times and extract information from the output
     following the pattern ``:<metric>,<value>;``.
@@ -188,7 +188,7 @@ def run_benchmark(
     else:
         loop = configs
 
-    data: List[Dict[str, Union[str, int, float, Tuple[int, int]]]] = []
+    data: List[Dict[str, Union[str, int, float]]] = []
     for iter_loop, config in enumerate(loop):
         if iter_loop < start:
             continue
@@ -266,23 +266,32 @@ def run_benchmark(
         metrics.update(config)
         if filename_out and os.path.exists(filename_out):
             if "model_name" in metrics:
+                assert isinstance(
+                    metrics["model_name"], str
+                ), f"unexpected type {type(metrics['model_name'])}"
                 new_name = f"{filename_out}.{_clean_string(metrics['model_name'])}"
                 os.rename(filename_out, new_name)
                 filename_out = new_name
             metrics["file.stdout"] = filename_out
         if filename_err and os.path.exists(filename_err):
             if "model_name" in metrics:
+                assert isinstance(
+                    metrics["model_name"], str
+                ), f"unexpected type {type(metrics['model_name'])}"
                 new_name = f"{filename_err}.{_clean_string(metrics['model_name'])}"
                 os.rename(filename_err, new_name)
                 filename_err = new_name
             metrics["file.stderr"] = filename_err
         metrics["DATE"] = f"{datetime.now():%Y-%m-%d}"
-        metrics["ITER"] = iter_loop
+        metrics["ITER"] = str(iter_loop)
         metrics["TIME_ITER"] = time.perf_counter() - begin
         metrics["ERROR"] = _clean_string(serr)
         metrics["ERR_stdout"] = _clean_string(sout)
         if metrics["ERROR"]:
             metrics["ERR_std"] = metrics["ERROR"]
+            assert isinstance(
+                metrics["ERROR"], str
+            ), f"unexpected type {type(metrics['ERROR'])}"
             if "CUDA out of memory" in metrics["ERROR"]:
                 metrics["ERR_CUDA_OOM"] = 1
             if "Cannot access gated repo for url" in metrics["ERROR"]:
@@ -348,8 +357,8 @@ def make_configs(
     drop: Optional[Set[str]] = None,
     replace: Optional[Dict[str, str]] = None,
     last: Optional[List[str]] = None,
-    filter_function: Optional[Callable[Dict[str, Any], bool]] = None,
-) -> List[Dict[str, Any]]:
+    filter_function: Optional[Callable[[Dict[str, Union[str, int, float]]], bool]] = None,
+) -> List[Dict[str, Union[str, int, float]]]:
     """
     Creates all the configurations based on the command line arguments.
 
@@ -383,14 +392,14 @@ def make_configs(
         for k in last:
             if k not in kwargs_:
                 continue
-            v = kwargs[k]
+            v = kwargs[k]  # type: ignore
             if isinstance(v, str):
                 args.append([(k, s) for s in v.split(",")])
             else:
                 args.append([(k, v)])
 
     configs = list(itertools.product(*args))
-    confs = [dict(c) for c in configs]
+    confs: List[Dict[str, Union[int, float, str]]] = [dict(c) for c in configs]
     if filter_function:
         confs = [c for c in confs if filter_function(c)]
     return confs
