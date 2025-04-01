@@ -227,6 +227,53 @@ def _cmd_config(argv: List[Any]):
         print(f"task: {task_from_id(args.mid)}")
 
 
+def get_parser_inputs() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="test",
+        description=dedent(
+            """
+        Prints out dummy inputs for a particular task or a model id.
+        """
+        ),
+        epilog="If the model id is specified, one untrained "
+        "version of it is instantiated.",
+    )
+    parser.add_argument(
+        "-m",
+        "--mid",
+        type=str,
+        required=True,
+        help="model id, usually <author>/<name>",
+    )
+    parser.add_argument(
+        "-t",
+        "--task",
+        default=None,
+        help="force the task to use",
+    )
+    parser.add_argument(
+        "-e",
+        "--export",
+        default=False,
+        action=BooleanOptionalAction,
+        help="runs the model to check it runs",
+    )
+    parser.add_argument(
+        "-r",
+        "--run",
+        default=False,
+        action=BooleanOptionalAction,
+        help="runs the model to check it runs",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        default=0,
+        help="verbosity",
+    )
+    return parser
+
+
 def get_main_parser() -> ArgumentParser:
     parser = ArgumentParser(
         prog="onnx_diagnostic",
@@ -237,17 +284,18 @@ def get_main_parser() -> ArgumentParser:
         Type 'python -m onnx_diagnostic <cmd> --help'
         to get help for a specific command.
 
+        config     - prints a configuration for a model id
+        find       - find node consuming or producing a result
         lighten    - makes an onnx model lighter by removing the weights,
         unlighten  - restores an onnx model produces by the previous experiment
         print      - prints the model on standard output
-        find       - find node consuming or producing a result
-        config     - prints a configuration for a model id
+        test       - tests a model
         """
         ),
     )
     parser.add_argument(
         "cmd",
-        choices=["lighten", "unlighten", "run", "print", "find", "config"],
+        choices=["config", "find", "lighten", "print", "unlighten", "test"],
         help="Selects a command.",
     )
     return parser
@@ -260,6 +308,7 @@ def main(argv: Optional[List[Any]] = None):
         print=_cmd_print,
         find=_cmd_find,
         config=_cmd_config,
+        text=_cmd_test,
     )
 
     if argv is None:
