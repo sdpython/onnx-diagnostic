@@ -437,7 +437,7 @@ class ModelInputs:
 
     def validate_inputs_for_export(
         self, dynamic_shapes: Optional[DYNAMIC_SHAPES] = None
-    ) -> List[List[str]]:
+    ) -> List[List[Union[int,str]]]:
         """
         Validates the inputs the class contains for the given dynamic shapes.
         If not specified, the dynamic_shapes are guessed.
@@ -447,7 +447,7 @@ class ModelInputs:
         """
         if dynamic_shapes is None:
             if len(self.inputs) == 1:
-                return True
+                return []
             dyn_shapes = self.guess_dynamic_shapes()
         return [CoupleInputsDynamicShapes(*i, dyn_shapes).invalid_paths() for i in self.inputs]
 
