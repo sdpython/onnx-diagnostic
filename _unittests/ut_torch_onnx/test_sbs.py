@@ -52,7 +52,6 @@ class TestSideBySide(ExtTestCase):
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
-    @unittest.skipIf(to_onnx is None, "to_onnx not installed")
     def test_ep_onnx_sync_a(self):
         import torch
 
@@ -69,9 +68,10 @@ class TestSideBySide(ExtTestCase):
         ep = torch.export.export(
             Model(), (x,), dynamic_shapes=({0: torch.export.Dim("batch")},)
         )
-        onx = torch.onnx.export(
-            Model(), (x,), dynamic_shapes=({0: torch.export.Dim("batch")},), dynamo=True
-        ).model_proto
+        epo = torch.onnx.export(
+            ep, (x,), dynamic_shapes=({0: torch.export.Dim("batch")},), dynamo=True
+        )
+        onx = epo.model_proto
         results = list(
             run_aligned(
                 ep,
