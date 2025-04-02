@@ -1,5 +1,6 @@
+import inspect
 import os
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import time
 import torch
 from ..helpers import max_diff, string_type, string_diff
@@ -45,6 +46,69 @@ def get_inputs_for_task(task: str, config: Optional[Any] = None) -> Dict[str, An
     return f(model=None, config=config, **kwargs)
 
 
+def split_args_kwargs(inputs: Any) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    """Splits into args, kwargs."""
+    if isinstance(inputs, dict):
+        return (), inputs
+    if isinstance(inputs, tuple) and len(inputs) == 2 and isinstance(inputs[1], dict):
+        return inputs
+    assert isinstance(inputs, tuple), f"Unexpected inputs {string_type(inputs)}"
+    return inputs, {}
+
+
+def make_inputs(
+    args: Optional[Tuple[Any, ...]], kwargs: Optional[Dict[str, Any]] = None
+) -> Any:
+    """Returns either args, kwargs or both depending on which ones are empty."""
+    assert args or kwargs, "No input was given."
+    if not args:
+        return kwargs
+    if not kwargs:
+        return args
+    return args, kwargs
+
+
+def filter_inputs(
+    inputs: Any,
+    drop_names: List[str],
+    model: Optional[Union[torch.nn.Module, List[str]]] = None,
+    dynamic_shapes: Optional[Any] = None,
+):
+    """
+    Drops some inputs from the given inputs.
+    It updates the dynamic shapes as well.
+    """
+    args, kwargs = split_args_kwargs(inputs)
+    set_drop_names = set(drop_names)
+    kwargs = {k: v for k, v in kwargs.items() if k not in set_drop_names}
+    dyn = (
+        {k: v for k, v in dynamic_shapes.items() if k not in set_drop_names}
+        if dynamic_shapes and isinstance(dynamic_shapes, dict)
+        else dynamic_shapes
+    )
+    if not args or all(i in kwargs for i in set_drop_names):
+        return make_inputs(args, kwargs), dyn
+    assert model, (
+        f"we need the model to get the parameter name but model is None, "
+        f"input_names={drop_names} and args={string_type(args)}"
+    )
+    pnames = (
+        list(inspect.signature(model.forward).parameters)
+        if isinstance(model, torch.nn.Module)
+        else model
+    )
+    new_args = []
+    new_ds = []
+    for i, a in enumerate(args):
+        if isinstance(dynamic_shapes, tuple):
+            new_ds.append(None if pnames[i] in set_drop_names else dynamic_shapes[i])
+        new_args.append(None if pnames[i] in set_drop_names else a)
+    new_inputs = make_inputs(tuple(new_args), kwargs)
+    if new_ds:
+        return new_inputs, tuple(new_ds)
+    return new_inputs, dyn
+
+
 def validate_model(
     model_id: str,
     task: Optional[str] = None,
@@ -59,6 +123,7 @@ def validate_model(
     quiet: bool = False,
     patch: bool = False,
     dump_folder: Optional[str] = None,
+    drop_inputs: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -80,6 +145,7 @@ def validate_model(
     :param quiet: if quiet, catches exception if any issue
     :param patch: applies patches before exporting
     :param dump_folder: dumps everything in a subfolder of this one
+    :param drop_inputs: drops this list of inputs (given their names)
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -111,6 +177,27 @@ def validate_model(
             return summary, {}
     else:
         data = get_untrained_model_with_inputs(model_id, verbose=verbose, task=task)
+
+    if drop_inputs:
+        if verbose:
+            print(f"[validate_model] drop inputs {drop_inputs!r}")
+            print(f"[validate_model] current inputs: {string_type(data["inputs"])}")
+            print(
+                f"[validate_model] current dynnamic_shapes: "
+                f"{_ds_clean(data["dynamic_shapes"])}"
+            )
+        data["inputs"], data["dynamic_shapes"] = filter_inputs(
+            data["inputs"],
+            drop_names=drop_inputs,
+            model=data["model"],
+            dynamic_shapes=data["dynamic_shapes"],
+        )
+        if verbose:
+            print(f"[validate_model] new inputs: {string_type(data["inputs"])}")
+            print(
+                f"[validate_model] new dynnamic_shapes: "
+                f"{_ds_clean(data["dynamic_shapes"])}"
+            )
 
     if not empty(dtype):
         if isinstance(dtype, str):
@@ -336,18 +423,6 @@ def call_exporter(
     raise NotImplementedError(
         f"export with {exporter!r} and optimization={optimization!r} not implemented yet"
     )
-
-
-def split_args_kwargs(inputs: Any) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-    """
-    Splits into args, kwargs.
-    """
-    if isinstance(inputs, dict):
-        return (), inputs
-    if isinstance(inputs, tuple) and len(inputs) == 2 and isinstance(inputs[1], dict):
-        return inputs
-    assert isinstance(inputs, tuple), f"Unexpected inputs {string_type(inputs)}"
-    return inputs, {}
 
 
 def call_torch_export_export(
