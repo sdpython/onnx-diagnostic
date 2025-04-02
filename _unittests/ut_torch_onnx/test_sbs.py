@@ -1,5 +1,10 @@
 import unittest
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_warnings
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    hide_stdout,
+    ignore_warnings,
+    ignore_errors,
+)
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 from onnx_diagnostic.torch_onnx.sbs import run_aligned
 
@@ -13,6 +18,7 @@ class TestSideBySide(ExtTestCase):
 
     @hide_stdout()
     @unittest.skipIf(to_onnx is None, "to_onnx not installed")
+    @ignore_errors(OSError, "connectivity issues")
     @ignore_warnings((UserWarning,))
     def test_ep_onnx_sync_exp(self):
         import torch
