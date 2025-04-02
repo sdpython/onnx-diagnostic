@@ -181,7 +181,7 @@ def validate_model(
     if drop_inputs:
         if verbose:
             print(f"[validate_model] drop inputs {drop_inputs!r}")
-            print(f"[validate_model] current inputs: {string_type(data["inputs"])}")
+            print(f"[validate_model] current inputs: {string_type(data['inputs'])}")
             print(
                 f"[validate_model] current dynnamic_shapes: "
                 f"{_ds_clean(data["dynamic_shapes"])}"

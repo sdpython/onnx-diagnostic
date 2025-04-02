@@ -318,11 +318,11 @@ def get_untrained_model_with_inputs(
 
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM", verbose=1)
 
-        print("-- model size:", data["size"])
-        print("-- number of parameters:", data["n_weights"])
-        print("-- inputs:", string_type(data["inputs"], with_shape=True))
-        print("-- dynamic shapes:", pprint.pformat(data["dynamic_shapes"]))
-        print("-- configuration:", pprint.pformat(data["configuration"]))
+        print("-- model size:", data['size'])
+        print("-- number of parameters:", data['n_weights'])
+        print("-- inputs:", string_type(data['inputs'], with_shape=True))
+        print("-- dynamic shapes:", pprint.pformat(data['dynamic_shapes']))
+        print("-- configuration:", pprint.pformat(data['configuration']))
     """
     if verbose:
         print(f"[get_untrained_model_with_inputs] model_id={model_id!r}")
