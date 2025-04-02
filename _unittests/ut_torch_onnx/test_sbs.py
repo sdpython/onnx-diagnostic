@@ -18,7 +18,7 @@ class TestSideBySide(ExtTestCase):
 
     @hide_stdout()
     @unittest.skipIf(to_onnx is None, "to_onnx not installed")
-    @ignore_errors(OSError, "connectivity issues")
+    @ignore_errors(OSError)  # connectivity issues
     @ignore_warnings((UserWarning,))
     def test_ep_onnx_sync_exp(self):
         import torch
