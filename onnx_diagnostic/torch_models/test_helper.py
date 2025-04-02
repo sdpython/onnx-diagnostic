@@ -184,7 +184,7 @@ def validate_model(
             print(f"[validate_model] current inputs: {string_type(data['inputs'])}")
             print(
                 f"[validate_model] current dynnamic_shapes: "
-                f"{_ds_clean(data["dynamic_shapes"])}"
+                f"{_ds_clean(data['dynamic_shapes'])}"
             )
         data["inputs"], data["dynamic_shapes"] = filter_inputs(
             data["inputs"],
