@@ -103,7 +103,7 @@ else:
             )
             print(string_type(past_key_values, with_shape=True))
         """
-        cache = transformers.cache_utils.DynamicCache(len(key_value_pairs))
+        cache = transformers.cache_utils.DynamicCache(len(key_value_pairs))  # type: ignore
         for i, (key, value) in enumerate(key_value_pairs):
             cache.update(key, value, i)
         return cache

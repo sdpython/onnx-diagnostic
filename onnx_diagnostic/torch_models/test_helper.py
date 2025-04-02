@@ -109,6 +109,36 @@ def filter_inputs(
     return new_inputs, dyn
 
 
+def _make_folder_name(
+    model_id: str,
+    exporter: Optional[str],
+    optimization: Optional[str] = None,
+    dtype: Optional[Union[str, torch.dtype]] = None,
+    device: Optional[Union[str, torch.device]] = None,
+) -> str:
+    "Creates a filename unique based on the given options."
+    els = [model_id.replace("/", "_")]
+    if exporter:
+        els.append(exporter)
+    if optimization:
+        els.append(optimization)
+    if dtype is not None and dtype:
+        stype = dtype if isinstance(dtype, str) else str(dtype)
+        stype = stype.replace("float", "f").replace("uint", "u").replace("int", "i")
+        els.append(stype)
+    if device is not None and device:
+        sdev = device if isinstance(device, str) else str(device)
+        sdev = sdev.lower()
+        if "cpu" in sdev:
+            sdev = "cpu"
+        elif "cuda" in sdev:
+            sdev = "cuda"
+        else:
+            raise AssertionError(f"unexpected value for device={device}, sdev={sdev!r}")
+        els.append(sdev)
+    return "-".join(els)
+
+
 def validate_model(
     model_id: str,
     task: Optional[str] = None,
@@ -152,7 +182,9 @@ def validate_model(
     assert not trained, f"trained={trained} not supported yet"
     summary: Dict[str, Union[int, float, str]] = {}
     if dump_folder:
-        folder_name = f"{model_id.replace('/','-')}-{exporter}-{optimization or ''}"
+        folder_name = _make_folder_name(
+            model_id, exporter, optimization, dtype=dtype, device=device
+        )
         dump_folder = os.path.join(dump_folder, folder_name)
         if not os.path.exists(dump_folder):
             os.makedirs(dump_folder)
@@ -353,7 +385,7 @@ def validate_model(
             if verbose:
                 print(f"[validate_model] dumps onnx program in {dump_folder!r}...")
             onnx_file_name = os.path.join(dump_folder, f"{folder_name}.onnx")
-            epo.save(onnx_file_name)
+            epo.save(onnx_file_name, external_data=True)
             if verbose:
                 print("[validate_model] done (dump onnx)")
         if verbose:

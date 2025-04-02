@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 import torch
 import transformers
-import transformers.modeling_attn_mask_utils
+from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.cache_utils import StaticCache, Cache, DynamicCache
 from ...helpers.torch_test_helper import is_torchdynamo_exporting
 
@@ -54,7 +54,7 @@ if sys.version_info[:2] <= (3, 11):
         """
 
         _PATCHES_ = ["_make_causal_mask"]
-        _PATCHED_CLASS_ = transformers.modeling_attn_mask_utils.AttentionMaskConverter
+        _PATCHED_CLASS_ = AttentionMaskConverter
 
         @staticmethod
         def _make_causal_mask(
@@ -79,7 +79,7 @@ else:
         """
 
         _PATCHES_ = ["_make_causal_mask"]
-        _PATCHED_CLASS_ = transformers.modeling_attn_mask_utils.AttentionMaskConverter
+        _PATCHED_CLASS_ = AttentionMaskConverter
 
         @staticmethod
         def _make_causal_mask(

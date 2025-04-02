@@ -1,5 +1,5 @@
 import functools
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 import transformers
 from huggingface_hub import HfApi, model_info
 from . import hub_data_cached_configs
@@ -38,7 +38,7 @@ def get_cached_configuration(name: str) -> Optional[transformers.PretrainedConfi
 
 def get_pretrained_config(
     model_id: str, trust_remote_code: bool = True, use_cached: bool = True
-) -> str:
+) -> Any:
     """
     Returns the config for a model_id.
 
@@ -49,6 +49,7 @@ def get_pretrained_config(
         accessing the network, if available, it is returned by
         :func:`get_cached_configuration`, the cached list is mostly for
         unit tests
+    :return: a configuration
     """
     if use_cached:
         conf = get_cached_configuration(model_id)
