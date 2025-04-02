@@ -1,8 +1,11 @@
+import inspect
 import os
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import time
 import torch
 from ..helpers import max_diff, string_type, string_diff
+from ..helpers.helper import flatten_object
+from ..helpers.ort_session import make_feeds
 from ..helpers.torch_test_helper import to_any, torch_deepcopy
 from ..torch_export_patches import bypass_export_some_errors
 from .hghub import get_untrained_model_with_inputs
@@ -43,6 +46,69 @@ def get_inputs_for_task(task: str, config: Optional[Any] = None) -> Dict[str, An
     return f(model=None, config=config, **kwargs)
 
 
+def split_args_kwargs(inputs: Any) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    """Splits into args, kwargs."""
+    if isinstance(inputs, dict):
+        return (), inputs
+    if isinstance(inputs, tuple) and len(inputs) == 2 and isinstance(inputs[1], dict):
+        return inputs
+    assert isinstance(inputs, tuple), f"Unexpected inputs {string_type(inputs)}"
+    return inputs, {}
+
+
+def make_inputs(
+    args: Optional[Tuple[Any, ...]], kwargs: Optional[Dict[str, Any]] = None
+) -> Any:
+    """Returns either args, kwargs or both depending on which ones are empty."""
+    assert args or kwargs, "No input was given."
+    if not args:
+        return kwargs
+    if not kwargs:
+        return args
+    return args, kwargs
+
+
+def filter_inputs(
+    inputs: Any,
+    drop_names: List[str],
+    model: Optional[Union[torch.nn.Module, List[str]]] = None,
+    dynamic_shapes: Optional[Any] = None,
+):
+    """
+    Drops some inputs from the given inputs.
+    It updates the dynamic shapes as well.
+    """
+    args, kwargs = split_args_kwargs(inputs)
+    set_drop_names = set(drop_names)
+    kwargs = {k: v for k, v in kwargs.items() if k not in set_drop_names}
+    dyn = (
+        {k: v for k, v in dynamic_shapes.items() if k not in set_drop_names}
+        if dynamic_shapes and isinstance(dynamic_shapes, dict)
+        else dynamic_shapes
+    )
+    if not args or all(i in kwargs for i in set_drop_names):
+        return make_inputs(args, kwargs), dyn
+    assert model, (
+        f"we need the model to get the parameter name but model is None, "
+        f"input_names={drop_names} and args={string_type(args)}"
+    )
+    pnames = (
+        list(inspect.signature(model.forward).parameters)
+        if isinstance(model, torch.nn.Module)
+        else model
+    )
+    new_args = []
+    new_ds = []
+    for i, a in enumerate(args):
+        if isinstance(dynamic_shapes, tuple):
+            new_ds.append(None if pnames[i] in set_drop_names else dynamic_shapes[i])
+        new_args.append(None if pnames[i] in set_drop_names else a)
+    new_inputs = make_inputs(tuple(new_args), kwargs)
+    if new_ds:
+        return new_inputs, tuple(new_ds)
+    return new_inputs, dyn
+
+
 def validate_model(
     model_id: str,
     task: Optional[str] = None,
@@ -57,6 +123,7 @@ def validate_model(
     quiet: bool = False,
     patch: bool = False,
     dump_folder: Optional[str] = None,
+    drop_inputs: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -78,6 +145,7 @@ def validate_model(
     :param quiet: if quiet, catches exception if any issue
     :param patch: applies patches before exporting
     :param dump_folder: dumps everything in a subfolder of this one
+    :param drop_inputs: drops this list of inputs (given their names)
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -109,6 +177,27 @@ def validate_model(
             return summary, {}
     else:
         data = get_untrained_model_with_inputs(model_id, verbose=verbose, task=task)
+
+    if drop_inputs:
+        if verbose:
+            print(f"[validate_model] drop inputs {drop_inputs!r}")
+            print(f"[validate_model] current inputs: {string_type(data['inputs'])}")
+            print(
+                f"[validate_model] current dynnamic_shapes: "
+                f"{_ds_clean(data['dynamic_shapes'])}"
+            )
+        data["inputs"], data["dynamic_shapes"] = filter_inputs(
+            data["inputs"],
+            drop_names=drop_inputs,
+            model=data["model"],
+            dynamic_shapes=data["dynamic_shapes"],
+        )
+        if verbose:
+            print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
+            print(
+                f"[validate_model] new dynnamic_shapes: "
+                f"{_ds_clean(data['dynamic_shapes'])}"
+            )
 
     if not empty(dtype):
         if isinstance(dtype, str):
@@ -259,6 +348,14 @@ def validate_model(
                 f.write(str(ep.graph))
             if verbose:
                 print("[validate_model] done (dump ep)")
+        if "onnx_program" in data:
+            epo = data["onnx_program"]
+            if verbose:
+                print(f"[validate_model] dumps onnx program in {dump_folder!r}...")
+            onnx_file_name = os.path.join(dump_folder, f"{folder_name}.onnx")
+            epo.save(onnx_file_name)
+            if verbose:
+                print("[validate_model] done (dump onnx)")
         if verbose:
             print(f"[validate_model] dumps statistics in {dump_folder!r}...")
         with open(os.path.join(dump_folder, f"{folder_name}.stats"), "w") as f:
@@ -266,6 +363,15 @@ def validate_model(
                 f.write(f":{k}:{v};\n")
         if verbose:
             print("[validate_model] done (dump)")
+
+    if exporter and exporter.startswith("onnx-") and do_run:
+        summary_valid, data = validate_onnx_model(
+            data=data,
+            quiet=quiet,
+            verbose=verbose,
+            optimization=optimization,
+        )
+        summary.update(summary_valid)
 
     if verbose:
         print("[validate_model] done (final)")
@@ -288,7 +394,6 @@ def call_exporter(
     :param exporter: exporter to call
     :param quiet: catch exception or not
     :param verbose: verbosity
-    :param patch: apply patches
     :param optimization: optimization to do
     :param do_run: runs and compute discrepancies
     :return: two dictionaries, one with some metrics,
@@ -305,21 +410,19 @@ def call_exporter(
             do_run=do_run,
         )
         return summary, data
+    if exporter.startswith("onnx-"):
+        # torch export
+        summary, data = call_torch_export_onnx(
+            exporter=exporter,
+            data=data,
+            quiet=quiet,
+            verbose=verbose,
+            optimization=optimization,
+        )
+        return summary, data
     raise NotImplementedError(
         f"export with {exporter!r} and optimization={optimization!r} not implemented yet"
     )
-
-
-def split_args_kwargs(inputs: Any) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-    """
-    Splits into args, kwargs.
-    """
-    if isinstance(inputs, dict):
-        return (), inputs
-    if isinstance(inputs, tuple) and len(inputs) == 2 and isinstance(inputs[1], dict):
-        return inputs
-    assert isinstance(inputs, tuple), f"Unexpected inputs {string_type(inputs)}"
-    return inputs, {}
 
 
 def call_torch_export_export(
@@ -331,19 +434,23 @@ def call_torch_export_export(
     do_run: bool = False,
 ):
     """
-    Calls an exporter on a model;
+    Exports a model with :func:`torch.export.export`.
     If a patch must be applied, it should be before this functions.
 
-    :param data: dictionary with all the necessary inputs
+    :param data: dictionary with all the necessary inputs, the dictionary must
+        contains keys ``model`` and ``inputs_export``
     :param exporter: exporter to call
     :param quiet: catch exception or not
     :param verbose: verbosity
-    :param patch: apply patches
     :param optimization: optimization to do
     :param do_run: runs and compute discrepancies
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
+    assert exporter in {
+        "export-strict",
+        "export-nostrict",
+    }, f"Unexpected value for exporter={exporter!r}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
     summary: Dict[str, Union[str, int, float]] = {}
@@ -355,8 +462,8 @@ def call_torch_export_export(
             f"[call_torch_export_export] exporter={exporter!r}, "
             f"strict={strict}, optimization={optimization!r}"
         )
-        print(f"[call_torch_export_export] args={string_type(args)}")
-        print(f"[call_torch_export_export] kwargs={string_type(kwargs)}")
+        print(f"[call_torch_export_export] args={string_type(args, with_shape=True)}")
+        print(f"[call_torch_export_export] kwargs={string_type(kwargs, with_shape=True)}")
         print(f"[call_torch_export_export] dynamic_shapes={_ds_clean(ds)}")
         print("[call_torch_export_export] export...")
     summary["export_exporter"] = exporter
@@ -430,4 +537,206 @@ def call_torch_export_export(
             f"before: {hash_inputs}\n"
             f" after: {string_type(data['inputs_export'], with_shape=True)}"
         )
+    return summary, data
+
+
+def call_torch_export_onnx(
+    data: Dict[str, Any],
+    exporter: str,
+    quiet: bool = False,
+    verbose: int = 0,
+    optimization: Optional[str] = None,
+):
+    """
+    Exports a model into onnx.
+    If a patch must be applied, it should be before this functions.
+
+    :param data: dictionary with all the necessary inputs, the dictionary must
+        contains keys ``model`` and ``inputs_export``
+    :param exporter: exporter to call
+    :param quiet: catch exception or not
+    :param verbose: verbosity
+    :param optimization: optimization to do
+    :return: two dictionaries, one with some metrics,
+        another one with whatever the function produces
+    """
+    assert optimization in {
+        "",
+        "ir",
+        None,
+    }, f"unexpected value for optimization={optimization}"
+    assert exporter in {
+        "onnx-dynamo",
+        "onnx-script",
+    }, f"Unexpected value for exporter={exporter!r}"
+    assert "model" in data, f"model is missing from data: {sorted(data)}"
+    assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
+    summary: Dict[str, Union[str, int, float]] = {}
+    dynamo = "nostrict" not in exporter
+    args, kwargs = split_args_kwargs(data["inputs_export"])
+    ds = data.get("dynamic_shapes", None)
+    if verbose:
+        print(
+            f"[call_torch_export_onnx] exporter={exporter!r}, "
+            f"optimization={optimization!r}"
+        )
+        print(f"[call_torch_export_onnx] args={string_type(args, with_shape=True)}")
+        print(f"[call_torch_export_onnx] kwargs={string_type(kwargs, with_shape=True)}")
+        print(f"[call_torch_export_onnx] dynamic_shapes={_ds_clean(ds)}")
+        print("[call_torch_export_onnx] export...")
+    summary["export_exporter"] = exporter
+    summary["export_optimization"] = optimization or ""
+    summary["export_dynamo"] = dynamo
+    summary["export_args"] = string_type(args, with_shape=True)
+    summary["export_kwargs"] = string_type(kwargs, with_shape=True)
+
+    begin = time.perf_counter()
+    if quiet:
+        try:
+            epo = torch.onnx.export(
+                data["model"],
+                args,
+                kwargs=kwargs,
+                dynamic_shapes=ds,
+                dynamo=dynamo,
+            )
+        except Exception as e:
+            summary["ERR_export_export"] = str(e)
+            data["ERR_export_export"] = e
+            summary["time_export_export"] = time.perf_counter() - begin
+            return summary, data
+    else:
+        epo = torch.onnx.export(
+            data["model"],
+            args,
+            kwargs=kwargs,
+            dynamic_shapes=ds,
+            dynamo=dynamo,
+        )
+
+    summary["time_export_export"] = time.perf_counter() - begin
+    assert epo is not None, "no onnx export was found"
+    if verbose:
+        print("[call_torch_export_onnx] done (export)")
+    data["onnx_program"] = epo
+    if verbose > 1:
+        print("[call_torch_export_onnx] -- ONNXProgram")
+        print(epo)
+        print("[call_torch_export_onnx] -- End of ONNXProgram")
+
+    begin = time.perf_counter()
+    if optimization == "ir":
+        if verbose:
+            print(f"[call_torch_export_onnx] starts optimization={optimization!r}...")
+        if quiet:
+            try:
+                epo.optimize()
+            except Exception as e:
+                summary["ERR_export_optimize_ir"] = str(e)
+                data["ERR_export_optimize_ir"] = e
+                summary["time_export_optimize_ir"] = time.perf_counter() - begin
+                return summary, data
+        else:
+            epo.optimize()
+        summary["time_export_optimize_ir"] = time.perf_counter() - begin
+        if verbose:
+            print("[call_torch_export_onnx] done (optimization)")
+
+    return summary, data
+
+
+def validate_onnx_model(
+    data: Dict[str, Any],
+    quiet: bool = False,
+    verbose: int = 0,
+    optimization: Optional[str] = None,
+):
+    """
+    Verifies that an onnx model produces the same
+    expected outputs.
+
+    :param data: dictionary with all the necessary inputs, the dictionary must
+        contains keys ``model`` and ``inputs_export``
+    :param quiet: catch exception or not
+    :param verbose: verbosity
+    :param optimization: optimization to do
+    :return: two dictionaries, one with some metrics,
+        another one with whatever the function produces
+    """
+    import onnxruntime
+
+    summary = {}
+    flat_inputs = flatten_object(data["inputs"], drop_keys=True)
+    d = flat_inputs[0].get_device()
+    providers = (
+        ["CPUExecutionProvider"]
+        if d < 0
+        else ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    )
+    if "onnx_file_name" in data:
+        source = data["onnx_file_name"]
+        summary["onnx_filename"] = source
+        summary["onnx_size"] = os.stats(source).st_size
+    else:
+        assert (
+            "onnx_program" in data
+        ), f"onnx_program is missing from data which has {sorted(data)}"
+        source = data["onnx_program"].model_proto.SerializeToString()
+        assert len(source) < 2**31, f"The model is highger than 2Gb: {len(source) / 2**30} Gb"
+        summary["onnx_size"] = len(source)
+    if verbose:
+        print(f"[validate_onnx_model] verify onnx model with providers {providers}...")
+
+    begin = time.perf_counter()
+    if quiet:
+        try:
+            sess = onnxruntime.InferenceSession(source, providers=providers)
+        except Exception as e:
+            summary["ERR_onnx_ort_create"] = str(e)
+            data["ERR_onnx_ort_create"] = e
+            summary["time_onnx_ort_create"] = time.perf_counter() - begin
+            return summary, data
+    else:
+        sess = onnxruntime.InferenceSession(source, providers=providers)
+
+    summary["time_onnx_ort_create"] = time.perf_counter() - begin
+    data["onnx_ort_sess"] = sess
+    if verbose:
+        print("[validate_onnx_model] done (ort_session)")
+
+    # make_feeds
+    if verbose:
+        print("[validate_onnx_model] make_feeds...")
+        print(f"[validate_onnx_model] inputs={string_type(data['inputs'], with_shape=True)}")
+    feeds = make_feeds([i.name for i in sess.get_inputs()], data["inputs"], use_numpy=True)
+    if verbose:
+        print(f"[validate_onnx_model] ort inputs={string_type(feeds, with_shape=True)}")
+    summary["onnx_ort_inputs"] = string_type(feeds, with_shape=True)
+    if verbose:
+        print("[validate_onnx_model] done (make_feeds)")
+
+    # run ort
+    if verbose:
+        print("[validate_onnx_model] run session...")
+    begin = time.perf_counter()
+    if quiet:
+        try:
+            got = sess.run(None, feeds)
+        except Exception as e:
+            summary["ERR_onnx_ort_run"] = str(e)
+            data["ERR_onnx_ort_run"] = e
+            summary["time_onnx_ort_run"] = time.perf_counter() - begin
+            return summary, data
+    else:
+        got = sess.run(None, feeds)
+    if verbose:
+        print("[validate_onnx_model] done (run)")
+        print(f"[validate_onnx_model] got={string_type(got, with_shape=True)}")
+
+    # compute discrepancies
+    disc = max_diff(data["expected"], got, flatten=True)
+    if verbose:
+        print(f"[validate_onnx_model] discrepancies={string_diff(disc)}")
+    for k, v in disc.items():
+        summary[f"disc_onnx_ort_run_{k}"] = v
     return summary, data

@@ -272,7 +272,7 @@ def string_type(
         return "SymFloat"
     # Tensors
     if isinstance(obj, torch._subclasses.fake_tensor.FakeTensor):
-        from .helper.onnx_helper import torch_dtype_to_onnx_dtype
+        from .onnx_helper import torch_dtype_to_onnx_dtype
 
         i = torch_dtype_to_onnx_dtype(obj.dtype)
         prefix = ("G" if obj.get_device() >= 0 else "C") if with_device else ""

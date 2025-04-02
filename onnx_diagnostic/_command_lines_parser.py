@@ -276,6 +276,11 @@ def get_parser_validate() -> ArgumentParser:
         help="if not empty, a folder is created to dumps statistics, "
         "exported program, onnx...",
     )
+    parser.add_argument(
+        "--drop",
+        help="drops the following inputs names, it should be a list "
+        "with comma separated values",
+    )
     parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
     parser.add_argument("--dtype", help="changes dtype if necessary")
     parser.add_argument("--device", help="changes the device if necessary")
@@ -317,6 +322,7 @@ def _cmd_validate(argv: List[Any]):
             optimization=args.opt,
             exporter=args.export,
             dump_folder=args.dump_folder,
+            drop_inputs=None if not args.drop else args.drop.split(","),
         )
         print("")
         print("-- summary --")

@@ -84,3 +84,19 @@ the same model.
     from onnx_diagnostic._command_lines_parser import main
 
     main("validate -m arnir0/Tiny-LLM --run -v 1 --export export-nostrict -o dump_models --patch".split())
+
+Validate ONNX discrepancies
++++++++++++++++++++++++++++
+
+Let's export with ONNX this time and checks for discrepancies.
+
+.. code-block::
+
+    python -m onnx_diagnostic validate -m arnir0/Tiny-LLM --run -v 1 --export onnx-dynamo -o dump_models --patch --opt ir
+
+.. runpython::
+
+    from onnx_diagnostic._command_lines_parser import main
+
+    main("validate -m arnir0/Tiny-LLM --run -v 1 --export onnx-dynamo -o dump_models --patch --opt ir".split())
+
