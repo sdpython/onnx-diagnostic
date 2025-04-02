@@ -111,13 +111,15 @@ def filter_inputs(
 
 def _make_folder_name(
     model_id: str,
-    exporter: str,
+    exporter: Optional[str],
     optimization: Optional[str] = None,
     dtype: Optional[Union[str, torch.dtype]] = None,
     device: Optional[Union[str, torch.device]] = None,
 ) -> str:
     "Creates a filename unique based on the given options."
-    els = [model_id.replace("/", "_"), exporter]
+    els = [model_id.replace("/", "_")]
+    if exporter:
+        els.append(exporter)
     if optimization:
         els.append(optimization)
     if dtype is not None and dtype:
