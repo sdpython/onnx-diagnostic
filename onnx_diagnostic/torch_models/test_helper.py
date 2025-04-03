@@ -276,9 +276,7 @@ def validate_model(
         )
         if verbose:
             print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
-            print(
-                f"[validate_model] new dynamic_hapes: {_ds_clean(data['dynamic_shapes'])}"
-            )
+            print(f"[validate_model] new dynamic_hapes: {_ds_clean(data['dynamic_shapes'])}")
 
     if not empty(dtype):
         if isinstance(dtype, str):

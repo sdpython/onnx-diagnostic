@@ -71,7 +71,7 @@ class ModelInputs:
         ds = mi.guess_dynamic_shapes()
         pprint.pprint(ds)
 
-    **and and kwargs**
+    **args and kwargs**
 
     .. runpython::
         :showcode:
@@ -449,7 +449,10 @@ class ModelInputs:
             if len(self.inputs) == 1:
                 return []
             dyn_shapes = self.guess_dynamic_shapes()
-        return [CoupleInputsDynamicShapes(*i, dyn_shapes).invalid_paths() for i in self.inputs]
+        return [
+            CoupleInputsDynamicShapes(*i, dyn_shapes).invalid_dimensions_for_export()
+            for i in self.inputs
+        ]
 
 
 class CoupleInputsDynamicShapes:
@@ -530,7 +533,7 @@ class CoupleInputsDynamicShapes:
                 new_ds[i] = value
         return new_ds
 
-    def invalid_paths(self):
+    def invalid_dimensions_for_export(self):
         """
         Tells if the inputs are valid based on the dynamic shapes definition.
         The method assumes that all custom classes can be serialized.
@@ -538,7 +541,8 @@ class CoupleInputsDynamicShapes:
         calling this method if the inputs contains such classes.
 
         The function checks that a dynamic dimension does not receive a value
-        of 0 or 1. It returns a list of invalid path.
+        of 0 or 1. It returns the unexpected values in the same structure as
+        the given dynamic shapes.
 
         Example:
 
@@ -554,7 +558,23 @@ class CoupleInputsDynamicShapes:
             ds_batch_seq = {0: "batch", 1: "seq"}
             kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
             ds = {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
-            print(CoupleInputsDynamicShapes((), kwargs, ds).invalid_paths())
+            print(CoupleInputsDynamicShapes((), kwargs, ds).invalid_dimensions_for_export())
+
+        In case it works, it shows:
+
+        .. runpython::
+            :showcode:
+
+            import torch
+            from onnx_diagnostic.export.dynamic_shapes import CoupleInputsDynamicShapes
+
+            T3x2 = torch.rand((3, 2))
+            T3x4 = torch.rand((3, 4))
+            ds_batch = {0: "batch"}
+            ds_batch_seq = {0: "batch", 1: "seq"}
+            kwargs = {"A": T3x4, "B": (T3x2, T3x2)}
+            ds = {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
+            print(CoupleInputsDynamicShapes((), kwargs, ds).invalid_dimensions_for_export())
         """
         return self._generic_walker(self._valid_shapes_tensor)
 

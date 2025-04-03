@@ -459,21 +459,31 @@ class TestDynamicShapes(ExtTestCase):
         T3x4 = torch.rand((3, 4))
         T3x1 = torch.rand((3, 1))
         Cls = CoupleInputsDynamicShapes
-        self.assertEmpty(Cls((T3x4,), {}, ({0: "batch"},)).invalid_paths())
-        self.assertEmpty(Cls((T3x1,), {}, ({0: "batch"},)).invalid_paths())
-        self.assertEmpty(Cls((), {"A": T3x1}, {"A": {0: "batch"}}).invalid_paths())
-        self.assertEmpty(Cls((), {"A": T3x4}, {"A": {0: "batch"}}).invalid_paths())
+        self.assertEmpty(Cls((T3x4,), {}, ({0: "batch"},)).invalid_dimensions_for_export())
+        self.assertEmpty(Cls((T3x1,), {}, ({0: "batch"},)).invalid_dimensions_for_export())
+        self.assertEmpty(
+            Cls((), {"A": T3x1}, {"A": {0: "batch"}}).invalid_dimensions_for_export()
+        )
+        self.assertEmpty(
+            Cls((), {"A": T3x4}, {"A": {0: "batch"}}).invalid_dimensions_for_export()
+        )
 
         T1x4 = torch.rand((1, 4))
         T1x1 = torch.rand((1, 1))
         Cls = CoupleInputsDynamicShapes
-        self.assertEqual(({0: "d=[1]"},), Cls((T1x4,), {}, ({0: "batch"},)).invalid_paths())
-        self.assertEqual(({0: "d=[1]"},), Cls((T1x1,), {}, ({0: "batch"},)).invalid_paths())
         self.assertEqual(
-            {"A": {0: "d=[1]"}}, Cls((), {"A": T1x1}, {"A": {0: "batch"}}).invalid_paths()
+            ({0: "d=[1]"},), Cls((T1x4,), {}, ({0: "batch"},)).invalid_dimensions_for_export()
         )
         self.assertEqual(
-            {"A": {0: "d=[1]"}}, Cls((), {"A": T1x4}, {"A": {0: "batch"}}).invalid_paths()
+            ({0: "d=[1]"},), Cls((T1x1,), {}, ({0: "batch"},)).invalid_dimensions_for_export()
+        )
+        self.assertEqual(
+            {"A": {0: "d=[1]"}},
+            Cls((), {"A": T1x1}, {"A": {0: "batch"}}).invalid_dimensions_for_export(),
+        )
+        self.assertEqual(
+            {"A": {0: "d=[1]"}},
+            Cls((), {"A": T1x4}, {"A": {0: "batch"}}).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_1(self):
@@ -483,9 +493,12 @@ class TestDynamicShapes(ExtTestCase):
         ds_batch_seq = {0: "batch", 1: "seq"}
         args = (T3x4, T3x1)
         Cls = CoupleInputsDynamicShapes
-        self.assertEqual(None, Cls(args, {}, (ds_batch, ds_batch)).invalid_paths())
         self.assertEqual(
-            (None, {1: "d=[1]"}), Cls(args, {}, (ds_batch, ds_batch_seq)).invalid_paths()
+            None, Cls(args, {}, (ds_batch, ds_batch)).invalid_dimensions_for_export()
+        )
+        self.assertEqual(
+            (None, {1: "d=[1]"}),
+            Cls(args, {}, (ds_batch, ds_batch_seq)).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_2(self):
@@ -495,10 +508,15 @@ class TestDynamicShapes(ExtTestCase):
         ds_batch_seq = {0: "batch", 1: "seq"}
         kwargs = {"A": T3x4, "B": T3x1}
         Cls = CoupleInputsDynamicShapes
-        self.assertEqual(None, Cls((), kwargs, {"A": ds_batch, "B": ds_batch}).invalid_paths())
+        self.assertEqual(
+            None,
+            Cls((), kwargs, {"A": ds_batch, "B": ds_batch}).invalid_dimensions_for_export(),
+        )
         self.assertEqual(
             {"B": {1: "d=[1]"}},
-            Cls((), kwargs, {"A": ds_batch, "B": ds_batch_seq}).invalid_paths(),
+            Cls(
+                (), kwargs, {"A": ds_batch, "B": ds_batch_seq}
+            ).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_3(self):
@@ -509,11 +527,16 @@ class TestDynamicShapes(ExtTestCase):
         kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
         Cls = CoupleInputsDynamicShapes
         self.assertEqual(
-            None, Cls((), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}).invalid_paths()
+            None,
+            Cls(
+                (), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}
+            ).invalid_dimensions_for_export(),
         )
         self.assertEqual(
             {"B": (None, {1: "d=[1]"})},
-            Cls((), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}).invalid_paths(),
+            Cls(
+                (), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
+            ).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_cache(self):
@@ -540,7 +563,7 @@ class TestDynamicShapes(ExtTestCase):
                     (),
                     kwargs,
                     {"A": ds_batch, "B": (ds_batch, [ds_batch, ds_batch, ds_batch, ds_batch])},
-                ).invalid_paths(),
+                ).invalid_dimensions_for_export(),
             )
             self.assertEqual(
                 {"B": (None, [None, {2: "d=[1]"}, None, {2: "d=[1]"}])},
@@ -551,7 +574,7 @@ class TestDynamicShapes(ExtTestCase):
                         "A": ds_batch,
                         "B": (ds_batch, [ds_batch, ds_batch_seq, ds_batch, ds_batch_seq]),
                     },
-                ).invalid_paths(),
+                ).invalid_dimensions_for_export(),
             )
 
     def test_couple_input_ds_args_kwargs_0(self):
@@ -564,17 +587,22 @@ class TestDynamicShapes(ExtTestCase):
         kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
         Cls = CoupleInputsDynamicShapes
         self.assertEqual(
-            None, Cls(args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}).invalid_paths()
+            None,
+            Cls(
+                args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}
+            ).invalid_dimensions_for_export(),
         )
         self.assertEqual(
             None,
             Cls(
                 args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}, args_names=["X"]
-            ).invalid_paths(),
+            ).invalid_dimensions_for_export(),
         )
         self.assertEqual(
             {"B": (None, {1: "d=[1]"})},
-            Cls(args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}).invalid_paths(),
+            Cls(
+                args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
+            ).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_args_kwargs_1(self):
@@ -593,7 +621,7 @@ class TestDynamicShapes(ExtTestCase):
                 kwargs,
                 {"X": ds_batch, "A": ds_batch, "B": (ds_batch, ds_batch)},
                 args_names=["X"],
-            ).invalid_paths(),
+            ).invalid_dimensions_for_export(),
         )
         self.assertEqual(
             {"X": {1: "d=[1]"}, "B": (None, {1: "d=[1]"})},
@@ -602,7 +630,7 @@ class TestDynamicShapes(ExtTestCase):
                 kwargs,
                 {"X": ds_batch_seq, "A": ds_batch, "B": (ds_batch, ds_batch_seq)},
                 args_names=["X"],
-            ).invalid_paths(),
+            ).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_replace_string(self):
