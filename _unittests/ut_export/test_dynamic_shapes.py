@@ -459,21 +459,31 @@ class TestDynamicShapes(ExtTestCase):
         T3x4 = torch.rand((3, 4))
         T3x1 = torch.rand((3, 1))
         Cls = CoupleInputsDynamicShapes
-        self.assertEmpty(Cls((T3x4,), {}, ({0: "batch"},)).invalid_paths())
-        self.assertEmpty(Cls((T3x1,), {}, ({0: "batch"},)).invalid_paths())
-        self.assertEmpty(Cls((), {"A": T3x1}, {"A": {0: "batch"}}).invalid_paths())
-        self.assertEmpty(Cls((), {"A": T3x4}, {"A": {0: "batch"}}).invalid_paths())
+        self.assertEmpty(Cls((T3x4,), {}, ({0: "batch"},)).invalid_dimensions_for_export())
+        self.assertEmpty(Cls((T3x1,), {}, ({0: "batch"},)).invalid_dimensions_for_export())
+        self.assertEmpty(
+            Cls((), {"A": T3x1}, {"A": {0: "batch"}}).invalid_dimensions_for_export()
+        )
+        self.assertEmpty(
+            Cls((), {"A": T3x4}, {"A": {0: "batch"}}).invalid_dimensions_for_export()
+        )
 
         T1x4 = torch.rand((1, 4))
         T1x1 = torch.rand((1, 1))
         Cls = CoupleInputsDynamicShapes
-        self.assertEqual([(0, "[0]")], Cls((T1x4,), {}, ({0: "batch"},)).invalid_paths())
-        self.assertEqual([(0, "[0]")], Cls((T1x1,), {}, ({0: "batch"},)).invalid_paths())
         self.assertEqual(
-            [("A", "[0]")], Cls((), {"A": T1x1}, {"A": {0: "batch"}}).invalid_paths()
+            ({0: "d=[1]"},), Cls((T1x4,), {}, ({0: "batch"},)).invalid_dimensions_for_export()
         )
         self.assertEqual(
-            [("A", "[0]")], Cls((), {"A": T1x4}, {"A": {0: "batch"}}).invalid_paths()
+            ({0: "d=[1]"},), Cls((T1x1,), {}, ({0: "batch"},)).invalid_dimensions_for_export()
+        )
+        self.assertEqual(
+            {"A": {0: "d=[1]"}},
+            Cls((), {"A": T1x1}, {"A": {0: "batch"}}).invalid_dimensions_for_export(),
+        )
+        self.assertEqual(
+            {"A": {0: "d=[1]"}},
+            Cls((), {"A": T1x4}, {"A": {0: "batch"}}).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_1(self):
@@ -483,8 +493,13 @@ class TestDynamicShapes(ExtTestCase):
         ds_batch_seq = {0: "batch", 1: "seq"}
         args = (T3x4, T3x1)
         Cls = CoupleInputsDynamicShapes
-        self.assertEqual([], Cls(args, {}, (ds_batch, ds_batch)).invalid_paths())
-        self.assertEqual([(1, "[1]")], Cls(args, {}, (ds_batch, ds_batch_seq)).invalid_paths())
+        self.assertEqual(
+            None, Cls(args, {}, (ds_batch, ds_batch)).invalid_dimensions_for_export()
+        )
+        self.assertEqual(
+            (None, {1: "d=[1]"}),
+            Cls(args, {}, (ds_batch, ds_batch_seq)).invalid_dimensions_for_export(),
+        )
 
     def test_couple_input_ds_2(self):
         T3x1 = torch.rand((3, 1))
@@ -493,9 +508,15 @@ class TestDynamicShapes(ExtTestCase):
         ds_batch_seq = {0: "batch", 1: "seq"}
         kwargs = {"A": T3x4, "B": T3x1}
         Cls = CoupleInputsDynamicShapes
-        self.assertEqual([], Cls((), kwargs, {"A": ds_batch, "B": ds_batch}).invalid_paths())
         self.assertEqual(
-            [("B", "[1]")], Cls((), kwargs, {"A": ds_batch, "B": ds_batch_seq}).invalid_paths()
+            None,
+            Cls((), kwargs, {"A": ds_batch, "B": ds_batch}).invalid_dimensions_for_export(),
+        )
+        self.assertEqual(
+            {"B": {1: "d=[1]"}},
+            Cls(
+                (), kwargs, {"A": ds_batch, "B": ds_batch_seq}
+            ).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_3(self):
@@ -506,11 +527,16 @@ class TestDynamicShapes(ExtTestCase):
         kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
         Cls = CoupleInputsDynamicShapes
         self.assertEqual(
-            [], Cls((), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}).invalid_paths()
+            None,
+            Cls(
+                (), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}
+            ).invalid_dimensions_for_export(),
         )
         self.assertEqual(
-            [("B", 1, "[1]")],
-            Cls((), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}).invalid_paths(),
+            {"B": (None, {1: "d=[1]"})},
+            Cls(
+                (), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
+            ).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_cache(self):
@@ -532,15 +558,15 @@ class TestDynamicShapes(ExtTestCase):
         Cls = CoupleInputsDynamicShapes
         with bypass_export_some_errors(patch_transformers=True):
             self.assertEqual(
-                [],
+                None,
                 Cls(
                     (),
                     kwargs,
                     {"A": ds_batch, "B": (ds_batch, [ds_batch, ds_batch, ds_batch, ds_batch])},
-                ).invalid_paths(),
+                ).invalid_dimensions_for_export(),
             )
             self.assertEqual(
-                [("B", 1, "DynamicCache", 1, "[2]"), ("B", 1, "DynamicCache", 3, "[2]")],
+                {"B": (None, [None, {2: "d=[1]"}, None, {2: "d=[1]"}])},
                 Cls(
                     (),
                     kwargs,
@@ -548,7 +574,7 @@ class TestDynamicShapes(ExtTestCase):
                         "A": ds_batch,
                         "B": (ds_batch, [ds_batch, ds_batch_seq, ds_batch, ds_batch_seq]),
                     },
-                ).invalid_paths(),
+                ).invalid_dimensions_for_export(),
             )
 
     def test_couple_input_ds_args_kwargs_0(self):
@@ -561,17 +587,22 @@ class TestDynamicShapes(ExtTestCase):
         kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
         Cls = CoupleInputsDynamicShapes
         self.assertEqual(
-            [], Cls(args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}).invalid_paths()
+            None,
+            Cls(
+                args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}
+            ).invalid_dimensions_for_export(),
         )
         self.assertEqual(
-            [],
+            None,
             Cls(
                 args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}, args_names=["X"]
-            ).invalid_paths(),
+            ).invalid_dimensions_for_export(),
         )
         self.assertEqual(
-            [("B", 1, "[1]")],
-            Cls(args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}).invalid_paths(),
+            {"B": (None, {1: "d=[1]"})},
+            Cls(
+                args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
+            ).invalid_dimensions_for_export(),
         )
 
     def test_couple_input_ds_args_kwargs_1(self):
@@ -584,23 +615,67 @@ class TestDynamicShapes(ExtTestCase):
         kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
         Cls = CoupleInputsDynamicShapes
         self.assertEqual(
-            [],
+            None,
             Cls(
                 args,
                 kwargs,
                 {"X": ds_batch, "A": ds_batch, "B": (ds_batch, ds_batch)},
                 args_names=["X"],
-            ).invalid_paths(),
+            ).invalid_dimensions_for_export(),
         )
         self.assertEqual(
-            [("X", "[1]"), ("B", 1, "[1]")],
+            {"X": {1: "d=[1]"}, "B": (None, {1: "d=[1]"})},
             Cls(
                 args,
                 kwargs,
                 {"X": ds_batch_seq, "A": ds_batch, "B": (ds_batch, ds_batch_seq)},
                 args_names=["X"],
-            ).invalid_paths(),
+            ).invalid_dimensions_for_export(),
         )
+
+    def test_couple_input_ds_replace_string(self):
+        T3x1 = torch.rand((3, 1))
+        T3x4 = torch.rand((3, 4))
+        T5x1 = torch.rand((5, 1))
+        ds_batch = {0: "batch"}
+        ds_batch_seq = {0: "batch", 1: "seq"}
+        args = (T5x1,)
+        kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+        Cls = CoupleInputsDynamicShapes
+        self.assertEqual(
+            {"X": {0: "DYN"}, "A": {0: "DYN"}, "B": ({0: "DYN"}, {0: "DYN"})},
+            Cls(
+                args,
+                kwargs,
+                {"X": ds_batch, "A": ds_batch, "B": (ds_batch, ds_batch)},
+                args_names=["X"],
+            ).replace_string_by(value="DYN"),
+        )
+        self.assertEqual(
+            {
+                "A": {0: "DYN"},
+                "B": ({0: "DYN"}, {0: "DYN", 1: "DYN"}),
+                "X": {0: "DYN", 1: "DYN"},
+            },
+            Cls(
+                args,
+                kwargs,
+                {"X": ds_batch_seq, "A": ds_batch, "B": (ds_batch, ds_batch_seq)},
+                args_names=["X"],
+            ).replace_string_by(value="DYN"),
+        )
+
+    def test_couple_input_ds_change_dynamic_dimensions(self):
+        T257 = torch.arange(2 * 5 * 7).reshape((2, 5, 7))
+        T29 = torch.arange(2 * 9).reshape((2, 9))
+        inst = CoupleInputsDynamicShapes(
+            (),
+            {"A": T257, "B": T29},
+            {"A": {0: "batch", 2: "last"}, "B": {0: "batch", 1: "seq"}},
+        )
+        new_input = inst.change_dynamic_dimensions()
+        self.assertEqual((3, 5, 8), new_input["A"].shape)
+        self.assertEqual((3, 10), new_input["B"].shape)
 
 
 if __name__ == "__main__":
