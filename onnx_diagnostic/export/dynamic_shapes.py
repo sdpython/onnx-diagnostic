@@ -1,5 +1,5 @@
 import inspect
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import torch
 from ..helpers import string_type
@@ -488,7 +488,7 @@ class CoupleInputsDynamicShapes:
             ]
         )
 
-    def invalid_paths(self) -> Any:
+    def invalid_paths(self):
         """
         Tells the inputs are valid based on the dynamic shapes definition.
         The method assumes that all custom classes can be serialized.
@@ -501,7 +501,7 @@ class CoupleInputsDynamicShapes:
         return self._generic_walker(self._valid_shapes_tensor)
 
     @classmethod
-    def _valid_shapes_tensor(cls, inputs: Any, ds: Any) -> Iterable:
+    def _valid_shapes_tensor(cls, inputs, ds):
         assert isinstance(inputs, torch.Tensor), f"unexpected type for inputs {type(inputs)}"
         assert isinstance(ds, dict) and all(isinstance(s, int) for s in ds), (
             f"Unexpected types, inputs is a Tensor but ds is {ds}, "
@@ -516,7 +516,7 @@ class CoupleInputsDynamicShapes:
                     issues[i] = f"d=[{d}]"
         return issues if issues else None
 
-    def _generic_walker(self, method_to_call: Callable) -> Any:
+    def _generic_walker(self, processor: Callable):
         """
         Generic deserializator walking through inputs and dynamic_shapes all along.
         The function returns a result with the same structure as the dynamic shapes.
@@ -526,14 +526,14 @@ class CoupleInputsDynamicShapes:
                 f"Type mismatch, args={string_type(self.args)} and "
                 f"dynamic_shapes={self.dynamic_shapes} should have the same type."
             )
-            return self._generic_walker_step(method_to_call, self.kwargs, self.dynamic_shapes)
+            return self._generic_walker_step(processor, self.kwargs, self.dynamic_shapes)
 
         if not self.kwargs:
             assert isinstance(self.args, tuple) and isinstance(self.dynamic_shapes, tuple), (
                 f"Type mismatch, args={string_type(self.args)} and "
                 f"dynamic_shapes={self.dynamic_shapes} should have the same type."
             )
-            return self._generic_walker_step(method_to_call, self.args, self.dynamic_shapes)
+            return self._generic_walker_step(processor, self.args, self.dynamic_shapes)
 
         assert isinstance(self.dynamic_shapes, dict), (
             f"Both positional and named arguments (args and kwargs) are filled. "
@@ -543,14 +543,12 @@ class CoupleInputsDynamicShapes:
             self.dynamic_shapes
         ):
             # No dynamic shapes for the positional arguments.
-            return self._generic_walker_step(method_to_call, self.kwargs, self.dynamic_shapes)
+            return self._generic_walker_step(processor, self.kwargs, self.dynamic_shapes)
 
         if isinstance(self.args_names, list):
             if not set(self.args_names) & set(self.dynamic_shapes):
                 # No dynamic shapes for the positional arguments.
-                return self._generic_walker_step(
-                    method_to_call, self.kwargs, self.dynamic_shapes
-                )
+                return self._generic_walker_step(processor, self.kwargs, self.dynamic_shapes)
 
             assert self.args_names, (
                 "args and kwargs are filled, then args_names must be specified in "
@@ -563,7 +561,7 @@ class CoupleInputsDynamicShapes:
             )
             kwargs = dict(zip(self.args_names, self.args))
             kwargs.update(self.kwargs)
-            return self._generic_walker_step(method_to_call, kwargs, self.dynamic_shapes)
+            return self._generic_walker_step(processor, kwargs, self.dynamic_shapes)
 
         raise NotImplementedError(
             f"Not yet implemented when args is filled, "
@@ -571,9 +569,9 @@ class CoupleInputsDynamicShapes:
         )
 
     @classmethod
-    def _generic_walker_step(cls, method_to_call: Callable, inputs: Any, ds: Any) -> Iterable:
+    def _generic_walker_step(cls, processor: Callable, inputs, ds):
         if isinstance(inputs, torch.Tensor):
-            return method_to_call(inputs, ds)
+            return processor(inputs, ds)
         if isinstance(inputs, (int, float, str)):
             return None
         if isinstance(inputs, (tuple, list, dict)):
@@ -588,7 +586,7 @@ class CoupleInputsDynamicShapes:
             if isinstance(inputs, (tuple, list)):
                 value = []
                 for i, d in zip(inputs, ds):
-                    value.append(cls._generic_walker_step(method_to_call, i, d))
+                    value.append(cls._generic_walker_step(processor, i, d))
                 return (
                     (value if isinstance(ds, list) else tuple(value))
                     if any(v is not None for v in value)
@@ -599,7 +597,7 @@ class CoupleInputsDynamicShapes:
             ), f"Keys mismatch between inputs {set(inputs)} and ds={set(ds)}"
             dvalue = {}
             for k, v in inputs.items():
-                t = cls._generic_walker_step(method_to_call, v, ds[k])
+                t = cls._generic_walker_step(processor, v, ds[k])
                 if t is not None:
                     dvalue[k] = t
             return dvalue if dvalue else None
@@ -611,4 +609,4 @@ class CoupleInputsDynamicShapes:
             f"map this class with the given dynamic shapes."
         )
         flat, _spec = torch.utils._pytree.tree_flatten(inputs)
-        return cls._generic_walker_step(method_to_call, flat, ds)
+        return cls._generic_walker_step(processor, flat, ds)

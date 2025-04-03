@@ -62,6 +62,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         self.assertEqual((316712, 79178), (data["size"], data["n_weights"]))
 
     @hide_stdout()
+    @ignore_errors(OSError)
     def test_get_untrained_model_with_inputs_phi_2(self):
         mid = "microsoft/phi-2"
         data = get_untrained_model_with_inputs(mid, verbose=1)
@@ -83,6 +84,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         self.assertIn((data["size"], data["n_weights"]), [(111448, 27862), (56880, 14220)])
 
     @hide_stdout()
+    @ignore_errors(OSError)
     def test_get_untrained_model_with_inputs_codellama(self):
         mid = "codellama/CodeLlama-7b-Python-hf"
         data = get_untrained_model_with_inputs(mid, verbose=1)
