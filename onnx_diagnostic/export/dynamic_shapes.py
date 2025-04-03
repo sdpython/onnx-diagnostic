@@ -753,14 +753,18 @@ class CoupleInputsDynamicShapes:
             :showcode:
 
             import torch
+            from onnx_diagnostic.helpers import string_type
             from onnx_diagnostic.export.dynamic_shapes import CoupleInputsDynamicShapes
 
-            T3x1 = torch.rand((3, 1))
+            T3x15 = torch.rand((3, 15))
+            T3x20 = torch.rand((3, 20))
             T3x4 = torch.rand((3, 4))
             ds_batch = {0: "batch"}
             ds_batch_seq = {0: "batch", 1: "seq"}
-            kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+            kwargs = {"A": T3x4, "B": (T3x15, T3x20)}
             ds = {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
-            print(CoupleInputsDynamicShapes((), kwargs, ds).change_dynamic_dimension())
+            new_kwargs = CoupleInputsDynamicShapes((), kwargs, ds).change_dynamic_dimensions()
+            print("before:", string_type(kwargs, with_shape=True))
+            print("-after:", string_type(new_kwargs, with_shape=True))
         """
         return self._generic_walker(self.ChangeDimensionProcessor())

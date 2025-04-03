@@ -47,7 +47,7 @@ def _patch_make_causal_mask(
 if sys.version_info[:2] <= (3, 11):
 
     @dataclass
-    class kkpatched_AttentionMaskConverter:
+    class patched_AttentionMaskConverter:
         """
         Patches
         ``transformers.modeling_attn_mask_utils.AttentionMaskConverter._make_causal_mask``.
@@ -72,7 +72,7 @@ if sys.version_info[:2] <= (3, 11):
 else:
 
     @dataclass
-    class kkpatched_AttentionMaskConverter:
+    class patched_AttentionMaskConverter:
         """
         Patches
         ``transformers.modeling_attn_mask_utils.AttentionMaskConverter._make_causal_mask``.
