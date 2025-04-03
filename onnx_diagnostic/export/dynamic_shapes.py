@@ -437,7 +437,7 @@ class ModelInputs:
 
     def validate_inputs_for_export(
         self, dynamic_shapes: Optional[DYNAMIC_SHAPES] = None
-    ) -> List[List[str]]:
+    ) -> List[List[Union[int, str]]]:
         """
         Validates the inputs the class contains for the given dynamic shapes.
         If not specified, the dynamic_shapes are guessed.
@@ -447,7 +447,7 @@ class ModelInputs:
         """
         if dynamic_shapes is None:
             if len(self.inputs) == 1:
-                return True
+                return []
             dyn_shapes = self.guess_dynamic_shapes()
         return [CoupleInputsDynamicShapes(*i, dyn_shapes).invalid_paths() for i in self.inputs]
 
@@ -455,14 +455,27 @@ class ModelInputs:
 class CoupleInputsDynamicShapes:
     """
     Pair inputs / dynamic shapes.
+
+    :param args: positional arguments
+    :param kwargs: named arguments
+    :param dynamic_shapes: dynamic shapes
+    :param args_names: if both args and kwargs are not empty, then
+        dynamic shapes must be a dictionary, and positional must be added
+        to the named arguments. Arguments names or a module must be given
+        in that case.
     """
 
     def __init__(
-        self, args: Tuple[Any, ...], kwargs: Dict[str, Any], dynamic_shapes: DYNAMIC_SHAPES
+        self,
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any],
+        dynamic_shapes: DYNAMIC_SHAPES,
+        args_names: Optional[Union[torch.nn.Module, List[str]]] = None,
     ):
         self.args = args
         self.kwargs = kwargs
         self.dynamic_shapes = dynamic_shapes
+        self.args_names = args_names
 
     def __str__(self) -> str:
         return "\n".join(
@@ -497,7 +510,39 @@ class CoupleInputsDynamicShapes:
                 f"dynamic_shapes={self.dynamic_shapes} should have the same type."
             )
             return list(self._valid_shapes(self.args, self.dynamic_shapes))
-        raise NotImplementedError("args and kwargs are filled, it is not implemented yet.")
+
+        assert isinstance(self.dynamic_shapes, dict), (
+            f"Both positional and named arguments (args and kwargs) are filled. "
+            f"dynamic shapes must a dictionary not {type(self.dynamic_shapes)}"
+        )
+        if not self.args_names and set(self.dynamic_shapes) & set(self.kwargs) == set(
+            self.dynamic_shapes
+        ):
+            # No dynamic shapes for the positional arguments.
+            return list(self._valid_shapes(self.kwargs, self.dynamic_shapes))
+
+        if isinstance(self.args_names, list):
+            if not set(self.args_names) & set(self.dynamic_shapes):
+                # No dynamic shapes for the positional arguments.
+                return list(self._valid_shapes(self.kwargs, self.dynamic_shapes))
+
+            assert self.args_names, (
+                "args and kwargs are filled, then args_names must be specified in "
+                "the constructor to move positional arguments to named arguments."
+            )
+            assert len(self.args) <= len(self.args_names), (
+                f"There are {len(self.args)} positional arguments "
+                f"but only {len(self.args_names)} names. "
+                f"args={string_type(self.args, with_shape=True)}, args_name={self.args_names}"
+            )
+            kwargs = dict(zip(self.args_names, self.args))
+            kwargs.update(self.kwargs)
+            return list(self._valid_shapes(kwargs, self.dynamic_shapes))
+
+        raise NotImplementedError(
+            f"Not yet implemented when args is filled, "
+            f"kwargs as well but args_names is {type(self.args_names)}"
+        )
 
     @classmethod
     def _valid_shapes(
@@ -541,6 +586,11 @@ class CoupleInputsDynamicShapes:
                             yield path
             else:
                 # A custom class.
+                assert inputs.__class__ in torch.utils._pytree.SUPPORTED_NODES, (
+                    f"Class {inputs.__class__.__name__!r} was not registered using "
+                    f"torch.utils._pytree.register_pytree_node, it is not possible to "
+                    f"map this class with the given dynamic shapes."
+                )
                 flat, _spec = torch.utils._pytree.tree_flatten(inputs)
                 for path in cls._valid_shapes(
                     flat, ds, prefix=(*prefix, inputs.__class__.__name__)
