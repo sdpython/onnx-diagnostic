@@ -64,7 +64,7 @@ class TestTestHelper(ExtTestCase):
             exporter="onnx-dynamo",
             dump_folder="dump_test_validate_model_onnx",
             patch=True,
-            stop_if_static=pv.Version(torch.__version__) > pv.Version("2.6"),
+            stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6") else 0,
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
