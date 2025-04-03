@@ -5,6 +5,7 @@ from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.export import ModelInputs
 from onnx_diagnostic.export.dynamic_shapes import CoupleInputsDynamicShapes
+from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
 
 class TestDynamicShapes(ExtTestCase):
@@ -529,25 +530,26 @@ class TestDynamicShapes(ExtTestCase):
 
         kwargs = {"A": T3x4, "B": (T3x1, cache)}
         Cls = CoupleInputsDynamicShapes
-        self.assertEqual(
-            [],
-            Cls(
-                (),
-                kwargs,
-                {"A": ds_batch, "B": (ds_batch, [ds_batch, ds_batch, ds_batch, ds_batch])},
-            ).invalid_paths(),
-        )
-        self.assertEqual(
-            [("B", 1, "DynamicCache", 1, "[2]"), ("B", 1, "DynamicCache", 3, "[2]")],
-            Cls(
-                (),
-                kwargs,
-                {
-                    "A": ds_batch,
-                    "B": (ds_batch, [ds_batch, ds_batch_seq, ds_batch, ds_batch_seq]),
-                },
-            ).invalid_paths(),
-        )
+        with bypass_export_some_errors(patch_transformers=True):
+            self.assertEqual(
+                [],
+                Cls(
+                    (),
+                    kwargs,
+                    {"A": ds_batch, "B": (ds_batch, [ds_batch, ds_batch, ds_batch, ds_batch])},
+                ).invalid_paths(),
+            )
+            self.assertEqual(
+                [("B", 1, "DynamicCache", 1, "[2]"), ("B", 1, "DynamicCache", 3, "[2]")],
+                Cls(
+                    (),
+                    kwargs,
+                    {
+                        "A": ds_batch,
+                        "B": (ds_batch, [ds_batch, ds_batch_seq, ds_batch, ds_batch_seq]),
+                    },
+                ).invalid_paths(),
+            )
 
 
 if __name__ == "__main__":

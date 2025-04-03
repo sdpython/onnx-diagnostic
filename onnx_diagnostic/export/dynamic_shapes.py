@@ -541,6 +541,11 @@ class CoupleInputsDynamicShapes:
                             yield path
             else:
                 # A custom class.
+                assert inputs.__class__ in torch.utils._pytree.SUPPORTED_NODES, (
+                    f"Class {inputs.__class__.__name__!r} was not registered using "
+                    f"torch.utils._pytree.register_pytree_node, it is not possible to "
+                    f"map this class with the given dynamic shapes."
+                )
                 flat, _spec = torch.utils._pytree.tree_flatten(inputs)
                 for path in cls._valid_shapes(
                     flat, ds, prefix=(*prefix, inputs.__class__.__name__)
