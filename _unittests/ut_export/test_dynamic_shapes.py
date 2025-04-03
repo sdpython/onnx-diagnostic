@@ -605,6 +605,50 @@ class TestDynamicShapes(ExtTestCase):
             ).invalid_paths(),
         )
 
+    def test_couple_input_ds_replace_string(self):
+        T3x1 = torch.rand((3, 1))
+        T3x4 = torch.rand((3, 4))
+        T5x1 = torch.rand((5, 1))
+        ds_batch = {0: "batch"}
+        ds_batch_seq = {0: "batch", 1: "seq"}
+        args = (T5x1,)
+        kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+        Cls = CoupleInputsDynamicShapes
+        self.assertEqual(
+            {"X": {0: "DYN"}, "A": {0: "DYN"}, "B": ({0: "DYN"}, {0: "DYN"})},
+            Cls(
+                args,
+                kwargs,
+                {"X": ds_batch, "A": ds_batch, "B": (ds_batch, ds_batch)},
+                args_names=["X"],
+            ).replace_string_by(value="DYN"),
+        )
+        self.assertEqual(
+            {
+                "A": {0: "DYN"},
+                "B": ({0: "DYN"}, {0: "DYN", 1: "DYN"}),
+                "X": {0: "DYN", 1: "DYN"},
+            },
+            Cls(
+                args,
+                kwargs,
+                {"X": ds_batch_seq, "A": ds_batch, "B": (ds_batch, ds_batch_seq)},
+                args_names=["X"],
+            ).replace_string_by(value="DYN"),
+        )
+
+    def test_couple_input_ds_change_dynamic_dimensions(self):
+        T257 = torch.arange(2 * 5 * 7).reshape((2, 5, 7))
+        T29 = torch.arange(2 * 9).reshape((2, 9))
+        inst = CoupleInputsDynamicShapes(
+            (),
+            {"A": T257, "B": T29},
+            {"A": {0: "batch", 2: "last"}, "B": {0: "batch", 1: "seq"}},
+        )
+        new_input = inst.change_dynamic_dimensions()
+        self.assertEqual((3, 5, 8), new_input["A"].shape)
+        self.assertEqual((3, 10), new_input["B"].shape)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

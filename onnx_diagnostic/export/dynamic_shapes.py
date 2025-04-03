@@ -488,15 +488,73 @@ class CoupleInputsDynamicShapes:
             ]
         )
 
+    def replace_string_by(self, value: Any = None):
+        """
+        Replaces string by the value ``torch.export.Dim.DYNAMIC``
+        (default) or any other value specified by value.
+
+        Example:
+
+        .. runpython::
+            :showcode:
+
+            import torch
+            from onnx_diagnostic.export.dynamic_shapes import CoupleInputsDynamicShapes
+
+            T3x1 = torch.rand((3, 1))
+            T3x4 = torch.rand((3, 4))
+            ds_batch = {0: "batch"}
+            ds_batch_seq = {0: "batch", 1: "seq"}
+            kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+            ds = {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
+            print(CoupleInputsDynamicShapes((), kwargs, ds).replace_string_by())
+        """
+        return self._generic_walker(
+            lambda inputs, ds, value=value: self._replace_string_dim_tensor(
+                inputs, ds, value=value
+            )
+        )
+
+    @classmethod
+    def _replace_string_dim_tensor(cls, inputs, ds, value=None):
+        assert isinstance(inputs, torch.Tensor), f"unexpected type for inputs {type(inputs)}"
+        assert isinstance(ds, dict) and all(isinstance(s, int) for s in ds), (
+            f"Unexpected types, inputs is a Tensor but ds is {ds}, "
+            f"a dictionary is expected to specify a dimension dimension"
+        )
+        if value is None:
+            value = torch.export.Dim.DYNAMIC
+        new_ds = ds.copy()
+        for i, v in ds.items():
+            if isinstance(v, str):
+                new_ds[i] = value
+        return new_ds
+
     def invalid_paths(self):
         """
-        Tells the inputs are valid based on the dynamic shapes definition.
+        Tells if the inputs are valid based on the dynamic shapes definition.
         The method assumes that all custom classes can be serialized.
         If some patches were applied to export, they should enabled while
         calling this method if the inputs contains such classes.
 
         The function checks that a dynamic dimension does not receive a value
         of 0 or 1. It returns a list of invalid path.
+
+        Example:
+
+        .. runpython::
+            :showcode:
+
+            import torch
+            from onnx_diagnostic.export.dynamic_shapes import CoupleInputsDynamicShapes
+
+            T3x1 = torch.rand((3, 1))
+            T3x4 = torch.rand((3, 4))
+            ds_batch = {0: "batch"}
+            ds_batch_seq = {0: "batch", 1: "seq"}
+            kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+            ds = {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
+            print(CoupleInputsDynamicShapes((), kwargs, ds).invalid_paths())
         """
         return self._generic_walker(self._valid_shapes_tensor)
 
@@ -610,3 +668,99 @@ class CoupleInputsDynamicShapes:
         )
         flat, _spec = torch.utils._pytree.tree_flatten(inputs)
         return cls._generic_walker_step(processor, flat, ds)
+
+    class ChangeDimensionProcessor:
+        def __init__(self):
+            self.mapping = {}
+
+        def _build_new_shape(
+            self, shape: Tuple[int, ...], ds: Dict[int, Any]
+        ) -> Tuple[int, ...]:
+            new_shape = list(shape)
+            for i in range(len(shape)):
+                if i in ds:
+                    if isinstance(ds[i], str):
+                        d = ds[i]
+                    elif isinstance(
+                        ds[i],
+                        (
+                            torch.export.dynamic_shapes._DerivedDim,
+                            torch.export.dynamic_shapes._Dim,
+                        ),
+                    ):
+                        d = str(ds[i])
+                    elif not isinstance(ds[i], int):
+                        raise NotImplementedError(f"Unable to handle type {ds[i]} in {ds}")
+                    if d in self.mapping:
+                        new_dim = self.mapping[d]
+                    else:
+                        new_dim = shape[i] + 1
+                        self.mapping[d] = new_dim
+                    new_shape[i] = new_dim
+            return tuple(new_shape)
+
+        def _build_new_tensor(self, tensor: torch.Tensor, new_shape: Tuple[int, ...]):
+            rank = len(tensor.shape)
+            for i in range(len(tensor.shape)):
+                d0 = tensor.shape[i]
+                d1 = new_shape[i]
+                if d0 == d1:
+                    continue
+                alt_shape = list(tensor.shape)
+                alt_shape[i] = d1
+                new_tensor = torch.zeros(
+                    tuple(alt_shape), dtype=tensor.dtype, device=tensor.device
+                )
+                mind = min(d0, d1)
+                indices = [slice(None) for _ in range(rank)]
+                indices[i] = slice(0, mind)
+                ind = tuple(indices)
+                new_tensor[ind] = tensor[ind]
+                if d1 > mind:
+                    for k in range(d1 - mind):
+                        indices0 = [slice(None) for _ in range(rank)]
+                        indices1 = [slice(None) for _ in range(rank)]
+                        indices1[i] = mind + k
+                        indices0[i] = k % mind
+                        new_tensor[tuple(indices1)] = tensor[tuple(indices0)]
+                tensor = new_tensor
+            return tensor
+
+        def __call__(self, inputs, ds):
+            assert isinstance(
+                inputs, torch.Tensor
+            ), f"unexpected type for inputs {type(inputs)}"
+            assert isinstance(ds, dict) and all(isinstance(s, int) for s in ds), (
+                f"Unexpected types, inputs is a Tensor but ds is {ds}, "
+                f"a dictionary is expected to specify a dimension dimension"
+            )
+            new_shape = self._build_new_shape(inputs.shape, ds)
+            return self._build_new_tensor(inputs, new_shape)
+
+    def change_dynamic_dimensions(self):
+        """
+        A model exported with dynamic shapes is not necessarily dynamic
+        just because the user specified dynamic shapes. The algorithm
+        may discover that a dimension cannot be dynamic and then continues
+        the export making the assumption it is static. That may lead a wrong
+        model. This function produces a new set of inputs with different values
+        for the dimension than the first ones, assuming they were used to export
+        the model.
+
+        Example:
+
+        .. runpython::
+            :showcode:
+
+            import torch
+            from onnx_diagnostic.export.dynamic_shapes import CoupleInputsDynamicShapes
+
+            T3x1 = torch.rand((3, 1))
+            T3x4 = torch.rand((3, 4))
+            ds_batch = {0: "batch"}
+            ds_batch_seq = {0: "batch", 1: "seq"}
+            kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+            ds = {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
+            print(CoupleInputsDynamicShapes((), kwargs, ds).change_dynamic_dimension())
+        """
+        return self._generic_walker(self.ChangeDimensionProcessor())
