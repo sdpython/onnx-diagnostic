@@ -74,6 +74,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         )
 
     @hide_stdout()
+    @ignore_errors(OSError)  # connectitivies issues
     def test_get_untrained_model_with_inputs_beit(self):
         mid = "hf-internal-testing/tiny-random-BeitForImageClassification"
         data = get_untrained_model_with_inputs(mid, verbose=1)

@@ -265,6 +265,11 @@ def get_parser_validate() -> ArgumentParser:
         help="applies patches before exporting",
     )
     parser.add_argument(
+        "--stop-if-static",
+        default=0,
+        help="raises an exception if a dynamic dimension becomes static",
+    )
+    parser.add_argument(
         "--trained",
         default=False,
         action=BooleanOptionalAction,
@@ -319,6 +324,7 @@ def _cmd_validate(argv: List[Any]):
             dtype=args.dtype,
             device=args.device,
             patch=args.patch,
+            stop_if_static=args.stop_if_static,
             optimization=args.opt,
             exporter=args.export,
             dump_folder=args.dump_folder,
