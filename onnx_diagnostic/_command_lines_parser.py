@@ -267,6 +267,7 @@ def get_parser_validate() -> ArgumentParser:
     parser.add_argument(
         "--stop-if-static",
         default=0,
+        type=int,
         help="raises an exception if a dynamic dimension becomes static",
     )
     parser.add_argument(

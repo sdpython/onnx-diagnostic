@@ -202,7 +202,7 @@ def validate_model(
     optimization: Optional[str] = None,
     quiet: bool = False,
     patch: bool = False,
-    stop_if_static: bool = True,
+    stop_if_static: int = 1,
     dump_folder: Optional[str] = None,
     drop_inputs: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
