@@ -319,6 +319,7 @@ def bypass_export_some_errors(
             f_sympy_name = getattr(sympy.core.numbers.IntegerConstant, "name", None)
 
             if verbose:
+                print(f"[bypass_export_some_errors] sympy.__version__={sympy.__version__!r}")
                 print("[bypass_export_some_errors] patch sympy")
 
             sympy.core.numbers.IntegerConstant.name = lambda self: f"IntCst{str(self)}"
@@ -336,6 +337,8 @@ def bypass_export_some_errors(
             )
 
             if verbose:
+                print(f"[bypass_export_some_errors] torch.__version__={torch.__version__!r}")
+                print(f"[bypass_export_some_errors] stop_if_static={stop_if_static!r}")
                 print("[bypass_export_some_errors] patch pytorch")
 
             # torch.jit.isinstance
@@ -400,6 +403,13 @@ def bypass_export_some_errors(
         ####################
 
         if patch_transformers:
+            if verbose:
+                import transformers
+
+                print(
+                    f"[bypass_export_some_errors] transformers.__version__="
+                    f"{transformers.__version__!r}"
+                )
             revert_patches_info = patch_module(patch_transformers_list, verbose=verbose)
 
         ########
