@@ -150,6 +150,16 @@ def patched__broadcast_shapes(*_shapes):
 
 class patched_ShapeEnv:
 
+    def _check_frozen(
+        self, expr: "sympy.Basic", concrete_val: "sympy.Basic"  # noqa: F821
+    ) -> None:
+        if self.frozen:
+            self.counter["ignored_backward_guard"] += 1
+            raise AssertionError(
+                f"[patched_ShapeEnv] Ignored guard {expr} == {concrete_val}, "
+                f"this could result in accuracy problems."
+            )
+
     def _set_replacement(
         self, a: "sympy.Symbol", tgt: "sympy.Expr", msg: str  # noqa: F821
     ) -> None:
@@ -314,7 +324,7 @@ class patched_ShapeEnv:
             #     )
             #     self.log.debug("SPECIALIZATION", stack_info=True)
         assert msg != "range_refined_to_singleton", (
-            f"A dynamic dimension becomes static! "
+            f"patched_ShapeEnv: A dynamic dimension becomes static! "
             f"a={a!r}, tgt={tgt!r}, msg={msg!r}, tgt_bound={tgt_bound}"
         )
         # log.info("set_replacement %s = %s (%s) %s", a, tgt, msg, tgt_bound)

@@ -211,7 +211,7 @@ def bypass_export_some_errors(
     patch_torch: bool = True,
     patch_transformers: bool = False,
     catch_constraints: bool = True,
-    stop_if_static: bool = False,
+    stop_if_static: int = 0,
     verbose: int = 0,
     patch: bool = True,
 ) -> Callable:
@@ -227,7 +227,9 @@ def bypass_export_some_errors(
         can be put to stop at that stage.
     :param stop_if_static: see example :ref:`l-plot-export-locale-issue`,
         to stop the export as soon as an issue is detected with dynamic shapes
-        and show a stack trace indicating the exact location of the issue
+        and show a stack trace indicating the exact location of the issue,
+        ``if stop_if_static > 1``, more methods are replace to catch more
+        issues
     :param patch: if False, disable all patches except the registration of
         serialization function
     :param verbose: to show which patches is applied
@@ -375,16 +377,23 @@ def bypass_export_some_errors(
             )
 
         if stop_if_static:
+            from torch.fx.experimental.symbolic_shapes import ShapeEnv
+            from .patches.patch_torch import patched_ShapeEnv
+
             if verbose:
                 print(
                     "[bypass_export_some_errors] assert when a dynamic dimension turns static"
                 )
-
-            from torch.fx.experimental.symbolic_shapes import ShapeEnv
-            from .patches.patch_torch import patched_ShapeEnv
+                print("[bypass_export_some_errors] replaces ShapeEnv._set_replacement")
 
             f_shape_env__set_replacement = ShapeEnv._set_replacement
             ShapeEnv._set_replacement = patched_ShapeEnv._set_replacement
+
+            if stop_if_static > 1:
+                if verbose:
+                    print("[bypass_export_some_errors] replaces ShapeEnv._check_frozen")
+                f_shape_env__check_frozen = ShapeEnv._check_frozen
+                ShapeEnv._check_frozen = patched_ShapeEnv._check_frozen
 
         ####################
         # patch transformers
@@ -444,6 +453,10 @@ def bypass_export_some_errors(
                     print("[bypass_export_some_errors] restored ShapeEnv._set_replacement")
 
                 ShapeEnv._set_replacement = f_shape_env__set_replacement
+                if stop_if_static > 1:
+                    if verbose:
+                        print("[bypass_export_some_errors] restored ShapeEnv._check_frozen")
+                    ShapeEnv._check_frozen = f_shape_env__check_frozen
 
             if catch_constraints:
                 # to catch or skip dynamic_shapes issues
