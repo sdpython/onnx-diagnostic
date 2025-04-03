@@ -1,5 +1,7 @@
 import copy
 import unittest
+import packaging.version as pv
+import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_warnings
 from onnx_diagnostic.torch_models.test_helper import (
     get_inputs_for_task,
@@ -62,6 +64,7 @@ class TestTestHelper(ExtTestCase):
             exporter="onnx-dynamo",
             dump_folder="dump_test_validate_model_onnx",
             patch=True,
+            stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)

@@ -3,6 +3,7 @@ import pandas
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     hide_stdout,
+    ignore_errors,
     long_test,
     never_test,
     requires_torch,
@@ -26,6 +27,7 @@ class TestHuggingFaceHubApi(ExtTestCase):
 
     @requires_transformers("4.50")  # we limit to some versions of the CI
     @requires_torch("2.7")
+    @ignore_errors(OSError)  # connectivity issues
     @hide_stdout()
     def test_enumerate_model_list(self):
         models = list(
@@ -76,6 +78,7 @@ class TestHuggingFaceHubApi(ExtTestCase):
 
     @requires_transformers("4.50")
     @requires_torch("2.7")
+    @ignore_errors(OSError)  # connectivity issues
     @hide_stdout()
     def test_get_model_info(self):
         info = get_model_info("microsoft/phi-2")

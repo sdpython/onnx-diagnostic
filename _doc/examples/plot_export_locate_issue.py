@@ -85,7 +85,7 @@ except Exception as e:
 # to replace torch implementation by a new one raising the exception
 # mentioned in previous section.
 
-with bypass_export_some_errors(stop_if_static=True, verbose=1):
+with bypass_export_some_errors(stop_if_static=1, verbose=1):
     try:
         torch.export.export(model, inputs, dynamic_shapes=dyn_shapes)
     except (AssertionError, torch._dynamo.exc.TorchRuntimeError) as e:

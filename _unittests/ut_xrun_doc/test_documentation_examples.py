@@ -5,7 +5,13 @@ import importlib.util
 import subprocess
 import time
 from onnx_diagnostic import __file__ as onnx_diagnostic_file
-from onnx_diagnostic.ext_test_case import ExtTestCase, is_windows, has_transformers, has_torch
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    is_windows,
+    has_transformers,
+    has_torch,
+    ignore_errors,
+)
 
 
 VERBOSE = 0
@@ -94,6 +100,7 @@ class TestDocumentationExamples(ExtTestCase):
 
             else:
 
+                @ignore_errors(OSError)  # connectivity issues
                 def _test_(self, name=name):
                     res = self.run_test(fold, name, verbose=VERBOSE)
                     self.assertTrue(res)

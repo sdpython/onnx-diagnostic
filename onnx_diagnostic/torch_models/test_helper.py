@@ -202,6 +202,7 @@ def validate_model(
     optimization: Optional[str] = None,
     quiet: bool = False,
     patch: bool = False,
+    stop_if_static: int = 1,
     dump_folder: Optional[str] = None,
     drop_inputs: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
@@ -223,7 +224,10 @@ def validate_model(
     :param optimization: optimization to apply to the exported model,
         depend on the the exporter
     :param quiet: if quiet, catches exception if any issue
-    :param patch: applies patches before exporting
+    :param patch: applies patches (``patch_transformers=True``) before exporting,
+        see :func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
+    :param stop_if_static: stops if a dynamic dimension becomes static,
+        see :func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
     :param dump_folder: dumps everything in a subfolder of this one
     :param drop_inputs: drops this list of inputs (given their names)
     :return: two dictionaries, one with some metrics,
@@ -354,7 +358,9 @@ def validate_model(
             if verbose:
                 print("[validate_model] applies patches before exporting")
             with bypass_export_some_errors(  # type: ignore
-                patch_transformers=True, verbose=max(0, verbose - 1)
+                patch_transformers=True,
+                stop_if_static=stop_if_static,
+                verbose=max(0, verbose - 1),
             ) as modificator:
                 data["inputs_export"] = modificator(data["inputs"])  # type: ignore
 
