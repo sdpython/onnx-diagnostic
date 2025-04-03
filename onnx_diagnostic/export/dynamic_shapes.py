@@ -1,8 +1,10 @@
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
 import numpy as np
 import torch
 from ..helpers import string_type
+
+DYNAMIC_SHAPES = Tuple[Tuple[Any, ...], Dict[str, Any]]
 
 
 class ModelInputs:
@@ -218,7 +220,7 @@ class ModelInputs:
         return new_inputs
 
     @property
-    def true_model_name(self):
+    def true_model_name(self) -> str:
         "Returns class name or module name."
         return (
             self.model.__class__.__name__
@@ -227,7 +229,7 @@ class ModelInputs:
         )
 
     @property
-    def full_name(self):
+    def full_name(self) -> str:
         "Returns a name and class name."
         if self.method_name == "forward":
             return f"{self.name}:{self.true_model_name}"
@@ -337,9 +339,7 @@ class ModelInputs:
             f"{string_type(objs)}{msg() if msg else ''} in {self.module_name_type}"
         )
 
-    def guess_dynamic_shapes(
-        self,
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    def guess_dynamic_shapes(self) -> DYNAMIC_SHAPES:
         """
         Guesses the dynamic shapes for that module from two execution.
         If there is only one execution, then that would be static dimensions.
@@ -386,7 +386,7 @@ class ModelInputs:
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         dynamic_shapes: Tuple[Tuple[Any, ...], Dict[str, Any]],
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any], Tuple[Tuple[Any, ...], Dict[str, Any]]]:
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any], DYNAMIC_SHAPES]:
         """
         Uses the signatures to move positional arguments (args) to named arguments (kwargs)
         with the corresponding dynamic shapes.
@@ -434,3 +434,165 @@ class ModelInputs:
                 f"forward_ordered_parameter_names={self.forward_ordered_parameter_names}"
             )
         return args, kwargs, (tuple(), kw_dyn)
+
+    def validate_inputs_for_export(
+        self, dynamic_shapes: Optional[DYNAMIC_SHAPES] = None
+    ) -> List[List[Union[int, str]]]:
+        """
+        Validates the inputs the class contains for the given dynamic shapes.
+        If not specified, the dynamic_shapes are guessed.
+
+        :param dynamic_shapes: dynamic shapes to validate
+        :return: a list of lists, every list contains the path the invalid dimension
+        """
+        if dynamic_shapes is None:
+            if len(self.inputs) == 1:
+                return []
+            dyn_shapes = self.guess_dynamic_shapes()
+        return [CoupleInputsDynamicShapes(*i, dyn_shapes).invalid_paths() for i in self.inputs]
+
+
+class CoupleInputsDynamicShapes:
+    """
+    Pair inputs / dynamic shapes.
+
+    :param args: positional arguments
+    :param kwargs: named arguments
+    :param dynamic_shapes: dynamic shapes
+    :param args_names: if both args and kwargs are not empty, then
+        dynamic shapes must be a dictionary, and positional must be added
+        to the named arguments. Arguments names or a module must be given
+        in that case.
+    """
+
+    def __init__(
+        self,
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any],
+        dynamic_shapes: DYNAMIC_SHAPES,
+        args_names: Optional[Union[torch.nn.Module, List[str]]] = None,
+    ):
+        self.args = args
+        self.kwargs = kwargs
+        self.dynamic_shapes = dynamic_shapes
+        self.args_names = args_names
+
+    def __str__(self) -> str:
+        return "\n".join(
+            [
+                f"{self.__class__.__name__}(",
+                f"    args={string_type(self.args, with_shape=True)},"
+                f"    kwargs={string_type(self.kwargs, with_shape=True)},"
+                f"    dynamic_shapes={string_type(self.dynamic_shapes, with_shape=True)},"
+                f")",
+            ]
+        )
+
+    def invalid_paths(self) -> List[Union[str, int]]:
+        """
+        Tells the inputs are valid based on the dynamic shapes definition.
+        The method assumes that all custom classes can be serialized.
+        If some patches were applied to export, they should enabled while
+        calling this method if the inputs contains such classes.
+
+        The function checks that a dynamic dimension does not receive a value
+        of 0 or 1. It returns a list of invalid path.
+        """
+        if not self.args:
+            assert isinstance(self.kwargs, dict) and isinstance(self.dynamic_shapes, dict), (
+                f"Type mismatch, args={string_type(self.args)} and "
+                f"dynamic_shapes={self.dynamic_shapes} should have the same type."
+            )
+            return list(self._valid_shapes(self.kwargs, self.dynamic_shapes))
+        if not self.kwargs:
+            assert isinstance(self.args, tuple) and isinstance(self.dynamic_shapes, tuple), (
+                f"Type mismatch, args={string_type(self.args)} and "
+                f"dynamic_shapes={self.dynamic_shapes} should have the same type."
+            )
+            return list(self._valid_shapes(self.args, self.dynamic_shapes))
+
+        assert isinstance(self.dynamic_shapes, dict), (
+            f"Both positional and named arguments (args and kwargs) are filled. "
+            f"dynamic shapes must a dictionary not {type(self.dynamic_shapes)}"
+        )
+        if not self.args_names and set(self.dynamic_shapes) & set(self.kwargs) == set(
+            self.dynamic_shapes
+        ):
+            # No dynamic shapes for the positional arguments.
+            return list(self._valid_shapes(self.kwargs, self.dynamic_shapes))
+
+        if isinstance(self.args_names, list):
+            if not set(self.args_names) & set(self.dynamic_shapes):
+                # No dynamic shapes for the positional arguments.
+                return list(self._valid_shapes(self.kwargs, self.dynamic_shapes))
+
+            assert self.args_names, (
+                "args and kwargs are filled, then args_names must be specified in "
+                "the constructor to move positional arguments to named arguments."
+            )
+            assert len(self.args) <= len(self.args_names), (
+                f"There are {len(self.args)} positional arguments "
+                f"but only {len(self.args_names)} names. "
+                f"args={string_type(self.args, with_shape=True)}, args_name={self.args_names}"
+            )
+            kwargs = dict(zip(self.args_names, self.args))
+            kwargs.update(self.kwargs)
+            return list(self._valid_shapes(kwargs, self.dynamic_shapes))
+
+        raise NotImplementedError(
+            f"Not yet implemented when args is filled, "
+            f"kwargs as well but args_names is {type(self.args_names)}"
+        )
+
+    @classmethod
+    def _valid_shapes(
+        cls, inputs: Any, ds: Any, prefix: Tuple[Union[int, str], ...] = ()
+    ) -> Iterable:
+        assert all(isinstance(i, (int, str)) for i in prefix), f"Unexpected prefix {prefix}"
+        if isinstance(inputs, torch.Tensor):
+            assert isinstance(ds, dict) and all(
+                isinstance(s, int) for s in ds
+            ), f"Unexpected types, inputs is a Tensor but ds={ds}, prefix={prefix}"
+            for i, d in enumerate(inputs.shape):
+                if i in ds and not isinstance(ds[i], int):
+                    # dynamic then
+                    if d in {0, 1}:
+                        # export issues for sure
+                        yield (*prefix, f"[{i}]")
+        else:
+            if isinstance(inputs, (int, float, str)):
+                pass
+            elif isinstance(inputs, (tuple, list, dict)):
+                assert type(ds) is type(inputs), (
+                    f"Type mismatch between inputs {type(inputs)} "
+                    f"and ds={type(ds)}, prefix={prefix!r}"
+                )
+                assert len(ds) == len(inputs), (
+                    f"Length mismatch between inputs {len(inputs)} "
+                    f"and ds={len(ds)}, prefix={prefix!r}\n"
+                    f"inputs={string_type(inputs, with_shape=True)}, ds={ds}"
+                )
+                if isinstance(inputs, (tuple, list)):
+                    for ind, (i, d) in enumerate(zip(inputs, ds)):
+                        for path in cls._valid_shapes(i, d, prefix=(*prefix, ind)):
+                            yield path
+                else:
+                    assert set(inputs) == set(ds), (
+                        f"Keys mismatch between inputs {set(inputs)} "
+                        f"and ds={set(ds)}, prefix={prefix!r}"
+                    )
+                    for k, v in inputs.items():
+                        for path in cls._valid_shapes(v, ds[k], prefix=(*prefix, k)):
+                            yield path
+            else:
+                # A custom class.
+                assert inputs.__class__ in torch.utils._pytree.SUPPORTED_NODES, (
+                    f"Class {inputs.__class__.__name__!r} was not registered using "
+                    f"torch.utils._pytree.register_pytree_node, it is not possible to "
+                    f"map this class with the given dynamic shapes."
+                )
+                flat, _spec = torch.utils._pytree.tree_flatten(inputs)
+                for path in cls._valid_shapes(
+                    flat, ds, prefix=(*prefix, inputs.__class__.__name__)
+                ):
+                    yield path

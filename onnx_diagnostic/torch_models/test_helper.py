@@ -1,3 +1,4 @@
+import datetime
 import inspect
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -139,6 +140,55 @@ def _make_folder_name(
     return "-".join(els)
 
 
+def version_summary() -> Dict[str, Union[int, float, str]]:
+    """
+    Example:
+
+    .. runpython::
+        :showcode:
+
+        import pprint
+        from onnx_diagnostic.torch_models.test_helper import version_summary
+
+        pprint.pprint(version_summary())
+    """
+    import numpy
+
+    summary: Dict[str, Union[int, float, str]] = {
+        "version_torch": torch.__version__,
+        "version_numpy": numpy.__version__,
+    }
+    try:
+        import transformers
+
+        summary["version_transformers"] = transformers.__version__
+    except ImportError:
+        pass
+    try:
+        import onnx
+
+        summary["version_onnx"] = onnx.__version__
+    except ImportError:
+        pass
+    try:
+        import onnxscript
+
+        summary["version_onnxscript"] = onnxscript.__version__
+    except ImportError:
+        pass
+    try:
+        import onnxruntime
+
+        summary["version_onnxruntime"] = onnxruntime.__version__
+    except ImportError:
+        pass
+    import onnx_diagnostic
+
+    summary["version_onnx_diagnostic"] = onnx_diagnostic.__version__
+    summary["version_date"] = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    return summary
+
+
 def validate_model(
     model_id: str,
     task: Optional[str] = None,
@@ -180,7 +230,7 @@ def validate_model(
         another one with whatever the function produces
     """
     assert not trained, f"trained={trained} not supported yet"
-    summary: Dict[str, Union[int, float, str]] = {}
+    summary = version_summary()
     if dump_folder:
         folder_name = _make_folder_name(
             model_id, exporter, optimization, dtype=dtype, device=device

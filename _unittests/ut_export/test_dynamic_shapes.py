@@ -4,6 +4,8 @@ from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.export import ModelInputs
+from onnx_diagnostic.export.dynamic_shapes import CoupleInputsDynamicShapes
+from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
 
 class TestDynamicShapes(ExtTestCase):
@@ -451,6 +453,153 @@ class TestDynamicShapes(ExtTestCase):
                 ),
                 {},
             ),
+        )
+
+    def test_couple_input_ds_0(self):
+        T3x4 = torch.rand((3, 4))
+        T3x1 = torch.rand((3, 1))
+        Cls = CoupleInputsDynamicShapes
+        self.assertEmpty(Cls((T3x4,), {}, ({0: "batch"},)).invalid_paths())
+        self.assertEmpty(Cls((T3x1,), {}, ({0: "batch"},)).invalid_paths())
+        self.assertEmpty(Cls((), {"A": T3x1}, {"A": {0: "batch"}}).invalid_paths())
+        self.assertEmpty(Cls((), {"A": T3x4}, {"A": {0: "batch"}}).invalid_paths())
+
+        T1x4 = torch.rand((1, 4))
+        T1x1 = torch.rand((1, 1))
+        Cls = CoupleInputsDynamicShapes
+        self.assertEqual([(0, "[0]")], Cls((T1x4,), {}, ({0: "batch"},)).invalid_paths())
+        self.assertEqual([(0, "[0]")], Cls((T1x1,), {}, ({0: "batch"},)).invalid_paths())
+        self.assertEqual(
+            [("A", "[0]")], Cls((), {"A": T1x1}, {"A": {0: "batch"}}).invalid_paths()
+        )
+        self.assertEqual(
+            [("A", "[0]")], Cls((), {"A": T1x4}, {"A": {0: "batch"}}).invalid_paths()
+        )
+
+    def test_couple_input_ds_1(self):
+        T3x1 = torch.rand((3, 1))
+        T3x4 = torch.rand((3, 4))
+        ds_batch = {0: "batch"}
+        ds_batch_seq = {0: "batch", 1: "seq"}
+        args = (T3x4, T3x1)
+        Cls = CoupleInputsDynamicShapes
+        self.assertEqual([], Cls(args, {}, (ds_batch, ds_batch)).invalid_paths())
+        self.assertEqual([(1, "[1]")], Cls(args, {}, (ds_batch, ds_batch_seq)).invalid_paths())
+
+    def test_couple_input_ds_2(self):
+        T3x1 = torch.rand((3, 1))
+        T3x4 = torch.rand((3, 4))
+        ds_batch = {0: "batch"}
+        ds_batch_seq = {0: "batch", 1: "seq"}
+        kwargs = {"A": T3x4, "B": T3x1}
+        Cls = CoupleInputsDynamicShapes
+        self.assertEqual([], Cls((), kwargs, {"A": ds_batch, "B": ds_batch}).invalid_paths())
+        self.assertEqual(
+            [("B", "[1]")], Cls((), kwargs, {"A": ds_batch, "B": ds_batch_seq}).invalid_paths()
+        )
+
+    def test_couple_input_ds_3(self):
+        T3x1 = torch.rand((3, 1))
+        T3x4 = torch.rand((3, 4))
+        ds_batch = {0: "batch"}
+        ds_batch_seq = {0: "batch", 1: "seq"}
+        kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+        Cls = CoupleInputsDynamicShapes
+        self.assertEqual(
+            [], Cls((), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}).invalid_paths()
+        )
+        self.assertEqual(
+            [("B", 1, "[1]")],
+            Cls((), kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}).invalid_paths(),
+        )
+
+    def test_couple_input_ds_cache(self):
+        T3x1 = torch.rand((3, 1))
+        T3x4 = torch.rand((3, 4))
+        ds_batch = {0: "batch"}
+        ds_batch_seq = {0: "batch", 2: "seq"}
+
+        n_layers = 2
+        bsize, nheads, slen, dim = 2, 4, 1, 7
+        cache = make_dynamic_cache(
+            [
+                (torch.randn(bsize, nheads, slen, dim), torch.randn(bsize, nheads, slen, dim))
+                for i in range(n_layers)
+            ]
+        )
+
+        kwargs = {"A": T3x4, "B": (T3x1, cache)}
+        Cls = CoupleInputsDynamicShapes
+        with bypass_export_some_errors(patch_transformers=True):
+            self.assertEqual(
+                [],
+                Cls(
+                    (),
+                    kwargs,
+                    {"A": ds_batch, "B": (ds_batch, [ds_batch, ds_batch, ds_batch, ds_batch])},
+                ).invalid_paths(),
+            )
+            self.assertEqual(
+                [("B", 1, "DynamicCache", 1, "[2]"), ("B", 1, "DynamicCache", 3, "[2]")],
+                Cls(
+                    (),
+                    kwargs,
+                    {
+                        "A": ds_batch,
+                        "B": (ds_batch, [ds_batch, ds_batch_seq, ds_batch, ds_batch_seq]),
+                    },
+                ).invalid_paths(),
+            )
+
+    def test_couple_input_ds_args_kwargs_0(self):
+        T3x1 = torch.rand((3, 1))
+        T3x4 = torch.rand((3, 4))
+        T5x6 = torch.rand((5, 6))
+        ds_batch = {0: "batch"}
+        ds_batch_seq = {0: "batch", 1: "seq"}
+        args = (T5x6,)
+        kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+        Cls = CoupleInputsDynamicShapes
+        self.assertEqual(
+            [], Cls(args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}).invalid_paths()
+        )
+        self.assertEqual(
+            [],
+            Cls(
+                args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch)}, args_names=["X"]
+            ).invalid_paths(),
+        )
+        self.assertEqual(
+            [("B", 1, "[1]")],
+            Cls(args, kwargs, {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}).invalid_paths(),
+        )
+
+    def test_couple_input_ds_args_kwargs_1(self):
+        T3x1 = torch.rand((3, 1))
+        T3x4 = torch.rand((3, 4))
+        T5x1 = torch.rand((5, 1))
+        ds_batch = {0: "batch"}
+        ds_batch_seq = {0: "batch", 1: "seq"}
+        args = (T5x1,)
+        kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+        Cls = CoupleInputsDynamicShapes
+        self.assertEqual(
+            [],
+            Cls(
+                args,
+                kwargs,
+                {"X": ds_batch, "A": ds_batch, "B": (ds_batch, ds_batch)},
+                args_names=["X"],
+            ).invalid_paths(),
+        )
+        self.assertEqual(
+            [("X", "[1]"), ("B", 1, "[1]")],
+            Cls(
+                args,
+                kwargs,
+                {"X": ds_batch_seq, "A": ds_batch, "B": (ds_batch, ds_batch_seq)},
+                args_names=["X"],
+            ).invalid_paths(),
         )
 
 
