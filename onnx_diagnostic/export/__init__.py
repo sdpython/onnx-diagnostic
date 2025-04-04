@@ -1,1 +1,1 @@
-from .dynamic_shapes import ModelInputs
+from .dynamic_shapes import CoupleInputsDynamicShapes, ModelInputs
