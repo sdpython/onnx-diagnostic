@@ -313,6 +313,24 @@ class ModelInputs:
                 shapes[i] = self.guess_dynamic_shape_object(*[o[i] for o in objs])
             return shapes
 
+        if obj.__class__ in torch.utils._pytree.SUPPORTED_NODES:
+            kcl = set(o.__class__ for o in objs)
+            assert len(kcl) == 1, (
+                f"All instances of argument {i} are not of the same class but {kcl}, "
+                f"types should be the same."
+            )
+            col_args = [torch.utils._pytree.tree_flatten(o) for o in objs]
+            kc = set(len(col_args) for o in objs)
+            assert len(kc) == 1, (
+                f"All instances of type {kcl.pop()} are not serialized into the same number "
+                f"of arguments, it should be the same."
+            )
+            values = []
+            for i in range(kc.pop()):
+                values.append(self.guess_dynamic_dimensions(*[ca[i] for ca in col_args]))
+            return values
+
+        # In case DynamicCache is not registered.
         if obj.__class__.__name__ == "DynamicCache":
             kc = set(len(o.key_cache) for o in objs)
             assert (

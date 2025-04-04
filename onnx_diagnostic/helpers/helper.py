@@ -443,6 +443,17 @@ def string_type(
     if ignore:
         return f"{obj.__class__.__name__}(...)"
 
+    if obj.__class__ in torch.utils._pytree.SUPPORTED_NODES:
+        args, _spec = torch.utils._pytree.tree_flatten(obj)
+        att = string_type(
+            args,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+        )
+        return f"{obj.__class__.__name__}({att})"
+
     raise AssertionError(f"Unsupported type {type(obj).__name__!r} - {type(obj)}")
 
 
@@ -1125,6 +1136,29 @@ def max_diff(
             flatten=flatten,
         )
 
+    if expected.__class__ in torch.utils._pytree.SUPPORTED_NODES:
+        if got.__class__ not in torch.utils._pytree.SUPPORTED_NODES:
+            return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
+        if verbose >= 6:
+            print(
+                f"[max_diff] {expected.__class__.__name__}: "
+                f"{string_type(expected)} ? {string_type(got)}"
+            )
+        expected_args, _spec = torch.utils._pytree.tree_flatten(expected)
+        got_args, _spec = torch.utils._pytree.tree_flatten(got)
+        return max_diff(
+            expected_args,
+            got_args,
+            level=level,
+            flatten=flatten,
+            debug_info=debug_info,
+            begin=begin,
+            end=end,
+            _index=_index,
+            verbose=verbose,
+        )
+
+    # backup function in case pytorch does not know how to serialize.
     if expected.__class__.__name__ == "DynamicCache":
         if got.__class__.__name__ == "DynamicCache":
             if verbose >= 6:
