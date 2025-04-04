@@ -40,6 +40,21 @@ class TestDynamicShapes(ExtTestCase):
         ds = mi.guess_dynamic_shapes()
         self.assertEqual(ds, ((), {}))
 
+    def test_guess_dynamic_shapes_auto(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return x + y
+
+        model = Model()
+        x = torch.randn((5, 6))
+        y = torch.randn((1, 6))
+        model(x, y)
+        self.assertNotEmpty(y)
+
+        mi = ModelInputs(Model(), [])
+        ds = mi.guess_dynamic_shapes(auto=True)
+        self.assertEqual(ds, ((), {}))
+
     def test_guess_dynamic_shapes_1args(self):
         class Model(torch.nn.Module):
             def forward(self, x, y):

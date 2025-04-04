@@ -7,6 +7,7 @@ from onnx_diagnostic.helpers.cache_helper import (
     flatten_unflatten_for_dynamic_shapes,
 )
 from onnx_diagnostic.export import ModelInputs
+from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
 
 class TestSerialization(ExtTestCase):
@@ -24,14 +25,32 @@ class TestSerialization(ExtTestCase):
                 return cache.key_cache[0]
 
         cache = self._get_cache()
-        flat_unflat = flatten_unflatten_for_dynamic_shapes(cache)
-        s = string_type(flat_unflat, with_shape=True)
-        self.assertEqual(s, "#2[#2[T1s2x4x1x7,T1s2x4x1x7],#2[T1s2x4x1x7,T1s2x4x1x7]]")
         DYN = torch.export.Dim.DYNAMIC
         ds = {0: DYN, 1: DYN, 3: DYN}
         dynamic_shapes = ([[ds, ds], [ds, ds]],)
         exp = torch.export.export(Model(), (cache,), dynamic_shapes=dynamic_shapes)
         self.assertNotEmpty(exp)
+
+    def test_dynamic_cache_flat_unflat(self):
+        class Model(torch.nn.Module):
+            def forward(self, cache):
+                return cache.key_cache[0]
+
+        cache = self._get_cache()
+        flat_unflat = flatten_unflatten_for_dynamic_shapes(cache)
+        s = string_type(flat_unflat, with_shape=True)
+        self.assertEqual("#2[#2[T1s2x4x1x7,T1s2x4x1x7],#2[T1s2x4x1x7,T1s2x4x1x7]]", s)
+
+    def test_dynamic_cache_bypass(self):
+        class Model(torch.nn.Module):
+            def forward(self, cache):
+                return cache.key_cache[0]
+
+        cache = self._get_cache()
+        with bypass_export_some_errors(patch_transformers=True):
+            flat_unflat = flatten_unflatten_for_dynamic_shapes(cache)
+            s = string_type(flat_unflat, with_shape=True)
+            self.assertEqual("#2[#2[T1s2x4x1x7,T1s2x4x1x7],#2[T1s2x4x1x7,T1s2x4x1x7]]", s)
 
     def test_dynamic_cache_guess_static(self):
         class Model(torch.nn.Module):
@@ -42,6 +61,18 @@ class TestSerialization(ExtTestCase):
         md = ModelInputs(Model(), [(cache,)])
         guessed = md.guess_dynamic_shapes()
         self.assertEqual(guessed, (([[{}, {}], [{}, {}]],), {}))
+
+    def test_dynamic_cache_guess_auto(self):
+        class Model(torch.nn.Module):
+            def forward(self, cache):
+                return cache.key_cache[0]
+
+        cache = self._get_cache()
+        md = ModelInputs(Model(), [(cache,)])
+        guessed = md.guess_dynamic_shapes(auto=True)
+        AUTO = torch.export.Dim.AUTO
+        ds = {i: AUTO for i in range(4)}  # noqa: C420
+        self.assertEqual(guessed, (([[ds, ds], [ds, ds]],), {}))
 
     def test_dynamic_cache_guess_dynamic(self):
         class Model(torch.nn.Module):
