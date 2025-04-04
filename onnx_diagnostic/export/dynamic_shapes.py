@@ -319,7 +319,7 @@ class ModelInputs:
                 f"All instances of argument {i} are not of the same class but {kcl}, "
                 f"types should be the same."
             )
-            col_args = [torch.utils._pytree.tree_flatten(o) for o in objs]
+            col_args = [torch.utils._pytree.tree_flatten(o)[0] for o in objs]
             kc = set(len(col_args) for o in objs)
             assert len(kc) == 1, (
                 f"All instances of type {kcl.pop()} are not serialized into the same number "

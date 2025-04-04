@@ -97,6 +97,10 @@ def flatten_dynamic_cache(
     dynamic_cache: transformers.cache_utils.DynamicCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
+    import transformers.cache_utils
+
+    if hasattr(transformers.cache_utils, "_flatten_dynamic_cache"):
+        return transformers.cache_utils._flatten_dynamic_cache(dynamic_cache)
     flat = [
         (k, getattr(dynamic_cache, k))
         for k in ["key_cache", "value_cache"]
@@ -111,7 +115,10 @@ def flatten_with_keys_dynamic_cache(d: Dict[Any, Any]) -> Tuple[
 ]:
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
     import torch
+    import transformers.cache_utils
 
+    if hasattr(transformers.cache_utils, "_flatten_with_keys_dynamic_cache"):
+        return transformers.cache_utils._flatten_with_keys_dynamic_cache(d)
     values, context = flatten_dynamic_cache(d)
     return [(torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)], context
 
@@ -122,9 +129,13 @@ def unflatten_dynamic_cache(
     output_type=None,
 ) -> transformers.cache_utils.DynamicCache:
     """Restores a :class:`transformers.cache_utils.DynamicCache` from python objects."""
-    from transformers.cache_utils import DynamicCache
+    import transformers.cache_utils
 
-    cache = DynamicCache()
+    if hasattr(transformers.cache_utils, "_unflatten_dynamic_cache"):
+        assert output_type is None, f"output_type={output_type} not supported"
+        return transformers.cache_utils._unflatten_dynamic_cache(values, context)
+
+    cache = transformers.cache_utils.DynamicCache()
     values = dict(zip(context, values))
     for k, v in values.items():
         setattr(cache, k, v)
