@@ -3,8 +3,7 @@ import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
-from onnx_diagnostic.export import ModelInputs
-from onnx_diagnostic.export.dynamic_shapes import CoupleInputsDynamicShapes
+from onnx_diagnostic.export import ModelInputs, CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
 

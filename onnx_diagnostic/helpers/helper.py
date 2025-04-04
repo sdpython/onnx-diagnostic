@@ -344,7 +344,9 @@ def string_type(
     # others classes
 
     if obj.__class__ in torch.utils._pytree.SUPPORTED_NODES:
-        args, _spec = torch.utils._pytree.tree_flatten(obj)
+        from .cache_helper import flatten_unflatten_for_dynamic_shapes
+
+        args = flatten_unflatten_for_dynamic_shapes(obj)
         att = string_type(
             args,
             with_shape=with_shape,
@@ -395,7 +397,14 @@ def string_type(
     if isinstance(obj, (torch.device, torch.dtype, torch.memory_format, torch.layout)):
         return f"{obj.__class__.__name__}({obj})"
 
-    if isinstance(obj, torch.utils._pytree.TreeSpec):
+    if isinstance(
+        obj,
+        (
+            torch.utils._pytree.TreeSpec,
+            torch.utils._pytree.MappingKey,
+            torch.utils._pytree.SequenceKey,
+        ),
+    ):
         return repr(obj).replace(" ", "").replace("\n", " ")
 
     # to avoid failures
