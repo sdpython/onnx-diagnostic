@@ -110,10 +110,19 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     # torch.fx._pytree.register_pytree_flatten_spec(
     #           DynamicCache, _flatten_dynamic_cache_for_fx)
     # so we remove it anyway
-    if DynamicCache in torch.fx._pytree.SUPPORTED_NODES_EXACT_MATCH and pv.Version(
+    if DynamicCache in torch.fx._pytree.SUPPORTED_NODES and pv.Version(
         transformers.__version__
     ) >= pv.Version("2.7"):
-        del torch.fx._pytree.SUPPORTED_NODES_EXACT_MATCH[DynamicCache]
+        if verbose:
+            print("[_register_cache_serialization] DynamicCache is unregistered first.")
+        _unregister(DynamicCache)
+        torch.utils._pytree.register_pytree_node(
+            DynamicCache,
+            flatten_dynamic_cache,
+            unflatten_dynamic_cache,
+            serialized_type_name=f"{DynamicCache.__module__}.{DynamicCache.__name__}",
+            flatten_with_keys_fn=flatten_with_keys_dynamic_cache,
+        )
 
     unregistered_dynamic_cache = True
     if DynamicCache is not None and DynamicCache in torch.utils._pytree.SUPPORTED_NODES:
