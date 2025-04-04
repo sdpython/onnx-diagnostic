@@ -126,6 +126,7 @@ nitpick_ignore = [
     ("py:class", "transformers.configuration_utils.PretrainedConfig"),
     ("py:func", "torch.export._draft_export.draft_export"),
     ("py:func", "torch._export.tools.report_exportability"),
+    ("py:func", "torch.utils._pytree.register_pytree_node"),
     ("py:meth", "huggingface_hub.HfApi.list_models"),
     ("py:meth", "transformers.AutoConfig.from_pretrained"),
     ("py:meth", "transformers.GenerationMixin.generate"),

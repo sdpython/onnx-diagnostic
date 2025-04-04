@@ -1,20 +1,16 @@
 """
 .. _l-plot-export-with-args-kwargs:
 
-==================================
-Dynamic Shapes for *args, **kwargs
-==================================
+==========================================
+Dynamic Shapes for ``*args``, ``**kwargs``
+==========================================
 
 Quick tour of dynamic shapes.
-
-Simple Examples
-===============
-
 We first look at examples playing positional and names parameters
 to understand how :func:`torch.export.export` works.
 
 args
-++++
+====
 """
 
 import pprint
@@ -59,7 +55,7 @@ print(ep)
 
 # %%
 # kwargs
-# ++++++
+# ======
 #
 # We do the same with named arguments.
 
@@ -88,7 +84,7 @@ print(ep)
 
 # %%
 # args and kwargs
-# +++++++++++++++
+# ===============
 #
 # :func:`torch.export.export` does not like having dynami shapes
 # for both args and kwargs. We need to define them using one mechanism.
