@@ -1,8 +1,27 @@
-from typing import List, Tuple
+from typing import Any, List, Tuple
 import packaging.version as pv
 import torch
 import transformers
 import transformers.cache_utils
+
+
+def flatten_unflatten_for_dynamic_shapes(obj: Any) -> Any:
+    """
+    Returns the object in a different structure similar to what
+    the definition of the dynamic shapes should use.
+
+    :param obj: object from a custom class
+    :return: the serialized object
+    """
+    flat, spec = torch.utils._pytree.tree_flatten(obj)
+    start = 0
+    end = 0
+    subtrees = []
+    for subspec in spec.children_specs:
+        end += subspec.num_leaves
+        subtrees.append(subspec.unflatten(flat[start:end]))
+        start = end
+    return subtrees
 
 
 def is_cache_dynamic_registered(fast: bool = False) -> bool:

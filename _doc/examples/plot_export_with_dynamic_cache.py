@@ -11,142 +11,26 @@ The cache size is dynamic to cope with the growing context.
 The example shows a tool which determines the dynamic shapes
 for :func:`torch.export.export` based on a set of valid inputs.
 
-Simple Examples
-===============
+DynamicCache
+============
 
-We first look at examples playing positional and names parameters
-to understand how :func:`torch.export.export` works.
-
-args
-++++
+:func:`torch.export.export` serializes caches and any custom class
+if these serialization functions are provided with is the case for
+:class:`transformers.cache_utils.DynamicCache` and ``transformers>=4.50``.
+The dynamic shapes must be provided following the serialized form.
 """
 
 import pprint
 import torch
 from onnx_diagnostic import doc
-from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
-from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.export import ModelInputs
-
-# %%
-# We need addition import in case ``transformers<4.50``.
-# Exporting DynamicCache is not supported before that.
 from onnx_diagnostic.ext_test_case import has_transformers
+from onnx_diagnostic.helpers import string_type
+from onnx_diagnostic.helpers.cache_helper import (
+    flatten_unflatten_for_dynamic_shapes,
+    make_dynamic_cache,
+)
+from onnx_diagnostic.export import ModelInputs
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
-
-
-class Model(torch.nn.Module):
-    def forward(self, x, y):
-        return x + y
-
-
-model = Model()
-x = torch.randn((5, 6))
-y = torch.randn((1, 6))
-model(x, y)  # to check it works
-
-ep = torch.export.export(model, (x, y))
-print(ep)
-
-# %%
-# As expected there is no dynamic shapes.
-# We use :class:`onnx_diagnostic.export.ModelInputs`
-# to define them from two set of valid inputs.
-# These inputs must have different value for the dynamic
-# dimensions.
-
-inputs = [(x, y), (torch.randn((7, 8)), torch.randn((1, 8)))]
-mi = ModelInputs(Model(), inputs)
-ds = mi.guess_dynamic_shapes()
-pprint.pprint(ds)
-
-# %%
-# The function returns a tuple with two objects.
-# The first one for the positional arguments, the other one
-# for the named arguments. There is no named arguments. We
-# we used the first result to export.
-
-ep = torch.export.export(model, (x, y), dynamic_shapes=ds[0])
-print(ep)
-
-# %%
-# kwargs
-# ++++++
-#
-# We do the same with named arguments.
-
-
-class Model(torch.nn.Module):
-    def forward(self, x, y):
-        return x + y
-
-
-model = Model()
-x = torch.randn((5, 6))
-y = torch.randn((1, 6))
-model(x=x, y=y)  # to check it works
-
-# %%
-# Two sets of valid inputs.
-inputs = [dict(x=x, y=y), dict(x=torch.randn((7, 8)), y=torch.randn((1, 8)))]
-mi = ModelInputs(Model(), inputs)
-ds = mi.guess_dynamic_shapes()
-pprint.pprint(ds)
-
-# %%
-# And we export.
-ep = torch.export.export(model, (), kwargs=dict(x=x, y=y), dynamic_shapes=ds[1])
-print(ep)
-
-# %%
-# args and kwargs
-# +++++++++++++++
-#
-# :func:`torch.export.export` does not like having dynami shapes
-# for both args and kwargs. We need to define them using one mechanism.
-
-
-class Model(torch.nn.Module):
-    def forward(self, x, y):
-        return x + y
-
-
-model = Model()
-x = torch.randn((5, 6))
-y = torch.randn((1, 6))
-model(x, y=y)  # to check it works
-
-# %%
-# Two sets of valid inputs with positional and names arguments.
-
-inputs = [((x,), dict(y=y)), ((torch.randn((7, 8)),), dict(y=torch.randn((1, 8))))]
-mi = ModelInputs(Model(), inputs)
-ds = mi.guess_dynamic_shapes()
-pprint.pprint(ds)
-
-# %%
-# This does not work with :func:`torch.export.export` so
-# we use a method to move the positional dynamic shapes to
-# named one. The method relies on the signature of the
-# forward method.
-
-new_args, new_kwargs, new_ds = mi.move_to_kwargs(*mi.inputs[0], ds)
-pprint.pprint(new_ds)
-
-# %%
-# And we export.
-
-ep = torch.export.export(model, new_args, kwargs=new_kwargs, dynamic_shapes=new_ds[1])
-print(ep)
-
-# %%
-# DynamicCache
-# ============
-#
-# :func:`torch.export.export` serializes caches and any custom class
-# if these serialization functions are provided with is the case for
-# :class:`transformers.cache_utils.DynamicCache` and ``transformers>=4.50``.
-# The dynamic shapes must be provided following the serialized form.
 
 
 class Model(torch.nn.Module):
@@ -196,14 +80,19 @@ inputs = [
 ]
 
 # %%
-# And the first set of inputs looks like:
-print(string_type(inputs[0], with_shape=True))
+# And the second set of inputs looks like:
+print(string_type(inputs[1], with_shape=True))
 
 # %%
-# We can now compute the dynamic shapes.
+# Guess the dynamic shapes
+# ========================
+#
+# The following tool can be used to guess the dynamic shapes
+# the way :func:`torch.export.export` expects them.
 
 mi = ModelInputs(Model(), inputs)
 ds = mi.guess_dynamic_shapes()
+
 pprint.pprint(ds)
 
 # %%
@@ -223,6 +112,26 @@ else:
         )
 print(ep)
 
-# %%
+# Do we need to guess?
+# ++++++++++++++++++++
+#
+# Function :func:`onnx_diagnostic.helpers.string_type` is using
+# the serialization functions to print out the DynamicCache the was
+# :func:`torch.export.export` expects them.
 
-doc.plot_legend("dynamic shapes\nfor cache", "torch.export.export", "tomato")
+print(string_type(cache, with_shape=True))
+
+# %%
+# You can also use function
+# :func:`onnx_diagnostic.helpers.cache_helper.flatten_unflatten_for_dynamic_shapes`
+# to show a DynamicCache restructured the way :func:`torch.export.export` expects
+# it to be without the custom class.
+
+print(string_type(flatten_unflatten_for_dynamic_shapes(cache), with_shape=True))
+
+# %%
+# This code works for any custom class if it was registered
+# with :func:`torch.utils._pytree.register_pytree_node`.
+
+
+doc.plot_legend("dynamic shapes\nfor DynamicCache", "torch.export.export", "tomato")

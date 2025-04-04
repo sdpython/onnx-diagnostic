@@ -7,6 +7,12 @@ onnx_diagnostic.export
 
     dynamic_shapes
 
+CoupleInputsDynamicShapes
++++++++++++++++++++++++++
+
+.. autoclass:: onnx_diagnostic.export.CoupleInputsDynamicShapes
+    :members:
+
 ModelInputs
 +++++++++++
 

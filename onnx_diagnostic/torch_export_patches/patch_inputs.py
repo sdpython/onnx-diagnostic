@@ -39,6 +39,11 @@ def _make_shape(subset: Dict, cls: type, value: Any) -> Any:
             break
         new_shape = [[axes for i in range(cache_length)], [axes for i in range(cache_length)]]
         return new_shape
+    if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:
+        raise NotImplementedError(
+            f"_make_shape not implemented for registered class={cls}, "
+            f"subset={subset}, value={string_type(value)}"
+        )
     raise NotImplementedError(
         f"_make_shape not implemented for cls={cls}, "
         f"subset={subset}, value={string_type(value)}"

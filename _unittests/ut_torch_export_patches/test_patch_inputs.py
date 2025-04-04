@@ -1,7 +1,7 @@
 import unittest
 import torch
 import transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, requires_transformers
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
@@ -10,6 +10,7 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import (
 
 class TestPatchInputs(ExtTestCase):
     @hide_stdout()
+    @requires_transformers("4.50")
     def test_convert_dynamic_axes_into_dynamic_shapes_1(self):
         args = (
             torch.randint(0, 10, size=(2, 8)).to(torch.int64),
@@ -36,8 +37,7 @@ class TestPatchInputs(ExtTestCase):
         self.assertEqual(
             (
                 "dict(input_ids:T7s2x8,attention_mask:T7s2x8,position_ids:T7s2x8,"
-                "past_key_values:DynamicCache(key_cache=#1[T1s2x1x3x96], "
-                "value_cache=#1[T1s2x1x3x96]))"
+                "past_key_values:DynamicCache[serialized](#2[#1[T1s2x1x3x96],#1[T1s2x1x3x96]]))"
             ),
             string_type(res[1], with_shape=True),
         )
@@ -55,6 +55,7 @@ class TestPatchInputs(ExtTestCase):
         )
 
     @hide_stdout()
+    @requires_transformers("4.50")
     def test_convert_dynamic_axes_into_dynamic_shapes_2(self):
         args = (
             torch.randint(0, 10, size=(2, 8)).to(torch.int64),
@@ -105,8 +106,7 @@ class TestPatchInputs(ExtTestCase):
         self.assertEqual(
             (
                 "dict(input_ids:T7s2x8,attention_mask:T7s2x8,position_ids:T7s2x8,"
-                "past_key_values:DynamicCache(key_cache=#1[T1s2x1x3x96], "
-                "value_cache=#1[T1s2x1x3x96]))"
+                "past_key_values:DynamicCache[serialized](#2[#1[T1s2x1x3x96],#1[T1s2x1x3x96]]))"
             ),
             string_type(res[1], with_shape=True),
         )

@@ -60,7 +60,7 @@ Enlightening Examples
 **Torch Export**
 
 * :ref:`l-plot-export-cond`
-* :ref:`l-plot-sxport-with-dynamio-shapes-auto`
+* :ref:`l-plot-sxport-with-auto`
 * :ref:`l-plot-export-with-dynamic-shape`
 * :ref:`l-plot-export-locale-issue`
 * :ref:`l-plot-tiny-llm-export`

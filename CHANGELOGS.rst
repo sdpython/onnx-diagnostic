@@ -4,6 +4,7 @@ Change Logs
 0.3.0
 +++++
 
+* :pr:`38`, uses the registered serialization functions when it is available
 * :pr:`30`, :pr:`31`: adds command to test a model id, validate the export
 * :pr:`29`: adds helpers to measure the memory peak and run benchmark
   on different processes

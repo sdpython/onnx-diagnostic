@@ -1,5 +1,5 @@
 """
-.. _l-plot-sxport-with-dynamio-shapes-auto:
+.. _l-plot-sxport-with-auto:
 
 Use DYNAMIC or AUTO when exporting if dynamic shapes has constraints
 ====================================================================
@@ -46,7 +46,7 @@ except NotImplementedError as e:
 # %%
 # Then we could make it a different one.
 
-dz = torch.export.Dim("dz") * 2
+dz = torch.export.Dim("dz")
 try:
     ep = torch.export.export(
         model,
@@ -84,14 +84,13 @@ print(ep)
 # The same result can be obtained with ``torch.export.Dim.AUTO``.
 
 AUTO = torch.export.Dim.AUTO
-print(
-    torch.export.export(
-        model,
-        (x, y, z),
-        dynamic_shapes=({0: AUTO, 1: AUTO}, {0: AUTO, 1: AUTO}, {0: AUTO, 1: AUTO}),
-    )
+ep = torch.export.export(
+    model,
+    (x, y, z),
+    dynamic_shapes=({0: AUTO, 1: AUTO}, {0: AUTO, 1: AUTO}, {0: AUTO, 1: AUTO}),
 )
+print(ep)
 
 # %%
 
-doc.plot_legend("dynamic shapes\ninferred", "torch.export.export", "tomato")
+doc.plot_legend("torch.export.Dim\nor DYNAMIC\nor AUTO", "torch.export.export", "tomato")

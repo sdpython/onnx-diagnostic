@@ -305,7 +305,7 @@ def dummy_llm(
 
 def to_any(value: Any, to_value: Union[torch.dtype, torch.device]) -> Any:
     """
-    Applies torch.to is applicables.
+    Applies torch.to is applicable.
     Goes recursively.
     """
     if isinstance(value, (torch.nn.Module, torch.Tensor)):
@@ -329,6 +329,10 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device]) -> Any:
                 )
             )
         )
+    if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:
+        args, spec = torch.utils._pytree.tree_flatten(value)
+        new_args = to_any(args, to_value)
+        return torch.utils._pytree.tree_unflatten(new_args, spec)
 
     assert not isinstance(value, Iterable), f"Unsupported type {type(value)}"
     return value
@@ -361,6 +365,11 @@ def torch_deepcopy(value: Any) -> Any:
             torch_deepcopy(value.self_attention_cache),
             torch_deepcopy(value.cross_attention_cache),
         )
+    if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:
+        args, spec = torch.utils._pytree.tree_flatten(value)
+        new_args = torch_deepcopy(args)
+        return torch.utils._pytree.tree_unflatten(new_args, spec)
+
     # We should have a code using serialization, deserialization assuming a model
     # cannot be exported without them.
     raise NotImplementedError(f"torch_deepcopy not implemented for type {type(value)}")

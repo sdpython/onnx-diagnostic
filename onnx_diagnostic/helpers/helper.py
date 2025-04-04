@@ -343,6 +343,72 @@ def string_type(
 
     # others classes
 
+    if obj.__class__ in torch.utils._pytree.SUPPORTED_NODES:
+        from .cache_helper import flatten_unflatten_for_dynamic_shapes
+
+        args = flatten_unflatten_for_dynamic_shapes(obj)
+        att = string_type(
+            args,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+        )
+        return f"{obj.__class__.__name__}[serialized]({att})"
+
+    if type(obj).__name__ == "Node" and hasattr(obj, "meta"):
+        # torch.fx.node.Node
+        return f"%{obj.target}"
+    if type(obj).__name__ == "ValueInfoProto":
+        return f"OT{obj.type.tensor_type.elem_type}"
+
+    if obj.__class__.__name__ == "BatchFeature":
+        s = string_type(
+            obj.data,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+        )
+        return f"BatchFeature(data={s})"
+
+    if obj.__class__.__name__ == "BatchEncoding":
+        s = string_type(
+            obj.data,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+        )
+        return f"BatchEncoding(data={s})"
+
+    if obj.__class__.__name__ == "VirtualTensor":
+        return (
+            f"{obj.__class__.__name__}(name={obj.name!r}, "
+            f"dtype={obj.dtype}, shape={obj.shape})"
+        )
+
+    if obj.__class__.__name__ == "_DimHint":
+        return str(obj)
+
+    if isinstance(obj, torch.nn.Module):
+        return f"{obj.__class__.__name__}(...)"
+
+    if isinstance(obj, (torch.device, torch.dtype, torch.memory_format, torch.layout)):
+        return f"{obj.__class__.__name__}({obj})"
+
+    if isinstance(
+        obj,
+        (
+            torch.utils._pytree.TreeSpec,
+            torch.utils._pytree.MappingKey,
+            torch.utils._pytree.SequenceKey,
+        ),
+    ):
+        return repr(obj).replace(" ", "").replace("\n", " ")
+
+    # to avoid failures
+
     if type(obj).__name__ == "MambaCache":
         c = string_type(
             obj.conv_states,
@@ -359,11 +425,6 @@ def string_type(
             limit=limit,
         )
         return f"MambaCache(conv_states={c}, ssm_states={d})"
-    if type(obj).__name__ == "Node" and hasattr(obj, "meta"):
-        # torch.fx.node.Node
-        return f"%{obj.target}"
-    if type(obj).__name__ == "ValueInfoProto":
-        return f"OT{obj.type.tensor_type.elem_type}"
 
     if obj.__class__.__name__ == "DynamicCache":
         kc = string_type(
@@ -401,44 +462,6 @@ def string_type(
             f"{obj.__class__.__name__}(self_attention_cache={att}, "
             f"cross_attention_cache={cross})"
         )
-
-    if obj.__class__.__name__ == "BatchFeature":
-        s = string_type(
-            obj.data,
-            with_shape=with_shape,
-            with_min_max=with_min_max,
-            with_device=with_device,
-            limit=limit,
-        )
-        return f"BatchFeature(data={s})"
-
-    if obj.__class__.__name__ == "BatchEncoding":
-        s = string_type(
-            obj.data,
-            with_shape=with_shape,
-            with_min_max=with_min_max,
-            with_device=with_device,
-            limit=limit,
-        )
-        return f"BatchEncoding(data={s})"
-
-    if obj.__class__.__name__ == "VirtualTensor":
-        return (
-            f"{obj.__class__.__name__}(name={obj.name!r}, "
-            f"dtype={obj.dtype}, shape={obj.shape})"
-        )
-
-    if obj.__class__.__name__ == "_DimHint":
-        return str(obj)
-
-    if isinstance(obj, torch.nn.Module):
-        return f"{obj.__class__.__name__}(...)"
-
-    if isinstance(obj, (torch.device, torch.dtype, torch.memory_format, torch.layout)):
-        return f"{obj.__class__.__name__}({obj})"
-
-    if isinstance(obj, torch.utils._pytree.TreeSpec):
-        return repr(obj).replace(" ", "").replace("\n", " ")
 
     if ignore:
         return f"{obj.__class__.__name__}(...)"
@@ -1125,6 +1148,29 @@ def max_diff(
             flatten=flatten,
         )
 
+    if expected.__class__ in torch.utils._pytree.SUPPORTED_NODES:
+        if got.__class__ not in torch.utils._pytree.SUPPORTED_NODES:
+            return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
+        if verbose >= 6:
+            print(
+                f"[max_diff] {expected.__class__.__name__}: "
+                f"{string_type(expected)} ? {string_type(got)}"
+            )
+        expected_args, _spec = torch.utils._pytree.tree_flatten(expected)
+        got_args, _spec = torch.utils._pytree.tree_flatten(got)
+        return max_diff(
+            expected_args,
+            got_args,
+            level=level,
+            flatten=flatten,
+            debug_info=debug_info,
+            begin=begin,
+            end=end,
+            _index=_index,
+            verbose=verbose,
+        )
+
+    # backup function in case pytorch does not know how to serialize.
     if expected.__class__.__name__ == "DynamicCache":
         if got.__class__.__name__ == "DynamicCache":
             if verbose >= 6:
