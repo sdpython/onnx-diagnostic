@@ -1,6 +1,6 @@
 import contextlib
 import pprint
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Set
 from .onnx_export_serialization import (
     flatten_with_keys_dynamic_cache,
     flatten_dynamic_cache,
@@ -65,7 +65,7 @@ def unpatch_module(mod, info: Dict[type, Dict[type, Callable]], verbose: int = 0
                 setattr(original, n, v)
 
 
-PATCH_OF_PATCHES = set()
+PATCH_OF_PATCHES: Set[Any] = set()
 
 
 def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
@@ -116,7 +116,7 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     if (
         DynamicCache in torch.fx._pytree.SUPPORTED_NODES
         and not PATCH_OF_PATCHES
-        and pv.Version(torch.__version__) >= pv.Version("2.7")
+        # and pv.Version(torch.__version__) < pv.Version("2.7")
         and pv.Version(transformers.__version__) >= pv.Version("4.50")
     ):
         if verbose:
@@ -132,6 +132,10 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
             serialized_type_name=f"{DynamicCache.__module__}.{DynamicCache.__name__}",
             flatten_with_keys_fn=flatten_with_keys_dynamic_cache,
         )
+        if pv.Version(torch.__version__) < pv.Version("2.7"):
+            torch.fx._pytree.register_pytree_flatten_spec(
+                DynamicCache, lambda x, _: [x.key_cache, x.value_cache]
+            )
         # To avoid doing it multiple times.
         PATCH_OF_PATCHES.add(DynamicCache)
 
