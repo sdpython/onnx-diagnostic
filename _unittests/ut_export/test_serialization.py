@@ -1,6 +1,6 @@
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import (
     make_dynamic_cache,
@@ -19,6 +19,7 @@ class TestSerialization(ExtTestCase):
             ]
         )
 
+    @requires_transformers("4.50")
     def test_dynamic_cache(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
@@ -31,6 +32,7 @@ class TestSerialization(ExtTestCase):
         exp = torch.export.export(Model(), (cache,), dynamic_shapes=dynamic_shapes)
         self.assertNotEmpty(exp)
 
+    @requires_transformers("4.50")
     def test_dynamic_cache_flat_unflat(self):
         class Model(torch.nn.Module):
             def forward(self, cache):

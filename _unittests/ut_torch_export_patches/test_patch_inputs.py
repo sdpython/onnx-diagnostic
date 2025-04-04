@@ -1,7 +1,7 @@
 import unittest
 import torch
 import transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, requires_transformers
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
@@ -10,6 +10,7 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import (
 
 class TestPatchInputs(ExtTestCase):
     @hide_stdout()
+    @requires_transformers("4.50")
     def test_convert_dynamic_axes_into_dynamic_shapes_1(self):
         args = (
             torch.randint(0, 10, size=(2, 8)).to(torch.int64),
@@ -55,6 +56,7 @@ class TestPatchInputs(ExtTestCase):
         )
 
     @hide_stdout()
+    @requires_transformers("4.50")
     def test_convert_dynamic_axes_into_dynamic_shapes_2(self):
         args = (
             torch.randint(0, 10, size=(2, 8)).to(torch.int64),
