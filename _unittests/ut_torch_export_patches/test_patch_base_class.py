@@ -1,5 +1,7 @@
 import unittest
-from onnx_diagnostic.ext_test_case import ExtTestCase
+import torch
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
 
 class TestPatchBaseClass(ExtTestCase):
@@ -51,6 +53,28 @@ class TestPatchBaseClass(ExtTestCase):
         self.assertEqual(aa.ok(), 13)
         self.assertEqual(a.ret(4), 14)
         self.assertEqual(a.ok(), 13)
+
+    @hide_stdout()
+    def test_custom_patches(self):
+        class Model(torch.nn.Module):
+            def m1(self, x):
+                return x * x
+
+            def forward(self, x):
+                return self.m1(x)
+
+        class patched_Model:
+            _PATCHED_CLASS_ = Model
+            _PATCHES_ = ["m1"]
+
+            def m1(self, x):
+                return x**3
+
+        model = Model()
+        x = torch.arange(4)
+        self.assertEqualArray(x * x, model(x))
+        with bypass_export_some_errors(custom_patches=[patched_Model], verbose=10):
+            self.assertEqualArray(x**3, model(x))
 
 
 if __name__ == "__main__":
