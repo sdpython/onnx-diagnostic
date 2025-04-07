@@ -429,6 +429,8 @@ def bypass_export_some_errors(
             from torch.fx.experimental.symbolic_shapes import ShapeEnv
             from .patches.patch_torch import patched_ShapeEnv
 
+            ShapeEnv._log_guard_remember = ShapeEnv._log_guard
+
             if verbose:
                 print(
                     "[bypass_export_some_errors] assert when a dynamic dimension turns static"
@@ -437,6 +439,11 @@ def bypass_export_some_errors(
 
             f_shape_env__set_replacement = ShapeEnv._set_replacement
             ShapeEnv._set_replacement = patched_ShapeEnv._set_replacement
+
+            if verbose:
+                print("[bypass_export_some_errors] replaces ShapeEnv._log_guard")
+            f_shape_env__log_guard = ShapeEnv._log_guard
+            ShapeEnv._log_guard = patched_ShapeEnv._log_guard
 
             if stop_if_static > 1:
                 if verbose:
@@ -517,6 +524,12 @@ def bypass_export_some_errors(
                     print("[bypass_export_some_errors] restored ShapeEnv._set_replacement")
 
                 ShapeEnv._set_replacement = f_shape_env__set_replacement
+
+                if verbose:
+                    print("[bypass_export_some_errors] restored ShapeEnv._log_guard")
+
+                ShapeEnv._log_guard = f_shape_env__log_guard
+
                 if stop_if_static > 1:
                     if verbose:
                         print("[bypass_export_some_errors] restored ShapeEnv._check_frozen")
