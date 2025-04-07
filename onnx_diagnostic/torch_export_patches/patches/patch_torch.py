@@ -1,6 +1,7 @@
 import inspect
 import os
 import traceback
+import warnings
 from typing import Any, Callable, Dict, List, Sequence, Tuple, Union
 import torch
 from torch._subclasses.fake_tensor import FakeTensorMode
@@ -360,8 +361,10 @@ class patched_ShapeEnv:
     ) -> None:
         self._log_guard_remember(prefix=prefix, g=g, forcing_spec=forcing_spec)
         sloc, _maybe_extra_debug = self._get_stack_summary(True)
-        raise AssertionError(
+        warnings.warn(
             f"A guard was added, prefix={prefix!r}, g={g!r}, "
             f"forcing_spec={forcing_spec}, location=\n{sloc}\n"
-            f"--stack trace--\n{retrieve_stacktrace()}"
+            f"--stack trace--\n{retrieve_stacktrace()}",
+            RuntimeWarning,
+            stacklevel=0,
         )
