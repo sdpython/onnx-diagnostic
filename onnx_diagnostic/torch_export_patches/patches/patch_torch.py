@@ -1,8 +1,23 @@
 import inspect
 import os
+import traceback
 from typing import Any, Callable, Dict, List, Sequence, Tuple, Union
 import torch
 from torch._subclasses.fake_tensor import FakeTensorMode
+
+
+def retrieve_stacktrace():
+    """Retrieves and prints the current stack trace, avoids every torch file."""
+    rows = []
+    stack_frames = traceback.extract_stack()
+    for frame in stack_frames:
+        filename, lineno, function_name, code_line = frame
+        if "/torch/" in filename:
+            continue
+        rows.append(f"File: {filename}, Line {lineno}, in {function_name}")
+        if code_line:
+            rows.append(f"    {code_line}")
+    return "\n".join(rows)
 
 
 def _catch_produce_guards_and_solve_constraints(
@@ -339,3 +354,14 @@ class patched_ShapeEnv:
         # When specializing 'a == tgt', the equality should be also conveyed to
         # Z3, in case an expression uses 'a'.
         self._add_target_expr(sympy.Eq(a, tgt, evaluate=False))
+
+    def _log_guard(
+        self, prefix: str, g: "SympyBoolean", forcing_spec: bool  # noqa: F821
+    ) -> None:
+        self._log_guard_remember(prefix=prefix, g=g, forcing_spec=forcing_spec)
+        sloc, _maybe_extra_debug = self._get_stack_summary(True)
+        raise AssertionError(
+            f"A guard was added, prefix={prefix!r}, g={g!r}, "
+            f"forcing_spec={forcing_spec}, location=\n{sloc}\n"
+            f"--stack trace--\n{retrieve_stacktrace()}"
+        )

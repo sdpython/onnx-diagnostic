@@ -31,6 +31,7 @@ Source are `sdpython/onnx-diagnostic
     api/index
     cmds/index
     auto_examples/index
+    auto_recipes/index
 
 .. toctree::
     :maxdepth: 1

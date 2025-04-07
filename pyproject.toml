@@ -7,6 +7,7 @@ ignore_missing_imports = true
 packages = ["onnx_diagnostic"]
 exclude = [
     "^_doc/auto_examples",  # skips examples in the documentation
+    "^_doc/auto_recipes",  # skips examples in the documentation
     "^_doc/conf.py",
     "^_doc/examples",
     "^_unittests",  # skips unit tests
