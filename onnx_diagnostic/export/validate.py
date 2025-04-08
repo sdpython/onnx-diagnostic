@@ -9,7 +9,7 @@ from .dynamic_shapes import CoupleInputsDynamicShapes
 
 
 def compare_modules(
-    modep: torch.export.ExportedProgram,
+    modep: torch.nn.Module,
     mod: Optional[torch.nn.Module] = None,
     args: Optional[Tuple[Any, ...]] = None,
     kwargs: Optional[Dict[str, Any]] = None,
@@ -18,7 +18,7 @@ def compare_modules(
     verbose: int = 0,
     atol: float = 1e-2,
     rtol: float = 1e-1,
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
     Compares two torch modules, usually one coming from an exported program,
     the other being the origin model.
@@ -150,8 +150,8 @@ def validate_ep(
     values = [_[1] for _ in items]
     all_vals = list(itertools.product(*values))
     cpl = CoupleInputsDynamicShapes(
-        args,
-        kwargs,
+        args or (),
+        kwargs or {},
         dynamic_shapes,
         args_names=(
             list(inspect.signature(modep.forward).parameters) if args and kwargs else None

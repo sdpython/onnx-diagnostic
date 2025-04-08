@@ -297,14 +297,14 @@ class CoupleInputsDynamicShapes:
                     tuple(alt_shape), dtype=tensor.dtype, device=tensor.device
                 )
                 mind = min(d0, d1)
-                indices = [slice(None) for _ in range(rank)]
+                indices: List[Union[slice, int]] = [slice(None) for _ in range(rank)]
                 indices[i] = slice(0, mind)
                 ind = tuple(indices)
                 new_tensor[ind] = tensor[ind]
                 if d1 > mind:
                     for k in range(d1 - mind):
-                        indices0 = [slice(None) for _ in range(rank)]
-                        indices1 = [slice(None) for _ in range(rank)]
+                        indices0: List[Union[slice, int]] = [slice(None) for _ in range(rank)]
+                        indices1: List[Union[slice, int]] = [slice(None) for _ in range(rank)]
                         indices1[i] = mind + k
                         indices0[i] = k % mind
                         new_tensor[tuple(indices1)] = tensor[tuple(indices0)]
