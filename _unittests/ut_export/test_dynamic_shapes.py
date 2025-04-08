@@ -691,6 +691,18 @@ class TestDynamicShapes(ExtTestCase):
         self.assertEqual((3, 5, 8), new_input["A"].shape)
         self.assertEqual((3, 10), new_input["B"].shape)
 
+    def test_couple_input_ds_change_dynamic_dimensions_fixed(self):
+        T257 = torch.arange(2 * 5 * 7).reshape((2, 5, 7))
+        T29 = torch.arange(2 * 9).reshape((2, 9))
+        inst = CoupleInputsDynamicShapes(
+            (),
+            {"A": T257, "B": T29},
+            {"A": {0: "batch", 2: "last"}, "B": {0: "batch", 1: "seq"}},
+        )
+        new_input = inst.change_dynamic_dimensions({"seq": 50, "batch": 1})
+        self.assertEqual((1, 5, 8), new_input["A"].shape)
+        self.assertEqual((1, 50), new_input["B"].shape)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

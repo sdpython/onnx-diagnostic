@@ -243,8 +243,8 @@ class CoupleInputsDynamicShapes:
         return cls._generic_walker_step(processor, flat, ds)
 
     class ChangeDimensionProcessor:
-        def __init__(self):
-            self.mapping = {}
+        def __init__(self, desired_values):
+            self.mapping = desired_values or {}
 
         def _build_new_shape(
             self, shape: Tuple[int, ...], ds: Dict[int, Any]
@@ -310,7 +310,7 @@ class CoupleInputsDynamicShapes:
             new_shape = self._build_new_shape(inputs.shape, ds)
             return self._build_new_tensor(inputs, new_shape)
 
-    def change_dynamic_dimensions(self):
+    def change_dynamic_dimensions(self, desired_values: Optional[Dict[str, int]] = None):
         """
         A model exported with dynamic shapes is not necessarily dynamic
         just because the user specified dynamic shapes. The algorithm
@@ -319,6 +319,9 @@ class CoupleInputsDynamicShapes:
         model. This function produces a new set of inputs with different values
         for the dimension than the first ones, assuming they were used to export
         the model.
+
+        :param desired_values: to fixed named dimension to have the desired value
+        :return: new inputs
 
         Example:
 
@@ -340,7 +343,7 @@ class CoupleInputsDynamicShapes:
             print("before:", string_type(kwargs, with_shape=True))
             print("-after:", string_type(new_kwargs, with_shape=True))
         """
-        return self._generic_walker(self.ChangeDimensionProcessor())
+        return self._generic_walker(self.ChangeDimensionProcessor(desired_values))
 
 
 class ModelInputs:

@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.4.0
++++++
+
+* :pr:`45`: improve change_dynamic_dimension to fix some dimensions
+
 0.3.0
 +++++
 
