@@ -196,14 +196,14 @@ class CoupleInputsDynamicShapes:
             kwargs.update(self.kwargs)
             res = self._generic_walker_step(processor, kwargs, self.dynamic_shapes)
             if args_kwargs:
-                ags = [None for _ in range(len(self.args))]
+                pgs = [None for _ in range(len(self.args))]
                 kws = {}
                 for k, v in res.items():
                     if k not in self.kwargs:
-                        ags[self.args_names.index(k)] = v
+                        pgs[self.args_names.index(k)] = v
                     else:
                         kws[k] = v
-                return ags, kws
+                return pgs, kws
             return res
 
         raise NotImplementedError(
