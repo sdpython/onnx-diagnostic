@@ -36,7 +36,7 @@ print(f"x.shape={x.shape}, y.shape={y.shape}")
 # ++++++
 
 DYN = torch.export.Dim.DYNAMIC
-ep = torch.export.export(model, (x,), dynamic_shapes=((DYN, DYN),))
+ep = torch.export.export(model, (x,), dynamic_shapes=(({0: DYN, 1: DYN}),))
 print(ep)
 
 # %%
@@ -65,7 +65,7 @@ print(f"x.shape={x.shape}, y.shape={y.shape}")
 # Export
 # ++++++
 
-ep = torch.export.export(rewritten_model, (x,), dynamic_shapes=((DYN, DYN),))
+ep = torch.export.export(rewritten_model, (x,), dynamic_shapes=({0: DYN, 1: DYN},))
 print(ep)
 
 
@@ -79,7 +79,7 @@ print(ep)
 
 
 with bypass_export_some_errors(stop_if_static=True):
-    ep = torch.export.export(model, (x,), dynamic_shapes=((DYN, DYN),))
+    ep = torch.export.export(model, (x,), dynamic_shapes=({0: DYN, 1: DYN},))
     print(ep)
 
 # %%

@@ -126,10 +126,12 @@ register(
 # %%
 # Now everything is registered. Let's rewrite the model.
 
+
 class RewrittenModel(torch.nn.Module):
     def forward(self, x, y, fact):
         z = torch.ops.mylib.copy_max_dimensions(x, y)
         return z * fact
+
 
 # %%
 # And check it works.

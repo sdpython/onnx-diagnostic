@@ -2,7 +2,7 @@
 Half certain nonzero
 ====================
 
-:func:`torch.nonzero` returns the indices or the first zero found
+:func:`torch.nonzero` returns the indices of the first zero found
 in a tensor. The output shape is unknown in the generic case
 but... If you have a 2D tensor with at least a nonzero value
 in every row, you can guess the dimension. But :func:`torch.export.export`
@@ -49,7 +49,7 @@ print(f"x.shape={x.shape}, y.shape={y.shape}")
 # ++++++
 
 DYN = torch.export.Dim.DYNAMIC
-ep = torch.export.export(model, (x,), dynamic_shapes=((DYN, DYN),))
+ep = torch.export.export(model, (x,), dynamic_shapes=(({0: DYN, 1: DYN}),))
 print(ep)
 
 
