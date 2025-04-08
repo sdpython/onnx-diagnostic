@@ -1,7 +1,7 @@
 import inspect
 import itertools
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 import torch
 from ..helpers import string_type, max_diff, string_diff
 from ..helpers.torch_test_helper import torch_deepcopy
@@ -103,7 +103,7 @@ def compare_modules(
 
 
 def validate_ep(
-    ep: torch.export.ExportedProgram,
+    ep: Union[torch.nn.Module, torch.export.ExportedProgram],
     mod: Optional[torch.nn.Module] = None,
     args: Optional[Tuple[Any, ...]] = None,
     kwargs: Optional[Dict[str, Any]] = None,
@@ -131,7 +131,7 @@ def validate_ep(
     :param rtol: relative tolerance
     :return: dictionary with inputs, outputs and tolerance
     """
-    modep = ep.module()
+    modep = ep.module() if isinstance(ep, torch.export.ExportedProgram) else ep
 
     results = [
         compare_modules(
