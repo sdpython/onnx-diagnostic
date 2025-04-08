@@ -6,6 +6,7 @@ onnx_diagnostic.export
     :caption: modules
 
     dynamic_shapes
+    validate
 
 CoupleInputsDynamicShapes
 +++++++++++++++++++++++++
@@ -18,6 +19,11 @@ ModelInputs
 
 .. autoclass:: onnx_diagnostic.export.ModelInputs
     :members:
+
+validate_ep
++++++++++++
+
+.. autofunction:: onnx_diagnostic.export.validate_ep
 
 Other functions
 +++++++++++++++
