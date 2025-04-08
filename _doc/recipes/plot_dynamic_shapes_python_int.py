@@ -1,5 +1,5 @@
 """
-Do not use python int with dynamic shape
+Do not use python int with dynamic shapes
 =========================================
 
 :func:`torch.export.export` uses :class:`torch.SymInt` to operate on shapes and
