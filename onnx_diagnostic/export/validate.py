@@ -123,7 +123,7 @@ def validate_ep(
     :param args: positional arguments
     :param kwargs: named arguments
     :param copy: copy the inputs before executing the model (they may modify them inplace)
-    :param dynamic_shapes: dynamic shapes, string should be used not :class:`torch.export.Dim`
+    :param dynamic_shapes: dynamic shapes, string should be used not ``torch.export.Dim``
     :param values_to_try: dictionary with the values to try for every dynamic dimension
     :param exc: raise exception if discrepancies are too high
     :param verbose: verbosity level
