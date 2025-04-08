@@ -78,7 +78,7 @@ except Exception as e:
 def make_undefined_dimension(i: int) -> torch.SymInt:
     """
     Uses for a custom op when a new dimension must be introduced to bypass
-    some verficiation. The following function creates a dummy output
+    some verification. The following function creates a dummy output
     with a dimension based on the content.
 
     .. code-block:: python
