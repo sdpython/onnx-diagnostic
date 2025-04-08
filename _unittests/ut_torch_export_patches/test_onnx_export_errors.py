@@ -114,7 +114,7 @@ class TestOnnxExportErrors(ExtTestCase):
         DYN = torch.export.Dim.DYNAMIC
 
         with bypass_export_some_errors():
-            cache = MambaCache(_config(), max_batch_size=1, device="cpu")
+            cache = MambaCache(_config(), max_batch_size=2, device="cpu")
             torch.export.export(
                 Model(),
                 (x, cache),
