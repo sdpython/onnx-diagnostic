@@ -147,7 +147,7 @@ class CoupleInputsDynamicShapes:
                     issues[i] = f"d=[{d}]"
         return issues if issues else None
 
-    def _generic_walker(self, processor: Callable):
+    def _generic_walker(self, processor: Callable, args_kwargs: bool = False):
         """
         Generic deserializator walking through inputs and dynamic_shapes all along.
         The function returns a result with the same structure as the dynamic shapes.
@@ -157,14 +157,16 @@ class CoupleInputsDynamicShapes:
                 f"Type mismatch, args={string_type(self.args)} and "
                 f"dynamic_shapes={self.dynamic_shapes} should have the same type."
             )
-            return self._generic_walker_step(processor, self.kwargs, self.dynamic_shapes)
+            res = self._generic_walker_step(processor, self.kwargs, self.dynamic_shapes)
+            return (tuple(), res) if args_kwargs else res
 
         if not self.kwargs:
             assert isinstance(self.args, tuple) and isinstance(self.dynamic_shapes, tuple), (
                 f"Type mismatch, args={string_type(self.args)} and "
                 f"dynamic_shapes={self.dynamic_shapes} should have the same type."
             )
-            return self._generic_walker_step(processor, self.args, self.dynamic_shapes)
+            res = self._generic_walker_step(processor, self.args, self.dynamic_shapes)
+            return (res, {}) if args_kwargs else res
 
         assert isinstance(self.dynamic_shapes, dict), (
             f"Both positional and named arguments (args and kwargs) are filled. "
@@ -192,7 +194,17 @@ class CoupleInputsDynamicShapes:
             )
             kwargs = dict(zip(self.args_names, self.args))
             kwargs.update(self.kwargs)
-            return self._generic_walker_step(processor, kwargs, self.dynamic_shapes)
+            res = self._generic_walker_step(processor, kwargs, self.dynamic_shapes)
+            if args_kwargs:
+                pgs = [None for _ in range(len(self.args))]
+                kws = {}
+                for k, v in res.items():
+                    if k not in self.kwargs:
+                        pgs[self.args_names.index(k)] = v
+                    else:
+                        kws[k] = v
+                return pgs, kws
+            return res
 
         raise NotImplementedError(
             f"Not yet implemented when args is filled, "
@@ -285,14 +297,14 @@ class CoupleInputsDynamicShapes:
                     tuple(alt_shape), dtype=tensor.dtype, device=tensor.device
                 )
                 mind = min(d0, d1)
-                indices = [slice(None) for _ in range(rank)]
+                indices: List[Union[slice, int]] = [slice(None) for _ in range(rank)]
                 indices[i] = slice(0, mind)
                 ind = tuple(indices)
                 new_tensor[ind] = tensor[ind]
                 if d1 > mind:
                     for k in range(d1 - mind):
-                        indices0 = [slice(None) for _ in range(rank)]
-                        indices1 = [slice(None) for _ in range(rank)]
+                        indices0: List[Union[slice, int]] = [slice(None) for _ in range(rank)]
+                        indices1: List[Union[slice, int]] = [slice(None) for _ in range(rank)]
                         indices1[i] = mind + k
                         indices0[i] = k % mind
                         new_tensor[tuple(indices1)] = tensor[tuple(indices0)]
@@ -310,7 +322,9 @@ class CoupleInputsDynamicShapes:
             new_shape = self._build_new_shape(inputs.shape, ds)
             return self._build_new_tensor(inputs, new_shape)
 
-    def change_dynamic_dimensions(self, desired_values: Optional[Dict[str, int]] = None):
+    def change_dynamic_dimensions(
+        self, desired_values: Optional[Dict[str, int]] = None, args_kwargs: bool = False
+    ):
         """
         A model exported with dynamic shapes is not necessarily dynamic
         just because the user specified dynamic shapes. The algorithm
@@ -321,6 +335,7 @@ class CoupleInputsDynamicShapes:
         the model.
 
         :param desired_values: to fixed named dimension to have the desired value
+        :param args_kwargs: return both args, kwargs even if empty
         :return: new inputs
 
         Example:
@@ -343,7 +358,9 @@ class CoupleInputsDynamicShapes:
             print("before:", string_type(kwargs, with_shape=True))
             print("-after:", string_type(new_kwargs, with_shape=True))
         """
-        return self._generic_walker(self.ChangeDimensionProcessor(desired_values))
+        return self._generic_walker(
+            self.ChangeDimensionProcessor(desired_values), args_kwargs=args_kwargs
+        )
 
 
 class ModelInputs:

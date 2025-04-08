@@ -60,7 +60,7 @@ def get_pretrained_config(
     )
 
 
-def get_model_info(model_id) -> str:
+def get_model_info(model_id) -> Any:
     """Returns the model info for a model_id."""
     return model_info(model_id)
 
@@ -220,7 +220,11 @@ def enumerate_model_list(
                             m.trending_score or "",
                             m.private or "",
                             m.gated or "",
-                            ("|".join(m.tags)).replace(",", "_").replace(" ", "_"),
+                            (
+                                ("|".join(m.tags)).replace(",", "_").replace(" ", "_")
+                                if m.tags
+                                else ""
+                            ),
                         ],
                     )
                 )
