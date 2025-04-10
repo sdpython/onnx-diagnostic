@@ -6,8 +6,7 @@ import torch
 from torch._C import _from_dlpack
 import onnxruntime
 from onnxruntime.capi import _pybind_state as ORTC
-from .cache_helper import is_cache_dynamic_registered
-from .helper import size_type, string_type, flatten_object
+from .helper import size_type
 from .onnx_helper import (
     torch_dtype_to_onnx_dtype,
     onnx_dtype_to_np_dtype,
@@ -16,43 +15,6 @@ from .onnx_helper import (
 )
 
 DEVICES = {-1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memory(), 0)}
-
-
-def make_feeds(
-    proto: Union[onnx.ModelProto, List[str]],
-    inputs: Any,
-    use_numpy: bool = False,
-    copy: bool = False,
-) -> Dict[str, Union[torch.Tensor, np.ndarray]]:
-    """
-    Serializes the inputs to produce feeds expected
-    by :class:`onnxruntime.InferenceSession`.
-
-    :param proto: onnx model or list of names
-    :param inputs: any kind of inputs
-    :param use_numpy: if True, converts torch tensors into numpy arrays
-    :param copy: a copy is made, this should be the case if the inputs is ingested
-        by ``OrtValue``
-    :return: feeds dictionary
-    """
-    flat = flatten_object(inputs, drop_keys=True)
-    assert (
-        not all(isinstance(obj, torch.Tensor) for obj in flat)
-        or not is_cache_dynamic_registered(fast=True)
-        or len(flat) == len(torch.utils._pytree.tree_flatten(inputs)[0])
-    ), (
-        f"Unexpected number of flattened objects, "
-        f"{string_type(flat, with_shape=True, limit=20)} != "
-        f"{string_type(torch.utils._pytree.tree_flatten(inputs)[0], with_shape=True,limit=20)}"
-    )
-    if use_numpy:
-        flat = [t.detach().cpu().numpy() if isinstance(t, torch.Tensor) else t for t in flat]
-    names = (
-        [i.name for i in proto.graph.input] if isinstance(proto, onnx.ModelProto) else proto
-    )
-    if copy:
-        flat = [t.copy() if hasattr(t, "copy") else t.clone() for t in flat]
-    return dict(zip(names, flat))
 
 
 class _InferenceSession:

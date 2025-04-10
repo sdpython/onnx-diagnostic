@@ -6,7 +6,7 @@ import time
 import torch
 from ..helpers import max_diff, string_type, string_diff
 from ..helpers.helper import flatten_object
-from ..helpers.ort_session import make_feeds
+from ..helpers.rt_helper import make_feeds
 from ..helpers.torch_test_helper import to_any, torch_deepcopy
 from ..torch_export_patches import bypass_export_some_errors
 from .hghub import get_untrained_model_with_inputs

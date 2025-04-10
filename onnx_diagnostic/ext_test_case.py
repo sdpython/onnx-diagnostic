@@ -1081,7 +1081,8 @@ class ExtTestCase(unittest.TestCase):
             :class:`onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch`
         """
         from .helpers import string_type, string_diff, max_diff
-        from .helpers.ort_session import InferenceSessionForTorch, make_feeds
+        from .rt_helper import make_feeds
+        from .helpers.ort_session import InferenceSessionForTorch
 
         kws = dict(with_shape=True, with_min_max=verbose > 1)
         if verbose:

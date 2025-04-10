@@ -298,14 +298,17 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
         kwargs = dict(
             batch_size=2,
             sequence_length=30,
-            dummy_max_token_id=config.vocab_size,
-            max_source_positions=config.max_source_positions,
-            d_model=config.d_model,
+            dummy_max_token_id=31000 if config is None else config.vocab_size,
+            max_source_positions=1500 if config is None else config.max_source_positions,
+            d_model=384 if config is None else config.d_model,
             num_hidden_layers=4 if config is None else config.num_hidden_layers,
-            encoder_attention_heads=config.encoder_attention_heads,
-            encoder_layers=config.encoder_layers,
-            decoder_layers=config.decoder_layers,
-            head_dim=config.d_model // config.encoder_attention_heads,
+            encoder_attention_heads=6 if config is None else config.encoder_attention_heads,
+            encoder_layers=4 if config is None else config.encoder_layers,
+            decoder_attention_heads=6 if config is None else config.decoder_attention_heads,
+            decoder_layers=4 if config is None else config.decoder_layers,
+            head_dim=(
+                64 if config is None else (config.d_model // config.encoder_attention_heads)
+            ),
         )
         fct = get_inputs_for_speech_automatic_recognition  # type: ignore
     else:
