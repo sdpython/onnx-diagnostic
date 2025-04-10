@@ -49,7 +49,7 @@ class TestPatchSerialization(ExtTestCase):
             [[{0: DYN}, {0: DYN}, {0: DYN}], [{0: DYN}, {0: DYN}, {0: DYN}]],
         ]
 
-        with bypass_export_some_errors():
+        with bypass_export_some_errors(patch_transformers=True):
             torch.export.export(model, (cache,), dynamic_shapes=(ds,))
 
     @ignore_warnings(UserWarning)
@@ -98,6 +98,21 @@ class TestPatchSerialization(ExtTestCase):
                 self.string_type(bo, with_shape=True, with_min_max=True),
                 self.string_type(bo2, with_shape=True, with_min_max=True),
             )
+
+    @ignore_warnings(UserWarning)
+    def test_export_base_model_output(self):
+        class Model(torch.nn.Module):
+            def forward(self, cache):
+                return cache.last_hidden_state[0]
+
+        bo = BaseModelOutput(last_hidden_state=torch.rand((4, 4, 4)))
+        model = Model()
+        model(bo)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = [{0: DYN}]
+
+        with bypass_export_some_errors():
+            torch.export.export(model, (bo,), dynamic_shapes=(ds,))
 
 
 if __name__ == "__main__":
