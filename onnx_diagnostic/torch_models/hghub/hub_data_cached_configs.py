@@ -1337,7 +1337,7 @@ def _ccached_hf_internal_testing_tiny_random_convnext():
 def _ccached_fxmarty_tiny_random_gemmaforcausallm():
     "fxmarty/tiny-random-GemmaForCausalLM"
     return transformers.GemmaConfig(
-        {
+        **{
             "architectures": ["GemmaForCausalLM"],
             "attention_bias": false,
             "attention_dropout": 0.0,
