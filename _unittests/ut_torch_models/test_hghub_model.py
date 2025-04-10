@@ -117,7 +117,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
             "#1[T1r3]",
             self.string_type(torch.utils._pytree.tree_flatten(inputs["encoder_outputs"])[0]),
         )
-        with bypass_export_some_errors(patch_transformers=True):
+        with bypass_export_some_errors(patch_transformers=True, verbose=10):
             flat = torch.utils._pytree.tree_flatten(inputs["past_key_values"])[0]
             self.assertIsInstance(flat, list)
             self.assertIsInstance(flat[0], torch.Tensor)

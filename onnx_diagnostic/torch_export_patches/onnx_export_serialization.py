@@ -12,27 +12,6 @@ PATCH_OF_PATCHES: Set[Any] = set()
 
 
 def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
-    # MambaCache
-    unregistered_mamba_cache = True
-    if MambaCache in torch.utils._pytree.SUPPORTED_NODES:
-        if verbose > 1:
-            print(f"[_register_cache_serialization] {MambaCache} already registered")
-        # It is already registered because bypass_export_some_errors was called
-        # within a section already calling bypass_export_some_errors or transformers
-        # has updated its code to do it.
-        # No need to register and unregister then.
-        unregistered_mamba_cache = False
-    else:
-        if verbose:
-            print("[_register_cache_serialization] register MambaCache")
-        torch.utils._pytree.register_pytree_node(
-            MambaCache,
-            flatten_mamba_cache,
-            unflatten_mamba_cache,
-            serialized_type_name=f"{MambaCache.__module__}.{MambaCache.__name__}",
-            flatten_with_keys_fn=flatten_with_keys_mamba_cache,
-        )
-
     # DynamicCache serialization is different in transformers and does not
     # play way with torch.export.export.
     # see test test_export_dynamic_cache_cat with NOBYPASS=1
@@ -42,8 +21,8 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     #           DynamicCache, _flatten_dynamic_cache_for_fx)
     # so we remove it anyway
     if (
-        DynamicCache in torch.fx._pytree.SUPPORTED_NODES
-        and not PATCH_OF_PATCHES
+        DynamicCache in torch.utils._pytree.SUPPORTED_NODES
+        and DynamicCache not in PATCH_OF_PATCHES
         # and pv.Version(torch.__version__) < pv.Version("2.7")
         and pv.Version(transformers.__version__) >= pv.Version("4.50")
     ):
@@ -52,7 +31,7 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
                 "[_register_cache_serialization] DynamicCache "
                 "is unregistered and registered first."
             )
-        _unregister(DynamicCache)
+        _unregister(DynamicCache, verbose=verbose)
         torch.utils._pytree.register_pytree_node(
             DynamicCache,
             flatten_dynamic_cache,
@@ -60,6 +39,11 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
             serialized_type_name=f"{DynamicCache.__module__}.{DynamicCache.__name__}",
             flatten_with_keys_fn=flatten_with_keys_dynamic_cache,
         )
+        if verbose:
+            print(
+                "[_register_cache_serialization] DynamicCache "
+                "unregistered and registered done."
+            )
         if pv.Version(torch.__version__) < pv.Version("2.7"):
             torch.fx._pytree.register_pytree_flatten_spec(
                 DynamicCache, lambda x, _: [x.key_cache, x.value_cache]
@@ -69,13 +53,16 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
 
     # BaseModelOutput serialization is incomplete.
     # It does not include dynamic shapes mapping.
-    if BaseModelOutput in torch.fx._pytree.SUPPORTED_NODES and not PATCH_OF_PATCHES:
+    if (
+        BaseModelOutput in torch.utils._pytree.SUPPORTED_NODES
+        and BaseModelOutput not in PATCH_OF_PATCHES
+    ):
         if verbose:
             print(
                 "[_register_cache_serialization] BaseModelOutput "
                 "is unregistered and registered first."
             )
-        _unregister(BaseModelOutput)
+        _unregister(BaseModelOutput, verbose=verbose)
         torch.utils._pytree.register_pytree_node(
             BaseModelOutput,
             flatten_base_model_output,
@@ -83,6 +70,11 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
             serialized_type_name=f"{BaseModelOutput.__module__}.{BaseModelOutput.__name__}",
             flatten_with_keys_fn=flatten_with_keys_base_model_output,
         )
+        if verbose:
+            print(
+                "[_register_cache_serialization] BaseModelOutput "
+                "unregistered and registered done."
+            )
 
         # To avoid doing it multiple times.
         PATCH_OF_PATCHES.add(BaseModelOutput)
@@ -116,6 +108,48 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
         # torch.fx._pytree.tree_flatten(cache)
         assert len(cache2.key_cache) == 1
 
+    # BaseModelOutput
+    unregistered_base_model_output = True
+    if BaseModelOutput is not None and BaseModelOutput in torch.utils._pytree.SUPPORTED_NODES:
+        if verbose > 1:
+            print(f"[_register_cache_serialization] {BaseModelOutput} already registered")
+        # It is already registered because bypass_export_some_errors was called
+        # within a section already calling bypass_export_some_errors or transformers
+        # has updated its code to do it.
+        # No need to register and unregister then.
+        unregistered_base_model_output = False
+    else:
+        if verbose:
+            print("[_register_cache_serialization] register BaseModelOutput")
+        torch.utils._pytree.register_pytree_node(
+            BaseModelOutput,
+            flatten_encoder_decoder_cache,
+            unflatten_encoder_decoder_cache,
+            serialized_type_name=f"{BaseModelOutput.__module__}.{BaseModelOutput.__name__}",
+            flatten_with_keys_fn=flatten_with_keys_base_model_output,
+        )
+
+    # MambaCache
+    unregistered_mamba_cache = True
+    if MambaCache in torch.utils._pytree.SUPPORTED_NODES:
+        if verbose > 1:
+            print(f"[_register_cache_serialization] {MambaCache} already registered")
+        # It is already registered because bypass_export_some_errors was called
+        # within a section already calling bypass_export_some_errors or transformers
+        # has updated its code to do it.
+        # No need to register and unregister then.
+        unregistered_mamba_cache = False
+    else:
+        if verbose:
+            print("[_register_cache_serialization] register MambaCache")
+        torch.utils._pytree.register_pytree_node(
+            MambaCache,
+            flatten_mamba_cache,
+            unflatten_mamba_cache,
+            serialized_type_name=f"{MambaCache.__module__}.{MambaCache.__name__}",
+            flatten_with_keys_fn=flatten_with_keys_mamba_cache,
+        )
+
     # EncoderDecoderCache
     unregistered_encode_decode_cache = True
     if (
@@ -140,27 +174,6 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
             flatten_with_keys_fn=flatten_with_keys_encoder_decoder_cache,
         )
 
-    # BaseModelOutput
-    unregistered_base_model_output = True
-    if BaseModelOutput is not None and BaseModelOutput in torch.utils._pytree.SUPPORTED_NODES:
-        if verbose > 1:
-            print(f"[_register_cache_serialization] {BaseModelOutput} already registered")
-        # It is already registered because bypass_export_some_errors was called
-        # within a section already calling bypass_export_some_errors or transformers
-        # has updated its code to do it.
-        # No need to register and unregister then.
-        unregistered_base_model_output = False
-    else:
-        if verbose:
-            print("[_register_cache_serialization] register BaseModelOutput")
-        torch.utils._pytree.register_pytree_node(
-            BaseModelOutput,
-            flatten_encoder_decoder_cache,
-            unflatten_encoder_decoder_cache,
-            serialized_type_name=f"{BaseModelOutput.__module__}.{BaseModelOutput.__name__}",
-            flatten_with_keys_fn=flatten_with_keys_base_model_output,
-        )
-
     return dict(
         DynamicCache=unregistered_dynamic_cache,
         MambaCache=unregistered_mamba_cache,
@@ -170,7 +183,7 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
 
 
 def _unregister(cls: type, verbose: int = 0):
-    # torch.fx._pytree._deregister_pytree_flatten_spec(cls)
+    # torch.utils._pytree._deregister_pytree_flatten_spec(cls)
     if cls in torch.fx._pytree.SUPPORTED_NODES:
         del torch.fx._pytree.SUPPORTED_NODES[cls]
     if cls in torch.fx._pytree.SUPPORTED_NODES_EXACT_MATCH:
@@ -178,6 +191,9 @@ def _unregister(cls: type, verbose: int = 0):
     if hasattr(torch.utils._pytree, "_deregister_pytree_node"):
         # torch >= 2.7
         torch.utils._pytree._deregister_pytree_node(cls)
+    else:
+        if cls in torch.utils._pytree.SUPPORTED_NODES:
+            del torch.utils._pytree.SUPPORTED_NODES[cls]
     optree.unregister_pytree_node(cls, namespace="torch")
     if cls in torch.utils._pytree.SUPPORTED_NODES:
         import packaging.version as pv
@@ -391,7 +407,7 @@ def flatten_with_keys_base_model_output(
     Serializes a :class:`transformers.modeling_outputs.BaseModelOutput`
     with python objects.
     """
-    values, context = flatten_dynamic_cache(bo)
+    values, context = flatten_base_model_output(bo)
     return [(torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)], context
 
 
