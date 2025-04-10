@@ -5,6 +5,7 @@ from onnx_diagnostic.helpers.cache_helper import make_encoder_decoder_cache, mak
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     bypass_export_some_errors,
 )
+from transformers.modeling_outputs import BaseModelOutput
 
 
 class TestPatchSerialization(ExtTestCase):
@@ -82,6 +83,21 @@ class TestPatchSerialization(ExtTestCase):
 
         with bypass_export_some_errors():
             torch.export.export(model, (cache,), dynamic_shapes=(ds,))
+
+    @ignore_warnings(UserWarning)
+    def test_base_model_output(self):
+        bo = BaseModelOutput(last_hidden_state=torch.rand((4, 4, 4)))
+        with bypass_export_some_errors():
+            flat, _spec = torch.utils._pytree.tree_flatten(bo)
+            self.assertEqual(
+                "#1[T1s4x4x4]",
+                self.string_type(flat, with_shape=True),
+            )
+            bo2 = torch.utils._pytree.tree_unflatten(flat, _spec)
+            self.assertEqual(
+                self.string_type(bo, with_shape=True, with_min_max=True),
+                self.string_type(bo2, with_shape=True, with_min_max=True),
+            )
 
 
 if __name__ == "__main__":
