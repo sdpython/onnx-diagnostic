@@ -1,5 +1,6 @@
 import pprint
 import unittest
+import torch
 import transformers
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
@@ -14,6 +15,7 @@ from onnx_diagnostic.torch_models.hghub.model_inputs import (
 )
 from onnx_diagnostic.torch_models.hghub.hub_api import get_pretrained_config
 from onnx_diagnostic.torch_models.hghub.hub_data import load_models_testing
+from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
 
 class TestHuggingFaceHubModel(ExtTestCase):
@@ -109,8 +111,21 @@ class TestHuggingFaceHubModel(ExtTestCase):
         mid = "openai/whisper-tiny"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(132115968, 33028992)])
-        model, inputs = data["model"], data["inputs"]
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
+        self.assertEqual(
+            "#1[T1r3]",
+            self.string_type(torch.utils._pytree.tree_flatten(inputs["encoder_outputs"])[0]),
+        )
+        with bypass_export_some_errors(patch_transformers=True):
+            flat = torch.utils._pytree.tree_flatten(inputs["past_key_values"])[0]
+            self.assertIsInstance(flat, list)
+            self.assertIsInstance(flat[0], torch.Tensor)
+            self.assertEqual(
+                "#8[T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4]",
+                self.string_type(flat),
+            )
+            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds)
 
     @hide_stdout()
     def test_get_untrained_model_with_inputs_imagetext2text_generation(self):

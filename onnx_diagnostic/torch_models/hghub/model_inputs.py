@@ -815,9 +815,7 @@ def get_inputs_for_speech_automatic_recognition(
     shapes = {
         "decoder_input_ids": {0: batch, 1: seq_length},
         "cache_position": {0: seq_length},
-        "encoder_outputs": {
-            "last_hidden_state": {0: batch}
-        },  # b, max_source_positions, d_model
+        "encoder_outputs": [{0: batch}],
         "past_key_values": [
             [
                 [{0: batch} for _ in range(num_hidden_layers)],
