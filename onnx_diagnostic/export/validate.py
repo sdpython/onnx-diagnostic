@@ -75,8 +75,8 @@ def compare_modules(
         begin = time.perf_counter()
         print(
             f"[compare_modules] check ep with "
-            f"args={string_type(args, with_shape=True)}, "
-            f"kwargs={string_type(kwargs, with_shape=True)}..."
+            f"args={string_type(args, with_shape=True, with_device=True)}, "
+            f"kwargs={string_type(kwargs, with_shape=True, with_device=True)}..."
         )
     got = modep(*_get(args), **_get(kwargs))
     if verbose:

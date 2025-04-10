@@ -477,6 +477,9 @@ def get_inputs_for_text_generation(
     :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
     :return: dictionary
     """
+    if head_dim is None:
+        assert config, "head_dim is None, the value cannot be set without a configuration"
+        head_dim = config.hidden_size // config.num_attention_heads
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = torch.export.Dim("seq_length", min=1, max=4096)
     cache_length = torch.export.Dim("cache_length", min=1, max=4096)
