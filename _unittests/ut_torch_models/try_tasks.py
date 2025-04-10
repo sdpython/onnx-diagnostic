@@ -82,6 +82,72 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
         print(generated_text[0])
 
+    @never_test()
+    def test_automatic_speech_recognition(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k automatic_speech
+        # https://huggingface.co/openai/whisper-tiny
+
+        from transformers import WhisperProcessor, WhisperForConditionalGeneration
+        from datasets import load_dataset
+
+        """
+        kwargs=dict(
+            cache_position:T7s4,
+            past_key_values:EncoderDecoderCache(
+                self_attention_cache=DynamicCache[serialized](#2[#0[],#0[]]),
+                cross_attention_cache=DynamicCache[serialized](#2[#0[],#0[]])
+            ),
+            decoder_input_ids:T7s1x4,
+            encoder_outputs:dict(last_hidden_state:T1s1x1500x384),
+            use_cache:bool,return_dict:bool
+        )
+        kwargs=dict(
+            cache_position:T7s1,
+            past_key_values:EncoderDecoderCache(
+                self_attention_cache=DynamicCache[serialized](#2[
+                    #4[T1s1x6x4x64,T1s1x6x4x64,T1s1x6x4x64,T1s1x6x4x64],
+                    #4[T1s1x6x4x64,T1s1x6x4x64,T1s1x6x4x64,T1s1x6x4x64]
+                ]),
+                cross_attention_cache=DynamicCache[serialized](#2[
+                    #4[T1s1x6x1500x64,T1s1x6x1500x64,T1s1x6x1500x64,T1s1x6x1500x64],
+                    #4[T1s1x6x1500x64,T1s1x6x1500x64,T1s1x6x1500x64,T1s1x6x1500x64]
+                ]),
+            ),
+            decoder_input_ids:T7s1x1,
+            encoder_outputs:dict(last_hidden_state:T1s1x1500x384),
+            use_cache:bool,return_dict:bool
+        )
+        """
+
+        # load model and processor
+        processor = WhisperProcessor.from_pretrained("openai/whisper-tiny")
+        model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-tiny")
+        forced_decoder_ids = processor.get_decoder_prompt_ids(
+            language="english", task="transcribe"
+        )
+
+        # load streaming dataset and read first audio sample
+        ds = load_dataset(
+            "hf-internal-testing/librispeech_asr_dummy", "clean", split="validation"
+        )
+        sample = ds[0]["audio"]
+        input_features = processor(
+            sample["array"], sampling_rate=sample["sampling_rate"], return_tensors="pt"
+        ).input_features
+
+        # generate token ids
+        print()
+        with steel_forward(model):
+            predicted_ids = model.generate(
+                input_features, forced_decoder_ids=forced_decoder_ids
+            )
+
+        # decode token ids to text
+        transcription = processor.batch_decode(predicted_ids, skip_special_tokens=False)
+        print("--", transcription)
+        transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)
+        print("--", transcription)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

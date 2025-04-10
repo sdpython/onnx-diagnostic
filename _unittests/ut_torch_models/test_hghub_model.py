@@ -105,6 +105,14 @@ class TestHuggingFaceHubModel(ExtTestCase):
         model(**inputs)
 
     @hide_stdout()
+    def test_get_untrained_model_with_inputs_automatic_speech_recognition(self):
+        mid = "openai/whisper-tiny"
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        self.assertIn((data["size"], data["n_weights"]), [(132115968, 33028992)])
+        model, inputs = data["model"], data["inputs"]
+        model(**inputs)
+
+    @hide_stdout()
     def test_get_untrained_model_with_inputs_imagetext2text_generation(self):
         mid = "HuggingFaceM4/tiny-random-idefics"
         # mid = "Salesforce/codet5-small"

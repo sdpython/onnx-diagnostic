@@ -1137,6 +1137,11 @@ class ExtTestCase(unittest.TestCase):
         "Tells if DEBUG=1 is set up."
         return os.environ.get("DEBUG") in BOOLEAN_VALUES
 
+    def string_type(self, *args, **kwargs):
+        from .helpers import string_type
+
+        return string_type(*args, **kwargs)
+
     def subloop(self, *args, verbose: int = 0):
         "Loops over elements and calls :meth:`unittests.TestCase.subTest`."
         if len(args) == 1:

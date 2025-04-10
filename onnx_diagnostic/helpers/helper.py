@@ -1,6 +1,7 @@
 import ast
 import enum
 import inspect
+from dataclasses import is_dataclass, fields
 from typing import Any, Callable, Dict, List, Optional, Set
 import numpy as np
 
@@ -140,6 +141,19 @@ def string_type(
     """
     if obj is None:
         return "None"
+    if is_dataclass(obj):
+        values = {f.name: getattr(obj, f.name, None) for f in fields(obj)}
+        values = {k: v for k, v in values.items() if v is not None}
+        s = string_type(
+            values,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            ignore=ignore,
+            limit=limit,
+        )
+        return f"{obj.__class__.__name__}{s[4:]}"
+
     # tuple
     if isinstance(obj, tuple):
         if len(obj) == 1:

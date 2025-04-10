@@ -119,7 +119,7 @@ __data_arch__ = textwrap.dedent(
     VitsModel,text-to-audio
     Wav2Vec2ConformerForCTC,automatic-speech-recognition
     Wav2Vec2Model,feature-extraction
-    WhisperForConditionalGeneration,no-pipeline-tag
+    WhisperForConditionalGeneration,automatic-speech-recognition
     XLMModel,feature-extraction
     XLMRobertaForCausalLM,text-generation
     YolosForObjectDetection,object-detection
