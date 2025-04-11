@@ -934,6 +934,8 @@ class ExtTestCase(unittest.TestCase):
         elif expected.__class__.__name__ in ("Dim", "_Dim", "_DimHintType"):
             self.assertEqual(type(expected), type(value), msg=msg)
             self.assertEqual(expected.__name__, value.__name__, msg=msg)
+        elif expected is None:
+            self.assertEqual(expected, value, msg=msg)
         else:
             raise AssertionError(
                 f"Comparison not implemented for types {type(expected)} and {type(value)}"

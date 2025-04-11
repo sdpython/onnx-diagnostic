@@ -316,7 +316,11 @@ def _cmd_validate(argv: List[Any]):
             print(f"  + {k.ljust(max_length)}: {_ds_clean(v)}")
     else:
         # Let's skip any invalid combination if known to be unsupported
-        if "onnx" not in args.export and "custom" not in args.export and args.opt:
+        if (
+            "onnx" not in (args.export or "")
+            and "custom" not in (args.export or "")
+            and (args.opt or "")
+        ):
             print(f"validate - unsupported args: export={args.export!r}, opt={args.opt!r}")
             return
         summary, _data = validate_model(
