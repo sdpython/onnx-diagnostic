@@ -1,6 +1,11 @@
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, requires_transformers
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    ignore_warnings,
+    requires_transformers,
+    requires_python,
+)
 from onnx_diagnostic.torch_models.llms import get_phi2
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
@@ -25,6 +30,7 @@ class TestLlmPhi(ExtTestCase):
         assert ep
 
     @ignore_warnings(UserWarning)
+    @requires_python((3, 12))
     def test_export_phi2_2_bypassed(self):
         data = get_phi2(num_hidden_layers=2)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
