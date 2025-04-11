@@ -25,7 +25,6 @@ class TestLlmPhi(ExtTestCase):
         assert ep
 
     @ignore_warnings(UserWarning)
-    @requires_transformers("4.52")  # TODO
     def test_export_phi2_2_bypassed(self):
         data = get_phi2(num_hidden_layers=2)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
