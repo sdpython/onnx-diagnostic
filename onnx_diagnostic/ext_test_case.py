@@ -399,6 +399,18 @@ def has_cuda() -> bool:
     return torch.cuda.device_count() > 0
 
 
+def requires_python(version: Tuple[int, ...], msg: str = ""):
+    """
+    Skips a test if python is too old.
+
+    :param msg: to overwrite the message
+    :param version: minimum version
+    """
+    if sys.version_info[: len(version)] < version:
+        return unittest.skip(msg or f"python not recent enough {sys.version_info} < {version}")
+    return lambda x: x
+
+
 def requires_cuda(msg: str = "", version: str = "", memory: int = 0):
     """
     Skips a test if cuda is not available.
