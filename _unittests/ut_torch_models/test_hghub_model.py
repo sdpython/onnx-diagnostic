@@ -112,6 +112,42 @@ class TestHuggingFaceHubModel(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(132115968, 33028992)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        Dim = torch.export.Dim
+        self.maxDiff = None
+        self.assertIn("{0:Dim(batch),1:Dim(seq_length)}", self.string_type(ds))
+        self.assertEqualAny(
+            {
+                "decoder_input_ids": {
+                    0: Dim("batch", min=1, max=1024),
+                    1: Dim("seq_length", min=1, max=4096),
+                },
+                "cache_position": {0: Dim("seq_length", min=1, max=4096)},
+                "encoder_outputs": [{0: Dim("batch", min=1, max=1024)}],
+                "past_key_values": [
+                    [
+                        [
+                            {0: Dim("batch", min=1, max=1024)},
+                            {0: Dim("batch", min=1, max=1024)},
+                        ],
+                        [
+                            {0: Dim("batch", min=1, max=1024)},
+                            {0: Dim("batch", min=1, max=1024)},
+                        ],
+                    ],
+                    [
+                        [
+                            {0: Dim("batch", min=1, max=1024)},
+                            {0: Dim("batch", min=1, max=1024)},
+                        ],
+                        [
+                            {0: Dim("batch", min=1, max=1024)},
+                            {0: Dim("batch", min=1, max=1024)},
+                        ],
+                    ],
+                ],
+            },
+            ds,
+        )
         model(**inputs)
         self.assertEqual(
             "#1[T1r3]",
@@ -125,7 +161,16 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 "#8[T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4]",
                 self.string_type(flat),
             )
-            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds)
+            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
+        with bypass_export_some_errors(patch_transformers=True, verbose=10):
+            flat = torch.utils._pytree.tree_flatten(inputs["past_key_values"])[0]
+            self.assertIsInstance(flat, list)
+            self.assertIsInstance(flat[0], torch.Tensor)
+            self.assertEqual(
+                "#8[T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4]",
+                self.string_type(flat),
+            )
+            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
 
     @hide_stdout()
     def test_get_untrained_model_with_inputs_imagetext2text_generation(self):

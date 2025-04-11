@@ -1,14 +1,56 @@
 import pprint
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 import packaging.version as pv
 import optree
 import torch
 import transformers
 from transformers.cache_utils import DynamicCache, MambaCache, EncoderDecoderCache
 from transformers.modeling_outputs import BaseModelOutput
+from ..helpers import string_type
 
 
 PATCH_OF_PATCHES: Set[Any] = set()
+
+
+def _register_class_serialization(
+    cls,
+    f_flatten: Callable,
+    f_unflatten: Callable,
+    f_flatten_with_keys: Callable,
+    f_check: Optional[Callable] = None,
+    verbose: int = 0,
+) -> bool:
+    if cls is not None and cls in torch.utils._pytree.SUPPORTED_NODES:
+        return False
+
+    if verbose:
+        print(f"[_register_cache_serialization] register {cls}")
+    torch.utils._pytree.register_pytree_node(
+        cls,
+        f_flatten,
+        f_unflatten,
+        serialized_type_name=f"{cls.__module__}.{cls.__name__}",
+        flatten_with_keys_fn=f_flatten_with_keys,
+    )
+    if pv.Version(torch.__version__) < pv.Version("2.7"):
+        if verbose:
+            print(
+                f"[_register_cache_serialization] "
+                f"register {cls} for torch=={torch.__version__}"
+            )
+        torch.fx._pytree.register_pytree_flatten_spec(cls, lambda x, _: f_flatten(x)[0])
+
+    # check
+    if f_check:
+        inst = f_check()
+        values, spec = torch.utils._pytree.tree_flatten(inst)
+        restored = torch.utils._pytree.tree_unflatten(values, spec)
+        assert string_type(inst, with_shape=True) == string_type(restored, with_shape=True), (
+            f"Issue with registration of class {cls} "
+            f"inst={string_type(inst, with_shape=True)}, "
+            f"restored={string_type(restored, with_shape=True)}"
+        )
+    return True
 
 
 def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
@@ -28,26 +70,20 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     ):
         if verbose:
             print(
-                "[_register_cache_serialization] DynamicCache "
-                "is unregistered and registered first."
+                f"[_fix_registration] DynamicCache is unregistered and "
+                f"registered first for transformers=={transformers.__version__}"
             )
         _unregister(DynamicCache, verbose=verbose)
-        torch.utils._pytree.register_pytree_node(
+        _register_class_serialization(
             DynamicCache,
             flatten_dynamic_cache,
             unflatten_dynamic_cache,
-            serialized_type_name=f"{DynamicCache.__module__}.{DynamicCache.__name__}",
-            flatten_with_keys_fn=flatten_with_keys_dynamic_cache,
+            flatten_with_keys_dynamic_cache,
+            # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
+            verbose=verbose,
         )
         if verbose:
-            print(
-                "[_register_cache_serialization] DynamicCache "
-                "unregistered and registered done."
-            )
-        if pv.Version(torch.__version__) < pv.Version("2.7"):
-            torch.fx._pytree.register_pytree_flatten_spec(
-                DynamicCache, lambda x, _: [x.key_cache, x.value_cache]
-            )
+            print("[_fix_registration] DynamicCache done.")
         # To avoid doing it multiple times.
         PATCH_OF_PATCHES.add(DynamicCache)
 
@@ -59,120 +95,52 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     ):
         if verbose:
             print(
-                "[_register_cache_serialization] BaseModelOutput "
-                "is unregistered and registered first."
+                f"[_fix_registration] BaseModelOutput is unregistered and "
+                f"registered first for transformers=={transformers.__version__}"
             )
         _unregister(BaseModelOutput, verbose=verbose)
-        torch.utils._pytree.register_pytree_node(
+        _register_class_serialization(
             BaseModelOutput,
             flatten_base_model_output,
             unflatten_base_model_output,
-            serialized_type_name=f"{BaseModelOutput.__module__}.{BaseModelOutput.__name__}",
-            flatten_with_keys_fn=flatten_with_keys_base_model_output,
+            flatten_with_keys_base_model_output,
+            verbose=verbose,
         )
         if verbose:
-            print(
-                "[_register_cache_serialization] BaseModelOutput "
-                "unregistered and registered done."
-            )
+            print("[_fix_registration] BaseModelOutput done.")
 
         # To avoid doing it multiple times.
         PATCH_OF_PATCHES.add(BaseModelOutput)
 
-    unregistered_dynamic_cache = True
-    if DynamicCache is not None and DynamicCache in torch.utils._pytree.SUPPORTED_NODES:
-        if verbose > 1:
-            print(f"[_register_cache_serialization] {DynamicCache} already registered")
-        unregistered_dynamic_cache = False
-    else:
-        if verbose:
-            print("[_register_cache_serialization] register DynamicCache")
-        torch.utils._pytree.register_pytree_node(
-            DynamicCache,
-            flatten_dynamic_cache,
-            unflatten_dynamic_cache,
-            serialized_type_name=f"{DynamicCache.__module__}.{DynamicCache.__name__}",
-            flatten_with_keys_fn=flatten_with_keys_dynamic_cache,
-        )
-        if pv.Version(torch.__version__) < pv.Version("2.7"):
-            torch.fx._pytree.register_pytree_flatten_spec(
-                DynamicCache, lambda x, _: [x.key_cache, x.value_cache]
-            )
-
-        # check
-        from ..helpers.cache_helper import make_dynamic_cache
-
-        cache = make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))])
-        values, spec = torch.utils._pytree.tree_flatten(cache)
-        cache2 = torch.utils._pytree.tree_unflatten(values, spec)
-        # torch.fx._pytree.tree_flatten(cache)
-        assert len(cache2.key_cache) == 1
-
-    # BaseModelOutput
-    unregistered_base_model_output = True
-    if BaseModelOutput is not None and BaseModelOutput in torch.utils._pytree.SUPPORTED_NODES:
-        if verbose > 1:
-            print(f"[_register_cache_serialization] {BaseModelOutput} already registered")
-        # It is already registered because bypass_export_some_errors was called
-        # within a section already calling bypass_export_some_errors or transformers
-        # has updated its code to do it.
-        # No need to register and unregister then.
-        unregistered_base_model_output = False
-    else:
-        if verbose:
-            print("[_register_cache_serialization] register BaseModelOutput")
-        torch.utils._pytree.register_pytree_node(
-            BaseModelOutput,
-            flatten_encoder_decoder_cache,
-            unflatten_encoder_decoder_cache,
-            serialized_type_name=f"{BaseModelOutput.__module__}.{BaseModelOutput.__name__}",
-            flatten_with_keys_fn=flatten_with_keys_base_model_output,
-        )
-
-    # MambaCache
-    unregistered_mamba_cache = True
-    if MambaCache in torch.utils._pytree.SUPPORTED_NODES:
-        if verbose > 1:
-            print(f"[_register_cache_serialization] {MambaCache} already registered")
-        # It is already registered because bypass_export_some_errors was called
-        # within a section already calling bypass_export_some_errors or transformers
-        # has updated its code to do it.
-        # No need to register and unregister then.
-        unregistered_mamba_cache = False
-    else:
-        if verbose:
-            print("[_register_cache_serialization] register MambaCache")
-        torch.utils._pytree.register_pytree_node(
-            MambaCache,
-            flatten_mamba_cache,
-            unflatten_mamba_cache,
-            serialized_type_name=f"{MambaCache.__module__}.{MambaCache.__name__}",
-            flatten_with_keys_fn=flatten_with_keys_mamba_cache,
-        )
-
-    # EncoderDecoderCache
-    unregistered_encode_decode_cache = True
-    if (
-        EncoderDecoderCache is not None
-        and EncoderDecoderCache in torch.utils._pytree.SUPPORTED_NODES
-    ):
-        if verbose > 1:
-            print(f"[_register_cache_serialization] {EncoderDecoderCache} already registered")
-        # It is already registered because bypass_export_some_errors was called
-        # within a section already calling bypass_export_some_errors or transformers
-        # has updated its code to do it.
-        # No need to register and unregister then.
-        unregistered_encode_decode_cache = False
-    else:
-        if verbose:
-            print("[_register_cache_serialization] register EncoderDecoderCache")
-        torch.utils._pytree.register_pytree_node(
-            EncoderDecoderCache,
-            flatten_encoder_decoder_cache,
-            unflatten_encoder_decoder_cache,
-            serialized_type_name=f"{EncoderDecoderCache.__module__}.{EncoderDecoderCache.__name__}",
-            flatten_with_keys_fn=flatten_with_keys_encoder_decoder_cache,
-        )
+    unregistered_dynamic_cache = _register_class_serialization(
+        DynamicCache,
+        flatten_dynamic_cache,
+        unflatten_dynamic_cache,
+        flatten_with_keys_dynamic_cache,
+        # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
+        verbose=verbose,
+    )
+    unregistered_base_model_output = _register_class_serialization(
+        BaseModelOutput,
+        flatten_base_model_output,
+        unflatten_base_model_output,
+        flatten_with_keys_base_model_output,
+        verbose=verbose,
+    )
+    unregistered_encode_decode_cache = _register_class_serialization(
+        EncoderDecoderCache,
+        flatten_encoder_decoder_cache,
+        unflatten_encoder_decoder_cache,
+        flatten_with_keys_encoder_decoder_cache,
+        verbose=verbose,
+    )
+    unregistered_mamba_cache = _register_class_serialization(
+        MambaCache,
+        flatten_mamba_cache,
+        unflatten_mamba_cache,
+        flatten_with_keys_mamba_cache,
+        verbose=verbose,
+    )
 
     return dict(
         DynamicCache=unregistered_dynamic_cache,
@@ -213,8 +181,6 @@ def _unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
     for cls in [MambaCache, DynamicCache, EncoderDecoderCache, BaseModelOutput]:
         if undo.get(cls.__name__, False):
             _unregister(cls, verbose)
-        elif verbose > 1:
-            print(f"[_unregister_cache_serialization] skip unregister {cls.__name__}")
 
 
 ############

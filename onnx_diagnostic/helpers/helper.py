@@ -249,6 +249,8 @@ def string_type(
             limit=limit,
         )
         s = ",".join(f"{kv[0]}:{string_type(kv[1],**kws)}" for kv in obj.items())
+        if all(isinstance(k, int) for k in obj):
+            return f"{{{s}}}"
         return f"dict({s})"
     # arrat
     if isinstance(obj, np.ndarray):
@@ -279,7 +281,7 @@ def string_type(
     if isinstance(obj, torch.export.dynamic_shapes._DerivedDim):
         return "DerivedDim"
     if isinstance(obj, torch.export.dynamic_shapes._Dim):
-        return "Dim"
+        return f"Dim({obj.__name__})"
     if isinstance(obj, torch.SymInt):
         return "SymInt"
     if isinstance(obj, torch.SymFloat):
@@ -354,6 +356,11 @@ def string_type(
         return "str"
     if isinstance(obj, slice):
         return "slice"
+
+    if obj == torch.export.Dim.DYNAMIC:
+        return "DYNAMIC"
+    if obj == torch.export.Dim.AUTO:
+        return "AUTO"
 
     # others classes
 

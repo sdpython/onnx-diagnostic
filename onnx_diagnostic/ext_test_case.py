@@ -910,6 +910,9 @@ class ExtTestCase(unittest.TestCase):
         elif hasattr(expected, "shape"):
             self.assertEqual(type(expected), type(value), msg=msg)
             self.assertEqualArray(expected, value, msg=msg, atol=atol, rtol=rtol)
+        elif expected.__class__.__name__ in ("Dim", "_Dim"):
+            self.assertEqual(type(expected), type(value), msg=msg)
+            self.assertEqual(expected.__name__, value.__name__, msg=msg)
         else:
             raise AssertionError(
                 f"Comparison not implemented for types {type(expected)} and {type(value)}"

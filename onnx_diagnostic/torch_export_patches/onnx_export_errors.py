@@ -36,7 +36,7 @@ def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Call
         original = cls._PATCHED_CLASS_
         methods = cls._PATCHES_
         if verbose:
-            print(f"[patch_module_or_classes] {name} - {cls.__name__}: {', '.join(methods)}")
+            print(f"[patch_module_or_classes] {name}.{cls.__name__}: {', '.join(methods)}")
 
         keep = {n: getattr(original, n, None) for n in methods}
         for n in methods:
@@ -69,7 +69,7 @@ def unpatch_module_or_classes(mod, info: Dict[type, Dict[type, Callable]], verbo
     for cls, methods in info.items():
         assert cls in set_patch, f"No patch registered for {cls} in {mod} (found {set_patch})"
         if verbose:
-            print(f"[unpatch_module_or_classes] {name} - {cls.__name__}: {', '.join(methods)}")
+            print(f"[unpatch_module_or_classes] {name}.{cls.__name__}: {', '.join(methods)}")
         original = cls._PATCHED_CLASS_
         for n, v in methods.items():
             if v is None:
