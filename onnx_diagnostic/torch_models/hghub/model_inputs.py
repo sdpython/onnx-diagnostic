@@ -326,6 +326,7 @@ def get_untrained_model_with_inputs(
     verbose: int = 0,
     dynamic_rope: Optional[bool] = None,
     same_as_pretrained: bool = False,
+    use_preinstalled: bool = True,
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
@@ -342,6 +343,7 @@ def get_untrained_model_with_inputs(
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :param same_as_pretrained: if True, do not change the default values
         to get a smaller model
+    :param use_preinstalled: use preinstalled configurations
     :return: dictionary with a model, inputs, dynamic shapes, and the configuration
 
     Example:
@@ -363,8 +365,10 @@ def get_untrained_model_with_inputs(
     """
     if verbose:
         print(f"[get_untrained_model_with_inputs] model_id={model_id!r}")
+        if use_preinstalled:
+            print(f"[get_untrained_model_with_inputs] use preinstalled {model_id!r}")
     if config is None:
-        config = get_pretrained_config(model_id)
+        config = get_pretrained_config(model_id, use_preinstalled=use_preinstalled)
     archs = config.architectures  # type: ignore
     assert archs is not None and len(archs) == 1, (
         f"Unable to determine the architecture for model {model_id!r}, "

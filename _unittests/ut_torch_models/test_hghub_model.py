@@ -199,6 +199,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         for mid in load_models_testing():
             with self.subTest(mid=mid):
                 if mid in {
+                    "hf-internal-testing/tiny-random-BeitForImageClassification",
                     "hf-internal-testing/tiny-random-MaskFormerForInstanceSegmentation",
                     "hf-internal-testing/tiny-random-MoonshineForConditionalGeneration",
                     "fxmarty/pix2struct-tiny-random",

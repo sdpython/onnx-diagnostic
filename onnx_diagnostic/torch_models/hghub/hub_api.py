@@ -1,4 +1,5 @@
 import functools
+import os
 from typing import Any, Dict, List, Optional, Union
 import transformers
 from huggingface_hub import HfApi, model_info
@@ -33,11 +34,13 @@ def get_cached_configuration(name: str) -> Optional[transformers.PretrainedConfi
     assert cached, "no cached configuration, which is weird"
     if name in cached:
         return cached[name]()
+    if os.environ.get("NOHTTP", ""):
+        raise AssertionError(f"Unable to find {name!r} in {sorted(cached)}")
     return None
 
 
 def get_pretrained_config(
-    model_id: str, trust_remote_code: bool = True, use_cached: bool = True
+    model_id: str, trust_remote_code: bool = True, use_preinstalled: bool = True
 ) -> Any:
     """
     Returns the config for a model_id.
@@ -45,13 +48,13 @@ def get_pretrained_config(
     :param model_id: model id
     :param trust_remote_code: trust_remote_code,
         see :meth:`transformers.AutoConfig.from_pretrained`
-    :param used_cached: if cached, uses this version to avoid
+    :param use_preinstalled: if use_preinstalled, uses this version to avoid
         accessing the network, if available, it is returned by
         :func:`get_cached_configuration`, the cached list is mostly for
         unit tests
     :return: a configuration
     """
-    if use_cached:
+    if use_preinstalled:
         conf = get_cached_configuration(model_id)
         if conf is not None:
             return conf

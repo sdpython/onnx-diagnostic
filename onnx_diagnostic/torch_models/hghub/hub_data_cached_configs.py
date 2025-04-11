@@ -3259,8 +3259,8 @@ def _ccached_hf_m4_tiny_random_idefics():
     )
 
 
-def _ccached_openai_whisper_itny():
-    "openai/whipser-tiny"
+def _ccached_openai_whisper_tiny():
+    "openai/whisper-tiny"
     return transformers.WhisperConfig(
         **{
             "_name_or_path": "openai/whisper-tiny",
