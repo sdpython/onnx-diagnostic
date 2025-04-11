@@ -1,6 +1,7 @@
 import ast
 import enum
 import inspect
+from dataclasses import is_dataclass, fields
 from typing import Any, Callable, Dict, List, Optional, Set
 import numpy as np
 
@@ -140,6 +141,19 @@ def string_type(
     """
     if obj is None:
         return "None"
+    if is_dataclass(obj):
+        values = {f.name: getattr(obj, f.name, None) for f in fields(obj)}
+        values = {k: v for k, v in values.items() if v is not None}
+        s = string_type(
+            values,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            ignore=ignore,
+            limit=limit,
+        )
+        return f"{obj.__class__.__name__}{s[4:]}"
+
     # tuple
     if isinstance(obj, tuple):
         if len(obj) == 1:
@@ -235,6 +249,8 @@ def string_type(
             limit=limit,
         )
         s = ",".join(f"{kv[0]}:{string_type(kv[1],**kws)}" for kv in obj.items())
+        if all(isinstance(k, int) for k in obj):
+            return f"{{{s}}}"
         return f"dict({s})"
     # arrat
     if isinstance(obj, np.ndarray):
@@ -265,7 +281,7 @@ def string_type(
     if isinstance(obj, torch.export.dynamic_shapes._DerivedDim):
         return "DerivedDim"
     if isinstance(obj, torch.export.dynamic_shapes._Dim):
-        return "Dim"
+        return f"Dim({obj.__name__})"
     if isinstance(obj, torch.SymInt):
         return "SymInt"
     if isinstance(obj, torch.SymFloat):
@@ -341,6 +357,11 @@ def string_type(
     if isinstance(obj, slice):
         return "slice"
 
+    if obj == torch.export.Dim.DYNAMIC:
+        return "DYNAMIC"
+    if obj == torch.export.Dim.AUTO:
+        return "AUTO"
+
     # others classes
 
     if obj.__class__ in torch.utils._pytree.SUPPORTED_NODES:
@@ -388,7 +409,7 @@ def string_type(
             f"dtype={obj.dtype}, shape={obj.shape})"
         )
 
-    if obj.__class__.__name__ == "_DimHint":
+    if obj.__class__.__name__ in ("_DimHint", "_DimHintType"):
         return str(obj)
 
     if isinstance(obj, torch.nn.Module):

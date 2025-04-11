@@ -887,7 +887,18 @@ class ExtTestCase(unittest.TestCase):
     def assertEqualAny(
         self, expected: Any, value: Any, atol: float = 0, rtol: float = 0, msg: str = ""
     ):
-        if isinstance(expected, (tuple, list, dict)):
+        if expected.__class__.__name__ == "BaseModelOutput":
+            self.assertEqual(type(expected), type(value), msg=msg)
+            self.assertEqual(len(expected), len(value), msg=msg)
+            self.assertEqual(list(expected), list(value), msg=msg)  # checks the order
+            self.assertEqualAny(
+                {k: v for k, v in expected.items()},  # noqa: C416
+                {k: v for k, v in value.items()},  # noqa: C416
+                atol=atol,
+                rtol=rtol,
+                msg=msg,
+            )
+        elif isinstance(expected, (tuple, list, dict)):
             self.assertIsInstance(value, type(expected), msg=msg)
             self.assertEqual(len(expected), len(value), msg=msg)
             if isinstance(expected, dict):
@@ -898,7 +909,17 @@ class ExtTestCase(unittest.TestCase):
                 for e, g in zip(expected, value):
                     self.assertEqualAny(e, g, msg=msg, atol=atol, rtol=rtol)
         elif expected.__class__.__name__ == "DynamicCache":
+            self.assertEqual(type(expected), type(value), msg=msg)
             atts = ["key_cache", "value_cache"]
+            self.assertEqualAny(
+                {k: expected.__dict__.get(k, None) for k in atts},
+                {k: value.__dict__.get(k, None) for k in atts},
+                atol=atol,
+                rtol=rtol,
+            )
+        elif expected.__class__.__name__ == "EncoderDecoderCache":
+            self.assertEqual(type(expected), type(value), msg=msg)
+            atts = ["self_attention_cache", "cross_attention_cache"]
             self.assertEqualAny(
                 {k: expected.__dict__.get(k, None) for k in atts},
                 {k: value.__dict__.get(k, None) for k in atts},
@@ -910,6 +931,11 @@ class ExtTestCase(unittest.TestCase):
         elif hasattr(expected, "shape"):
             self.assertEqual(type(expected), type(value), msg=msg)
             self.assertEqualArray(expected, value, msg=msg, atol=atol, rtol=rtol)
+        elif expected.__class__.__name__ in ("Dim", "_Dim", "_DimHintType"):
+            self.assertEqual(type(expected), type(value), msg=msg)
+            self.assertEqual(expected.__name__, value.__name__, msg=msg)
+        elif expected is None:
+            self.assertEqual(expected, value, msg=msg)
         else:
             raise AssertionError(
                 f"Comparison not implemented for types {type(expected)} and {type(value)}"
@@ -1081,7 +1107,8 @@ class ExtTestCase(unittest.TestCase):
             :class:`onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch`
         """
         from .helpers import string_type, string_diff, max_diff
-        from .helpers.ort_session import InferenceSessionForTorch, make_feeds
+        from .helpers.rt_helper import make_feeds
+        from .helpers.ort_session import InferenceSessionForTorch
 
         kws = dict(with_shape=True, with_min_max=verbose > 1)
         if verbose:
@@ -1136,6 +1163,11 @@ class ExtTestCase(unittest.TestCase):
     def _debug(self):
         "Tells if DEBUG=1 is set up."
         return os.environ.get("DEBUG") in BOOLEAN_VALUES
+
+    def string_type(self, *args, **kwargs):
+        from .helpers import string_type
+
+        return string_type(*args, **kwargs)
 
     def subloop(self, *args, verbose: int = 0):
         "Loops over elements and calls :meth:`unittests.TestCase.subTest`."

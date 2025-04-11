@@ -25,7 +25,7 @@ import onnxruntime
 from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import max_diff, string_diff, string_type
 from onnx_diagnostic.helpers.cache_helper import is_cache_dynamic_registered
-from onnx_diagnostic.helpers.ort_session import make_feeds
+from onnx_diagnostic.helpers.rt_helper import make_feeds
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 from onnx_diagnostic.torch_models.hghub import (
     get_untrained_model_with_inputs,

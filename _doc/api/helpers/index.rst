@@ -13,6 +13,7 @@ onnx_diagnostic.helpers
     memory_peak
     onnx_helper
     ort_session
+    rt_helper
     torch_test_helper
 
 .. autofunction:: onnx_diagnostic.helpers.max_diff

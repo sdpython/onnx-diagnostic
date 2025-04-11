@@ -174,7 +174,7 @@ def _cached_hf_internal_testing_tiny_random_beitforimageclassification():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_convnext():
+def _ccached_hf_internal_testing_tiny_random_convnext():
     "hf-internal-testing/tiny-random-convnext"
     t64 = textwrap.dedent(
         """
@@ -1334,10 +1334,10 @@ def _cached_hf_internal_testing_tiny_random_convnext():
     return transformers.ConvNextConfig(**kwargs)
 
 
-def _cached_fxmarty_tiny_random_gemmaforcausallm():
+def _ccached_fxmarty_tiny_random_gemmaforcausallm():
     "fxmarty/tiny-random-GemmaForCausalLM"
     return transformers.GemmaConfig(
-        {
+        **{
             "architectures": ["GemmaForCausalLM"],
             "attention_bias": false,
             "attention_dropout": 0.0,
@@ -1366,7 +1366,7 @@ def _cached_fxmarty_tiny_random_gemmaforcausallm():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_gptneoxforcausallm():
+def _ccached_hf_internal_testing_tiny_random_gptneoxforcausallm():
     "hf-internal-testing/tiny-random-GPTNeoXForCausalLM"
     return transformers.GPTNeoXConfig(
         **{
@@ -1405,7 +1405,7 @@ def _cached_hf_internal_testing_tiny_random_gptneoxforcausallm():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_graniteforcausallm():
+def _ccached_hf_internal_testing_tiny_random_graniteforcausallm():
     "hf-internal-testing/tiny-random-GraniteForCausalLM"
     return transformers.GraniteConfig(
         **{
@@ -1441,7 +1441,7 @@ def _cached_hf_internal_testing_tiny_random_graniteforcausallm():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_hieraforimageclassification():
+def _ccached_hf_internal_testing_tiny_random_hieraforimageclassification():
     "hf-internal-testing/tiny-random-HieraForImageClassification"
     return transformers.HieraConfig(
         **{
@@ -1482,7 +1482,7 @@ def _cached_hf_internal_testing_tiny_random_hieraforimageclassification():
     )
 
 
-def _cached_fxmarty_tiny_llama_fast_tokenizer():
+def _ccached_fxmarty_tiny_llama_fast_tokenizer():
     "fxmarty/tiny-llama-fast-tokenizer"
     return transformers.LlamaConfig(
         **{
@@ -1516,7 +1516,7 @@ def _cached_fxmarty_tiny_llama_fast_tokenizer():
     )
 
 
-def _cached_sshleifer_tiny_marian_en_de():
+def _ccached_sshleifer_tiny_marian_en_de():
     "sshleifer/tiny-marian-en-de"
     return transformers.MarianConfig(
         **{
@@ -1567,7 +1567,7 @@ def _cached_sshleifer_tiny_marian_en_de():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_maskformerforinstancesegmentation():
+def _ccached_hf_internal_testing_tiny_random_maskformerforinstancesegmentation():
     "hf-internal-testing/tiny-random-MaskFormerForInstanceSegmentation"
     t64 = textwrap.dedent(
         """
@@ -1625,7 +1625,7 @@ def _cached_hf_internal_testing_tiny_random_maskformerforinstancesegmentation():
     return transformers.MaskFormerConfig(**kwargs)
 
 
-def _cached_echarlaix_tiny_random_mistral():
+def _ccached_echarlaix_tiny_random_mistral():
     "echarlaix/tiny-random-mistral"
     return transformers.MistralConfig(
         **{
@@ -1660,7 +1660,7 @@ def _cached_echarlaix_tiny_random_mistral():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_mobilevit():
+def _ccached_hf_internal_testing_tiny_random_mobilevit():
     "hf-internal-testing/tiny-random-mobilevit"
     t64 = textwrap.dedent(
         """
@@ -2823,7 +2823,7 @@ def _cached_hf_internal_testing_tiny_random_mobilevit():
     return transformers.MobileViTConfig(**kwargs)
 
 
-def _cached_hf_internal_testing_tiny_random_moonshineforconditionalgeneration():
+def _ccached_hf_internal_testing_tiny_random_moonshineforconditionalgeneration():
     "hf-internal-testing/tiny-random-MoonshineForConditionalGeneration"
     return transformers.MoonshineConfig(
         **{
@@ -2859,7 +2859,7 @@ def _cached_hf_internal_testing_tiny_random_moonshineforconditionalgeneration():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_olmoforcausallm():
+def _ccached_hf_internal_testing_tiny_random_olmoforcausallm():
     "hf-internal-testing/tiny-random-OlmoForCausalLM"
     return transformers.OlmoConfig(
         **{
@@ -2889,7 +2889,7 @@ def _cached_hf_internal_testing_tiny_random_olmoforcausallm():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_olmo2forcausallm():
+def _ccached_hf_internal_testing_tiny_random_olmo2forcausallm():
     "hf-internal-testing/tiny-random-Olmo2ForCausalLM"
     return transformers.Olmo2Config(
         **{
@@ -2919,7 +2919,7 @@ def _cached_hf_internal_testing_tiny_random_olmo2forcausallm():
     )
 
 
-def _cached_echarlaix_tiny_random_phiforcausallm():
+def _ccached_echarlaix_tiny_random_phiforcausallm():
     "echarlaix/tiny-random-PhiForCausalLM"
     return transformers.PhiConfig(
         **{
@@ -2957,7 +2957,7 @@ def _cached_echarlaix_tiny_random_phiforcausallm():
     )
 
 
-def _cached_xenova_tiny_random_phi3forcausallm():
+def _ccached_xenova_tiny_random_phi3forcausallm():
     "Xenova/tiny-random-Phi3ForCausalLM"
     return transformers.Phi3Config(
         **{
@@ -2992,7 +2992,7 @@ def _cached_xenova_tiny_random_phi3forcausallm():
     )
 
 
-def _cached_fxmarty_pix2struct_tiny_random():
+def _ccached_fxmarty_pix2struct_tiny_random():
     "fxmarty/pix2struct-tiny-random"
     return transformers.Pix2StructConfig(
         **{
@@ -3059,7 +3059,7 @@ def _cached_fxmarty_pix2struct_tiny_random():
     )
 
 
-def _cached_fxmarty_tiny_dummy_qwen2():
+def _ccached_fxmarty_tiny_dummy_qwen2():
     "fxmarty/tiny-dummy-qwen2"
     return transformers.Qwen2Config(
         **{
@@ -3091,7 +3091,7 @@ def _cached_fxmarty_tiny_dummy_qwen2():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_vitmsnforimageclassification():
+def _ccached_hf_internal_testing_tiny_random_vitmsnforimageclassification():
     "hf-internal-testing/tiny-random-ViTMSNForImageClassification"
     return transformers.ViTMSNConfig(
         **{
@@ -3116,7 +3116,7 @@ def _cached_hf_internal_testing_tiny_random_vitmsnforimageclassification():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_yolosmodel():
+def _ccached_hf_internal_testing_tiny_random_yolosmodel():
     "hf-internal-testing/tiny-random-YolosModel"
     return transformers.YolosConfig(
         **{
@@ -3152,7 +3152,7 @@ def _cached_hf_internal_testing_tiny_random_yolosmodel():
     )
 
 
-def _cached_hf_internal_testing_tiny_xlm_roberta():
+def _ccached_hf_internal_testing_tiny_xlm_roberta():
     "hf-internal-testing/tiny-xlm-roberta"
     return transformers.XLMRobertaConfig(
         **{
@@ -3191,7 +3191,7 @@ def _cached_hf_internal_testing_tiny_xlm_roberta():
     )
 
 
-def _cached_hf_m4_tiny_random_idefics():
+def _ccached_hf_m4_tiny_random_idefics():
     "HuggingFaceM4/tiny-random-idefics"
     return transformers.IdeficsConfig(
         **{
@@ -3255,5 +3255,137 @@ def _cached_hf_m4_tiny_random_idefics():
             },
             "vocab_size": 32000,
             "word_embed_proj_dim": 16,
+        }
+    )
+
+
+def _ccached_openai_whisper_tiny():
+    "openai/whisper-tiny"
+    return transformers.WhisperConfig(
+        **{
+            "_name_or_path": "openai/whisper-tiny",
+            "activation_dropout": 0.0,
+            "activation_function": "gelu",
+            "architectures": ["WhisperForConditionalGeneration"],
+            "attention_dropout": 0.0,
+            "begin_suppress_tokens": [220, 50257],
+            "bos_token_id": 50257,
+            "d_model": 384,
+            "decoder_attention_heads": 6,
+            "decoder_ffn_dim": 1536,
+            "decoder_layerdrop": 0.0,
+            "decoder_layers": 4,
+            "decoder_start_token_id": 50258,
+            "dropout": 0.0,
+            "encoder_attention_heads": 6,
+            "encoder_ffn_dim": 1536,
+            "encoder_layerdrop": 0.0,
+            "encoder_layers": 4,
+            "eos_token_id": 50257,
+            "forced_decoder_ids": [[1, 50259], [2, 50359], [3, 50363]],
+            "init_std": 0.02,
+            "is_encoder_decoder": true,
+            "max_length": 448,
+            "max_source_positions": 1500,
+            "max_target_positions": 448,
+            "model_type": "whisper",
+            "num_hidden_layers": 4,
+            "num_mel_bins": 80,
+            "pad_token_id": 50257,
+            "scale_embedding": false,
+            "suppress_tokens": [
+                1,
+                2,
+                7,
+                8,
+                9,
+                10,
+                14,
+                25,
+                26,
+                27,
+                28,
+                29,
+                31,
+                58,
+                59,
+                60,
+                61,
+                62,
+                63,
+                90,
+                91,
+                92,
+                93,
+                359,
+                503,
+                522,
+                542,
+                873,
+                893,
+                902,
+                918,
+                922,
+                931,
+                1350,
+                1853,
+                1982,
+                2460,
+                2627,
+                3246,
+                3253,
+                3268,
+                3536,
+                3846,
+                3961,
+                4183,
+                4667,
+                6585,
+                6647,
+                7273,
+                9061,
+                9383,
+                10428,
+                10929,
+                11938,
+                12033,
+                12331,
+                12562,
+                13793,
+                14157,
+                14635,
+                15265,
+                15618,
+                16553,
+                16604,
+                18362,
+                18956,
+                20075,
+                21675,
+                22520,
+                26130,
+                26161,
+                26435,
+                28279,
+                29464,
+                31650,
+                32302,
+                32470,
+                36865,
+                42863,
+                47425,
+                49870,
+                50254,
+                50258,
+                50358,
+                50359,
+                50360,
+                50361,
+                50362,
+            ],
+            "torch_dtype": "float32",
+            "transformers_version": "4.27.0.dev0",
+            "use_cache": true,
+            "vocab_size": 51865,
         }
     )

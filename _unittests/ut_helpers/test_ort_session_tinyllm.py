@@ -7,10 +7,10 @@ import onnxruntime
 from onnxruntime.capi import _pybind_state as ORTC
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_warnings
 from onnx_diagnostic.helpers import max_diff
+from onnx_diagnostic.helpers.rt_helper import make_feeds
 from onnx_diagnostic.helpers.ort_session import (
     InferenceSessionForNumpy,
     InferenceSessionForTorch,
-    make_feeds,
 )
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
