@@ -226,6 +226,7 @@ def validate_model(
     """
     assert not trained, f"trained={trained} not supported yet"
     summary = version_summary()
+    folder_name = None
     if dump_folder:
         folder_name = _make_folder_name(
             model_id, exporter, optimization, dtype=dtype, device=device
@@ -237,12 +238,12 @@ def validate_model(
         summary["dump_folder_name"] = folder_name
         if verbose:
             print(f"[validate_model] dump into {folder_name!r}")
-    else:
-        folder_name = None
+
     if verbose:
         print(f"[validate_model] validate model id {model_id!r}")
         print("[validate_model] get dummy inputs...")
         summary["model_id"] = model_id
+
     begin = time.perf_counter()
     if quiet:
         try:
@@ -344,7 +345,10 @@ def validate_model(
         )
         if patch:
             if verbose:
-                print("[validate_model] applies patches before exporting")
+                print(
+                    f"[validate_model] applies patches before exporting "
+                    f"stop_if_static={stop_if_static}"
+                )
             with bypass_export_some_errors(  # type: ignore
                 patch_transformers=True,
                 stop_if_static=stop_if_static,
@@ -527,6 +531,7 @@ def call_torch_export_export(
         "export-strict",
         "export-nostrict",
     }, f"Unexpected value for exporter={exporter!r}"
+    assert not optimization, f"No optimization is implemented for exporter={exporter!r}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
     summary: Dict[str, Union[str, int, float]] = {}

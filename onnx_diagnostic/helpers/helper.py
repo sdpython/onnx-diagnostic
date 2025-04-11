@@ -409,7 +409,7 @@ def string_type(
             f"dtype={obj.dtype}, shape={obj.shape})"
         )
 
-    if obj.__class__.__name__ == "_DimHint":
+    if obj.__class__.__name__ in ("_DimHint", "_DimHintType"):
         return str(obj)
 
     if isinstance(obj, torch.nn.Module):
