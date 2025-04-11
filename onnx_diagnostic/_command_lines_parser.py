@@ -315,6 +315,10 @@ def _cmd_validate(argv: List[Any]):
         for k, v in data["dynamic_shapes"].items():
             print(f"  + {k.ljust(max_length)}: {_ds_clean(v)}")
     else:
+        # Let's skip any invalid combination if known to be unsupported
+        if "onnx" not in args.export and "custom" not in args.export and args.opt:
+            print(f"validate - unsupported args: export={args.export!r}, opt={args.opt!r}")
+            return
         summary, _data = validate_model(
             model_id=args.mid,
             task=args.task,

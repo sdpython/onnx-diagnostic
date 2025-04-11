@@ -424,6 +424,9 @@ def replacement_before_exporting(args: Any) -> Any:
         return None
     if isinstance(args, (int, float)):
         return args
+    if type(args) not in {dict, tuple, list}:
+        # BaseModelOutput is a dict
+        return args
     if isinstance(args, dict):
         return {k: replacement_before_exporting(v) for k, v in args.items()}
     if isinstance(args, tuple):

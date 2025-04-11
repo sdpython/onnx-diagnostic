@@ -11,6 +11,7 @@ def make_feeds(
     inputs: Any,
     use_numpy: bool = False,
     copy: bool = False,
+    check_flatten: bool = True,
 ) -> Dict[str, Union[torch.Tensor, np.ndarray]]:
     """
     Serializes the inputs to produce feeds expected
@@ -21,17 +22,20 @@ def make_feeds(
     :param use_numpy: if True, converts torch tensors into numpy arrays
     :param copy: a copy is made, this should be the case if the inputs is ingested
         by ``OrtValue``
+    :param check_flatten: if True, checks the ``torch.utils._pytree.tree_flatten``
+        returns the same number of outputs
     :return: feeds dictionary
     """
     flat = flatten_object(inputs, drop_keys=True)
     assert (
-        not all(isinstance(obj, torch.Tensor) for obj in flat)
+        not check_flatten
+        or not all(isinstance(obj, torch.Tensor) for obj in flat)
         or not is_cache_dynamic_registered(fast=True)
         or len(flat) == len(torch.utils._pytree.tree_flatten(inputs)[0])
     ), (
         f"Unexpected number of flattened objects, "
-        f"{string_type(flat, with_shape=True, limit=20)} != "
-        f"{string_type(torch.utils._pytree.tree_flatten(inputs)[0], with_shape=True,limit=20)}"
+        f"{string_type(flat, with_shape=True)} != "
+        f"{string_type(torch.utils._pytree.tree_flatten(inputs)[0], with_shape=True)}"
     )
     if use_numpy:
         flat = [t.detach().cpu().numpy() if isinstance(t, torch.Tensor) else t for t in flat]

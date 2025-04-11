@@ -887,7 +887,18 @@ class ExtTestCase(unittest.TestCase):
     def assertEqualAny(
         self, expected: Any, value: Any, atol: float = 0, rtol: float = 0, msg: str = ""
     ):
-        if isinstance(expected, (tuple, list, dict)):
+        if expected.__class__.__name__ == "BaseModelOutput":
+            self.assertEqual(type(expected), type(value), msg=msg)
+            self.assertEqual(len(expected), len(value), msg=msg)
+            self.assertEqual(list(expected), list(value), msg=msg)  # checks the order
+            self.assertEqualAny(
+                {k: v for k, v in expected.items()},  # noqa: C416
+                {k: v for k, v in value.items()},  # noqa: C416
+                atol=atol,
+                rtol=rtol,
+                msg=msg,
+            )
+        elif isinstance(expected, (tuple, list, dict)):
             self.assertIsInstance(value, type(expected), msg=msg)
             self.assertEqual(len(expected), len(value), msg=msg)
             if isinstance(expected, dict):
@@ -898,7 +909,17 @@ class ExtTestCase(unittest.TestCase):
                 for e, g in zip(expected, value):
                     self.assertEqualAny(e, g, msg=msg, atol=atol, rtol=rtol)
         elif expected.__class__.__name__ == "DynamicCache":
+            self.assertEqual(type(expected), type(value), msg=msg)
             atts = ["key_cache", "value_cache"]
+            self.assertEqualAny(
+                {k: expected.__dict__.get(k, None) for k in atts},
+                {k: value.__dict__.get(k, None) for k in atts},
+                atol=atol,
+                rtol=rtol,
+            )
+        elif expected.__class__.__name__ == "EncoderDecoderCache":
+            self.assertEqual(type(expected), type(value), msg=msg)
+            atts = ["self_attention_cache", "cross_attention_cache"]
             self.assertEqualAny(
                 {k: expected.__dict__.get(k, None) for k in atts},
                 {k: value.__dict__.get(k, None) for k in atts},

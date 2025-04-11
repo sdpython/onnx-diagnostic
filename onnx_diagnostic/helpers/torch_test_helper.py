@@ -351,7 +351,10 @@ def torch_deepcopy(value: Any) -> Any:
     if isinstance(value, set):
         return {torch_deepcopy(v) for v in value}
     if isinstance(value, dict):
-        return {k: torch_deepcopy(v) for k, v in value.items()}
+        if type(value) is dict:
+            return {k: torch_deepcopy(v) for k, v in value.items()}
+        # for BaseModelOutput
+        return value.__class__(**{k: torch_deepcopy(v) for k, v in value.items()})
     if isinstance(value, np.ndarray):
         return value.copy()
     if hasattr(value, "clone"):

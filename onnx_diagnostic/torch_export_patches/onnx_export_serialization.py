@@ -188,36 +188,13 @@ def _unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
 ############
 
 
-# self.conv_states: torch.Tensor = torch.zeros(
-#     config.num_hidden_layers,
-#     self.max_batch_size,
-#     self.intermediate_size,
-#     self.conv_kernel_size,
-#     device=device,
-#     dtype=dtype,
-# )
-# self.ssm_states: torch.Tensor = torch.zeros(
-#     config.num_hidden_layers,
-#     self.max_batch_size,
-#     self.intermediate_size,
-#     self.ssm_state_size,
-#     device=device,
-#     dtype=dtype,
-# )
 def flatten_mamba_cache(
     mamba_cache: MambaCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.MambaCache` with python objects."""
     flat = [
         (k, getattr(mamba_cache, k))
-        for k in [
-            # "max_batch_size",  # new in transformers==4.47
-            # "intermediate_size",
-            # "ssm_state_size",
-            # "conv_kernel_size",
-            "conv_states",
-            "ssm_states",
-        ]
+        for k in ["conv_states", "ssm_states"]
         if hasattr(mamba_cache, k)
     ]
     return [f[1] for f in flat], [f[0] for f in flat]
@@ -241,8 +218,6 @@ def unflatten_mamba_cache(
                 self.state_size = ssm_states.shape[3]
                 self.conv_kernel = conv_states.shape[3]
                 self.num_hidden_layers = conv_states.shape[0]
-
-    from transformers.cache_utils import MambaCache
 
     cache = MambaCache(
         _config(),
@@ -348,7 +323,7 @@ def unflatten_encoder_decoder_cache(
 ) -> EncoderDecoderCache:
     """Restores a :class:`transformers.cache_utils.EncoderDecoderCache` from python objects."""
     dictionary = torch.utils._pytree._dict_unflatten(values, context)
-    return transformers.cache_utils.EncoderDecoderCache(**dictionary)
+    return EncoderDecoderCache(**dictionary)
 
 
 #################
