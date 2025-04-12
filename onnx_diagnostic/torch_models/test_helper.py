@@ -420,6 +420,7 @@ def validate_model(
             )
         summary.update(summary_export)
 
+    dump_stats = None
     if dump_folder:
         if "exported_program" in data:
             ep = data["exported_program"]
@@ -435,22 +436,27 @@ def validate_model(
             epo = data["onnx_program"]
             if verbose:
                 print(f"[validate_model] dumps onnx program in {dump_folder!r}...")
-            onnx_file_name = os.path.join(dump_folder, f"{folder_name}.onnx")
+            onnx_filename = os.path.join(dump_folder, f"{folder_name}.onnx")
+            begin = time.perf_counter()
             if isinstance(epo, onnx.model_container.ModelContainer):
-                epo.save(onnx_file_name, all_tensors_to_one_file=True)
+                epo.save(onnx_filename, all_tensors_to_one_file=True)
             else:
-                epo.save(onnx_file_name, external_data=True)
+                epo.save(onnx_filename, external_data=True)
+            duration = time.perf_counter() - begin
             if verbose:
-                print("[validate_model] done (dump onnx)")
+                print(f"[validate_model] done (dump onnx) in {duration}")
+            data["onnx_filename"] = onnx_filename
+            summary["time_onnx_save"] = duration
         if verbose:
             print(f"[validate_model] dumps statistics in {dump_folder!r}...")
-        with open(os.path.join(dump_folder, f"{folder_name}.stats"), "w") as f:
+        dump_stats = os.path.join(dump_folder, f"{folder_name}.stats")
+        with open(dump_stats, "w") as f:
             for k, v in sorted(summary.items()):
                 f.write(f":{k}:{v};\n")
         if verbose:
             print("[validate_model] done (dump)")
 
-    if exporter and exporter.startswith("onnx-") and do_run:
+    if exporter and exporter.startswith(("onnx-", "custom-")) and do_run:
         summary_valid, data = validate_onnx_model(
             data=data,
             quiet=quiet,
@@ -461,6 +467,10 @@ def validate_model(
 
     if verbose:
         print("[validate_model] -- done (final)")
+    if dump_stats:
+        with open(dump_stats, "w") as f:
+            for k, v in sorted(summary.items()):
+                f.write(f":{k}:{v};\n")
     return summary, data
 
 
@@ -642,7 +652,7 @@ def validate_onnx_model(
     quiet: bool = False,
     verbose: int = 0,
     optimization: Optional[str] = None,
-):
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Verifies that an onnx model produces the same
     expected outputs.
@@ -665,10 +675,10 @@ def validate_onnx_model(
         if d < 0
         else ["CUDAExecutionProvider", "CPUExecutionProvider"]
     )
-    if "onnx_file_name" in data:
-        source = data["onnx_file_name"]
+    if "onnx_filename" in data:
+        source = data["onnx_filename"]
         summary["onnx_filename"] = source
-        summary["onnx_size"] = os.stats(source).st_size
+        summary["onnx_size"] = os.stat(source).st_size
     else:
         assert (
             "onnx_program" in data
@@ -745,7 +755,7 @@ def call_torch_export_onnx(
     quiet: bool = False,
     verbose: int = 0,
     optimization: Optional[str] = None,
-):
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx.
     If a patch must be applied, it should be before this functions.
@@ -818,7 +828,7 @@ def call_torch_export_onnx(
     if verbose:
         print("[call_torch_export_onnx] done (export)")
     data["onnx_program"] = epo
-    if verbose > 1:
+    if verbose > 5:
         print("[call_torch_export_onnx] -- ONNXProgram")
         print(epo)
         print("[call_torch_export_onnx] -- End of ONNXProgram")
@@ -850,7 +860,7 @@ def call_torch_export_custom(
     quiet: bool = False,
     verbose: int = 0,
     optimization: Optional[str] = None,
-):
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx.
     If a patch must be applied, it should be before this functions.
@@ -1011,3 +1021,75 @@ def call_torch_export_custom(
         print("[call_torch_export_custom] done (export)")
     data["onnx_program"] = epo
     return summary, data
+
+
+def run_ort_fusion(
+    model_or_path: Union[str, onnx.ModelProto],
+    output_path: str,
+    num_attention_heads: int,
+    hidden_size: int,
+    model_type: str = "bert",
+    verbose: int = 0,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Runs :epkg:`onnxruntime` fusion optimizer.
+
+    :param model_or_path: path to the ModelProto or the ModelProto itself
+    :param output_path: the model to save
+    :param num_attention_heads: number of heads, usually ``config.num_attention_heads``
+    :param hidden_size: hidden size, usually ``config.hidden_size``
+    :param model_type: type of optimization, see below
+    :param verbose: verbosity
+    :return: two dictionaries, summary and data
+
+    Supported values for ``model_type``:
+
+    .. runpython::
+        :showcode:
+
+        import pprint
+        from onnxruntime.transformers.optimizer import MODEL_TYPES
+
+        pprint.pprint(sorted(MODEL_TYPES))
+    """
+    from onnxruntime.transformers.optimizer import optimize_by_fusion
+    from onnxruntime.transformers.fusion_options import FusionOptions
+
+    opts = FusionOptions(model_type)
+
+    if isinstance(model_or_path, str):
+        if verbose:
+            print(f"[run_ort_fusion] loads {model_or_path!r}")
+        onx = onnx.load(model_or_path)
+    else:
+        onx = model_or_path
+    begin = time.perf_counter()
+    n_nodes = len(onx.graph.node)
+    if verbose:
+        print(
+            f"[run_ort_fusion] starts optimization for "
+            f"model_type={model_type!r} with {n_nodes} nodes"
+        )
+    new_onx = optimize_by_fusion(
+        onx,
+        model_type=model_type,
+        num_heads=num_attention_heads,
+        hidden_size=hidden_size,
+        optimization_options=opts,
+    )
+    duration = {time.perf_counter() - begin}
+    delta = len(new_onx.model.graph.node)
+    if verbose:
+        print(f"[run_ort_fusion] done in {duration} with {delta} nodes")
+        print(f"[run_ort_fusion] save to {output_path!r}")
+    begin = time.perf_counter()
+    new_onx.save_model_to_file(output_path, use_external_data_format=True)
+    d = time.perf_counter() - begin
+    if verbose:
+        print(f"[run_ort_fusion] done in {d}")
+    return {
+        f"opt_ort_{model_type}_n_nodes1": n_nodes,
+        f"opt_ort_{model_type}_n_nodes2": delta,
+        f"opt_ort_{model_type}_duration": duration,
+        f"opt_ort_{model_type}_duration_save": d,
+    }, {f"opt_ort_{model_type}": output_path}

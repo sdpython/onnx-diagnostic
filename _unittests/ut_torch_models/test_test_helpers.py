@@ -7,6 +7,7 @@ from onnx_diagnostic.torch_models.test_helper import (
     get_inputs_for_task,
     validate_model,
     filter_inputs,
+    run_ort_fusion,
 )
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_get_inputs_function_for_tasks
 
@@ -69,6 +70,11 @@ class TestTestHelper(ExtTestCase):
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
         self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
+        onnx_filename = data["onnx_filename"]
+        output_path = f"{onnx_filename}.ortopt.onnx"
+        run_ort_fusion(
+            onnx_filename, output_path, num_attention_heads=2, hidden_size=192, verbose=10
+        )
 
     def test_filter_inputs(self):
         inputs, ds = {"a": 1, "b": 2}, {"a": 20, "b": 30}
