@@ -67,45 +67,30 @@ jobs:
         run: python -m pip freeze
 
       - name: tiny-llm torch.export.export
-        run: |
-          export PYTHONPATH=.
-          python _unittests/ut_torch_models/test_tiny_llms.py
+        run: PYTHONPATH=. python _unittests/ut_torch_models/test_tiny_llms.py
 
       - name: tiny-llm onnx
-        run: |
-          export PYTHONPATH=.
-          python _unittests/ut_torch_models/test_tiny_llms_onnx.py
+        run: PYTHONPATH=. python _unittests/ut_torch_models/test_tiny_llms_onnx.py
         continue-on-error: true  # connectivity issues
 
       - name: tiny-llm example
-        run: |
-          export PYTHONPATH=.
-          python _doc/examples/plot_export_tiny_llm.py
+        run: PYTHONPATH=. python _doc/examples/plot_export_tiny_llm.py
         continue-on-error: true  # connectivity issues
 
       - name: tiny-llm bypass
-        run: |
-          export PYTHONPATH=.
-          python _doc/examples/plot_export_tiny_llm_patched.py
+        run: PYTHONPATH=. python _doc/examples/plot_export_tiny_llm_patched.py
         continue-on-error: true  # connectivity issues
+
+      - name: run tests bypassed
+        run: PYTHONPATH=. python _unittests/ut_torch_models/test_tiny_llms_bypassed.py
 
       - name: run tests
         run: |
           pip install pytest
-          export PYTHONPATH=.
-          UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py --ignore _unittests/ut_reference/test_backend_onnxruntime_evaluator.py
-          export PYTHONPATH=
+          PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py --ignore _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --ignore _unittests/ut_torch_models/test_tiny_llms_bypassed.py
 
       - name: run backend tests python
-        run: |
-          pip install pytest
-          export PYTHONPATH=.
-          UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_extended_reference_evaluator.py
-          export PYTHONPATH=
+        run: PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_extended_reference_evaluator.py
 
       - name: run backend tests onnxruntime
-        run: |
-          pip install pytest
-          export PYTHONPATH=.
-          UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --maxfail=15
-          export PYTHONPATH=
+        run: PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --maxfail=15
