@@ -5,6 +5,8 @@ from typing import Dict, List
 
 __date__ = "2025-03-26"
 
+__data_arch_values__ = {"ResNetForImageClassification": dict(image_size=224)}
+
 __data_arch__ = textwrap.dedent(
     """
     architecture,task
@@ -127,25 +129,25 @@ __data_arch__ = textwrap.dedent(
 )
 
 __data_tasks__ = [
+    "audio-classification",
     "automatic-speech-recognition",
-    "image-text-to-text",
-    "image-to-text",
-    "text-generation",
-    "object-detection",
     "document-question-answering",
     "feature-extraction",
-    "text-to-audio",
-    "zero-shot-image-classification",
-    "image-segmentation",
-    "reinforcement-learning",
-    "no-pipeline-tag",
-    "image-classification",
-    "text2text-generation",
-    "mask-generation",
-    "keypoint-detection",
-    "audio-classification",
-    "image-feature-extraction",
     "fill-mask",
+    "image-classification",
+    "image-feature-extraction",
+    "image-segmentation",
+    "image-text-to-text",
+    "image-to-text",
+    "keypoint-detection",
+    "mask-generation",
+    "no-pipeline-tag",
+    "object-detection",
+    "reinforcement-learning",
+    "text-generation",
+    "text-to-audio",
+    "text2text-generation",
+    "zero-shot-image-classification",
 ]
 
 __models_testing__ = """

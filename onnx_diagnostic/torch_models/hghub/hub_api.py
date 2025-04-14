@@ -4,7 +4,20 @@ from typing import Any, Dict, List, Optional, Union
 import transformers
 from huggingface_hub import HfApi, model_info
 from . import hub_data_cached_configs
-from .hub_data import __date__, __data_tasks__, load_architecture_task
+from .hub_data import __date__, __data_tasks__, load_architecture_task, __data_arch_values__
+
+
+@functools.cache
+def get_architecture_default_values(architecture: str):
+    """
+    The configuration may miss information to build the dummy inputs.
+    This information returns the missing pieces.
+    """
+    assert architecture in __data_arch_values__, (
+        f"No known default values for {architecture!r}, "
+        f"expecting one architecture in {', '.join(sorted(__data_arch_values__))}"
+    )
+    return __data_arch_values__[architecture]
 
 
 @functools.cache

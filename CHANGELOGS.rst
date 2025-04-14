@@ -4,6 +4,7 @@ Change Logs
 0.4.0
 +++++
 
+* :pr:`52`: add support for zero-shot-image-classification
 * :pr:`50`: add support for onnxruntime fusion
 * :pr:`48`: add support for EncoderDecoderCache, test with openai/whisper-tiny
 * :pr:`45`: improve change_dynamic_dimension to fix some dimensions

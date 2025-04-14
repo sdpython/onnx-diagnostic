@@ -1,5 +1,4 @@
 import inspect
-import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 import torch
@@ -44,56 +43,47 @@ def _patch_make_causal_mask(
     return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
 
-if sys.version_info[:2] <= (3, 11):
+@dataclass
+class patched_AttentionMaskConverter:
+    """
+    Patches
+    ``transformers.modeling_attn_mask_utils.AttentionMaskConverter._make_causal_mask``.
+    """
 
-    @dataclass
-    class patched_AttentionMaskConverter:
+    _PATCHES_ = ["_make_causal_mask"]
+    _PATCHED_CLASS_ = AttentionMaskConverter
+
+    @staticmethod
+    def _make_causal_mask(
+        *args,
+        **kwargs,
+        # input_ids_shape: torch.Size,
+        # dtype: torch.dtype,
+        # device: torch.device,
+        # past_key_values_length: int = 0,
+        # sliding_window: Optional[int] = None,
+    ):
         """
-        Patches
-        ``transformers.modeling_attn_mask_utils.AttentionMaskConverter._make_causal_mask``.
+        Patched method.
+
+        This static method may be called with ``AttentionMaskConverter._make_causal_mask``
+        or ``self._make_causal_mask``. That changes this argument is receives.
+        That should not matter but...
         """
-
-        _PATCHES_ = ["_make_causal_mask"]
-        _PATCHED_CLASS_ = AttentionMaskConverter
-
-        @staticmethod
-        def _make_causal_mask(
-            input_ids_shape: torch.Size,
-            dtype: torch.dtype,
-            device: torch.device,
-            past_key_values_length: int = 0,
-            sliding_window: Optional[int] = None,
-        ):
-            """Patched method."""
-            return _patch_make_causal_mask(
-                input_ids_shape, dtype, device, past_key_values_length, sliding_window
-            )
-
-else:
-
-    @dataclass
-    class patched_AttentionMaskConverter:
-        """
-        Patches
-        ``transformers.modeling_attn_mask_utils.AttentionMaskConverter._make_causal_mask``.
-        """
-
-        _PATCHES_ = ["_make_causal_mask"]
-        _PATCHED_CLASS_ = AttentionMaskConverter
-
-        @staticmethod
-        def _make_causal_mask(
-            self,
-            input_ids_shape: torch.Size,
-            dtype: torch.dtype,
-            device: torch.device,
-            past_key_values_length: int = 0,
-            sliding_window: Optional[int] = None,
-        ):
-            """Patched method."""
-            return _patch_make_causal_mask(
-                input_ids_shape, dtype, device, past_key_values_length, sliding_window
-            )
+        if args:
+            index = 0 if isinstance(args[0], (tuple, torch.Size)) else 1
+            names = [
+                "input_ids_shape",
+                "dtype",
+                "device",
+                "past_key_values_length",
+                "sliding_window",
+            ]
+            for i, a in enumerate(args):
+                if i < index:
+                    continue
+                kwargs[names[i - index]] = a
+        return _patch_make_causal_mask(**kwargs)
 
 
 class patched_DynamicCache:
