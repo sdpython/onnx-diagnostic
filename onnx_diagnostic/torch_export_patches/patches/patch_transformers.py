@@ -55,20 +55,35 @@ class patched_AttentionMaskConverter:
 
     @staticmethod
     def _make_causal_mask(
-        input_ids_shape: torch.Size,
-        dtype: torch.dtype,
-        device: torch.device,
-        past_key_values_length: int = 0,
-        sliding_window: Optional[int] = None,
+        *args,
+        **kwargs,
+        # input_ids_shape: torch.Size,
+        # dtype: torch.dtype,
+        # device: torch.device,
+        # past_key_values_length: int = 0,
+        # sliding_window: Optional[int] = None,
     ):
-        """Patched method."""
-        return _patch_make_causal_mask(
-            input_ids_shape=input_ids_shape,
-            dtype=dtype,
-            device=device,
-            past_key_values_length=past_key_values_length,
-            sliding_window=sliding_window,
-        )
+        """
+        Patched method.
+
+        This static method may be called with ``AttentionMaskConverter._make_causal_mask``
+        or ``self._make_causal_mask``. That changes this argument is receives.
+        That should not matter but...
+        """
+        if args:
+            index = 0 if isinstance(args[0], (tuple, torch.Size)) else 1
+            names = [
+                "input_ids_shape",
+                "dtype",
+                "device",
+                "past_key_values_length",
+                "sliding_window",
+            ]
+            for i, a in enumerate(args):
+                if i < index:
+                    continue
+                kwargs[names[i - index]] = a
+        return _patch_make_causal_mask(**kwargs)
 
 
 class patched_DynamicCache:

@@ -102,7 +102,8 @@ class TestHuggingFaceHubModel(ExtTestCase):
         mid = "openai/clip-vit-base-patch16"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs = data["model"], data["inputs"]
-        model(**inputs)
+        with bypass_export_some_errors(patch_transformers=True):
+            model(**inputs)
         # different expected value for different version of transformers
         self.assertIn((data["size"], data["n_weights"]), [(188872708, 47218177)])
 
