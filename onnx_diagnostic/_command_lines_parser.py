@@ -287,6 +287,12 @@ def get_parser_validate() -> ArgumentParser:
         help="drops the following inputs names, it should be a list "
         "with comma separated values",
     )
+    parser.add_argument(
+        "--ortfusiontype",
+        required=False,
+        help="applies onnxruntime fusion, this parameter should contain the "
+        "model type or multiple values separated by |",
+    )
     parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
     parser.add_argument("--dtype", help="changes dtype if necessary")
     parser.add_argument("--device", help="changes the device if necessary")
@@ -338,6 +344,7 @@ def _cmd_validate(argv: List[Any]):
             exporter=args.export,
             dump_folder=args.dump_folder,
             drop_inputs=None if not args.drop else args.drop.split(","),
+            ortfusiontype=args.ortfusiontype,
         )
         print("")
         print("-- summary --")

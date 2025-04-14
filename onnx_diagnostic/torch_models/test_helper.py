@@ -197,6 +197,7 @@ def validate_model(
     stop_if_static: int = 1,
     dump_folder: Optional[str] = None,
     drop_inputs: Optional[List[str]] = None,
+    ortfusiontype: Optional[str] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -222,11 +223,33 @@ def validate_model(
         see :func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
     :param dump_folder: dumps everything in a subfolder of this one
     :param drop_inputs: drops this list of inputs (given their names)
+    :param ortfusiontype: runs ort fusion, the parameters defines the fusion type,
+        it accepts multiple values separated by ``|``,
+        see :func:`onnx_diagnostic.torch_models.test_helper.run_ort_fusion`
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
     assert not trained, f"trained={trained} not supported yet"
     summary = version_summary()
+
+    summary.update(
+        dict(
+            version_model_id=model_id,
+            version_do_run=str(do_run),
+            version_dtype=str(dtype or ""),
+            version_device=str(device or ""),
+            version_trained=str(trained),
+            version_optimization=optimization or "",
+            version_quiet=str(quiet),
+            version_patch=str(patch),
+            version_dump_folder=dump_folder or "",
+            version_drop_inputs=str(list(drop_inputs or "")),
+            version_ortfusiontype=ortfusiontype or "",
+            version_stop_if_static=str(stop_if_static),
+            version_exporter=exporter,
+        )
+    )
+
     folder_name = None
     if dump_folder:
         folder_name = _make_folder_name(
@@ -456,14 +479,65 @@ def validate_model(
         if verbose:
             print("[validate_model] done (dump)")
 
-    if exporter and exporter.startswith(("onnx-", "custom-")) and do_run:
-        summary_valid, data = validate_onnx_model(
-            data=data,
-            quiet=quiet,
-            verbose=verbose,
-            optimization=optimization,
-        )
+    if not exporter or not exporter.startswith(("onnx-", "custom-")):
+        if verbose:
+            print("[validate_model] -- done (final)")
+        if dump_stats:
+            with open(dump_stats, "w") as f:
+                for k, v in sorted(summary.items()):
+                    f.write(f":{k}:{v};\n")
+        return summary, data
+
+    if do_run:
+        summary_valid, data = validate_onnx_model(data=data, quiet=quiet, verbose=verbose)
         summary.update(summary_valid)
+
+    if ortfusiontype and "onnx_filename" in data:
+        assert (
+            "configuration" in data
+        ), f"missing configuration in data, cannot run ort fusion for model_id={model_id}"
+        config = data["configuration"]
+        assert hasattr(
+            config, "hidden_size"
+        ), f"Missing attribute hidden_size in configuration {config}"
+        hidden_size = config.hidden_size
+        assert hasattr(
+            config, "num_attention_heads"
+        ), f"Missing attribute num_attention_heads in configuration {config}"
+        num_attention_heads = config.num_attention_heads
+
+        model_types = ortfusiontype.split("|")
+        for model_type in model_types:
+            flavour = f"ort{model_type}"
+            summary[f"version_{flavour}_hidden_size"] = hidden_size
+            summary[f"version_{flavour}_num_attention_heads"] = num_attention_heads
+
+            begin = time.perf_counter()
+            if verbose:
+                print(f"[validate_model] run onnxruntime fusion for {model_type!r}")
+            input_filename = data["onnx_filename"]
+            output_path = f"{os.path.splitext(input_filename)[0]}.ort.{model_type}.onnx"
+            run_ort_fusion(
+                input_filename,
+                output_path,
+                model_type=model_type,
+                num_attention_heads=num_attention_heads,
+                hidden_size=hidden_size,
+            )
+            data[f"onnx_filename_{flavour}"] = output_path
+            duration = time.perf_counter() - begin
+            summary[f"time_ortfusion_{flavour}"] = duration
+            if verbose:
+                print(
+                    f"[validate_model] done {model_type!r} in {duration}, "
+                    f"saved into {output_path!r}"
+                )
+
+            if do_run:
+                summary_valid, data = validate_onnx_model(
+                    data=data, quiet=quiet, verbose=verbose, flavour=flavour
+                )
+                summary.update(summary_valid)
 
     if verbose:
         print("[validate_model] -- done (final)")
@@ -651,21 +725,26 @@ def validate_onnx_model(
     data: Dict[str, Any],
     quiet: bool = False,
     verbose: int = 0,
-    optimization: Optional[str] = None,
+    flavour: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Verifies that an onnx model produces the same
-    expected outputs.
+    expected outputs. It uses ``data["onnx_filename]`` as the input
+    onnx filename or ``data["onnx_filename_{flavour}]`` if *flavour*
+    is specified.
 
     :param data: dictionary with all the necessary inputs, the dictionary must
         contains keys ``model`` and ``inputs_export``
     :param quiet: catch exception or not
     :param verbose: verbosity
-    :param optimization: optimization to do
+    :param flavour: use a different version of the inputs
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
     import onnxruntime
+
+    def _mk(key):
+        return f"{key}_{flavour}" if flavour else key
 
     summary = {}
     flat_inputs = flatten_object(data["inputs"], drop_keys=True)
@@ -675,36 +754,42 @@ def validate_onnx_model(
         if d < 0
         else ["CUDAExecutionProvider", "CPUExecutionProvider"]
     )
-    if "onnx_filename" in data:
-        source = data["onnx_filename"]
-        summary["onnx_filename"] = source
-        summary["onnx_size"] = os.stat(source).st_size
+    input_data_key = f"onnx_filename_{flavour}" if flavour else "onnx_filename"
+
+    if input_data_key in data:
+        source = data[input_data_key]
+        summary[input_data_key] = source
+        summary[_mk("onnx_size")] = os.stat(source).st_size
     else:
+        assert not flavour, f"flavour={flavour!r}, the filename must be saved."
         assert (
             "onnx_program" in data
         ), f"onnx_program is missing from data which has {sorted(data)}"
         source = data["onnx_program"].model_proto.SerializeToString()
         assert len(source) < 2**31, f"The model is highger than 2Gb: {len(source) / 2**30} Gb"
-        summary["onnx_size"] = len(source)
+        summary[_mk("onnx_size")] = len(source)
     if verbose:
-        print(f"[validate_onnx_model] verify onnx model with providers {providers}...")
+        print(
+            f"[validate_onnx_model] verify onnx model with providers "
+            f"{providers}..., flavour={flavour!r}"
+        )
 
     begin = time.perf_counter()
     if quiet:
         try:
             sess = onnxruntime.InferenceSession(source, providers=providers)
         except Exception as e:
-            summary["ERR_onnx_ort_create"] = str(e)
-            data["ERR_onnx_ort_create"] = e
-            summary["time_onnx_ort_create"] = time.perf_counter() - begin
+            summary[_mk("ERR_onnx_ort_create")] = str(e)
+            data[_mk("ERR_onnx_ort_create")] = e
+            summary[_mk("time_onnx_ort_create")] = time.perf_counter() - begin
             return summary, data
     else:
         sess = onnxruntime.InferenceSession(source, providers=providers)
 
-    summary["time_onnx_ort_create"] = time.perf_counter() - begin
-    data["onnx_ort_sess"] = sess
+    summary[_mk("time_onnx_ort_create")] = time.perf_counter() - begin
+    data[_mk("onnx_ort_sess")] = sess
     if verbose:
-        print("[validate_onnx_model] done (ort_session)")
+        print(f"[validate_onnx_model] done (ort_session) flavour={flavour!r}")
 
     # make_feeds
     if verbose:
@@ -718,7 +803,7 @@ def validate_onnx_model(
     )
     if verbose:
         print(f"[validate_onnx_model] ort inputs={string_type(feeds, with_shape=True)}")
-    summary["onnx_ort_inputs"] = string_type(feeds, with_shape=True)
+    summary[_mk("onnx_ort_inputs")] = string_type(feeds, with_shape=True)
     if verbose:
         print("[validate_onnx_model] done (make_feeds)")
 
@@ -730,9 +815,9 @@ def validate_onnx_model(
         try:
             got = sess.run(None, feeds)
         except Exception as e:
-            summary["ERR_onnx_ort_run"] = str(e)
-            data["ERR_onnx_ort_run"] = e
-            summary["time_onnx_ort_run"] = time.perf_counter() - begin
+            summary[_mk("ERR_onnx_ort_run")] = str(e)
+            data[_mk("ERR_onnx_ort_run")] = e
+            summary[_mk("time_onnx_ort_run")] = time.perf_counter() - begin
             return summary, data
     else:
         got = sess.run(None, feeds)
@@ -745,7 +830,7 @@ def validate_onnx_model(
     if verbose:
         print(f"[validate_onnx_model] discrepancies={string_diff(disc)}")
     for k, v in disc.items():
-        summary[f"disc_onnx_ort_run_{k}"] = v
+        summary[_mk(f"disc_onnx_ort_run_{k}")] = v
     return summary, data
 
 
