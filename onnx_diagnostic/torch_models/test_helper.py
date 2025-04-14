@@ -754,7 +754,7 @@ def validate_onnx_model(
     def _mk(key):
         return f"{key}_{flavour}" if flavour else key
 
-    summary = {}
+    summary: Dict[str, Any] = {}
     flat_inputs = flatten_object(data["inputs"], drop_keys=True)
     d = flat_inputs[0].get_device()
     providers = (
