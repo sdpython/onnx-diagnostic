@@ -1,6 +1,6 @@
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.export import ModelInputs, CoupleInputsDynamicShapes
@@ -739,6 +739,7 @@ class TestDynamicShapes(ExtTestCase):
         self.assertEqual((1, 5, 8), new_input["A"].shape)
         self.assertEqual((1, 50), new_input["B"].shape)
 
+    @requires_transformers("4.51")
     def test_dynamic_cache_replace_by_string(self):
         n_layers = 2
         bsize, nheads, slen, dim = 2, 4, 3, 7
