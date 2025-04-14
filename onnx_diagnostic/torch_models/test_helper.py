@@ -246,7 +246,7 @@ def validate_model(
             version_drop_inputs=str(list(drop_inputs or "")),
             version_ortfusiontype=ortfusiontype or "",
             version_stop_if_static=str(stop_if_static),
-            version_exporter=exporter,
+            version_exporter=exporter or "",
         )
     )
 

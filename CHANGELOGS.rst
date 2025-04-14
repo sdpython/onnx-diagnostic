@@ -4,6 +4,7 @@ Change Logs
 0.4.0
 +++++
 
+* :pr:`50`: add support for onnxruntime fusion
 * :pr:`48`: add support for EncoderDecoderCache, test with openai/whisper-tiny
 * :pr:`45`: improve change_dynamic_dimension to fix some dimensions
 
