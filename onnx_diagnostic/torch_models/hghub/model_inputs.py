@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Optional, Tuple, Union
 import torch
 import transformers
 from ...helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
-from .hub_api import task_from_arch, get_pretrained_config
+from .hub_api import task_from_arch, get_pretrained_config, get_architecture_default_values
 
 
 @functools.cache
@@ -87,6 +87,20 @@ def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
                 else len(config.hidden_sizes)
             )
         )
+    elif task == "zero-shot-image-classification":
+        check_hasattr(config, "vision_config", "text_config")
+        check_hasattr(config.vision_config, "num_hidden_layers", "num_attention_heads")
+        check_hasattr(config.text_config, "num_hidden_layers", "num_attention_heads")
+        kwargs = dict(
+            vision_config=dict(
+                num_hidden_layers=min(2, config.vision_config.num_hidden_layers),
+                num_attention_heads=min(2, config.vision_config.num_attention_heads),
+            ),
+            text_config=dict(
+                num_hidden_layers=min(2, config.text_config.num_hidden_layers),
+                num_attention_heads=min(2, config.text_config.num_attention_heads),
+            ),
+        )
     elif task == "text2text-generation":
         kwargs = {}
         if hasattr(config, "num_decoder_layers"):
@@ -114,9 +128,20 @@ def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
     else:
         raise NotImplementedError(f"Input generation for task {task!r} not implemented yet.")
 
-    for k, v in kwargs.items():
-        setattr(config, k, v)
+    update_config(config, kwargs)
     return kwargs
+
+
+def update_config(config: Any, mkwargs: Dict[str, Any]):
+    """Updates a configuration with different values."""
+    for k, v in mkwargs.items():
+        if isinstance(v, dict):
+            assert hasattr(
+                config, k
+            ), f"missing attribute {k!r} in config={config}, cannot update it with {v}"
+            update_config(getattr(config, k), v)
+        else:
+            setattr(config, k, v)
 
 
 def check_hasattr(config: Any, *args: Union[str, Tuple[Any, ...]]):
@@ -127,7 +152,9 @@ def check_hasattr(config: Any, *args: Union[str, Tuple[Any, ...]]):
     for a in args:
         assert isinstance(a, (str, tuple)), f"unexpected type {type(a)} in {args!r}"
         if isinstance(a, str):
-            assert hasattr(config, a), f"Missing attribute {a!r} in\n{config}"
+            assert (isinstance(config, dict) and a in config) or hasattr(
+                config, a
+            ), f"Missing attribute {a!r} in\n{config}"
         elif isinstance(a, tuple):
             assert any(
                 (isinstance(name, str) and hasattr(config, name))
@@ -228,12 +255,19 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
         fct = get_inputs_for_text2text_generation  # type: ignore
     elif task == "image-classification":
         if config is not None:
-            check_hasattr(config, "image_size", "num_channels")
-        if config is None or isinstance(config.image_size, int):
+            check_hasattr(config, ("image_size", "architectures"), "num_channels")
+        if config is not None:
+            if hasattr(config, "image_size"):
+                image_size = config.image_size
+            else:
+                assert config.architectures, f"empty architecture in {config}"
+                default_values = get_architecture_default_values(config.architectures[0])
+                image_size = default_values["image_size"]
+        if config is None or isinstance(image_size, int):
             kwargs = dict(
                 batch_size=2,
-                input_width=224 if config is None else config.image_size,
-                input_height=224 if config is None else config.image_size,
+                input_width=224 if config is None else image_size,
+                input_height=224 if config is None else image_size,
                 input_channels=3 if config is None else config.num_channels,
             )
         else:
@@ -244,6 +278,22 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
                 input_channels=config.num_channels,
             )
         fct = get_inputs_for_image_classification  # type: ignore
+    elif task == "zero-shot-image-classification":
+        check_hasattr(config, "vision_config", "text_config")
+        check_hasattr(config.vision_config, "image_size", "num_channels")
+        check_hasattr(config.text_config, "vocab_size")
+        kwargs = dict(
+            batch_size=2,
+            batch_size_image=3,
+            sequence_length=30,
+            dummy_max_token_id=(
+                49408 if config is None else (config.text_config.vocab_size - 1)
+            ),
+            input_width=224 if config is None else config.vision_config.image_size,
+            input_height=224 if config is None else config.vision_config.image_size,
+            input_channels=3 if config is None else config.vision_config.num_channels,
+        )
+        fct = get_inputs_for_zero_shot_image_classification  # type: ignore
     elif task == "image-text-to-text":
         if config is not None:
             check_hasattr(
@@ -313,7 +363,6 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
         fct = get_inputs_for_speech_automatic_recognition  # type: ignore
     else:
         raise NotImplementedError(f"Input generation for task {task!r} not implemented yet.")
-
     return kwargs, fct
 
 
@@ -391,14 +440,20 @@ def get_untrained_model_with_inputs(
         )
 
     # updating the configuration
-    if not same_as_pretrained:
-        mkwargs = reduce_model_config(config, task)
-    else:
-        mkwargs = {}
+
+    mkwargs = reduce_model_config(config, task) if not same_as_pretrained else {}
     if model_kwargs:
         for k, v in model_kwargs.items():
-            setattr(config, k, v)
-            mkwargs[k] = v
+            if isinstance(v, dict):
+                if k in mkwargs:
+                    mkwargs[k].update(v)
+                else:
+                    mkwargs[k] = v
+            else:
+                mkwargs[k] = v
+    if mkwargs:
+        update_config(config, mkwargs)
+
     # input kwargs
     kwargs, fct = random_input_kwargs(config, task)
     if inputs_kwargs:
@@ -463,7 +518,7 @@ def get_inputs_for_image_classification(
     :param model: model to get the missing information
     :param config: configuration used to generate the model
     :param batch_size: batch size
-    :param input_channel: input channel
+    :param input_channels: input channel
     :param input_width: input width
     :param input_height: input height
     :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
@@ -487,6 +542,67 @@ def get_inputs_for_image_classification(
         pixel_values=torch.randn(batch_size, input_channels, input_width, input_height).clamp(
             -1, 1
         ),
+    )
+    return dict(inputs=inputs, dynamic_shapes=shapes)
+
+
+def get_inputs_for_zero_shot_image_classification(
+    model: torch.nn.Module,
+    config: Optional[Any],
+    dummy_max_token_id: int,
+    batch_size: int = 2,
+    sequence_length: int = 30,
+    input_width: int = 224,
+    input_height: int = 224,
+    input_channels: int = 3,
+    batch_size_image=3,
+    **kwargs,
+):
+    """
+    Generates inputs for task ``zero-short-image-classification``.
+
+    :param model: model to get the missing information
+    :param config: configuration used to generate the model
+    :param dummy_max_token_id: vocabulary size
+    :param batch_size: batch size
+    :param sequence_length: sequence length
+    :param batch_size_image: number of images
+    :param input_channels: input channel
+    :param input_width: input width
+    :param input_height: input height
+    :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
+    :return: dictionary
+
+    # input_ids:T7s2x7
+    # attention_mask:T7s2x7
+    # pixel_values:T1s2x3x224x224
+    """
+    assert isinstance(
+        input_width, int
+    ), f"Unexpected type for input_width {type(input_width)}{config}"
+    assert isinstance(
+        input_width, int
+    ), f"Unexpected type for input_height {type(input_height)}{config}"
+
+    batch = torch.export.Dim("batch", min=1, max=1024)
+    seq_length = torch.export.Dim("seq_length", min=1, max=4096)
+    shapes = {
+        "inputs_ids": {0: batch, 1: seq_length},
+        "attention_mask": {0: batch, 1: seq_length},
+        "pixel_values": {
+            0: torch.export.Dim("batch_img", min=1, max=1024),
+            # 2: torch.export.Dim("width", min=1, max=4096),
+            # 3: torch.export.Dim("height", min=1, max=4096),
+        },
+    }
+    inputs = dict(
+        input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length)).to(
+            torch.int64
+        ),
+        attention_mask=torch.ones((batch_size, sequence_length)).to(torch.int64),
+        pixel_values=torch.randn(
+            batch_size_image, input_channels, input_width, input_height
+        ).clamp(-1, 1),
     )
     return dict(inputs=inputs, dynamic_shapes=shapes)
 
@@ -885,4 +1001,5 @@ def get_get_inputs_function_for_tasks() -> Dict[str, Callable]:
         "image-text-to-text": get_inputs_for_image_text_to_text,
         "text-generation": get_inputs_for_text_generation,
         "text2text-generation": get_inputs_for_text2text_generation,
+        "zero-shot-image-classification": get_inputs_for_zero_shot_image_classification,
     }

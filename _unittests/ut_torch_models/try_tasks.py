@@ -26,6 +26,53 @@ class TestHuggingFaceHubModel(ExtTestCase):
         print("-- outputs", string_type(outputs, with_shape=True, with_min_max=True))
 
     @never_test()
+    def test_image_classification_resnet(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k resnet
+
+        from transformers import ViTImageProcessor, ViTModel
+        from PIL import Image
+        import requests
+
+        url = "http://images.cocodataset.org/val2017/000000039769.jpg"
+        image = Image.open(requests.get(url, stream=True).raw)
+
+        processor = ViTImageProcessor.from_pretrained("microsoft/resnet-50")
+        model = ViTModel.from_pretrained("microsoft/resnet-50")
+        inputs = processor(images=image, return_tensors="pt")
+        print()
+        print("-- inputs", string_type(inputs, with_shape=True, with_min_max=True))
+
+        outputs = model(**inputs)
+        print("-- outputs", string_type(outputs, with_shape=True, with_min_max=True))
+
+    @never_test()
+    def test_zero_shot_image_classification(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k zero
+        from PIL import Image
+        import requests
+        from transformers import CLIPProcessor, CLIPModel
+
+        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
+        url = "http://images.cocodataset.org/val2017/000000039769.jpg"
+        image = Image.open(requests.get(url, stream=True).raw)
+        inputs = processor(
+            text=["a photo of a cat", "a photo of a dog"],
+            images=[image, image],
+            return_tensors="pt",
+            padding=True,
+        )
+        print()
+        print("-- inputs", string_type(inputs, with_shape=True, with_min_max=True))
+        outputs = model(**inputs)
+        print("-- outputs", string_type(outputs, with_shape=True, with_min_max=True))
+        logits_per_image = outputs.logits_per_image  # this is the image-text similarity score
+        probs = logits_per_image.softmax(
+            dim=1
+        )  # we can take the softmax to get the label probabilities
+        assert probs is not None
+
+    @never_test()
     def test_text2text_generation(self):
         # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k text2t
 
