@@ -279,9 +279,10 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
             )
         fct = get_inputs_for_image_classification  # type: ignore
     elif task == "zero-shot-image-classification":
-        check_hasattr(config, "vision_config", "text_config")
-        check_hasattr(config.vision_config, "image_size", "num_channels")
-        check_hasattr(config.text_config, "vocab_size")
+        if config is not None:
+            check_hasattr(config, "vision_config", "text_config")
+            check_hasattr(config.vision_config, "image_size", "num_channels")
+            check_hasattr(config.text_config, "vocab_size")
         kwargs = dict(
             batch_size=2,
             batch_size_image=3,
