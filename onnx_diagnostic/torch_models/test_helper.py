@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import time
 import onnx
 import torch
+from ..export import CoupleInputsDynamicShapes
 from ..helpers import max_diff, string_type, string_diff
 from ..helpers.helper import flatten_object
 from ..helpers.rt_helper import make_feeds
@@ -506,7 +507,12 @@ def validate_model(
         ), f"Missing attribute num_attention_heads in configuration {config}"
         num_attention_heads = config.num_attention_heads
 
-        model_types = ortfusiontype.split("|")
+        if ortfusiontype == "ALL":
+            from onnxruntime.transformers.optimizer import MODEL_TYPES
+
+            model_types = sorted(MODEL_TYPES)
+        else:
+            model_types = ortfusiontype.split("|")
         for model_type in model_types:
             flavour = f"ort{model_type}"
             summary[f"version_{flavour}_hidden_size"] = hidden_size
@@ -517,13 +523,15 @@ def validate_model(
                 print(f"[validate_model] run onnxruntime fusion for {model_type!r}")
             input_filename = data["onnx_filename"]
             output_path = f"{os.path.splitext(input_filename)[0]}.ort.{model_type}.onnx"
-            run_ort_fusion(
+            ort_sum, ort_data = run_ort_fusion(
                 input_filename,
                 output_path,
                 model_type=model_type,
                 num_attention_heads=num_attention_heads,
                 hidden_size=hidden_size,
             )
+            summary.update(ort_sum)
+            data.update(ort_data)
             data[f"onnx_filename_{flavour}"] = output_path
             duration = time.perf_counter() - begin
             summary[f"time_ortfusion_{flavour}"] = duration
@@ -590,7 +598,7 @@ def call_exporter(
             optimization=optimization,
         )
         return summary, data
-    if exporter.startswith("custom-"):
+    if exporter == "custom" or exporter.startswith("custom"):
         # torch export
         summary, data = call_torch_export_custom(
             exporter=exporter,
@@ -746,7 +754,7 @@ def validate_onnx_model(
     def _mk(key):
         return f"{key}_{flavour}" if flavour else key
 
-    summary = {}
+    summary: Dict[str, Any] = {}
     flat_inputs = flatten_object(data["inputs"], drop_keys=True)
     d = flat_inputs[0].get_device()
     providers = (
@@ -758,6 +766,9 @@ def validate_onnx_model(
 
     if input_data_key in data:
         source = data[input_data_key]
+        if not os.path.exists(source):
+            summary[_mk("ERR_onnx_missing")] = f"FileNotFoundError({source!r})"
+            return summary, data
         summary[input_data_key] = source
         summary[_mk("onnx_size")] = os.stat(source).st_size
     else:
@@ -866,7 +877,7 @@ def call_torch_export_onnx(
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
     summary: Dict[str, Union[str, int, float]] = {}
-    dynamo = "nostrict" not in exporter
+    dynamo = "dynamo" in exporter
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
     if verbose:
@@ -884,6 +895,15 @@ def call_torch_export_onnx(
     summary["export_args"] = string_type(args, with_shape=True)
     summary["export_kwargs"] = string_type(kwargs, with_shape=True)
 
+    export_export_kwargs = (
+        dict(dynamo=True, dynamic_shapes=ds)
+        if dynamo
+        else dict(
+            dynamo=False,
+            dynamic_axes=CoupleInputsDynamicShapes(args, kwargs, ds).replace_by_string(),
+        )
+    )
+
     begin = time.perf_counter()
     if quiet:
         try:
@@ -891,8 +911,7 @@ def call_torch_export_onnx(
                 data["model"],
                 args,
                 kwargs=kwargs,
-                dynamic_shapes=ds,
-                dynamo=dynamo,
+                **export_export_kwargs,
             )
         except Exception as e:
             summary["ERR_export_export"] = str(e)
@@ -904,8 +923,7 @@ def call_torch_export_onnx(
             data["model"],
             args,
             kwargs=kwargs,
-            dynamic_shapes=ds,
-            dynamo=dynamo,
+            **export_export_kwargs,
         )
 
     summary["time_export_export"] = time.perf_counter() - begin
@@ -966,6 +984,7 @@ def call_torch_export_custom(
         None,
     }, f"unexpected value for optimization={optimization}"
     assert exporter in {
+        "custom",
         "custom-strict",
         "custom-strict-dec",
         "custom-strict-all",
@@ -1155,14 +1174,24 @@ def run_ort_fusion(
             f"[run_ort_fusion] starts optimization for "
             f"model_type={model_type!r} with {n_nodes} nodes"
         )
-    new_onx = optimize_by_fusion(
-        onx,
-        model_type=model_type,
-        num_heads=num_attention_heads,
-        hidden_size=hidden_size,
-        optimization_options=opts,
-    )
-    duration = {time.perf_counter() - begin}
+    try:
+        new_onx = optimize_by_fusion(
+            onx,
+            model_type=model_type,
+            num_heads=num_attention_heads,
+            hidden_size=hidden_size,
+            optimization_options=opts,
+        )
+    except Exception as e:
+        duration = time.perf_counter() - begin
+        if verbose:
+            print(f"[run_ort_fusion] failed in {duration} for model_type={model_type!r}")
+        return {
+            f"ERR_opt_ort_{model_type}": str(e),
+            f"opt_ort_{model_type}_duration": duration,
+        }, {}
+
+    duration = time.perf_counter() - begin
     delta = len(new_onx.model.graph.node)
     if verbose:
         print(f"[run_ort_fusion] done in {duration} with {delta} nodes")
@@ -1175,6 +1204,7 @@ def run_ort_fusion(
     return {
         f"opt_ort_{model_type}_n_nodes1": n_nodes,
         f"opt_ort_{model_type}_n_nodes2": delta,
+        f"opt_ort_{model_type}_delta_node": delta - n_nodes,
         f"opt_ort_{model_type}_duration": duration,
         f"opt_ort_{model_type}_duration_save": d,
     }, {f"opt_ort_{model_type}": output_path}

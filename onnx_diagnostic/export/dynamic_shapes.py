@@ -1,11 +1,35 @@
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 import torch
 from ..helpers import string_type
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 
 DYNAMIC_SHAPES = Tuple[Tuple[Any, ...], Dict[str, Any]]
+
+
+def flatten_dynamic_shapes(ds: Any) -> Any:
+    """Flattens the dynamic shapes."""
+    if isinstance(ds, list):
+        return _flat_list([flatten_dynamic_shapes(t) for t in ds])
+    if isinstance(ds, tuple):
+        return tuple(_flat_list([flatten_dynamic_shapes(t) for t in ds]))
+    if isinstance(ds, dict):
+        if all(isinstance(i, int) for i in ds):
+            # That's a dynamic shape
+            return ds
+        return _flat_list([flatten_dynamic_shapes(t) for t in ds.values()])
+    raise AssertionError(f"Not implemented for {type(ds)}: {ds}")
+
+
+def _flat_list(li: List[Any]) -> List[Dict[int, str]]:
+    res = []
+    for t in li:
+        if isinstance(t, dict):
+            res.append(t)
+        else:
+            res.extend(t)
+    return res
 
 
 class CoupleInputsDynamicShapes:
@@ -76,7 +100,7 @@ class CoupleInputsDynamicShapes:
         assert isinstance(inputs, torch.Tensor), f"unexpected type for inputs {type(inputs)}"
         assert isinstance(ds, dict) and all(isinstance(s, int) for s in ds), (
             f"Unexpected types, inputs is a Tensor but ds is {ds}, "
-            f"a dictionary is expected to specify a dimension dimension"
+            f"a dictionary is expected to specify a dimension"
         )
         if value is None:
             value = torch.export.Dim.DYNAMIC
@@ -84,6 +108,56 @@ class CoupleInputsDynamicShapes:
         for i, v in ds.items():
             if isinstance(v, str):
                 new_ds[i] = value
+        return new_ds
+
+    def replace_by_string(self):
+        """
+        Replaces dimensions by strings.
+
+        Example:
+
+        .. runpython::
+            :showcode:
+
+            import torch
+            from onnx_diagnostic.export.dynamic_shapes import CoupleInputsDynamicShapes
+
+            Dim = torch.export.Dim
+            T3x1 = torch.rand((3, 1))
+            T3x4 = torch.rand((3, 4))
+            ds_batch = {0: Dim("batch")}
+            ds_batch_seq = {0: Dim("batch"), 1: Dim("seq")}
+            kwargs = {"A": T3x4, "B": (T3x1, T3x1)}
+            ds = {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
+            print(CoupleInputsDynamicShapes((), kwargs, ds).replace_by_string())
+        """
+        unique = set()
+        return self._generic_walker(
+            lambda inputs, ds, unique=unique: self._replace_dim_tensor_by_string(
+                inputs, ds, unique=unique
+            )
+        )
+
+    @classmethod
+    def _replace_dim_tensor_by_string(cls, inputs, ds, unique: Set[str]):
+        assert isinstance(inputs, torch.Tensor), f"unexpected type for inputs {type(inputs)}"
+        assert isinstance(ds, dict) and all(isinstance(s, int) for s in ds), (
+            f"Unexpected types, inputs is a Tensor but ds is {ds}, "
+            f"a dictionary is expected to specify a dimension"
+        )
+        new_ds = ds.copy()
+        for i, v in ds.items():
+            if isinstance(v, str):
+                unique.add(v)
+                new_ds[i] = v
+            elif v in (torch.export.Dim.DYNAMIC, torch.export.Dim.AUTO):
+                name = f"Dim{len(unique)}"
+                new_ds[i] = name
+                unique.add(name)
+            else:
+                name = v.__name__
+                unique.add(name)
+                new_ds[i] = name
         return new_ds
 
     def invalid_dimensions_for_export(self):
@@ -252,6 +326,9 @@ class CoupleInputsDynamicShapes:
             f"map this class with the given dynamic shapes."
         )
         flat, _spec = torch.utils._pytree.tree_flatten(inputs)
+        if all(isinstance(t, torch.Tensor) for t in flat):
+            # We need to flatten dynamic shapes as well
+            ds = flatten_dynamic_shapes(ds)
         return cls._generic_walker_step(processor, flat, ds)
 
     class ChangeDimensionProcessor:
