@@ -100,3 +100,19 @@ Let's export with ONNX this time and checks for discrepancies.
 
     main("validate -m arnir0/Tiny-LLM --run -v 1 --export onnx-dynamo -o dump_models --patch --opt ir".split())
 
+Run onnxruntime fusions
++++++++++++++++++++++++
+
+This option runs `transformers optimizations <https://onnxruntime.ai/docs/performance/transformers-optimization.html>`_ 
+implemented in :epkg:`onnxruntime`. The list of supported ``model_type`` can be found in the documentation
+of function :func:`onnx_diagnostic.torch_models.test_helper.run_ort_fusion`.
+
+.. code-block::
+
+    python -m onnx_diagnostic validate -m arnir0/Tiny-LLM --run -v 1 --export onnx-dynamo -o dump_models --patch --opt ir --ortfusiontype ALL
+
+.. runpython::
+
+    from onnx_diagnostic._command_lines_parser import main
+
+    main("validate -m arnir0/Tiny-LLM --run -v 1 --export onnx-dynamo -o dump_models --patch --opt ir --ortfusiontype ALL".split())
