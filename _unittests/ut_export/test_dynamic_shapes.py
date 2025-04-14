@@ -710,7 +710,7 @@ class TestDynamicShapes(ExtTestCase):
             {
                 "X": {0: "batch"},
                 "A": {0: "batch", 1: "Dim1"},
-                "B": ({0: "batch", 1: "Dim1"}, {0: "batch", 1: "Dim1"}),
+                "B": ({0: "batch", 1: "Dim2"}, {0: "batch", 1: "Dim3"}),
             },
             res,
         )

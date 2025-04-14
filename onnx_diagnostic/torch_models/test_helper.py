@@ -1183,7 +1183,7 @@ def run_ort_fusion(
             optimization_options=opts,
         )
     except Exception as e:
-        duration = {time.perf_counter() - begin}
+        duration = time.perf_counter() - begin
         if verbose:
             print(f"[run_ort_fusion] failed in {duration} for model_type={model_type!r}")
         return {

@@ -148,7 +148,6 @@ class CoupleInputsDynamicShapes:
         new_ds = ds.copy()
         for i, v in ds.items():
             if isinstance(v, str):
-                assert v not in unique, f"Dimension {v!r} is already defined in {unique}"
                 unique.add(v)
                 new_ds[i] = v
             elif v in (torch.export.Dim.DYNAMIC, torch.export.Dim.AUTO):
