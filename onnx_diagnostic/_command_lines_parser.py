@@ -291,7 +291,8 @@ def get_parser_validate() -> ArgumentParser:
         "--ortfusiontype",
         required=False,
         help="applies onnxruntime fusion, this parameter should contain the "
-        "model type or multiple values separated by |",
+        "model type or multiple values separated by `|`. `ALL` can be used "
+        "to run them all",
     )
     parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
     parser.add_argument("--dtype", help="changes dtype if necessary")
