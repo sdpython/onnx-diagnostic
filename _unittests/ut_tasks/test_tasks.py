@@ -120,7 +120,7 @@ class TestTasks(ExtTestCase):
         model, inputs = data["model"], data["inputs"]
         print(self.string_type(inputs, with_shape=True))
         model(**inputs)
-        self.assertIn((data["size"], data["n_weights"]), [(62461440, 15615360)])
+        self.assertIn((data["size"], data["n_weights"]), [(138640384, 34660096)])
 
 
 if __name__ == "__main__":

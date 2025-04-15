@@ -157,6 +157,14 @@ def make_mamba_cache(
         device=key_value_pairs[0][0].device,
     )
     for i in range(len(key_value_pairs)):
+        assert cache.conv_states[i].shape == key_value_pairs[i][0].shape, (
+            f"Shape mismatch, expected {cache.conv_states[i].shape}, "
+            f"got {key_value_pairs[i][0].shape}"
+        )
         cache.conv_states[i][:, :, :] = key_value_pairs[i][0]
+        assert cache.ssm_states[i].shape == key_value_pairs[i][1].shape, (
+            f"Shape mismatch, expected {cache.ssm_states[i].shape}, "
+            f"got {key_value_pairs[i][1].shape}"
+        )
         cache.ssm_states[i][:, :, :] = key_value_pairs[i][1]
     return cache

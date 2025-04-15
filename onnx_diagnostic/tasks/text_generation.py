@@ -88,6 +88,15 @@ def get_inputs(
     cache_length = torch.export.Dim("cache_length", min=1, max=4096)
 
     if config is not None and config.__class__.__name__ == "FalconMambaConfig":
+        seq_length_multiple = 8
+        sequence_length = (
+            (sequence_length + seq_length_multiple)
+            // seq_length_multiple
+            * seq_length_multiple
+        )
+        # sequence_inc = seq_length_multiple
+        sequence_length2 = seq_length_multiple
+
         shapes = {
             "input_ids": {0: batch, 1: torch.export.Dim.DYNAMIC},
             "attention_mask": {
@@ -110,9 +119,8 @@ def get_inputs(
             attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
                 torch.int64
             ),
-            cache_position=torch.arange(0, sequence_length + sequence_length2)
-            .to(torch.int64)
-            .expand((batch_size, -1)),
+            cache_position=torch.arange(0, kwargs["conv_kernel"]).to(torch.int64),
+            # .expand((batch_size, -1))
             cache_params=make_mamba_cache(
                 [
                     (
