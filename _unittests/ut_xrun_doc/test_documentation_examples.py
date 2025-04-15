@@ -53,9 +53,9 @@ class TestDocumentationExamples(ExtTestCase):
                 if '"dot" not found in path.' in st:
                     # dot not installed, this part
                     # is tested in onnx framework
-                    if verbose:
-                        print(f"failed: {name!r} due to missing dot.")
-                    return 0
+                    raise unittest.SkipTest(f"failed: {name!r} due to missing dot.")
+                if "We couldn't connect to 'https://huggingface.co'" in st:
+                    raise unittest.SkipTest(f"Connectivity issues due to\n{err}")
                 raise AssertionError(  # noqa: B904
                     "Example '{}' (cmd: {} - exec_prefix='{}') "
                     "failed due to\n{}"
