@@ -25,8 +25,18 @@ onnx-diagnostic: investigate onnx models
 .. image:: https://codecov.io/gh/sdpython/onnx-diagnostic/branch/main/graph/badge.svg?token=Wb9ZGDta8J 
     :target: https://codecov.io/gh/sdpython/onnx-diagnostic
 
-Helps investigating onnx models, exporting modes into onnx.
-See `documentation of onnx-diagnostic <https://sdpython.github.io/doc/onnx-diagnostic/dev/>`_.
+The main feature is about `patches <https://github.com/sdpython/onnx-diagnostic/tree/main/onnx_diagnostic/torch_export_patches>`_:
+it helps exporting **pytorch models into ONNX**, mostly designed for LLMs using dynamic caches.
+
+.. code-block:: python
+
+  with bypass_export_some_errors(patch_transformers=True) as f:
+      ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
+      # ...
+
+It also implements tools to investigate, validate exported models (ExportedProgramm, ONNXProgram, ...).
+See `documentation of onnx-diagnostic <https://sdpython.github.io/doc/onnx-diagnostic/dev/>`_ and
+`bypass_export_some_errors <https://sdpython.github.io/doc/onnx-diagnostic/dev/api/torch_export_patches/index.html#onnx_diagnostic.torch_export_patches.bypass_export_some_errors>`_.
 
 Getting started
 +++++++++++++++
