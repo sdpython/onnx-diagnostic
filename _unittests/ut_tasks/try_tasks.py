@@ -7,7 +7,7 @@ from onnx_diagnostic.helpers.torch_test_helper import steel_forward
 class TestHuggingFaceHubModel(ExtTestCase):
     @never_test()
     def test_image_classification(self):
-        # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k image_c
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k image_c
 
         from transformers import ViTImageProcessor, ViTModel
         from PIL import Image
@@ -27,7 +27,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
     @never_test()
     def test_image_classification_resnet(self):
-        # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k resnet
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k resnet
 
         from transformers import ViTImageProcessor, ViTModel
         from PIL import Image
@@ -47,7 +47,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
     @never_test()
     def test_zero_shot_image_classification(self):
-        # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k zero
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k zero
         from PIL import Image
         import requests
         from transformers import CLIPProcessor, CLIPModel
@@ -74,7 +74,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
     @never_test()
     def test_text2text_generation(self):
-        # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k text2t
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k text2t
 
         import torch
         from transformers import RobertaTokenizer, T5ForConditionalGeneration
@@ -100,7 +100,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
     @never_test()
     def test_imagetext2text_generation(self):
-        # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k etext2t
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k etext2t
         # https://huggingface.co/docs/transformers/main/en/tasks/idefics
 
         import torch
@@ -131,7 +131,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
     @never_test()
     def test_automatic_speech_recognition(self):
-        # clear&&NEVERTEST=1 python _unittests/ut_torch_models/try_tasks.py -k automatic_speech
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k automatic_speech
         # https://huggingface.co/openai/whisper-tiny
 
         from transformers import WhisperProcessor, WhisperForConditionalGeneration
@@ -194,6 +194,22 @@ class TestHuggingFaceHubModel(ExtTestCase):
         print("--", transcription)
         transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)
         print("--", transcription)
+
+    @never_test()
+    def test_fill_mask(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k fill
+        # https://huggingface.co/google-bert/bert-base-multilingual-cased
+
+        from transformers import BertTokenizer, BertModel
+
+        tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
+        model = BertModel.from_pretrained("bert-base-multilingual-cased")
+        text = "Replace me by any text you'd like."
+        encoded_input = tokenizer(text, return_tensors="pt")
+        print()
+        print("-- inputs", string_type(encoded_input, with_shape=True, with_min_max=True))
+        output = model(**encoded_input)
+        print("-- outputs", string_type(output, with_shape=True, with_min_max=True))
 
 
 if __name__ == "__main__":

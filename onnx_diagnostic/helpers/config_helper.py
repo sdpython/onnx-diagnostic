@@ -1,4 +1,9 @@
-from typing import Any, Dict, Tuple, Union
+import functools
+import importlib
+import inspect
+import re
+from typing import Any, Dict, Optional, Tuple, Union
+import transformers
 
 
 def check_hasattr(config: Any, *args: Union[str, Tuple[Any, ...]]):
@@ -42,3 +47,34 @@ def _pick(config, *atts):
             if all(hasattr(config, _) for _ in a[1:]):
                 return a[0]([getattr(config, _) for _ in a[1:]])
     raise AssertionError(f"Unable to find any of these {atts!r} in {config}")
+
+
+@functools.cache
+def config_class_from_architecture(arch: str, exc: bool = False) -> Optional[type]:
+    """
+    Retrieves the configuration class for a given architecture.
+
+    :param arch: architecture (clas name)
+    :param exc: raise an exception if not found
+    :return: type
+    """
+    cls = getattr(transformers, arch)
+    mod_name = cls.__module__
+    mod = importlib.import_module(mod_name)
+    source = inspect.getsource(mod)
+    reg = re.compile("config: ([A-Za-z0-9]+)")
+    fall = reg.findall(source)
+    if len(fall) == 0:
+        assert not exc, (
+            f"Unable to guess Configuration class name for arch={arch!r}, "
+            f"module={mod_name!r}, no candidate, source is\n{source}"
+        )
+        return None
+    unique = set(fall)
+    assert len(unique) == 1, (
+        f"Unable to guess Configuration class name for arch={arch!r}, "
+        f"module={mod_name!r}, found={unique} (#{len(unique)}), "
+        f"source is\n{source}"
+    )
+    cls_name = unique.pop()
+    return getattr(transformers, cls_name)
