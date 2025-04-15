@@ -8,7 +8,7 @@ from onnx_diagnostic.helpers.torch_test_helper import (
     dummy_llm,
     to_numpy,
     is_torchdynamo_exporting,
-    steel_forward,
+    steal_forward,
     replace_string_by_dynamic,
     to_any,
     torch_deepcopy,
@@ -43,14 +43,14 @@ class TestTorchTestHelper(ExtTestCase):
         self.assertEqual(a.dtype, ml_dtypes.bfloat16)
 
     @hide_stdout()
-    def test_steel_forward(self):
+    def test_steal_forward(self):
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 return x + y
 
         inputs = torch.rand(3, 4), torch.rand(3, 4)
         model = Model()
-        with steel_forward(model):
+        with steal_forward(model):
             model(*inputs)
 
     def test_replace_string_by_dynamic(self):

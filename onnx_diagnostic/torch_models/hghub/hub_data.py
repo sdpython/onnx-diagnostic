@@ -41,6 +41,7 @@ __data_arch__ = textwrap.dedent(
     DonutSwinModel,feature-extraction
     ElectraModel,feature-extraction
     EsmModel,feature-extraction
+    FalconMambaForCausalLM,text-generation
     GLPNModel,image-feature-extraction
     GPTBigCodeModel,feature-extraction
     GPTJModel,feature-extraction

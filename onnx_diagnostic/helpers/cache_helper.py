@@ -136,3 +136,27 @@ def make_encoder_decoder_cache(
     return transformers.cache_utils.EncoderDecoderCache(
         self_attention_cache=self_attention_cache, cross_attention_cache=cross_attention_cache
     )
+
+
+def make_mamba_cache(
+    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+) -> transformers.cache_utils.MambaCache:
+    "Creates a :class:`transformers.cache_utils.MambaCache`."
+
+    class _config:
+        def __init__(self):
+            self.intermediate_size = key_value_pairs[0][0].shape[1]
+            self.conv_kernel = key_value_pairs[0][0].shape[-1]
+            self.state_size = key_value_pairs[0][1].shape[-1]
+            self.num_hidden_layers = len(key_value_pairs)
+            self.dtype = key_value_pairs[0][0].dtype
+
+    cache = transformers.cache_utils.MambaCache(
+        _config(),
+        max_batch_size=key_value_pairs[0][0].shape[0],
+        device=key_value_pairs[0][0].device,
+    )
+    for i in range(len(key_value_pairs)):
+        cache.conv_states[i][:, :, :] = key_value_pairs[i][0]
+        cache.ssm_states[i][:, :, :] = key_value_pairs[i][1]
+    return cache

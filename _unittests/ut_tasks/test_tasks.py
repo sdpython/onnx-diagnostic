@@ -113,6 +113,15 @@ class TestTasks(ExtTestCase):
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
 
+    @hide_stdout()
+    def test_falcon_mamba_dev(self):
+        mid = "tiiuae/falcon-mamba-tiny-dev"
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        model, inputs = data["model"], data["inputs"]
+        print(self.string_type(inputs, with_shape=True))
+        model(**inputs)
+        self.assertIn((data["size"], data["n_weights"]), [(62461440, 15615360)])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
