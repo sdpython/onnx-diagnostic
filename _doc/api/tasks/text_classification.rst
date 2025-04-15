@@ -1,6 +1,6 @@
 
-onnx_diagnostic.export.text_classification
-==========================================
+onnx_diagnostic.tasks.text_classification
+=========================================
 
 .. automodule:: onnx_diagnostic.tasks.text_classification
     :members:

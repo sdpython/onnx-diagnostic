@@ -3502,3 +3502,31 @@ def _ccached_intel_bert_base_uncased_mrpc():
             "vocab_size": 30522,
         }
     )
+
+
+def _ccached_sentence_transformers_all_MiniLM_L6_v1():
+    "sentence-transformers/all-MiniLM-L6-v1"
+    return transformers.BertConfig(
+        **{
+            "_name_or_path": "nreimers/MiniLM-L6-H384-uncased",
+            "architectures": ["BertModel"],
+            "attention_probs_dropout_prob": 0.1,
+            "gradient_checkpointing": false,
+            "hidden_act": "gelu",
+            "hidden_dropout_prob": 0.1,
+            "hidden_size": 384,
+            "initializer_range": 0.02,
+            "intermediate_size": 1536,
+            "layer_norm_eps": 1e-12,
+            "max_position_embeddings": 512,
+            "model_type": "bert",
+            "num_attention_heads": 12,
+            "num_hidden_layers": 6,
+            "pad_token_id": 0,
+            "position_embedding_type": "absolute",
+            "transformers_version": "4.8.2",
+            "type_vocab_size": 2,
+            "use_cache": true,
+            "vocab_size": 30522,
+        }
+    )
