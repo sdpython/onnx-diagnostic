@@ -1,6 +1,6 @@
 
-onnx_diagnostic.export.fill_mask
-================================
+onnx_diagnostic.tasks.fill_mask
+===============================
 
 .. automodule:: onnx_diagnostic.tasks.fill_mask
     :members:

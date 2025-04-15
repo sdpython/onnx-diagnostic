@@ -3502,3 +3502,70 @@ def _ccached_intel_bert_base_uncased_mrpc():
             "vocab_size": 30522,
         }
     )
+
+
+def _ccached_sentence_transformers_all_MiniLM_L6_v1():
+    "sentence-transformers/all-MiniLM-L6-v1"
+    return transformers.BertConfig(
+        **{
+            "_name_or_path": "nreimers/MiniLM-L6-H384-uncased",
+            "architectures": ["BertModel"],
+            "attention_probs_dropout_prob": 0.1,
+            "gradient_checkpointing": false,
+            "hidden_act": "gelu",
+            "hidden_dropout_prob": 0.1,
+            "hidden_size": 384,
+            "initializer_range": 0.02,
+            "intermediate_size": 1536,
+            "layer_norm_eps": 1e-12,
+            "max_position_embeddings": 512,
+            "model_type": "bert",
+            "num_attention_heads": 12,
+            "num_hidden_layers": 6,
+            "pad_token_id": 0,
+            "position_embedding_type": "absolute",
+            "transformers_version": "4.8.2",
+            "type_vocab_size": 2,
+            "use_cache": true,
+            "vocab_size": 30522,
+        }
+    )
+
+
+def _ccached_tiiuae_falcon_mamba_tiny_dev():
+    "tiiuae/falcon-mamba-tiny-dev"
+    return transformers.FalconMambaConfig(
+        **{
+            "architectures": ["FalconMambaForCausalLM"],
+            "bos_token_id": 0,
+            "conv_kernel": 4,
+            "eos_token_id": 11,
+            "expand": 16,
+            "hidden_act": "silu",
+            "hidden_size": 4096,
+            "initializer_range": 0.1,
+            "intermediate_size": 8192,
+            "layer_norm_epsilon": 1e-05,
+            "mixer_rms_eps": 1e-06,
+            "model_type": "falcon_mamba",
+            "num_hidden_layers": 64,
+            "pad_token_id": 11,
+            "rescale_prenorm_residual": false,
+            "residual_in_fp32": true,
+            "state_size": 16,
+            "tie_word_embeddings": false,
+            "time_step_floor": 0.0001,
+            "time_step_init_scheme": "random",
+            "time_step_max": 0.1,
+            "time_step_min": 0.001,
+            "time_step_rank": 256,
+            "time_step_scale": 1.0,
+            "torch_dtype": "bfloat16",
+            "transformers_version": "4.52.0.dev0",
+            "use_bias": false,
+            "use_cache": true,
+            "use_conv_bias": true,
+            "use_mambapy": false,
+            "vocab_size": 65024,
+        }
+    )

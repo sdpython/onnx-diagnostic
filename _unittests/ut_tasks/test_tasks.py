@@ -9,7 +9,6 @@ class TestTasks(ExtTestCase):
     @hide_stdout()
     def test_text2text_generation(self):
         mid = "sshleifer/tiny-marian-en-de"
-        # mid = "Salesforce/codet5-small"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(473928, 118482)])
         model, inputs = data["model"], data["inputs"]
@@ -85,7 +84,6 @@ class TestTasks(ExtTestCase):
     @hide_stdout()
     def test_imagetext2text_generation(self):
         mid = "HuggingFaceM4/tiny-random-idefics"
-        # mid = "Salesforce/codet5-small"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(12742888, 3185722)])
         model, inputs = data["model"], data["inputs"]
@@ -94,7 +92,6 @@ class TestTasks(ExtTestCase):
     @hide_stdout()
     def test_fill_mask(self):
         mid = "google-bert/bert-base-multilingual-cased"
-        # mid = "Salesforce/codet5-small"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(428383212, 107095803)])
         model, inputs = data["model"], data["inputs"]
@@ -103,11 +100,27 @@ class TestTasks(ExtTestCase):
     @hide_stdout()
     def test_text_classification(self):
         mid = "Intel/bert-base-uncased-mrpc"
-        # mid = "Salesforce/codet5-small"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(154420232, 38605058)])
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
+
+    @hide_stdout()
+    def test_sentence_similary(self):
+        mid = "sentence-transformers/all-MiniLM-L6-v1"
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        self.assertIn((data["size"], data["n_weights"]), [(62461440, 15615360)])
+        model, inputs = data["model"], data["inputs"]
+        model(**inputs)
+
+    @hide_stdout()
+    def test_falcon_mamba_dev(self):
+        mid = "tiiuae/falcon-mamba-tiny-dev"
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        model, inputs = data["model"], data["inputs"]
+        print(self.string_type(inputs, with_shape=True))
+        model(**inputs)
+        self.assertIn((data["size"], data["n_weights"]), [(138640384, 34660096)])
 
 
 if __name__ == "__main__":

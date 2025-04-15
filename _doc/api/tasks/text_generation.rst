@@ -1,6 +1,6 @@
 
-onnx_diagnostic.export.text_generation
-======================================
+onnx_diagnostic.tasks.text_generation
+=====================================
 
 .. automodule:: onnx_diagnostic.tasks.text_generation
     :members:

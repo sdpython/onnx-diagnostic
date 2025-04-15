@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 import torch
 from ..helpers.config_helper import update_config, check_hasattr
 
-__TASK__ = "text-classification"
+__TASK__ = "sentence-similarity"
 
 
 def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
@@ -25,7 +25,7 @@ def get_inputs(
     **kwargs,  # unused
 ):
     """
-    Generates inputs for task ``text-classification``.
+    Generates inputs for task ``sentence-similarity``.
     Example:
 
     ::
@@ -35,7 +35,7 @@ def get_inputs(
         attention_mask:T7s1x13[1,1:A1.0])
     """
     batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = torch.export.Dim("sequence_length", min=1, max=1024)
+    seq_length = "seq_length"
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
         "token_type_ids": {0: batch, 1: seq_length},

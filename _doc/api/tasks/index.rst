@@ -9,6 +9,7 @@ onnx_diagnostic.tasks
     fill_mask
     image_classification
     image_text_to_text
+    sentence_similarity
     text_classification
     text_generation
     text2text_generation

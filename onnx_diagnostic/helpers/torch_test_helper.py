@@ -31,7 +31,7 @@ def _forward_(*args, _f=None, _context=None, **kwargs):
 
 
 @contextlib.contextmanager
-def steel_forward(model: torch.nn.Module, with_shape: bool = True, with_min_max: bool = False):
+def steal_forward(model: torch.nn.Module, with_shape: bool = True, with_min_max: bool = False):
     """
     The necessary modification to steem forward method and prints out inputs
     and outputs. See example :ref:`l-plot-tiny-llm-export`.

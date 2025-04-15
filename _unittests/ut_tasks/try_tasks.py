@@ -1,7 +1,7 @@
 import unittest
 from onnx_diagnostic.ext_test_case import ExtTestCase, never_test
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.helpers.torch_test_helper import steel_forward
+from onnx_diagnostic.helpers.torch_test_helper import steal_forward
 
 
 class TestHuggingFaceHubModel(ExtTestCase):
@@ -92,7 +92,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
         # simply generate a single sequence
         print()
-        with steel_forward(model):
+        with steal_forward(model):
             generated_ids = model.generate(
                 decoder_input_ids=input_ids, attention_mask=mask, max_length=100
             )
@@ -121,7 +121,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
             ["<image>", "<fake_token_around_image>"], add_special_tokens=False
         ).input_ids
         print()
-        with steel_forward(model):
+        with steal_forward(model):
             generated_ids = model.generate(
                 **inputs, max_new_tokens=10, bad_words_ids=bad_words_ids
             )
@@ -184,7 +184,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
         # generate token ids
         print()
-        with steel_forward(model):
+        with steal_forward(model):
             predicted_ids = model.generate(
                 input_features, forced_decoder_ids=forced_decoder_ids
             )
@@ -235,6 +235,129 @@ class TestHuggingFaceHubModel(ExtTestCase):
         # Print tokens in text
         encoded_input["input_ids"][0]
         tokenizer.convert_ids_to_tokens(encoded_input["input_ids"][0])
+
+    @never_test()
+    def test_sentence_similary(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k ce_sim
+        # https://huggingface.co/sentence-transformers/all-MiniLM-L6-v1
+
+        from transformers import AutoTokenizer, AutoModel
+        import torch
+        import torch.nn.functional as F
+
+        # Mean Pooling - Take attention mask into account for correct averaging
+        def mean_pooling(model_output, attention_mask):
+            token_embeddings = model_output[
+                0
+            ]  # First element of model_output contains all token embeddings
+            input_mask_expanded = (
+                attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+            )
+            return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
+                input_mask_expanded.sum(1), min=1e-9
+            )
+
+        # Sentences we want sentence embeddings for
+        sentences = ["This is an example sentence", "Each sentence is converted"]
+
+        # Load model from HuggingFace Hub
+        tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v1")
+        model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v1")
+
+        # Tokenize sentences
+        encoded_input = tokenizer(
+            sentences, padding=True, truncation=True, return_tensors="pt"
+        )
+
+        # Compute token embeddings
+        with torch.no_grad():
+            print()
+            print("-- inputs", string_type(encoded_input, with_shape=True, with_min_max=True))
+            model_output = model(**encoded_input)
+            print("-- outputs", string_type(model_output, with_shape=True, with_min_max=True))
+
+        # Perform pooling
+        sentence_embeddings = mean_pooling(model_output, encoded_input["attention_mask"])
+
+        # Normalize embeddings
+        sentence_embeddings = F.normalize(sentence_embeddings, p=2, dim=1)
+
+        print("Sentence embeddings:")
+        print(sentence_embeddings)
+
+    @never_test()
+    def test_falcon_mamba_dev(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k falcon_mamba_dev
+        # https://huggingface.co/tiiuae/falcon-mamba-tiny-dev
+
+        from transformers import AutoTokenizer
+        import transformers
+        import torch
+
+        model = "tiiuae/falcon-mamba-tiny-dev"
+
+        tokenizer = AutoTokenizer.from_pretrained(model)
+        pipeline = transformers.pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            torch_dtype=torch.bfloat16,
+            trust_remote_code=True,
+            device_map="auto",
+        )
+        print()
+        with steal_forward(pipeline.model):
+            sequences = pipeline(
+                "Girafatron is obsessed with giraffes, "
+                "the most glorious animal on the face of this Earth. "
+                "Giraftron believes all other animals are irrelevant "
+                "when compared to the glorious majesty of the giraffe."
+                "\nDaniel: Hello, Girafatron!\nGirafatron:",
+                max_length=200,
+                do_sample=True,
+                top_k=10,
+                num_return_sequences=1,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+        for seq in sequences:
+            print(f"Result: {seq['generated_text']}")
+
+    @never_test()
+    def test_falcon_mamba_7b(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k falcon_mamba_7b
+        # https://huggingface.co/tiiuae/falcon-mamba-7b
+
+        from transformers import AutoTokenizer
+        import transformers
+        import torch
+
+        model = "tiiuae/falcon-mamba-7b"
+
+        tokenizer = AutoTokenizer.from_pretrained(model)
+        pipeline = transformers.pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            torch_dtype=torch.bfloat16,
+            trust_remote_code=True,
+            device_map="auto",
+        )
+        print()
+        with steal_forward(pipeline.model):
+            sequences = pipeline(
+                "Girafatron is obsessed with giraffes, "
+                "the most glorious animal on the face of this Earth. "
+                "Giraftron believes all other animals are irrelevant "
+                "when compared to the glorious majesty of the giraffe."
+                "\nDaniel: Hello, Girafatron!\nGirafatron:",
+                max_length=200,
+                do_sample=True,
+                top_k=10,
+                num_return_sequences=1,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+        for seq in sequences:
+            print(f"Result: {seq['generated_text']}")
 
 
 if __name__ == "__main__":
