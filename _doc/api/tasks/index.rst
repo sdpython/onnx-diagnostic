@@ -8,7 +8,8 @@ onnx_diagnostic.tasks
     automatic_speech_recognition
     fill_mask
     image_classification
-    image_text_to_text      
+    image_text_to_text
+    text_classification
     text_generation
     text2text_generation
     zero_shot_image_classification

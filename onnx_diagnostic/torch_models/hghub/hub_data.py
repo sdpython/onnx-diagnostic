@@ -14,6 +14,7 @@ __data_arch__ = textwrap.dedent(
     AlbertModel,feature-extraction
     BeitForImageClassification,image-classification
     BertForMaskedLM,fill-mask
+    BertForSequenceClassification,text-classification
     BigBirdModel,feature-extraction
     BlenderbotModel,feature-extraction
     BloomModel,feature-extraction
@@ -145,6 +146,7 @@ __data_tasks__ = [
     "no-pipeline-tag",
     "object-detection",
     "reinforcement-learning",
+    "text-classification",
     "text-generation",
     "text-to-audio",
     "text2text-generation",
