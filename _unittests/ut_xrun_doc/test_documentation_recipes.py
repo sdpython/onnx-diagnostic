@@ -53,7 +53,10 @@ class TestDocumentationRecipes(ExtTestCase):
                     # dot not installed, this part
                     # is tested in onnx framework
                     raise unittest.SkipTest(f"failed: {name!r} due to missing dot.")
-                if "We couldn't connect to 'https://huggingface.co'" in st:
+                if (
+                    "We couldn't connect to 'https://huggingface.co'" in st
+                    or "Cannot access content at: https://huggingface.co/" in st
+                ):
                     raise unittest.SkipTest(f"Connectivity issues due to\n{err}")
                 raise AssertionError(  # noqa: B904
                     "Example '{}' (cmd: {} - exec_prefix='{}') "

@@ -100,6 +100,15 @@ class TestTasks(ExtTestCase):
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
 
+    @hide_stdout()
+    def test_text_classification(self):
+        mid = "Intel/bert-base-uncased-mrpc"
+        # mid = "Salesforce/codet5-small"
+        data = get_untrained_model_with_inputs(mid, verbose=1)
+        self.assertIn((data["size"], data["n_weights"]), [(154420232, 38605058)])
+        model, inputs = data["model"], data["inputs"]
+        model(**inputs)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
