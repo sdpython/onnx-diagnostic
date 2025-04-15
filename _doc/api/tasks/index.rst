@@ -12,15 +12,7 @@ onnx_diagnostic.tasks
     text_generation
     text2text_generation
     zero_shot_image_classification
-
-reduce_model_config
-+++++++++++++++++++
-
-.. autofunction:: onnx_diagnostic.tasks.reduce_model_config
     
-Other functions
-+++++++++++++++
-
 .. automodule:: onnx_diagnostic.tasks
     :members:
     :no-undoc-members:
