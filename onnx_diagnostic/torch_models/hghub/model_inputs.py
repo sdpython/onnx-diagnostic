@@ -105,6 +105,7 @@ def get_untrained_model_with_inputs(
     # outputs even with the same inputs in training mode.
     model.eval()
     res = fct(model, config, **kwargs)
+
     res["input_kwargs"] = kwargs
     res["model_kwargs"] = mkwargs
 
@@ -118,19 +119,24 @@ def get_untrained_model_with_inputs(
     update = {}
     for k, v in res.items():
         if k.startswith(("inputs", "dynamic_shapes")) and isinstance(v, dict):
-            update[k] = filter_out_unexpected_inputs(model, v)
+            update[k] = filter_out_unexpected_inputs(model, v, verbose=verbose)
     res.update(update)
     return res
 
 
-def filter_out_unexpected_inputs(model: torch.nn.Module, kwargs: Dict[str, Any]):
+def filter_out_unexpected_inputs(
+    model: torch.nn.Module, kwargs: Dict[str, Any], verbose: int = 0
+):
     """
     Removes input names in kwargs if no parameter names was found in ``model.forward``.
     """
     sig = inspect.signature(model.forward)
     allowed = set(sig.parameters)
-    kwargs = {k: v for k, v in kwargs.items() if k in allowed}
-    return kwargs
+    new_kwargs = {k: v for k, v in kwargs.items() if k in allowed}
+    diff = set(kwargs) - set(new_kwargs)
+    if diff and verbose:
+        print(f"[filter_out_unexpected_inputs] removed {diff}")
+    return new_kwargs
 
 
 def compute_model_size(model: torch.nn.Module) -> Tuple[int, int]:
