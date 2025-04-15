@@ -2,10 +2,12 @@ import functools
 import importlib
 import inspect
 import re
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple
 import torch
 import transformers
 from ...helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
+from ...helpers.config_helper import check_hasattr, update_config, _pick
+from ...tasks import reduce_model_config
 from .hub_api import task_from_arch, get_pretrained_config, get_architecture_default_values
 
 
@@ -44,135 +46,6 @@ def _update_config(config: Any, kwargs: Dict[str, Any]):
     for k, v in kwargs.items():
         if hasattr(config, k):
             setattr(config, k, v)
-
-
-def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
-    """Reduces a model size."""
-    if task == "text-generation":
-        check_hasattr(
-            config,
-            ("head_dim", ("hidden_size", "num_attention_heads")),
-            "num_hidden_layers",
-            ("num_key_value_heads", "num_attention_heads"),
-            "intermediate_size",
-            "hidden_size",
-        )
-        kwargs = dict(
-            head_dim=getattr(
-                config, "head_dim", config.hidden_size // config.num_attention_heads
-            ),
-            num_hidden_layers=min(config.num_hidden_layers, 2),
-            num_key_value_heads=(
-                config.num_key_value_heads
-                if hasattr(config, "num_key_value_heads")
-                else config.num_attention_heads
-            ),
-            intermediate_size=(
-                min(config.intermediate_size, 24576 // 4)
-                if config.intermediate_size % 4 == 0
-                else config.intermediate_size
-            ),
-            hidden_size=(
-                min(config.hidden_size, 3072 // 4)
-                if config.hidden_size % 4 == 0
-                else config.hidden_size
-            ),
-        )
-    elif task == "image-classification":
-        check_hasattr(config, ("num_hidden_layers", "hidden_sizes"))
-        kwargs = dict(
-            num_hidden_layers=(
-                min(config.num_hidden_layers, 2)
-                if hasattr(config, "num_hidden_layers")
-                else len(config.hidden_sizes)
-            )
-        )
-    elif task == "zero-shot-image-classification":
-        check_hasattr(config, "vision_config", "text_config")
-        check_hasattr(config.vision_config, "num_hidden_layers", "num_attention_heads")
-        check_hasattr(config.text_config, "num_hidden_layers", "num_attention_heads")
-        kwargs = dict(
-            vision_config=dict(
-                num_hidden_layers=min(2, config.vision_config.num_hidden_layers),
-                num_attention_heads=min(2, config.vision_config.num_attention_heads),
-            ),
-            text_config=dict(
-                num_hidden_layers=min(2, config.text_config.num_hidden_layers),
-                num_attention_heads=min(2, config.text_config.num_attention_heads),
-            ),
-        )
-    elif task == "text2text-generation":
-        kwargs = {}
-        if hasattr(config, "num_decoder_layers"):
-            config.num_decoder_layers = min(config.num_decoder_layers, 2)
-        if hasattr(config, "num_hidden_layers"):
-            config.num_hidden_layers = min(config.num_hidden_layers, 2)
-    elif task == "image-text-to-text":
-        kwargs = {}
-        if hasattr(config, "num_hidden_layers"):
-            config.num_hidden_layers = min(config.num_hidden_layers, 2)
-        if hasattr(config, "vision_config") and hasattr(
-            config.vision_config, "num_hidden_layers"
-        ):
-            config.vision_config.num_hidden_layers = min(
-                config.vision_config.num_hidden_layers, 2
-            )
-    elif task == "automatic-speech-recognition":
-        kwargs = {}
-        if hasattr(config, "num_decoder_layers"):
-            config.num_decoder_layers = min(config.num_decoder_layers, 2)
-        if hasattr(config, "decoder_layers"):
-            config.decoder_layers = min(config.decoder_layers, 2)
-        if hasattr(config, "num_hidden_layers"):
-            config.num_hidden_layers = min(config.num_hidden_layers, 2)
-    else:
-        raise NotImplementedError(f"Input generation for task {task!r} not implemented yet.")
-
-    update_config(config, kwargs)
-    return kwargs
-
-
-def update_config(config: Any, mkwargs: Dict[str, Any]):
-    """Updates a configuration with different values."""
-    for k, v in mkwargs.items():
-        if isinstance(v, dict):
-            assert hasattr(
-                config, k
-            ), f"missing attribute {k!r} in config={config}, cannot update it with {v}"
-            update_config(getattr(config, k), v)
-        else:
-            setattr(config, k, v)
-
-
-def check_hasattr(config: Any, *args: Union[str, Tuple[Any, ...]]):
-    """
-    Checks the confiugation has all the attributes in ``args``.
-    Raises an exception otherwise.
-    """
-    for a in args:
-        assert isinstance(a, (str, tuple)), f"unexpected type {type(a)} in {args!r}"
-        if isinstance(a, str):
-            assert (isinstance(config, dict) and a in config) or hasattr(
-                config, a
-            ), f"Missing attribute {a!r} in\n{config}"
-        elif isinstance(a, tuple):
-            assert any(
-                (isinstance(name, str) and hasattr(config, name))
-                or all(hasattr(config, _) for _ in name)
-                for name in a
-            ), f"All attributes in {a!r} are missing from\n{config}"
-
-
-def _pick(config, *atts):
-    """Returns the first value found in the configuration."""
-    for a in atts:
-        if isinstance(a, str):
-            if hasattr(config, a):
-                return getattr(config, a)
-        elif isinstance(a, tuple):
-            if all(hasattr(config, _) for _ in a[1:]):
-                return a[0]([getattr(config, _) for _ in a[1:]])
-    raise AssertionError(f"Unable to find any of these {atts!r} in {config}")
 
 
 def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callable]:
