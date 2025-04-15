@@ -62,9 +62,11 @@ jobs:
 
       - name: tiny-llm example
         run: PYTHONPATH=. python _doc/examples/plot_export_tiny_llm.py
+        continue-on-error: true  # connectivity issues
 
       - name: tiny-llm bypass
         run: PYTHONPATH=. python _doc/examples/plot_export_tiny_llm_patched.py
+        continue-on-error: true  # connectivity issues
 
       - name: run tests bypassed
         run: PYTHONPATH=. python _unittests/ut_torch_models/test_tiny_llms_bypassed.py

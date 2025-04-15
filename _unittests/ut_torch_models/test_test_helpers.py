@@ -9,12 +9,12 @@ from onnx_diagnostic.torch_models.test_helper import (
     filter_inputs,
     run_ort_fusion,
 )
-from onnx_diagnostic.torch_models.hghub.model_inputs import get_get_inputs_function_for_tasks
+from onnx_diagnostic.tasks import supported_tasks
 
 
 class TestTestHelper(ExtTestCase):
     def test_get_inputs_for_task(self):
-        fcts = get_get_inputs_function_for_tasks()
+        fcts = supported_tasks()
         for task in self.subloop(sorted(fcts)):
             data = get_inputs_for_task(task)
             self.assertIsInstance(data, dict)

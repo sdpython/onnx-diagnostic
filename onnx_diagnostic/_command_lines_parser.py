@@ -303,13 +303,13 @@ def get_parser_validate() -> ArgumentParser:
 def _cmd_validate(argv: List[Any]):
     from .helpers import string_type
     from .torch_models.test_helper import get_inputs_for_task, validate_model, _ds_clean
-    from .torch_models.hghub.model_inputs import get_get_inputs_function_for_tasks
+    from .tasks import supported_tasks
 
     parser = get_parser_validate()
     args = parser.parse_args(argv[1:])
     if not args.task and not args.mid:
         print("-- list of supported tasks:")
-        print("\n".join(sorted(get_get_inputs_function_for_tasks())))
+        print("\n".join(supported_tasks()))
     elif not args.mid:
         data = get_inputs_for_task(args.task)
         if args.verbose:

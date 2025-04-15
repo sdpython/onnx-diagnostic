@@ -13,6 +13,7 @@ __data_arch__ = textwrap.dedent(
     ASTModel,feature-extraction
     AlbertModel,feature-extraction
     BeitForImageClassification,image-classification
+    BertForMaskedLM,fill-mask
     BigBirdModel,feature-extraction
     BlenderbotModel,feature-extraction
     BloomModel,feature-extraction

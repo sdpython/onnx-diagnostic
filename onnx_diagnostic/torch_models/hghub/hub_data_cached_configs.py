@@ -34,13 +34,13 @@ Automatically generated:
             "Config {",
             "Config (**{",
         )
-        rows = [f"def _cached_{name}():", f'    "{c}"', f"    return transformers.{sconf})"]
+        rows = [f"def _ccached_{name}():", f'    "{c}"', f"    return transformers.{sconf})"]
         srows = "\\n".join(rows)
         if len(srows) < 2048:
             print(srows)
         else:
             rows = [
-                f"def _cached_{name}():",
+                f"def _ccached_{name}():",
                 f'    "{c}"',
                 f'    t64 = textwrap.dedent(\"\"\"',
                 *w64,
@@ -130,7 +130,7 @@ def _ccached_microsoft_phi2():
     )
 
 
-def _cached_hf_internal_testing_tiny_random_beitforimageclassification():
+def _ccached_hf_internal_testing_tiny_random_beitforimageclassification():
     "hf-internal-testing/tiny-random-BeitForImageClassification"
     return transformers.BeitConfig(
         **{
@@ -3437,5 +3437,34 @@ def _ccached_openai_clip_vit_base_patch16():
                 "patch_size": 16,
                 "projection_dim": 512,
             },
+        }
+    )
+
+
+def _ccached_google_bert_bert_base_multilingual_cased():
+    "google-bert/bert-base-multilingual-cased"
+    return transformers.BertConfig(
+        **{
+            "architectures": ["BertForMaskedLM"],
+            "attention_probs_dropout_prob": 0.1,
+            "directionality": "bidi",
+            "hidden_act": "gelu",
+            "hidden_dropout_prob": 0.1,
+            "hidden_size": 768,
+            "initializer_range": 0.02,
+            "intermediate_size": 3072,
+            "layer_norm_eps": 1e-12,
+            "max_position_embeddings": 512,
+            "model_type": "bert",
+            "num_attention_heads": 12,
+            "num_hidden_layers": 12,
+            "pad_token_id": 0,
+            "pooler_fc_size": 768,
+            "pooler_num_attention_heads": 12,
+            "pooler_num_fc_layers": 3,
+            "pooler_size_per_head": 128,
+            "pooler_type": "first_token_transform",
+            "type_vocab_size": 2,
+            "vocab_size": 119547,
         }
     )
