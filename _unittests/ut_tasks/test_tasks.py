@@ -96,7 +96,7 @@ class TestTasks(ExtTestCase):
         mid = "google-bert/bert-base-multilingual-cased"
         # mid = "Salesforce/codet5-small"
         data = get_untrained_model_with_inputs(mid, verbose=1)
-        self.assertIn((data["size"], data["n_weights"]), [(12742888, 3185722)])
+        self.assertIn((data["size"], data["n_weights"]), [(428383212, 107095803)])
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
 

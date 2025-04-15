@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 import torch
 from ..helpers.config_helper import update_config, check_hasattr
 
-__TASK__ = "zero-shot-image-generation"
+__TASK__ = "zero-shot-image-classification"
 
 
 def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:

@@ -100,7 +100,7 @@ class TestHuggingFaceHubApi(ExtTestCase):
 
     def test_load_architecture_task(self):
         data = load_architecture_task()
-        print(set(data.values()))
+        self.assertNotEmpty(set(data.values()))
 
     def test_task_from_tags(self):
         _tags = [
@@ -132,10 +132,10 @@ class TestHuggingFaceHubApi(ExtTestCase):
 
     def test__ccached_config_64(self):
         from onnx_diagnostic.torch_models.hghub.hub_data_cached_configs import (
-            _cached_hf_internal_testing_tiny_random_beitforimageclassification,
+            _ccached_hf_internal_testing_tiny_random_beitforimageclassification,
         )
 
-        conf = _cached_hf_internal_testing_tiny_random_beitforimageclassification()
+        conf = _ccached_hf_internal_testing_tiny_random_beitforimageclassification()
         self.assertEqual(conf.auxiliary_channels, 256)
 
 

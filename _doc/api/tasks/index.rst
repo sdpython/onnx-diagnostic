@@ -5,13 +5,13 @@ onnx_diagnostic.tasks
     :maxdepth: 1
     :caption: modules
 
-    automatic_speech_generation
+    automatic_speech_recognition
     fill_mask
     image_classification
     image_text_to_text      
     text_generation
     text2text_generation
-    zero_short_image_classification
+    zero_shot_image_classification
 
 reduce_model_config
 +++++++++++++++++++
