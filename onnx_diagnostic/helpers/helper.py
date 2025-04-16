@@ -252,7 +252,7 @@ def string_type(
         if all(isinstance(k, int) for k in obj):
             return f"{{{s}}}"
         return f"dict({s})"
-    # arrat
+    # array
     if isinstance(obj, np.ndarray):
         from .onnx_helper import np_dtype_to_tensor_dtype
 
@@ -286,6 +286,16 @@ def string_type(
         return "SymInt"
     if isinstance(obj, torch.SymFloat):
         return "SymFloat"
+    if isinstance(obj, torch.export.dynamic_shapes._DimHintType):
+        if obj == torch.export.dynamic_shapes._DimHintType.DYNAMIC:
+            return "DYNAMIC"
+        if obj == torch.export.dynamic_shapes._DimHintType.AUTO:
+            return "AUTO"
+        return str(obj)
+    if obj in (torch.export.Dim.DYNAMIC, torch.export.dynamic_shapes._DimHintType.DYNAMIC):
+        return "DYNAMIC"
+    if obj == (torch.export.Dim.AUTO, torch.export.dynamic_shapes._DimHintType.AUTO):
+        return "AUTO"
     # Tensors
     if isinstance(obj, torch._subclasses.fake_tensor.FakeTensor):
         from .onnx_helper import torch_dtype_to_onnx_dtype
@@ -410,6 +420,10 @@ def string_type(
         )
 
     if obj.__class__.__name__ in ("_DimHint", "_DimHintType"):
+        if obj in (torch.export.Dim.DYNAMIC, torch.export.dynamic_shapes._DimHintType.DYNAMIC):
+            return "DYNAMIC"
+        if obj == (torch.export.Dim.AUTO, torch.export.dynamic_shapes._DimHintType.AUTO):
+            return "AUTO"
         return str(obj)
 
     if isinstance(obj, torch.nn.Module):

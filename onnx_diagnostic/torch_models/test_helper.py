@@ -646,6 +646,18 @@ def call_torch_export_export(
     strict = "nostrict" not in exporter
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
+
+    summary["export_exporter"] = exporter
+    summary["export_optimization"] = optimization or ""
+    summary["export_strict"] = strict
+    summary["export_args"] = string_type(args, with_shape=True)
+    summary["export_kwargs"] = string_type(kwargs, with_shape=True)
+    summary["export_dynamic_shapes"] = string_type(ds)
+
+    # There is an issue with DynamicShape [[],[]] becomes []
+    dse = CoupleInputsDynamicShapes(args, kwargs, ds).replace_string_by()
+    summary["export_dynamic_shapes_export_export"] = string_type(dse)
+
     if verbose:
         print(
             f"[call_torch_export_export] exporter={exporter!r}, "
@@ -654,18 +666,14 @@ def call_torch_export_export(
         print(f"[call_torch_export_export] args={string_type(args, with_shape=True)}")
         print(f"[call_torch_export_export] kwargs={string_type(kwargs, with_shape=True)}")
         print(f"[call_torch_export_export] dynamic_shapes={_ds_clean(ds)}")
+        print(f"[call_torch_export_export] dynamic_shapes_export_export={string_type(dse)}")
         print("[call_torch_export_export] export...")
-    summary["export_exporter"] = exporter
-    summary["export_optimization"] = optimization or ""
-    summary["export_strict"] = strict
-    summary["export_args"] = string_type(args, with_shape=True)
-    summary["export_kwargs"] = string_type(kwargs, with_shape=True)
 
     begin = time.perf_counter()
     if quiet:
         try:
             ep = torch.export.export(
-                data["model"], args, kwargs=kwargs, dynamic_shapes=ds, strict=strict
+                data["model"], args, kwargs=kwargs, dynamic_shapes=dse, strict=strict
             )
         except Exception as e:
             summary["ERR_export_export"] = str(e)
@@ -674,7 +682,7 @@ def call_torch_export_export(
             return summary, data
     else:
         ep = torch.export.export(
-            data["model"], args, kwargs=kwargs, dynamic_shapes=ds, strict=strict
+            data["model"], args, kwargs=kwargs, dynamic_shapes=dse, strict=strict
         )
 
     summary["time_export_export"] = time.perf_counter() - begin
