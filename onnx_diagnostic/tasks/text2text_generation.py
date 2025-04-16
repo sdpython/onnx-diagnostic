@@ -59,14 +59,14 @@ def get_inputs(
         encoder_outputs:dict(last_hidden_state:T1s1x16x512)
     """
     batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = torch.export.Dim("seq_length", min=1, max=4096)
-    cache_length = torch.export.Dim("cache_length", min=1, max=4096)
-    cache_length2 = torch.export.Dim("cache_length2", min=1, max=4096)
+    seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
+    cache_length = "cache_length_key"  # torch.export.Dim("cache_length", min=1, max=4096)
+    cache_length2 = "cache_length_val"  # torch.export.Dim("cache_length2", min=1, max=4096)
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
-        "decoder_input_ids": {0: batch, 1: torch.export.Dim.DYNAMIC},
-        "attention_mask": {0: batch, 1: torch.export.Dim.DYNAMIC},
+        "decoder_input_ids": {0: batch, 1: "seq_ids"},
+        "attention_mask": {0: batch, 1: "seq_mask"},
         # "cache_position": {0: batch, 1: torch.export.Dim.DYNAMIC},
         "past_key_values": [
             [
