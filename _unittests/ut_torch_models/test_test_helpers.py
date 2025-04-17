@@ -2,7 +2,12 @@ import copy
 import unittest
 import packaging.version as pv
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_warnings
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    hide_stdout,
+    ignore_warnings,
+    requires_torch,
+)
 from onnx_diagnostic.torch_models.test_helper import (
     get_inputs_for_task,
     validate_model,
@@ -54,6 +59,7 @@ class TestTestHelper(ExtTestCase):
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
 
+    @requires_torch("2.7")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     def test_validate_model_onnx(self):
