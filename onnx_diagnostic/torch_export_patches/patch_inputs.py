@@ -119,6 +119,10 @@ def convert_dynamic_axes_into_dynamic_shapes(
                     )
                 changes[k] = type(updated_kwargs[k])
                 continue
+        if isinstance(v, transformers.cache_utils.DynamicCache):
+            updated_kwargs[k] = [v.key_cache, v.value_cache]
+            changes[k] = type(v)
+            continue
         raise NotImplementedError(
             f"Unexpected type {type(v)} for parameter {k!r} "
             f"({string_type(v, with_shape=True)})"
@@ -130,6 +134,13 @@ def convert_dynamic_axes_into_dynamic_shapes(
         done = set()
         for k, v in dynamic_axes.items():
             if k not in changes and k in updated_kwargs and isinstance(v, dict):
+                dynamic_shapes[k] = v
+                continue
+            if (
+                k in updated_kwargs
+                and k in changes
+                and changes[k] == transformers.cache_utils.DynamicCache
+            ):
                 dynamic_shapes[k] = v
                 continue
             if "." in k:

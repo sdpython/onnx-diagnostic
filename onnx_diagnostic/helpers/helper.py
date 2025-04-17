@@ -98,7 +98,8 @@ def string_type(
     with_min_max: bool = False,
     with_device: bool = False,
     ignore: bool = False,
-    limit: int = 10,
+    limit: int = 20,
+    verbose: int = 0,
 ) -> str:
     """
     Displays the types of an object as a string.
@@ -108,6 +109,7 @@ def string_type(
     :param with_min_max: displays information about the values
     :param with_device: display the device
     :param ignore: if True, just prints the type for unknown types
+    :param verbose: verbosity (to show the path it followed to get that print)
     :return: str
 
     .. runpython::
@@ -140,19 +142,9 @@ def string_type(
         print(string_type(inputs, with_shape=True, with_min_max=True))
     """
     if obj is None:
+        if verbose:
+            print(f"[string_type] A:{type(obj)}")
         return "None"
-    if is_dataclass(obj):
-        values = {f.name: getattr(obj, f.name, None) for f in fields(obj)}
-        values = {k: v for k, v in values.items() if v is not None}
-        s = string_type(
-            values,
-            with_shape=with_shape,
-            with_min_max=with_min_max,
-            with_device=with_device,
-            ignore=ignore,
-            limit=limit,
-        )
-        return f"{obj.__class__.__name__}{s[4:]}"
 
     # tuple
     if isinstance(obj, tuple):
@@ -164,7 +156,10 @@ def string_type(
                 with_device=with_device,
                 ignore=ignore,
                 limit=limit,
+                verbose=verbose,
             )
+            if verbose:
+                print(f"[string_type] C:{type(obj)}")
             return f"({s},)"
         if len(obj) < limit:
             js = ",".join(
@@ -175,9 +170,12 @@ def string_type(
                     with_device=with_device,
                     ignore=ignore,
                     limit=limit,
+                    verbose=verbose,
                 )
                 for o in obj
             )
+            if verbose:
+                print(f"[string_type] D:{type(obj)}")
             return f"({js})"
         tt = string_type(
             obj[0],
@@ -186,10 +184,15 @@ def string_type(
             with_device=with_device,
             ignore=ignore,
             limit=limit,
+            verbose=verbose,
         )
         if with_min_max and all(isinstance(_, (int, float, bool)) for _ in obj):
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
+            if verbose:
+                print(f"[string_type] E:{type(obj)}")
             return f"#{len(obj)}({tt},...)[{mini},{maxi}:A[{avg}]]"
+        if verbose:
+            print(f"[string_type] F:{type(obj)}")
         return f"#{len(obj)}({tt},...)"
     # list
     if isinstance(obj, list):
@@ -202,9 +205,12 @@ def string_type(
                     with_device=with_device,
                     ignore=ignore,
                     limit=limit,
+                    verbose=verbose,
                 )
                 for o in obj
             )
+            if verbose:
+                print(f"[string_type] G:{type(obj)}")
             return f"#{len(obj)}[{js}]"
         tt = string_type(
             obj[0],
@@ -213,10 +219,15 @@ def string_type(
             with_device=with_device,
             ignore=ignore,
             limit=limit,
+            verbose=verbose,
         )
         if with_min_max and all(isinstance(_, (int, float, bool)) for _ in obj):
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
+            if verbose:
+                print(f"[string_type] H:{type(obj)}")
             return f"#{len(obj)}[{tt},...][{mini},{maxi}:{avg}]"
+        if verbose:
+            print(f"[string_type] I:{type(obj)}")
         return f"#{len(obj)}[{tt},...]"
     # set
     if isinstance(obj, set):
@@ -229,28 +240,68 @@ def string_type(
                     with_device=with_device,
                     ignore=ignore,
                     limit=limit,
+                    verbose=verbose,
                 )
                 for o in obj
             )
+            if verbose:
+                print(f"[string_type] J:{type(obj)}")
             return f"{{{js}}}"
         if with_min_max and all(isinstance(_, (int, float, bool)) for _ in obj):
             mini, maxi, avg = min(obj), max(obj), sum(float(_) for _ in obj) / len(obj)
+            if verbose:
+                print(f"[string_type] K:{type(obj)}")
             return f"{{...}}#{len(obj)}[{mini},{maxi}:A{avg}]"
+        if verbose:
+            print(f"[string_type] L:{type(obj)}")
         return f"{{...}}#{len(obj)}" if with_shape else "{...}"
     # dict
     if isinstance(obj, dict):
         if len(obj) == 0:
+            if verbose:
+                print(f"[string_type] M:{type(obj)}")
             return "{}"
+
+        import torch
+
+        if all(isinstance(k, int) for k in obj) and all(
+            isinstance(
+                v,
+                (
+                    str,
+                    torch.export.dynamic_shapes._Dim,
+                    torch.export.dynamic_shapes._DerivedDim,
+                    torch.export.dynamic_shapes._DimHint,
+                ),
+            )
+            for v in obj.values()
+        ):
+            # This is dyanmic shapes
+            rows = []
+            for k, v in obj.items():
+                if isinstance(v, str):
+                    rows.append(f"{k}:DYN({v})")
+                else:
+                    rows.append(f"{k}:{string_type(v, verbose=verbose)}")
+            if verbose:
+                print(f"[string_type] DS0:{type(obj)}")
+            return f"{{{','.join(rows)}}}"
+
         kws = dict(
             with_shape=with_shape,
             with_min_max=with_min_max,
             with_device=with_device,
             ignore=ignore,
             limit=limit,
+            verbose=verbose,
         )
         s = ",".join(f"{kv[0]}:{string_type(kv[1],**kws)}" for kv in obj.items())
         if all(isinstance(k, int) for k in obj):
+            if verbose:
+                print(f"[string_type] N:{type(obj)}")
             return f"{{{s}}}"
+        if verbose:
+            print(f"[string_type] O:{type(obj)}")
         return f"dict({s})"
     # array
     if isinstance(obj, np.ndarray):
@@ -267,35 +318,108 @@ def string_type(
                 nob = obj.ravel()
                 nob = nob[~np.isnan(nob)]
                 if nob.size == 0:
+                    if verbose:
+                        print(f"[string_type] A1:{type(obj)}")
                     return f"{s}[N{n_nan}nans]"
+                if verbose:
+                    print(f"[string_type] A2:{type(obj)}")
                 return f"{s}[{nob.min()},{nob.max()}:A{nob.astype(float).mean()}N{n_nan}nans]"
+            if verbose:
+                print(f"[string_type] A3:{type(obj)}")
             return f"{s}[{obj.min()},{obj.max()}:A{obj.astype(float).mean()}]"
         i = np_dtype_to_tensor_dtype(obj.dtype)
         if not with_shape:
+            if verbose:
+                print(f"[string_type] A4:{type(obj)}")
             return f"A{i}r{len(obj.shape)}"
+        if verbose:
+            print(f"[string_type] A5:{type(obj)}")
         return f"A{i}s{'x'.join(map(str, obj.shape))}"
 
     import torch
 
     # Dim, SymInt
     if isinstance(obj, torch.export.dynamic_shapes._DerivedDim):
+        if verbose:
+            print(f"[string_type] Y1:{type(obj)}")
         return "DerivedDim"
     if isinstance(obj, torch.export.dynamic_shapes._Dim):
+        if verbose:
+            print(f"[string_type] Y2:{type(obj)}")
         return f"Dim({obj.__name__})"
     if isinstance(obj, torch.SymInt):
+        if verbose:
+            print(f"[string_type] Y3:{type(obj)}")
         return "SymInt"
     if isinstance(obj, torch.SymFloat):
+        if verbose:
+            print(f"[string_type] Y4:{type(obj)}")
         return "SymFloat"
-    if isinstance(obj, torch.export.dynamic_shapes._DimHintType):
-        if obj == torch.export.dynamic_shapes._DimHintType.DYNAMIC:
+
+    if isinstance(obj, torch.export.dynamic_shapes._DimHint):
+        if obj in (torch.export.Dim.DYNAMIC, torch.export.dynamic_shapes._DimHintType.DYNAMIC):
+            if verbose:
+                print(f"[string_type] Y8:{type(obj)}")
             return "DYNAMIC"
-        if obj == torch.export.dynamic_shapes._DimHintType.AUTO:
+        if obj in (torch.export.Dim.AUTO, torch.export.dynamic_shapes._DimHintType.AUTO):
+            if verbose:
+                print(f"[string_type] Y9:{type(obj)}")
             return "AUTO"
+        if verbose:
+            print(f"[string_type] Y7:{type(obj)}")
         return str(obj)
-    if obj in (torch.export.Dim.DYNAMIC, torch.export.dynamic_shapes._DimHintType.DYNAMIC):
-        return "DYNAMIC"
-    if obj == (torch.export.Dim.AUTO, torch.export.dynamic_shapes._DimHintType.AUTO):
-        return "AUTO"
+
+    if isinstance(obj, bool):
+        if with_min_max:
+            if verbose:
+                print(f"[string_type] W1:{type(obj)}")
+            return f"bool={obj}"
+        if verbose:
+            print(f"[string_type] W2:{type(obj)}")
+        return "bool"
+    if isinstance(obj, int):
+        if with_min_max:
+            if verbose:
+                print(f"[string_type] W3:{type(obj)}")
+            return f"int={obj}"
+        if verbose:
+            print(f"[string_type] W4:{type(obj)}")
+        return "int"
+    if isinstance(obj, float):
+        if with_min_max:
+            if verbose:
+                print(f"[string_type] W6:{type(obj)}")
+            return f"float={obj}"
+        if verbose:
+            print(f"[string_type] W8:{type(obj)}")
+        return "float"
+    if isinstance(obj, str):
+        if verbose:
+            print(f"[string_type] W9:{type(obj)}")
+        return "str"
+    if isinstance(obj, slice):
+        if verbose:
+            print(f"[string_type] W10:{type(obj)}")
+        return "slice"
+
+    if is_dataclass(obj):
+        # That includes torch.export.Dim.AUTO, torch.export.Dim.DYNAMIC so they need to be
+        # handled before that.
+        values = {f.name: getattr(obj, f.name, None) for f in fields(obj)}
+        values = {k: v for k, v in values.items() if v is not None}
+        s = string_type(
+            values,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            ignore=ignore,
+            limit=limit,
+            verbose=verbose,
+        )
+        if verbose:
+            print(f"[string_type] B:{type(obj)}")
+        return f"{obj.__class__.__name__}{s[4:]}"
+
     # Tensors
     if isinstance(obj, torch._subclasses.fake_tensor.FakeTensor):
         from .onnx_helper import torch_dtype_to_onnx_dtype
@@ -303,7 +427,11 @@ def string_type(
         i = torch_dtype_to_onnx_dtype(obj.dtype)
         prefix = ("G" if obj.get_device() >= 0 else "C") if with_device else ""
         if not with_shape:
+            if verbose:
+                print(f"[string_type] F1:{type(obj)}")
             return f"{prefix}F{i}r{len(obj.shape)}"
+        if verbose:
+            print(f"[string_type] F2:{type(obj)}")
         return f"{prefix}F{i}s{'x'.join(map(str, obj.shape))}"
     if isinstance(obj, torch.Tensor):
         from .onnx_helper import torch_dtype_to_onnx_dtype
@@ -311,66 +439,72 @@ def string_type(
         if with_min_max:
             s = string_type(obj, with_shape=with_shape, with_device=with_device)
             if len(obj.shape) == 0:
+                if verbose:
+                    print(f"[string_type] T1:{type(obj)}")
                 return f"{s}={obj}"
             if obj.numel() == 0:
+                if verbose:
+                    print(f"[string_type] T2:{type(obj)}")
                 return f"{s}[empty]"
             n_nan = obj.reshape((-1,)).isnan().to(int).sum()
             if n_nan > 0:
                 nob = obj.reshape((-1,))
                 nob = nob[~nob.isnan()]
                 if obj.dtype in {torch.complex64, torch.complex128}:
+                    if verbose:
+                        print(f"[string_type] T3:{type(obj)}")
                     return (
                         f"{s}[{nob.abs().min()},{nob.abs().max():A{nob.mean()}N{n_nan}nans}]"
                     )
+                if verbose:
+                    print(f"[string_type] T5:{type(obj)}")
                 return f"{s}[{obj.min()},{obj.max()}:A{obj.to(float).mean()}N{n_nan}nans]"
             if obj.dtype in {torch.complex64, torch.complex128}:
+                if verbose:
+                    print(f"[string_type] T6:{type(obj)}")
                 return f"{s}[{obj.abs().min()},{obj.abs().max()}:A{obj.abs().mean()}]"
+            if verbose:
+                print(f"[string_type] T7:{type(obj)}")
             return f"{s}[{obj.min()},{obj.max()}:A{obj.to(float).mean()}]"
         i = torch_dtype_to_onnx_dtype(obj.dtype)
         prefix = ("G" if obj.get_device() >= 0 else "C") if with_device else ""
         if not with_shape:
+            if verbose:
+                print(f"[string_type] T8:{type(obj)}")
             return f"{prefix}T{i}r{len(obj.shape)}"
+        if verbose:
+            print(f"[string_type] T9:{type(obj)}")
         return f"{prefix}T{i}s{'x'.join(map(str, obj.shape))}"
 
     if obj.__class__.__name__ == "OrtValue":
         if not obj.has_value():
+            if verbose:
+                print(f"[string_type] V1:{type(obj)}")
             return "OV(<novalue>)"
         if not obj.is_tensor():
+            if verbose:
+                print(f"[string_type] V2:{type(obj)}")
             return "OV(NOTENSOR)"
         if with_min_max:
             try:
                 t = obj.numpy()
             except Exception:
                 # pass unable to convert into numpy (bfloat16, ...)
+                if verbose:
+                    print(f"[string_type] V3:{type(obj)}")
                 return "OV(NO-NUMPY:FIXIT)"
+            if verbose:
+                print(f"[string_type] V4:{type(obj)}")
             return f"OV({string_type(t, with_shape=with_shape, with_min_max=with_min_max)})"
         dt = obj.element_type()
         shape = obj.shape()
         if with_shape:
+            if verbose:
+                print(f"[string_type] V5:{type(obj)}")
             return f"OV{dt}s{'x'.join(map(str, shape))}"
+        if verbose:
+            print(f"[string_type] V6:{type(obj)}")
         return f"OV{dt}r{len(shape)}"
-
-    if isinstance(obj, bool):
-        if with_min_max:
-            return f"bool={obj}"
-        return "bool"
-    if isinstance(obj, int):
-        if with_min_max:
-            return f"int={obj}"
-        return "int"
-    if isinstance(obj, float):
-        if with_min_max:
-            return f"float={obj}"
-        return "float"
-    if isinstance(obj, str):
-        return "str"
-    if isinstance(obj, slice):
-        return "slice"
-
-    if obj == torch.export.Dim.DYNAMIC:
-        return "DYNAMIC"
-    if obj == torch.export.Dim.AUTO:
-        return "AUTO"
 
     # others classes
 
@@ -384,13 +518,20 @@ def string_type(
             with_min_max=with_min_max,
             with_device=with_device,
             limit=limit,
+            verbose=verbose,
         )
+        if verbose:
+            print(f"[string_type] DS:{type(obj)}")
         return f"{obj.__class__.__name__}[serialized]({att})"
 
     if type(obj).__name__ == "Node" and hasattr(obj, "meta"):
         # torch.fx.node.Node
+        if verbose:
+            print(f"[string_type] TT1:{type(obj)}")
         return f"%{obj.target}"
     if type(obj).__name__ == "ValueInfoProto":
+        if verbose:
+            print(f"[string_type] OO1:{type(obj)}")
         return f"OT{obj.type.tensor_type.elem_type}"
 
     if obj.__class__.__name__ == "BatchFeature":
@@ -400,7 +541,10 @@ def string_type(
             with_min_max=with_min_max,
             with_device=with_device,
             limit=limit,
+            verbose=verbose,
         )
+        if verbose:
+            print(f"[string_type] TT2:{type(obj)}")
         return f"BatchFeature(data={s})"
 
     if obj.__class__.__name__ == "BatchEncoding":
@@ -410,29 +554,31 @@ def string_type(
             with_min_max=with_min_max,
             with_device=with_device,
             limit=limit,
+            verbose=verbose,
         )
+        if verbose:
+            print(f"[string_type] TT3:{type(obj)}")
         return f"BatchEncoding(data={s})"
 
     if obj.__class__.__name__ == "VirtualTensor":
+        if verbose:
+            print(f"[string_type] TT4:{type(obj)}")
         return (
             f"{obj.__class__.__name__}(name={obj.name!r}, "
             f"dtype={obj.dtype}, shape={obj.shape})"
         )
 
-    if obj.__class__.__name__ in ("_DimHint", "_DimHintType"):
-        if obj in (torch.export.Dim.DYNAMIC, torch.export.dynamic_shapes._DimHintType.DYNAMIC):
-            return "DYNAMIC"
-        if obj == (torch.export.Dim.AUTO, torch.export.dynamic_shapes._DimHintType.AUTO):
-            return "AUTO"
-        return str(obj)
-
     if isinstance(obj, torch.nn.Module):
+        if verbose:
+            print(f"[string_type] MM:{type(obj)}")
         return f"{obj.__class__.__name__}(...)"
 
     if isinstance(obj, (torch.device, torch.dtype, torch.memory_format, torch.layout)):
+        if verbose:
+            print(f"[string_type] TT7:{type(obj)}")
         return f"{obj.__class__.__name__}({obj})"
 
-    if isinstance(
+    if isinstance(  # TreeSpec, MappingKey, SequenceKey
         obj,
         (
             torch.utils._pytree.TreeSpec,
@@ -440,17 +586,20 @@ def string_type(
             torch.utils._pytree.SequenceKey,
         ),
     ):
+        if verbose:
+            print(f"[string_type] TT8:{type(obj)}")
         return repr(obj).replace(" ", "").replace("\n", " ")
 
     # to avoid failures
 
-    if type(obj).__name__ == "MambaCache":
+    if obj.__class__.__name__ == "MambaCache":
         c = string_type(
             obj.conv_states,
             with_shape=with_shape,
             with_min_max=with_min_max,
             with_device=with_device,
             limit=limit,
+            verbose=verbose,
         )
         d = string_type(
             obj.ssm_states,
@@ -458,7 +607,10 @@ def string_type(
             with_min_max=with_min_max,
             with_device=with_device,
             limit=limit,
+            verbose=verbose,
         )
+        if verbose:
+            print(f"[string_type] CACHE1:{type(obj)}")
         return f"MambaCache(conv_states={c}, ssm_states={d})"
 
     if obj.__class__.__name__ == "DynamicCache":
@@ -468,6 +620,7 @@ def string_type(
             with_min_max=with_min_max,
             with_device=with_device,
             limit=limit,
+            verbose=verbose,
         )
         vc = string_type(
             obj.value_cache,
@@ -475,7 +628,10 @@ def string_type(
             with_min_max=with_min_max,
             with_device=with_device,
             limit=limit,
+            verbose=verbose,
         )
+        if verbose:
+            print(f"[string_type] CACHE2:{type(obj)}")
         return f"{obj.__class__.__name__}(key_cache={kc}, value_cache={vc})"
 
     if obj.__class__.__name__ == "EncoderDecoderCache":
@@ -485,6 +641,7 @@ def string_type(
             with_min_max=with_min_max,
             with_device=with_device,
             limit=limit,
+            verbose=verbose,
         )
         cross = string_type(
             obj.cross_attention_cache,
@@ -492,15 +649,22 @@ def string_type(
             with_min_max=with_min_max,
             with_device=with_device,
             limit=limit,
+            verbose=verbose,
         )
+        if verbose:
+            print(f"[string_type] CACHE3:{type(obj)}")
         return (
             f"{obj.__class__.__name__}(self_attention_cache={att}, "
             f"cross_attention_cache={cross})"
         )
 
     if ignore:
+        if verbose:
+            print(f"[string_type] CACHE4:{type(obj)}")
         return f"{obj.__class__.__name__}(...)"
 
+    if verbose:
+        print(f"[string_type] END:{type(obj)}")
     raise AssertionError(f"Unsupported type {type(obj).__name__!r} - {type(obj)}")
 
 
