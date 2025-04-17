@@ -1,6 +1,11 @@
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_warnings
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    hide_stdout,
+    ignore_warnings,
+    requires_onnxscript,
+)
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 from onnx_diagnostic.helpers.torch_test_helper import is_torchdynamo_exporting
 
@@ -53,6 +58,7 @@ class TestJit(ExtTestCase):
 
     @hide_stdout()
     @ignore_warnings(UserWarning)
+    @requires_onnxscript("0.4")
     def test_export_loop_onnxscript(self):
         class Model(torch.nn.Module):
             def forward(self, images, position):
@@ -96,7 +102,9 @@ class TestJit(ExtTestCase):
             dynamo=True,
             fallback=False,
         )
-        ref = ExtendedReferenceEvaluator(name2)
+        import onnxruntime
+
+        ref = onnxruntime.InferenceSession(name2, providers=["CPUExecutionProvider"])
         feeds = dict(images=x.numpy(), position=y.numpy())
         got = ref.run(None, feeds)[0]
         self.assertEqualArray(expected, got)
@@ -123,7 +131,9 @@ class TestJit(ExtTestCase):
             filename=name2,
             dynamic_shapes={"images": {0: "batch", 1: "maxdim"}, "position": {0: "batch"}},
         )
-        ref = ExtendedReferenceEvaluator(name2)
+        import onnxruntime
+
+        ref = onnxruntime.InferenceSession(name2, providers=["CPUExecutionProvider"])
         feeds = dict(images=x.numpy(), position=y.numpy())
         got = ref.run(None, feeds)[0]
         self.assertEqualArray(expected, got)
