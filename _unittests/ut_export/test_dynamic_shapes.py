@@ -765,10 +765,8 @@ class TestDynamicShapes(ExtTestCase):
         self.assertEqual(
             {
                 "cache": [
-                    {0: "Dim0", 1: "Dim1"},
-                    {0: "Dim2", 1: "Dim3"},
-                    {0: "Dim4", 1: "Dim5"},
-                    {0: "Dim6", 1: "Dim7"},
+                    [{0: "Dim0", 1: "Dim1"}, {0: "Dim2", 1: "Dim3"}],
+                    [{0: "Dim4", 1: "Dim5"}, {0: "Dim6", 1: "Dim7"}],
                 ]
             },
             as_string,
