@@ -576,17 +576,20 @@ class TestDynamicShapes(ExtTestCase):
                 Cls(
                     (),
                     kwargs,
-                    {"A": ds_batch, "B": (ds_batch, [ds_batch, ds_batch, ds_batch, ds_batch])},
+                    {
+                        "A": ds_batch,
+                        "B": (ds_batch, [[ds_batch, ds_batch], [ds_batch, ds_batch]]),
+                    },
                 ).invalid_dimensions_for_export(),
             )
             self.assertEqual(
-                {"B": (None, [None, {2: "d=[1]"}, None, {2: "d=[1]"}])},
+                {"B": (None, [[None, {2: "d=[1]"}], [None, {2: "d=[1]"}]])},
                 Cls(
                     (),
                     kwargs,
                     {
                         "A": ds_batch,
-                        "B": (ds_batch, [ds_batch, ds_batch_seq, ds_batch, ds_batch_seq]),
+                        "B": (ds_batch, [[ds_batch, ds_batch_seq], [ds_batch, ds_batch_seq]]),
                     },
                 ).invalid_dimensions_for_export(),
             )

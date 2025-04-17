@@ -4,6 +4,10 @@ Change Logs
 0.4.0
 +++++
 
+* :pr:`58`: add function use_dyn_not_str to replace string by ``torch.export.Dim.DYNAMIC``,
+  use string instead of ``torch.export.Dim.DYNAMIC`` when returning the dynamic shapes
+  for a specific models, it is a valid definition for ``torch.onnx.export``
+  which can reuse the names
 * :pr:`55`: add support for text-classification
 * :pr:`54`: add support for fill-mask, refactoring
 * :pr:`52`: add support for zero-shot-image-classification

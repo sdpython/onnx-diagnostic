@@ -7,6 +7,7 @@ from onnx_diagnostic.export import CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
 )
+from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 
 
 class TestCacheHelpers(ExtTestCase):
@@ -59,8 +60,9 @@ class TestCacheHelpers(ExtTestCase):
         )
         self.assertEqual(dynamic_shapes, nds)
 
-        cpl = CoupleInputsDynamicShapes(tuple(), kwargs, dynamic_shapes)
-        res = cpl.replace_string_by()
+        with bypass_export_some_errors(patch_transformers=True):
+            cpl = CoupleInputsDynamicShapes(tuple(), kwargs, dynamic_shapes)
+            res = cpl.replace_string_by()
         dsc = res["past_key_values"]
         self.assertEqual([[{0: batch, 2: DYN}], [{0: batch, 2: DYN}]], dsc)
 

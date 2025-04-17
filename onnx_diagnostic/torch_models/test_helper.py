@@ -10,6 +10,7 @@ from ..helpers import max_diff, string_type, string_diff
 from ..helpers.helper import flatten_object
 from ..helpers.rt_helper import make_feeds
 from ..helpers.torch_test_helper import to_any, torch_deepcopy
+from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 from ..torch_export_patches import bypass_export_some_errors
 from .hghub import get_untrained_model_with_inputs
 from .hghub.model_inputs import random_input_kwargs
@@ -22,10 +23,6 @@ def empty(value: Any) -> bool:
     if value is None:
         return True
     return False
-
-
-def _ds_clean(v):
-    return string_type(v)
 
 
 def get_inputs_for_task(task: str, config: Optional[Any] = None) -> Dict[str, Any]:
@@ -287,7 +284,7 @@ def validate_model(
             print(f"[validate_model] current inputs: {string_type(data['inputs'])}")
             print(
                 f"[validate_model] current dynnamic_shapes: "
-                f"{_ds_clean(data['dynamic_shapes'])}"
+                f"{string_type(data['dynamic_shapes'])}"
             )
         data["inputs"], data["dynamic_shapes"] = filter_inputs(
             data["inputs"],
@@ -297,7 +294,7 @@ def validate_model(
         )
         if verbose:
             print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
-            print(f"[validate_model] new dynamic_hapes: {_ds_clean(data['dynamic_shapes'])}")
+            print(f"[validate_model] new dynamic_hapes: {string_type(data['dynamic_shapes'])}")
 
     if not empty(dtype):
         if isinstance(dtype, str):
@@ -319,7 +316,7 @@ def validate_model(
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
         summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
-        summary["model_shapes"] = _ds_clean(str(data["dynamic_shapes"]))
+        summary["model_shapes"] = string_type(str(data["dynamic_shapes"]))
         summary["model_class"] = data["model"].__class__.__name__
         summary["model_config_class"] = data["configuration"].__class__.__name__
         summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
@@ -333,7 +330,7 @@ def validate_model(
         for k, v in data["inputs"].items():
             print(f"[validate_model] +INPUT {k}={string_type(v, with_shape=True)}")
         for k, v in data["dynamic_shapes"].items():
-            print(f"[validate_model] +SHAPE {k}={_ds_clean(v)}")
+            print(f"[validate_model] +SHAPE {k}={string_type(v)}")
         print("[validate_model] --")
 
     if do_run:
@@ -665,7 +662,7 @@ def call_torch_export_export(
         )
         print(f"[call_torch_export_export] args={string_type(args, with_shape=True)}")
         print(f"[call_torch_export_export] kwargs={string_type(kwargs, with_shape=True)}")
-        print(f"[call_torch_export_export] dynamic_shapes={_ds_clean(ds)}")
+        print(f"[call_torch_export_export] dynamic_shapes={string_type(ds)}")
         print(f"[call_torch_export_export] dynamic_shapes_export_export={string_type(dse)}")
         print("[call_torch_export_export] export...")
 
@@ -895,7 +892,7 @@ def call_torch_export_onnx(
         )
         print(f"[call_torch_export_onnx] args={string_type(args, with_shape=True)}")
         print(f"[call_torch_export_onnx] kwargs={string_type(kwargs, with_shape=True)}")
-        print(f"[call_torch_export_onnx] dynamic_shapes={_ds_clean(ds)}")
+        print(f"[call_torch_export_onnx] dynamic_shapes={string_type(ds)}")
         print("[call_torch_export_onnx] export...")
     summary["export_exporter"] = exporter
     summary["export_optimization"] = optimization or ""
@@ -903,15 +900,30 @@ def call_torch_export_onnx(
     summary["export_args"] = string_type(args, with_shape=True)
     summary["export_kwargs"] = string_type(kwargs, with_shape=True)
 
-    export_export_kwargs = (
-        dict(dynamo=True, dynamic_shapes=ds)
-        if dynamo
-        else dict(
+    if dynamo:
+        export_export_kwargs = dict(dynamo=True, dynamic_shapes=ds)
+    else:
+        export_export_kwargs = dict(
             dynamo=False,
-            dynamic_axes=CoupleInputsDynamicShapes(args, kwargs, ds).replace_by_string(),
+            dynamic_axes={
+                k: v
+                for k, v in CoupleInputsDynamicShapes(args, kwargs, ds)
+                .replace_by_string()
+                .items()
+                if isinstance(v, dict)
+            },
         )
-    )
-
+        args = tuple(flatten_unflatten_for_dynamic_shapes(a) for a in args)
+        kwargs = {k: flatten_unflatten_for_dynamic_shapes(v) for k, v in kwargs.items()}
+        if verbose:
+            print("[call_torch_export_onnx] dynamo=False so...")
+            print(f"[call_torch_export_onnx] args={string_type(args, with_shape=True)}")
+            print(f"[call_torch_export_onnx] kwargs={string_type(kwargs, with_shape=True)}")
+    if verbose:
+        print(
+            f"[call_torch_export_onnx] export_export_kwargs="
+            f"{string_type(export_export_kwargs, with_shape=True)}"
+        )
     begin = time.perf_counter()
     if quiet:
         try:
@@ -1013,7 +1025,7 @@ def call_torch_export_custom(
         )
         print(f"[call_torch_export_custom] args={string_type(args, with_shape=True)}")
         print(f"[call_torch_export_custom] kwargs={string_type(kwargs, with_shape=True)}")
-        print(f"[call_torch_export_custom] dynamic_shapes={_ds_clean(ds)}")
+        print(f"[call_torch_export_custom] dynamic_shapes={string_type(ds)}")
         print("[call_torch_export_custom] export...")
     summary["export_exporter"] = exporter
     summary["export_optimization"] = optimization or ""

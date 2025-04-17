@@ -256,7 +256,7 @@ def string_type(
             print(f"[string_type] L:{type(obj)}")
         return f"{{...}}#{len(obj)}" if with_shape else "{...}"
     # dict
-    if isinstance(obj, dict):
+    if isinstance(obj, dict) and type(obj) is dict:
         if len(obj) == 0:
             if verbose:
                 print(f"[string_type] M:{type(obj)}")
@@ -276,7 +276,7 @@ def string_type(
             )
             for v in obj.values()
         ):
-            # This is dyanmic shapes
+            # This is dynamic shapes
             rows = []
             for k, v in obj.items():
                 if isinstance(v, str):
