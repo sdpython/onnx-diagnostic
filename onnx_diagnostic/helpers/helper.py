@@ -357,11 +357,16 @@ def string_type(
         return "SymFloat"
 
     if isinstance(obj, torch.export.dynamic_shapes._DimHint):
-        if obj in (torch.export.Dim.DYNAMIC, torch.export.dynamic_shapes._DimHintType.DYNAMIC):
+        cl = (
+            torch.export.dynamic_shapes._DimHintType
+            if hasattr(torch.export.dynamic_shapes, "_DimHintType")
+            else torch.export.Dim
+        )
+        if obj in (torch.export.Dim.DYNAMIC, cl.DYNAMIC):
             if verbose:
                 print(f"[string_type] Y8:{type(obj)}")
             return "DYNAMIC"
-        if obj in (torch.export.Dim.AUTO, torch.export.dynamic_shapes._DimHintType.AUTO):
+        if obj in (torch.export.Dim.AUTO, cl.AUTO):
             if verbose:
                 print(f"[string_type] Y9:{type(obj)}")
             return "AUTO"
