@@ -30,6 +30,7 @@ from onnx_diagnostic.torch_models.hghub.hub_api import (
     task_from_id,
 )
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 model_id = "codellama/CodeLlama-7b-Python-hf"
 print("info", get_model_info(model_id))
@@ -96,7 +97,7 @@ with bypass_export_some_errors(patch_transformers=True) as f:
         model,
         (),
         kwargs=f(data["inputs"]),
-        dynamic_shapes=data["dynamic_shapes"],
+        dynamic_shapes=use_dyn_not_str(data["dynamic_shapes"]),
         strict=False,
     )
     print(ep)

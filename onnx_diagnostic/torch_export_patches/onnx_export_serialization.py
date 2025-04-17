@@ -193,9 +193,8 @@ def flatten_mamba_cache(
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.MambaCache` with python objects."""
     flat = [
-        (k, getattr(mamba_cache, k))
-        for k in ["conv_states", "ssm_states"]
-        if hasattr(mamba_cache, k)
+        ("conv_states", mamba_cache.conv_states),
+        ("ssm_states", mamba_cache.ssm_states),
     ]
     return [f[1] for f in flat], [f[0] for f in flat]
 
@@ -251,11 +250,7 @@ def flatten_dynamic_cache(
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
     if hasattr(transformers.cache_utils, "_flatten_dynamic_cache"):
         return transformers.cache_utils._flatten_dynamic_cache(dynamic_cache)
-    flat = [
-        (k, getattr(dynamic_cache, k))
-        for k in ["key_cache", "value_cache"]
-        if hasattr(dynamic_cache, k)
-    ]
+    flat = [("key_cache", dynamic_cache.key_cache), ("value_cache", dynamic_cache.value_cache)]
     return [f[1] for f in flat], [f[0] for f in flat]
 
 

@@ -52,19 +52,19 @@ def get_inputs(
     :return: dictionary
     """
     batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = torch.export.Dim("seq_length", min=1, max=4096)
-    cache_length = torch.export.Dim("cache_length", min=1, max=4096)
-    images = torch.export.Dim("images", min=1, max=4096)
+    seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
+    cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
+    images = "images"  # torch.export.Dim("images", min=1, max=4096)
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
         "attention_mask": {
             0: batch,
-            1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
+            1: "cache+seq",  # cache_length + seq_length
         },
         "position_ids": {
             0: batch,
-            1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
+            1: "cache+seq",  # cache_length + seq_length
         },
         "past_key_values": [
             [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],

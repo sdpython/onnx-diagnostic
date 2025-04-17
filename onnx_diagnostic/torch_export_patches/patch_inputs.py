@@ -119,6 +119,10 @@ def convert_dynamic_axes_into_dynamic_shapes(
                     )
                 changes[k] = type(updated_kwargs[k])
                 continue
+        if isinstance(v, transformers.cache_utils.DynamicCache):
+            updated_kwargs[k] = [v.key_cache, v.value_cache]
+            changes[k] = type(v)
+            continue
         raise NotImplementedError(
             f"Unexpected type {type(v)} for parameter {k!r} "
             f"({string_type(v, with_shape=True)})"
@@ -130,6 +134,13 @@ def convert_dynamic_axes_into_dynamic_shapes(
         done = set()
         for k, v in dynamic_axes.items():
             if k not in changes and k in updated_kwargs and isinstance(v, dict):
+                dynamic_shapes[k] = v
+                continue
+            if (
+                k in updated_kwargs
+                and k in changes
+                and changes[k] == transformers.cache_utils.DynamicCache
+            ):
                 dynamic_shapes[k] = v
                 continue
             if "." in k:
@@ -172,3 +183,21 @@ def convert_dynamic_axes_into_dynamic_shapes(
             )
 
     return (), updated_kwargs, dynamic_shapes
+
+
+def use_dyn_not_str(dynamic_shapes: Any) -> Any:
+    """
+    Some functions returns dynamic shapes as string.
+    This functions replaces them with ``torch.export.Dim.DYNAMIC``.
+    """
+    if isinstance(dynamic_shapes, list):
+        return [use_dyn_not_str(a) for a in dynamic_shapes]
+    if isinstance(dynamic_shapes, tuple):
+        return tuple(use_dyn_not_str(a) for a in dynamic_shapes)
+    if isinstance(dynamic_shapes, dict):
+        return {k: use_dyn_not_str(v) for k, v in dynamic_shapes.items()}
+    if isinstance(dynamic_shapes, set):
+        return {use_dyn_not_str(a) for a in dynamic_shapes}
+    if isinstance(dynamic_shapes, str):
+        return torch.export.Dim.DYNAMIC
+    return dynamic_shapes

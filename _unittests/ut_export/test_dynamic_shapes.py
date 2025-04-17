@@ -576,17 +576,20 @@ class TestDynamicShapes(ExtTestCase):
                 Cls(
                     (),
                     kwargs,
-                    {"A": ds_batch, "B": (ds_batch, [ds_batch, ds_batch, ds_batch, ds_batch])},
+                    {
+                        "A": ds_batch,
+                        "B": (ds_batch, [[ds_batch, ds_batch], [ds_batch, ds_batch]]),
+                    },
                 ).invalid_dimensions_for_export(),
             )
             self.assertEqual(
-                {"B": (None, [None, {2: "d=[1]"}, None, {2: "d=[1]"}])},
+                {"B": (None, [[None, {2: "d=[1]"}], [None, {2: "d=[1]"}]])},
                 Cls(
                     (),
                     kwargs,
                     {
                         "A": ds_batch,
-                        "B": (ds_batch, [ds_batch, ds_batch_seq, ds_batch, ds_batch_seq]),
+                        "B": (ds_batch, [[ds_batch, ds_batch_seq], [ds_batch, ds_batch_seq]]),
                     },
                 ).invalid_dimensions_for_export(),
             )
@@ -762,10 +765,8 @@ class TestDynamicShapes(ExtTestCase):
         self.assertEqual(
             {
                 "cache": [
-                    {0: "Dim0", 1: "Dim1"},
-                    {0: "Dim2", 1: "Dim3"},
-                    {0: "Dim4", 1: "Dim5"},
-                    {0: "Dim6", 1: "Dim7"},
+                    [{0: "Dim0", 1: "Dim1"}, {0: "Dim2", 1: "Dim3"}],
+                    [{0: "Dim4", 1: "Dim5"}, {0: "Dim6", 1: "Dim7"}],
                 ]
             },
             as_string,
