@@ -1,3 +1,4 @@
+import inspect
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import (
@@ -13,6 +14,9 @@ try:
     from experimental_experiment.torch_interpreter import to_onnx
 except ImportError:
     to_onnx = None
+
+
+has_scan_reverse = "reverse" in set(inspect.signature(torch.ops.higher_order.scan).parameters)
 
 
 @torch.jit.script_if_tracing
@@ -36,12 +40,12 @@ def dummy_loop_with_scan(padded: torch.Tensor, pos: torch.Tensor):
         row[: p.item()] = padded[: p.item()]
         return (row,)
 
-    return torch.ops.higher_order.scan(
-        pad_row,
-        [],
-        [padded, pos],
-        [],
-    )
+    if has_scan_reverse:
+        # torch==2.6
+        return torch.ops.higher_order.scan(
+            pad_row, [], [padded, pos], additional_inputs=[], reverse=False, dim=0
+        )
+    return torch.ops.higher_order.scan(pad_row, [], [padded, pos], [])
 
 
 def select_when_exporting(f, f_scan):
