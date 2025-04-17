@@ -5,6 +5,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, requires_tra
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
+    use_dyn_not_str,
 )
 
 
@@ -109,6 +110,26 @@ class TestPatchInputs(ExtTestCase):
                 "past_key_values:DynamicCache[serialized](#2[#1[T1s2x1x3x96],#1[T1s2x1x3x96]]))"
             ),
             string_type(res[1], with_shape=True),
+        )
+
+    def test_use_dyn_not_str(self):
+        batch = torch.export.Dim("batch")
+        dynamic_shapes = dict(
+            input_ids={0: batch, 1: "seq"},
+            attention_mask={0: batch, 1: "seq"},
+            position_ids={0: batch, 1: "seq"},
+            past_key_values=[[{0: batch, 2: "seq"}], [{0: batch, 2: "seq"}]],
+        )
+        res = use_dyn_not_str(dynamic_shapes)
+        DYN = torch.export.Dim.DYNAMIC
+        self.assertEqual(
+            dict(
+                input_ids={0: batch, 1: DYN},
+                attention_mask={0: batch, 1: DYN},
+                position_ids={0: batch, 1: DYN},
+                past_key_values=[[{0: batch, 2: DYN}], [{0: batch, 2: DYN}]],
+            ),
+            res,
         )
 
 

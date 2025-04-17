@@ -20,6 +20,7 @@ onnx-diagnostic: investigate onnx models
 
 The main feature is about `patches <https://github.com/sdpython/onnx-diagnostic/tree/main/onnx_diagnostic/torch_export_patches>`_:
 it helps exporting **pytorch models into ONNX**, mostly designed for LLMs using dynamic caches.
+Sources available at `github/onnx-diagnostic <https://github.com/sdpython/onnx-diagnostic/>`_.
 
 .. code-block:: python
 

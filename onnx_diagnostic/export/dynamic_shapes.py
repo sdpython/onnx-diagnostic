@@ -92,7 +92,8 @@ class CoupleInputsDynamicShapes:
         return self._generic_walker(
             lambda inputs, ds, value=value: self._replace_string_dim_tensor(
                 inputs, ds, value=value
-            )
+            ),
+            flatten_unflatten=True,
         )
 
     @classmethod
@@ -135,7 +136,8 @@ class CoupleInputsDynamicShapes:
         return self._generic_walker(
             lambda inputs, ds, unique=unique: self._replace_dim_tensor_by_string(
                 inputs, ds, unique=unique
-            )
+            ),
+            flatten_unflatten=True,
         )
 
     @classmethod
@@ -203,7 +205,7 @@ class CoupleInputsDynamicShapes:
             ds = {"A": ds_batch, "B": (ds_batch, ds_batch_seq)}
             print(CoupleInputsDynamicShapes((), kwargs, ds).invalid_dimensions_for_export())
         """
-        return self._generic_walker(self._valid_shapes_tensor)
+        return self._generic_walker(self._valid_shapes_tensor, flatten_unflatten=True)
 
     @classmethod
     def _valid_shapes_tensor(cls, inputs, ds):
@@ -221,7 +223,9 @@ class CoupleInputsDynamicShapes:
                     issues[i] = f"d=[{d}]"
         return issues if issues else None
 
-    def _generic_walker(self, processor: Callable, args_kwargs: bool = False):
+    def _generic_walker(
+        self, processor: Callable, args_kwargs: bool = False, flatten_unflatten: bool = False
+    ):
         """
         Generic deserializator walking through inputs and dynamic_shapes all along.
         The function returns a result with the same structure as the dynamic shapes.
@@ -231,7 +235,12 @@ class CoupleInputsDynamicShapes:
                 f"Type mismatch, args={string_type(self.args)} and "
                 f"dynamic_shapes={self.dynamic_shapes} should have the same type."
             )
-            res = self._generic_walker_step(processor, self.kwargs, self.dynamic_shapes)
+            res = self._generic_walker_step(
+                processor,
+                self.kwargs,
+                self.dynamic_shapes,
+                flatten_unflatten=flatten_unflatten,
+            )
             return (tuple(), res) if args_kwargs else res
 
         if not self.kwargs:
@@ -239,7 +248,9 @@ class CoupleInputsDynamicShapes:
                 f"Type mismatch, args={string_type(self.args)} and "
                 f"dynamic_shapes={self.dynamic_shapes} should have the same type."
             )
-            res = self._generic_walker_step(processor, self.args, self.dynamic_shapes)
+            res = self._generic_walker_step(
+                processor, self.args, self.dynamic_shapes, flatten_unflatten=flatten_unflatten
+            )
             return (res, {}) if args_kwargs else res
 
         assert isinstance(self.dynamic_shapes, dict), (
@@ -250,12 +261,22 @@ class CoupleInputsDynamicShapes:
             self.dynamic_shapes
         ):
             # No dynamic shapes for the positional arguments.
-            return self._generic_walker_step(processor, self.kwargs, self.dynamic_shapes)
+            return self._generic_walker_step(
+                processor,
+                self.kwargs,
+                self.dynamic_shapes,
+                flatten_unflatten=flatten_unflatten,
+            )
 
         if isinstance(self.args_names, list):
             if not set(self.args_names) & set(self.dynamic_shapes):
                 # No dynamic shapes for the positional arguments.
-                return self._generic_walker_step(processor, self.kwargs, self.dynamic_shapes)
+                return self._generic_walker_step(
+                    processor,
+                    self.kwargs,
+                    self.dynamic_shapes,
+                    flatten_unflatten=flatten_unflatten,
+                )
 
             assert self.args_names, (
                 "args and kwargs are filled, then args_names must be specified in "
@@ -268,7 +289,9 @@ class CoupleInputsDynamicShapes:
             )
             kwargs = dict(zip(self.args_names, self.args))
             kwargs.update(self.kwargs)
-            res = self._generic_walker_step(processor, kwargs, self.dynamic_shapes)
+            res = self._generic_walker_step(
+                processor, kwargs, self.dynamic_shapes, flatten_unflatten=flatten_unflatten
+            )
             if args_kwargs:
                 pgs = [None for _ in range(len(self.args))]
                 kws = {}
@@ -286,7 +309,9 @@ class CoupleInputsDynamicShapes:
         )
 
     @classmethod
-    def _generic_walker_step(cls, processor: Callable, inputs, ds):
+    def _generic_walker_step(
+        cls, processor: Callable, inputs, ds, flatten_unflatten: bool = False
+    ):
         if isinstance(inputs, torch.Tensor):
             return processor(inputs, ds)
         if isinstance(inputs, (int, float, str)):
@@ -303,7 +328,11 @@ class CoupleInputsDynamicShapes:
             if isinstance(inputs, (tuple, list)):
                 value = []
                 for i, d in zip(inputs, ds):
-                    value.append(cls._generic_walker_step(processor, i, d))
+                    value.append(
+                        cls._generic_walker_step(
+                            processor, i, d, flatten_unflatten=flatten_unflatten
+                        )
+                    )
                 return (
                     (value if isinstance(ds, list) else tuple(value))
                     if any(v is not None for v in value)
@@ -314,7 +343,9 @@ class CoupleInputsDynamicShapes:
             ), f"Keys mismatch between inputs {set(inputs)} and ds={set(ds)}"
             dvalue = {}
             for k, v in inputs.items():
-                t = cls._generic_walker_step(processor, v, ds[k])
+                t = cls._generic_walker_step(
+                    processor, v, ds[k], flatten_unflatten=flatten_unflatten
+                )
                 if t is not None:
                     dvalue[k] = t
             return dvalue if dvalue else None
@@ -325,11 +356,18 @@ class CoupleInputsDynamicShapes:
             f"torch.utils._pytree.register_pytree_node, it is not possible to "
             f"map this class with the given dynamic shapes."
         )
+        if flatten_unflatten:
+            flatunflat = flatten_unflatten_for_dynamic_shapes(inputs)
+            return cls._generic_walker_step(
+                processor, flatunflat, ds, flatten_unflatten=flatten_unflatten
+            )
         flat, _spec = torch.utils._pytree.tree_flatten(inputs)
         if all(isinstance(t, torch.Tensor) for t in flat):
             # We need to flatten dynamic shapes as well
             ds = flatten_dynamic_shapes(ds)
-        return cls._generic_walker_step(processor, flat, ds)
+        return cls._generic_walker_step(
+            processor, flat, ds, flatten_unflatten=flatten_unflatten
+        )
 
     class ChangeDimensionProcessor:
         def __init__(self, desired_values):
