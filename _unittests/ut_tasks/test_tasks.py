@@ -11,9 +11,11 @@ class TestTasks(ExtTestCase):
         mid = "sshleifer/tiny-marian-en-de"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(473928, 118482)])
-        model, inputs = data["model"], data["inputs"]
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         raise unittest.SkipTest(f"not working for {mid!r}")
         model(**inputs)
+        with bypass_export_some_errors(patch_transformers=True, verbose=10):
+            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
 
     @hide_stdout()
     def test_automatic_speech_recognition(self):
@@ -86,41 +88,50 @@ class TestTasks(ExtTestCase):
         mid = "HuggingFaceM4/tiny-random-idefics"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(12742888, 3185722)])
-        model, inputs = data["model"], data["inputs"]
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
+        with bypass_export_some_errors(patch_transformers=True, verbose=10):
+            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
 
     @hide_stdout()
     def test_fill_mask(self):
         mid = "google-bert/bert-base-multilingual-cased"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(428383212, 107095803)])
-        model, inputs = data["model"], data["inputs"]
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
+        with bypass_export_some_errors(patch_transformers=True, verbose=10):
+            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
 
     @hide_stdout()
     def test_text_classification(self):
         mid = "Intel/bert-base-uncased-mrpc"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(154420232, 38605058)])
-        model, inputs = data["model"], data["inputs"]
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
+        with bypass_export_some_errors(patch_transformers=True, verbose=10):
+            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
 
     @hide_stdout()
     def test_sentence_similary(self):
         mid = "sentence-transformers/all-MiniLM-L6-v1"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         self.assertIn((data["size"], data["n_weights"]), [(62461440, 15615360)])
-        model, inputs = data["model"], data["inputs"]
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
+        with bypass_export_some_errors(patch_transformers=True, verbose=10):
+            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
 
     @hide_stdout()
     def test_falcon_mamba_dev(self):
         mid = "tiiuae/falcon-mamba-tiny-dev"
         data = get_untrained_model_with_inputs(mid, verbose=1)
-        model, inputs = data["model"], data["inputs"]
-        print(self.string_type(inputs, with_shape=True))
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         self.assertIn((data["size"], data["n_weights"]), [(138640384, 34660096)])
+        with bypass_export_some_errors(patch_transformers=True, verbose=10):
+            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
 
 
 if __name__ == "__main__":
