@@ -12,6 +12,7 @@ from ..helpers.rt_helper import make_feeds
 from ..helpers.torch_test_helper import to_any, torch_deepcopy
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 from ..torch_export_patches import bypass_export_some_errors
+from ..torch_export_patches.patch_inputs import use_dyn_not_str
 from .hghub import get_untrained_model_with_inputs
 from .hghub.model_inputs import random_input_kwargs
 
@@ -633,6 +634,7 @@ def call_torch_export_export(
         another one with whatever the function produces
     """
     assert exporter in {
+        "export",
         "export-strict",
         "export-nostrict",
     }, f"Unexpected value for exporter={exporter!r}"
@@ -640,7 +642,7 @@ def call_torch_export_export(
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
     summary: Dict[str, Union[str, int, float]] = {}
-    strict = "nostrict" not in exporter
+    strict = "-strict" in exporter
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
 
@@ -652,7 +654,9 @@ def call_torch_export_export(
     summary["export_dynamic_shapes"] = string_type(ds)
 
     # There is an issue with DynamicShape [[],[]] becomes []
-    dse = CoupleInputsDynamicShapes(args, kwargs, ds).replace_string_by()
+    dse = use_dyn_not_str(ds)
+    # dse = CoupleInputsDynamicShapes(args, kwargs, ds).replace_string_by()
+
     summary["export_dynamic_shapes_export_export"] = string_type(dse)
 
     if verbose:
@@ -1015,7 +1019,7 @@ def call_torch_export_custom(
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
     summary: Dict[str, Union[str, int, float]] = {}
-    dynamo = "nostrict" not in exporter
+    strict = "-strict" in exporter
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
     if verbose:
@@ -1029,7 +1033,7 @@ def call_torch_export_custom(
         print("[call_torch_export_custom] export...")
     summary["export_exporter"] = exporter
     summary["export_optimization"] = optimization or ""
-    summary["export_dynamo"] = dynamo
+    summary["export_strict"] = strict
     summary["export_args"] = string_type(args, with_shape=True)
     summary["export_kwargs"] = string_type(kwargs, with_shape=True)
 
@@ -1037,7 +1041,7 @@ def call_torch_export_custom(
     from experimental_experiment.xbuilder import OptimizationOptions
 
     export_options = ExportOptions(
-        strict="nostrict" not in exporter,
+        strict=strict,
         decomposition_table=(
             "dec" if "-dec" in exporter else ("all" if "-all" in exporter else None)
         ),
@@ -1057,6 +1061,7 @@ def call_torch_export_custom(
                 optimize=bool(optimization),
                 large_model=True,
                 return_optimize_report=True,
+                verbose=max(verbose - 2, 0),
             )
         except Exception as e:
             summary["ERR_export_export"] = str(e)
@@ -1074,6 +1079,7 @@ def call_torch_export_custom(
             optimize=bool(optimization),
             large_model=True,
             return_optimize_report=True,
+            verbose=max(verbose - 2, 0),
         )
 
     new_stat = {}

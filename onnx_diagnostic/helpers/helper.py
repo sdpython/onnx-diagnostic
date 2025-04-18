@@ -513,6 +513,72 @@ def string_type(
 
     # others classes
 
+    if obj.__class__.__name__ == "MambaCache":
+        c = string_type(
+            obj.conv_states,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        d = string_type(
+            obj.ssm_states,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        if verbose:
+            print(f"[string_type] CACHE1:{type(obj)}")
+        return f"MambaCache(conv_states={c}, ssm_states={d})"
+
+    if obj.__class__.__name__ == "DynamicCache":
+        kc = string_type(
+            obj.key_cache,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        vc = string_type(
+            obj.value_cache,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        if verbose:
+            print(f"[string_type] CACHE2:{type(obj)}")
+        return f"{obj.__class__.__name__}(key_cache={kc}, value_cache={vc})"
+
+    if obj.__class__.__name__ == "EncoderDecoderCache":
+        att = string_type(
+            obj.self_attention_cache,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        cross = string_type(
+            obj.cross_attention_cache,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        if verbose:
+            print(f"[string_type] CACHE3:{type(obj)}")
+        return (
+            f"{obj.__class__.__name__}(self_attention_cache={att}, "
+            f"cross_attention_cache={cross})"
+        )
+
     if obj.__class__ in torch.utils._pytree.SUPPORTED_NODES:
         from .cache_helper import flatten_unflatten_for_dynamic_shapes
 
@@ -594,74 +660,6 @@ def string_type(
         if verbose:
             print(f"[string_type] TT8:{type(obj)}")
         return repr(obj).replace(" ", "").replace("\n", " ")
-
-    # to avoid failures
-
-    if obj.__class__.__name__ == "MambaCache":
-        c = string_type(
-            obj.conv_states,
-            with_shape=with_shape,
-            with_min_max=with_min_max,
-            with_device=with_device,
-            limit=limit,
-            verbose=verbose,
-        )
-        d = string_type(
-            obj.ssm_states,
-            with_shape=with_shape,
-            with_min_max=with_min_max,
-            with_device=with_device,
-            limit=limit,
-            verbose=verbose,
-        )
-        if verbose:
-            print(f"[string_type] CACHE1:{type(obj)}")
-        return f"MambaCache(conv_states={c}, ssm_states={d})"
-
-    if obj.__class__.__name__ == "DynamicCache":
-        kc = string_type(
-            obj.key_cache,
-            with_shape=with_shape,
-            with_min_max=with_min_max,
-            with_device=with_device,
-            limit=limit,
-            verbose=verbose,
-        )
-        vc = string_type(
-            obj.value_cache,
-            with_shape=with_shape,
-            with_min_max=with_min_max,
-            with_device=with_device,
-            limit=limit,
-            verbose=verbose,
-        )
-        if verbose:
-            print(f"[string_type] CACHE2:{type(obj)}")
-        return f"{obj.__class__.__name__}(key_cache={kc}, value_cache={vc})"
-
-    if obj.__class__.__name__ == "EncoderDecoderCache":
-        att = string_type(
-            obj.self_attention_cache,
-            with_shape=with_shape,
-            with_min_max=with_min_max,
-            with_device=with_device,
-            limit=limit,
-            verbose=verbose,
-        )
-        cross = string_type(
-            obj.cross_attention_cache,
-            with_shape=with_shape,
-            with_min_max=with_min_max,
-            with_device=with_device,
-            limit=limit,
-            verbose=verbose,
-        )
-        if verbose:
-            print(f"[string_type] CACHE3:{type(obj)}")
-        return (
-            f"{obj.__class__.__name__}(self_attention_cache={att}, "
-            f"cross_attention_cache={cross})"
-        )
 
     if ignore:
         if verbose:

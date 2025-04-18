@@ -5,12 +5,17 @@ import transformers
 import transformers.cache_utils
 
 
-def flatten_unflatten_for_dynamic_shapes(obj: Any) -> Any:
+def flatten_unflatten_for_dynamic_shapes(obj: Any, use_dict: bool = False) -> Any:
     """
     Returns the object in a different structure similar to what
     the definition of the dynamic shapes should use.
 
     :param obj: object from a custom class
+    :param use_dict: closer to the original result but
+        :func:`torch.export.export` only considers the values,
+        the context gives the dictionary keys but it is not expressed
+        in the dynamic shapes, these specifications seems to be different
+        for the strict and non strict mode.
     :return: the serialized object
     """
     flat, spec = torch.utils._pytree.tree_flatten(obj)
@@ -20,11 +25,11 @@ def flatten_unflatten_for_dynamic_shapes(obj: Any) -> Any:
     for subspec in spec.children_specs:
         end += subspec.num_leaves
         value = subspec.unflatten(flat[start:end])
-        if not isinstance(value, (torch.Tensor, list)):
-            value = flatten_unflatten_for_dynamic_shapes(value)
+        if subspec.type is dict:
+            value = flatten_unflatten_for_dynamic_shapes(value, use_dict=use_dict)
         subtrees.append(value)
         start = end
-    if spec.context:
+    if subspec.type is dict:
         # This a dictionary.
         return dict(zip(spec.context, subtrees))
     # This is a list.
