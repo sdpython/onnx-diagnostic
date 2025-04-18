@@ -1,8 +1,13 @@
 import unittest
 import torch
+import transformers
 from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
+from onnx_diagnostic.helpers.cache_helper import (
+    make_dynamic_cache,
+    make_encoder_decoder_cache,
+    flatten_unflatten_for_dynamic_shapes,
+)
 from onnx_diagnostic.export import CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
@@ -65,6 +70,61 @@ class TestCacheHelpers(ExtTestCase):
             res = cpl.replace_string_by()
         dsc = res["past_key_values"]
         self.assertEqual([[{0: batch, 2: DYN}], [{0: batch, 2: DYN}]], dsc)
+
+    def test_unflatten_flatten_dynamic_cache(self):
+        with bypass_export_some_errors(patch_transformers=True):
+            c1 = make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))])
+            self.assertIsInstance(c1, transformers.cache_utils.DynamicCache)
+            unflat = flatten_unflatten_for_dynamic_shapes(c1)
+            self.assertEqual(
+                "#2[#1[T1s4x4x4],#1[T1s4x4x4]]", self.string_type(unflat, with_shape=True)
+            )
+            self.assertEqual(
+                "DynamicCache[serialized](#2[#1[T1s4x4x4],#1[T1s4x4x4]])",
+                self.string_type(c1, with_shape=True),
+            )
+
+    def test_unflatten_flatten_encoder_decoder_cache(self):
+        with bypass_export_some_errors(patch_transformers=True):
+            c2 = make_encoder_decoder_cache(
+                make_dynamic_cache(
+                    [
+                        (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                        (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                        (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                    ]
+                ),
+                make_dynamic_cache(
+                    [
+                        (torch.rand((5, 5, 5)), torch.rand((5, 5, 5))),
+                        (torch.rand((5, 5, 5)), torch.rand((5, 5, 5))),
+                        (torch.rand((5, 5, 5)), torch.rand((5, 5, 5))),
+                    ]
+                ),
+            )
+            self.assertIsInstance(c2, transformers.cache_utils.EncoderDecoderCache)
+            flat, _spec = torch.utils._pytree.tree_flatten(c2)
+            self.assertIsInstance(flat, list)
+            self.assertEqual(len(flat), 12)
+            self.assertIsInstance(flat[0], torch.Tensor)
+            unflat = flatten_unflatten_for_dynamic_shapes(c2)
+            self.assertIsInstance(unflat, list)
+            self.assertEqual(len(unflat), 2)
+            self.assertIsInstance(unflat[0], list)
+            self.assertEqual(len(unflat[0]), 2)
+            self.assertIsInstance(unflat[0][0], list)
+            self.assertEqual(len(unflat[0][0]), 3)
+            self.assertEqual(
+                "#2[#2[#3[T1s4x4x4,T1s4x4x4,T1s4x4x4],#3[T1s4x4x4,T1s4x4x4,T1s4x4x4]],"
+                "#2[#3[T1s5x5x5,T1s5x5x5,T1s5x5x5],#3[T1s5x5x5,T1s5x5x5,T1s5x5x5]]]",
+                self.string_type(unflat, with_shape=True),
+            )
+            self.assertEqual(
+                "EncoderDecoderCache[serialized]("
+                "#2[#2[#3[T1s4x4x4,T1s4x4x4,T1s4x4x4],#3[T1s4x4x4,T1s4x4x4,T1s4x4x4]],"
+                "#2[#3[T1s5x5x5,T1s5x5x5,T1s5x5x5],#3[T1s5x5x5,T1s5x5x5,T1s5x5x5]]])",
+                self.string_type(c2, with_shape=True),
+            )
 
 
 if __name__ == "__main__":

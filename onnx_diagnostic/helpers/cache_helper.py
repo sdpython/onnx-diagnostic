@@ -19,8 +19,15 @@ def flatten_unflatten_for_dynamic_shapes(obj: Any) -> Any:
     subtrees = []
     for subspec in spec.children_specs:
         end += subspec.num_leaves
-        subtrees.append(subspec.unflatten(flat[start:end]))
+        value = subspec.unflatten(flat[start:end])
+        if not isinstance(value, (torch.Tensor, list)):
+            value = flatten_unflatten_for_dynamic_shapes(value)
+        subtrees.append(value)
         start = end
+    if spec.context:
+        # This a dictionary.
+        return dict(zip(spec.context, subtrees))
+    # This is a list.
     return subtrees
 
 

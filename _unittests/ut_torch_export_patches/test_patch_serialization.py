@@ -2,7 +2,11 @@ import unittest
 import torch
 from transformers.modeling_outputs import BaseModelOutput
 from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
-from onnx_diagnostic.helpers.cache_helper import make_encoder_decoder_cache, make_dynamic_cache
+from onnx_diagnostic.helpers.cache_helper import (
+    make_encoder_decoder_cache,
+    make_dynamic_cache,
+    flatten_unflatten_for_dynamic_shapes,
+)
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     bypass_export_some_errors,
 )
@@ -150,6 +154,15 @@ class TestPatchSerialization(ExtTestCase):
 
         with bypass_export_some_errors():
             torch.export.export(model, (bo,), dynamic_shapes=(ds,))
+
+    @ignore_warnings(UserWarning)
+    def test_base_model_output_unflatten_flatten(self):
+        bo = BaseModelOutput(last_hidden_state=torch.rand((4, 4, 4)))
+        with bypass_export_some_errors(patch_transformers=True):
+            flat, _spec = torch.utils._pytree.tree_flatten(bo)
+            unflat = flatten_unflatten_for_dynamic_shapes(bo)
+            self.assertIsInstance(unflat, dict)
+            self.assertEqual(list(unflat), ["last_hidden_state"])
 
 
 if __name__ == "__main__":

@@ -74,7 +74,7 @@ def get_inputs(
     shapes = {
         "decoder_input_ids": {0: batch, 1: seq_length},
         "cache_position": {0: seq_length},
-        "encoder_outputs": [{0: batch}],
+        "encoder_outputs": {"last_hidden_state": {0: batch}},
         "past_key_values": [
             [
                 [{0: batch} for _ in range(num_hidden_layers)],
