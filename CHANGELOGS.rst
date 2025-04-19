@@ -4,6 +4,7 @@ Change Logs
 0.4.0
 +++++
 
+* :pr:`61`: improves dynamic shapes for EncoderDecoderCache
 * :pr:`58`: add function use_dyn_not_str to replace string by ``torch.export.Dim.DYNAMIC``,
   use string instead of ``torch.export.Dim.DYNAMIC`` when returning the dynamic shapes
   for a specific models, it is a valid definition for ``torch.onnx.export``

@@ -316,16 +316,19 @@ class CoupleInputsDynamicShapes:
             return processor(inputs, ds)
         if isinstance(inputs, (int, float, str)):
             return None
-        if isinstance(inputs, (tuple, list, dict)):
-            assert type(ds) is type(
-                inputs
-            ), f"Type mismatch between inputs {type(inputs)} and ds={type(ds)}"
+        if type(inputs) in (tuple, list, dict):
+            # Type must be strict, some custom classes can inherit from those.
+            assert type(inputs) is type(ds), (
+                f"Input type and dynamic shape type mush match but "
+                f"type(inputs)={type(inputs)}, type(ds)={type(ds)}, "
+                f"inputs={string_type(inputs, with_shape=True)}, ds={ds}"
+            )
             assert len(ds) == len(inputs), (
                 f"Length mismatch between inputs {len(inputs)} "
                 f"and ds={len(ds)}\n"
                 f"inputs={string_type(inputs, with_shape=True)}, ds={ds}"
             )
-            if isinstance(inputs, (tuple, list)):
+            if type(inputs) in (tuple, list):
                 value = []
                 for i, d in zip(inputs, ds):
                     value.append(
@@ -338,9 +341,11 @@ class CoupleInputsDynamicShapes:
                     if any(v is not None for v in value)
                     else None
                 )
-            assert set(inputs) == set(
-                ds
-            ), f"Keys mismatch between inputs {set(inputs)} and ds={set(ds)}"
+            assert type(inputs) is dict, f"Unexpected type for inputs {type(inputs)}"
+            assert set(inputs) == set(ds), (
+                f"Keys mismatch between inputs {set(inputs)} and ds={set(ds)}, "
+                f"inputs={string_type(inputs, with_shape=True)}, ds={ds}"
+            )
             dvalue = {}
             for k, v in inputs.items():
                 t = cls._generic_walker_step(

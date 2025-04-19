@@ -69,12 +69,12 @@ def get_inputs(
         )
     """
     batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = torch.export.Dim("seq_length", min=1, max=4096)
+    seq_length = "seq_length"
 
     shapes = {
         "decoder_input_ids": {0: batch, 1: seq_length},
         "cache_position": {0: seq_length},
-        "encoder_outputs": [{0: batch}],
+        "encoder_outputs": [{0: batch}],  # last_hidden_state
         "past_key_values": [
             [
                 [{0: batch} for _ in range(num_hidden_layers)],

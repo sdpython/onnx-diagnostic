@@ -184,7 +184,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
         # generate token ids
         print()
-        with steal_forward(model):
+        with steal_forward(model.model.decoder):
             predicted_ids = model.generate(
                 input_features, forced_decoder_ids=forced_decoder_ids
             )

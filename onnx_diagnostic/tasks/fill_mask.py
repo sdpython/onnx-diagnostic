@@ -35,7 +35,7 @@ def get_inputs(
         attention_mask:T7s1x13[1,1:A1.0])
     """
     batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = torch.export.Dim("sequence_length", min=1, max=1024)
+    seq_length = "sequence_length"
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
         "token_type_ids": {0: batch, 1: seq_length},
