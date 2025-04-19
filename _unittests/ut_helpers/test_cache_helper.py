@@ -115,14 +115,20 @@ class TestCacheHelpers(ExtTestCase):
             self.assertIsInstance(unflat[0][0], list)
             self.assertEqual(len(unflat[0][0]), 3)
             self.assertEqual(
+                "#2[#3[T1s4x4x4,T1s4x4x4,T1s4x4x4],#3[T1s4x4x4,T1s4x4x4,T1s4x4x4]]",
+                self.string_type(unflat[0], with_shape=True),
+            )
+            self.assertEqual(
                 "#2[#2[#3[T1s4x4x4,T1s4x4x4,T1s4x4x4],#3[T1s4x4x4,T1s4x4x4,T1s4x4x4]],"
                 "#2[#3[T1s5x5x5,T1s5x5x5,T1s5x5x5],#3[T1s5x5x5,T1s5x5x5,T1s5x5x5]]]",
                 self.string_type(unflat, with_shape=True),
             )
             self.assertEqual(
-                "EncoderDecoderCache[serialized]("
-                "#2[#2[#3[T1s4x4x4,T1s4x4x4,T1s4x4x4],#3[T1s4x4x4,T1s4x4x4,T1s4x4x4]],"
-                "#2[#3[T1s5x5x5,T1s5x5x5,T1s5x5x5],#3[T1s5x5x5,T1s5x5x5,T1s5x5x5]]])",
+                "EncoderDecoderCache(self_attention_cache=DynamicCache("
+                "key_cache=#3[T1s4x4x4,T1s4x4x4,T1s4x4x4], value_cache=#3"
+                "[T1s4x4x4,T1s4x4x4,T1s4x4x4]), cross_attention_cache=DynamicCache"
+                "(key_cache=#3[T1s5x5x5,T1s5x5x5,T1s5x5x5], value_cache=#3"
+                "[T1s5x5x5,T1s5x5x5,T1s5x5x5]))",
                 self.string_type(c2, with_shape=True),
             )
 

@@ -18,20 +18,23 @@ def flatten_unflatten_for_dynamic_shapes(obj: Any, use_dict: bool = False) -> An
         for the strict and non strict mode.
     :return: the serialized object
     """
+    if isinstance(obj, torch.Tensor):
+        return obj
     flat, spec = torch.utils._pytree.tree_flatten(obj)
     start = 0
     end = 0
     subtrees = []
     for subspec in spec.children_specs:
         end += subspec.num_leaves
-        if use_dict and subspec.type is dict:
+        if use_dict and (subspec.type is dict or subspec.context):
             value = subspec.unflatten(flat[start:end])
             value = flatten_unflatten_for_dynamic_shapes(value, use_dict=use_dict)
         else:
-            value = flat[start:end]
+            value = subspec.unflatten(flat[start:end])
+            value = flatten_unflatten_for_dynamic_shapes(value, use_dict=use_dict)
         subtrees.append(value)
         start = end
-    if subspec.type is dict:
+    if use_dict and (spec.type is dict or spec.context):
         # This a dictionary.
         return dict(zip(spec.context, subtrees))
     # This is a list.

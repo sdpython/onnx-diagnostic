@@ -38,7 +38,8 @@ class TestPatchInputs(ExtTestCase):
         self.assertEqual(
             (
                 "dict(input_ids:T7s2x8,attention_mask:T7s2x8,position_ids:T7s2x8,"
-                "past_key_values:DynamicCache[serialized](#2[#1[T1s2x1x3x96],#1[T1s2x1x3x96]]))"
+                "past_key_values:DynamicCache(key_cache=#1[T1s2x1x3x96], "
+                "value_cache=#1[T1s2x1x3x96]))"
             ),
             string_type(res[1], with_shape=True),
         )
@@ -107,7 +108,8 @@ class TestPatchInputs(ExtTestCase):
         self.assertEqual(
             (
                 "dict(input_ids:T7s2x8,attention_mask:T7s2x8,position_ids:T7s2x8,"
-                "past_key_values:DynamicCache[serialized](#2[#1[T1s2x1x3x96],#1[T1s2x1x3x96]]))"
+                "past_key_values:DynamicCache(key_cache=#1[T1s2x1x3x96], "
+                "value_cache=#1[T1s2x1x3x96]))"
             ),
             string_type(res[1], with_shape=True),
         )

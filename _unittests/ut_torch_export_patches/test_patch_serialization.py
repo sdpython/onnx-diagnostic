@@ -160,7 +160,7 @@ class TestPatchSerialization(ExtTestCase):
         bo = BaseModelOutput(last_hidden_state=torch.rand((4, 4, 4)))
         with bypass_export_some_errors(patch_transformers=True):
             flat, _spec = torch.utils._pytree.tree_flatten(bo)
-            unflat = flatten_unflatten_for_dynamic_shapes(bo)
+            unflat = flatten_unflatten_for_dynamic_shapes(bo, use_dict=True)
             self.assertIsInstance(unflat, dict)
             self.assertEqual(list(unflat), ["last_hidden_state"])
 
