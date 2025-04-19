@@ -24,9 +24,11 @@ def flatten_unflatten_for_dynamic_shapes(obj: Any, use_dict: bool = False) -> An
     subtrees = []
     for subspec in spec.children_specs:
         end += subspec.num_leaves
-        value = subspec.unflatten(flat[start:end])
-        if subspec.type is dict:
+        if use_dict and subspec.type is dict:
+            value = subspec.unflatten(flat[start:end])
             value = flatten_unflatten_for_dynamic_shapes(value, use_dict=use_dict)
+        else:
+            value = flat[start:end]
         subtrees.append(value)
         start = end
     if subspec.type is dict:

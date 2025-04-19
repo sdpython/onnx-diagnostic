@@ -80,7 +80,7 @@ class TestCacheHelpers(ExtTestCase):
                 "#2[#1[T1s4x4x4],#1[T1s4x4x4]]", self.string_type(unflat, with_shape=True)
             )
             self.assertEqual(
-                "DynamicCache[serialized](#2[#1[T1s4x4x4],#1[T1s4x4x4]])",
+                "DynamicCache(key_cache=#1[T1s4x4x4], value_cache=#1[T1s4x4x4])",
                 self.string_type(c1, with_shape=True),
             )
 
