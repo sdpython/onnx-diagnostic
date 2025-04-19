@@ -3,6 +3,7 @@ import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
 class TestTasks(ExtTestCase):
@@ -15,7 +16,9 @@ class TestTasks(ExtTestCase):
         raise unittest.SkipTest(f"not working for {mid!r}")
         model(**inputs)
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
-            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
 
     @hide_stdout()
     def test_automatic_speech_recognition(self):
@@ -25,14 +28,14 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         Dim = torch.export.Dim
         self.maxDiff = None
-        self.assertIn("{0:Dim(batch),1:Dim(seq_length)}", self.string_type(ds))
+        self.assertIn("{0:Dim(batch),1:DYN(seq_length)}", self.string_type(ds))
         self.assertEqualAny(
             {
                 "decoder_input_ids": {
                     0: Dim("batch", min=1, max=1024),
-                    1: Dim("seq_length", min=1, max=4096),
+                    1: "seq_length",
                 },
-                "cache_position": {0: Dim("seq_length", min=1, max=4096)},
+                "cache_position": {0: "seq_length"},
                 "encoder_outputs": [{0: Dim("batch", min=1, max=1024)}],
                 "past_key_values": [
                     [
@@ -72,7 +75,9 @@ class TestTasks(ExtTestCase):
                 "#8[T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4]",
                 self.string_type(flat),
             )
-            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
             flat = torch.utils._pytree.tree_flatten(inputs["past_key_values"])[0]
             self.assertIsInstance(flat, list)
@@ -81,7 +86,9 @@ class TestTasks(ExtTestCase):
                 "#8[T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4]",
                 self.string_type(flat),
             )
-            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
 
     @hide_stdout()
     def test_imagetext2text_generation(self):
@@ -91,7 +98,9 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
-            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
 
     @hide_stdout()
     def test_fill_mask(self):
@@ -101,7 +110,9 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
-            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
 
     @hide_stdout()
     def test_text_classification(self):
@@ -111,7 +122,9 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
-            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
 
     @hide_stdout()
     def test_sentence_similary(self):
@@ -121,7 +134,9 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
-            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
 
     @hide_stdout()
     def test_falcon_mamba_dev(self):
@@ -131,7 +146,9 @@ class TestTasks(ExtTestCase):
         model(**inputs)
         self.assertIn((data["size"], data["n_weights"]), [(138640384, 34660096)])
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
-            torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
 
 
 if __name__ == "__main__":
