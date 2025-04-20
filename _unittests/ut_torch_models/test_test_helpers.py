@@ -7,6 +7,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     ignore_warnings,
     requires_torch,
+    requires_experimental,
 )
 from onnx_diagnostic.torch_models.test_helper import (
     get_inputs_for_task,
@@ -62,16 +63,42 @@ class TestTestHelper(ExtTestCase):
     @requires_torch("2.7")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
-    def test_validate_model_onnx(self):
+    def test_validate_model_onnx_dynamo(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid,
             do_run=True,
             verbose=10,
             exporter="onnx-dynamo",
-            dump_folder="dump_test_validate_model_onnx",
+            dump_folder="dump_test_validate_model_onnx_dynamo",
             patch=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
+            optimization="ir",
+        )
+        self.assertIsInstance(summary, dict)
+        self.assertIsInstance(data, dict)
+        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
+        onnx_filename = data["onnx_filename"]
+        output_path = f"{onnx_filename}.ortopt.onnx"
+        run_ort_fusion(
+            onnx_filename, output_path, num_attention_heads=2, hidden_size=192, verbose=10
+        )
+
+    @requires_torch("2.7")
+    @hide_stdout()
+    @ignore_warnings(FutureWarning)
+    @requires_experimental()
+    def test_validate_model_custom(self):
+        mid = "arnir0/Tiny-LLM"
+        summary, data = validate_model(
+            mid,
+            do_run=True,
+            verbose=10,
+            exporter="custom",
+            dump_folder="dump_test_validate_model_custom",
+            patch=True,
+            stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
+            optimization="default",
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
