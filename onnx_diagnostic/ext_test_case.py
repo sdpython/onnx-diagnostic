@@ -461,6 +461,25 @@ def requires_sklearn(version: str, msg: str = "") -> Callable:
     return lambda x: x
 
 
+def requires_experimental(version: str = "", msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`experimental-experiment` is not recent enough."""
+    import packaging.version as pv
+
+    try:
+        import experimental_experiment
+    except ImportError:
+        msg = f"experimental-experiment not installed: {msg}"
+        return unittest.skip(msg)
+
+    if pv.Version(experimental_experiment.__version__) < pv.Version(version):
+        msg = (
+            f"experimental-experiment version "
+            f"{experimental_experiment.__version__} < {version}: {msg}"
+        )
+        return unittest.skip(msg)
+    return lambda x: x
+
+
 def has_torch(version: str) -> bool:
     "Returns True if torch transformers is higher."
     import packaging.version as pv
