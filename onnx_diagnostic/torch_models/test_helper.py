@@ -181,7 +181,11 @@ def version_summary() -> Dict[str, Union[int, float, str]]:
 
 
 def _quiet_or_not_quiet(
-    quiet: bool, suffix: str, summary: Dict[str, Any], data: Dict[str, Any], fct: Callable
+    quiet: bool,
+    suffix: str,
+    summary: Dict[str, Any],
+    data: Optional[Dict[str, Any]],
+    fct: Callable,
 ) -> Any:
     begin = time.perf_counter()
     if quiet:
@@ -189,9 +193,11 @@ def _quiet_or_not_quiet(
             return fct()
         except Exception as e:
             summary[f"ERR_{suffix}"] = str(e)
-            data[f"ERR_{suffix}"] = e
             summary[f"time_{suffix}"] = time.perf_counter() - begin
-            return summary, {}
+            if data is None:
+                return {f"ERR_{suffix}": e}
+            data[f"ERR_{suffix}"] = e
+            return None
     res = fct()
     summary[f"time_{suffix}"] = time.perf_counter() - begin
     return res
