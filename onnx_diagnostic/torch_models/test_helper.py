@@ -228,7 +228,6 @@ def validate_model(
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
-    assert not trained, f"trained={trained} not supported yet"
     summary = version_summary()
 
     summary.update(
@@ -270,14 +269,18 @@ def validate_model(
     begin = time.perf_counter()
     if quiet:
         try:
-            data = get_untrained_model_with_inputs(model_id, verbose=verbose, task=task)
+            data = get_untrained_model_with_inputs(
+                model_id, verbose=verbose, task=task, same_as_pretrained=trained
+            )
         except Exception as e:
             summary["ERR_create"] = str(e)
             data["ERR_create"] = e
             summary["time_create"] = time.perf_counter() - begin
             return summary, {}
     else:
-        data = get_untrained_model_with_inputs(model_id, verbose=verbose, task=task)
+        data = get_untrained_model_with_inputs(
+            model_id, verbose=verbose, task=task, same_as_pretrained=trained
+        )
 
     if drop_inputs:
         if verbose:
