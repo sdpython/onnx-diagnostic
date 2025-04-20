@@ -1,7 +1,7 @@
 import datetime
 import inspect
 import os
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import time
 import onnx
 import torch
@@ -180,6 +180,23 @@ def version_summary() -> Dict[str, Union[int, float, str]]:
     return summary
 
 
+def _quiet_or_not_quiet(
+    quiet: bool, suffix: str, summary: Dict[str, Any], data: Dict[str, Any], fct: Callable
+) -> Any:
+    begin = time.perf_counter()
+    if quiet:
+        try:
+            return fct()
+        except Exception as e:
+            summary[f"ERR_{suffix}"] = str(e)
+            data[f"ERR_{suffix}"] = e
+            summary[f"time_{suffix}"] = time.perf_counter() - begin
+            return summary, {}
+    res = fct()
+    summary[f"time_{suffix}"] = time.perf_counter() - begin
+    return res
+
+
 def validate_model(
     model_id: str,
     task: Optional[str] = None,
@@ -266,21 +283,19 @@ def validate_model(
         print("[validate_model] get dummy inputs...")
         summary["model_id"] = model_id
 
-    begin = time.perf_counter()
-    if quiet:
-        try:
-            data = get_untrained_model_with_inputs(
-                model_id, verbose=verbose, task=task, same_as_pretrained=trained
+    data = _quiet_or_not_quiet(
+        quiet,
+        "create",
+        summary,
+        None,
+        (
+            lambda mid=model_id, v=verbose, task=task, tr=trained: (
+                get_untrained_model_with_inputs(
+                    mid, verbose=v, task=task, same_as_pretrained=tr
+                )
             )
-        except Exception as e:
-            summary["ERR_create"] = str(e)
-            data["ERR_create"] = e
-            summary["time_create"] = time.perf_counter() - begin
-            return summary, {}
-    else:
-        data = get_untrained_model_with_inputs(
-            model_id, verbose=verbose, task=task, same_as_pretrained=trained
-        )
+        ),
+    )
 
     if drop_inputs:
         if verbose:
@@ -316,7 +331,6 @@ def validate_model(
         data["inputs"] = to_any(data["inputs"], device)  # type: ignore
         summary["model_device"] = str(device)
 
-    summary["time_create"] = time.perf_counter() - begin
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
         summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
