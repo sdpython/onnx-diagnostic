@@ -302,6 +302,8 @@ def validate_model(
             )
         ),
     )
+    if "ERR_create" in summary:
+        return summary, data
 
     if drop_inputs:
         if verbose:
@@ -364,18 +366,14 @@ def validate_model(
         # We make a copy of the input just in case the model modifies them inplace
         hash_inputs = string_type(data["inputs"], with_shape=True)
         inputs = torch_deepcopy(data["inputs"])
-        begin = time.perf_counter()
-        if quiet:
-            try:
-                expected = data["model"](**inputs)
-            except Exception as e:
-                summary["ERR_run"] = str(e)
-                data["ERR_run"] = e
-                summary["time_run"] = time.perf_counter() - begin
-                return summary, data
-        else:
-            expected = data["model"](**inputs)
-        summary["time_run"] = time.perf_counter() - begin
+        model = data["model"]
+
+        expected = _quiet_or_not_quiet(
+            quiet, "run", summary, data, (lambda m=model, inp=inputs: m(**inp))
+        )
+        if "ERR_run" in summary:
+            return summary, data
+
         summary["model_expected"] = string_type(expected, with_shape=True)
         if verbose:
             print("[validate_model] done (run)")
@@ -417,18 +415,18 @@ def validate_model(
 
                     # We make a copy of the input just in case the model modifies them inplace
                     inputs = torch_deepcopy(data["inputs_export"])
-                    begin = time.perf_counter()
-                    if quiet:
-                        try:
-                            expected = data["model"](**inputs)
-                        except Exception as e:
-                            summary["ERR_run_patched"] = str(e)
-                            data["ERR_run_patched"] = e
-                            summary["time_run_patched"] = time.perf_counter() - begin
-                            return summary, data
-                    else:
-                        expected = data["model"](**inputs)
-                    summary["time_run_patched"] = time.perf_counter() - begin
+                    model = data["model"]
+
+                    expected = _quiet_or_not_quiet(
+                        quiet,
+                        "run_patched",
+                        summary,
+                        data,
+                        (lambda m=model, inp=inputs: m(**inp)),
+                    )
+                    if "ERR_run_patched" in summary:
+                        return summary, data
+
                     disc = max_diff(data["expected"], expected)
                     for k, v in disc.items():
                         summary[f"disc_patched_{k}"] = v
