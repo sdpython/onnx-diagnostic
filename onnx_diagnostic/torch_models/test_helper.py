@@ -220,6 +220,7 @@ def validate_model(
     dump_folder: Optional[str] = None,
     drop_inputs: Optional[List[str]] = None,
     ortfusiontype: Optional[str] = None,
+    input_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -248,6 +249,8 @@ def validate_model(
     :param ortfusiontype: runs ort fusion, the parameters defines the fusion type,
         it accepts multiple values separated by ``|``,
         see :func:`onnx_diagnostic.torch_models.test_helper.run_ort_fusion`
+    :param input_options: additional options to define the dummy inputs
+        used to export
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -286,22 +289,24 @@ def validate_model(
 
     if verbose:
         print(f"[validate_model] validate model id {model_id!r}")
-        print("[validate_model] get dummy inputs...")
+        print(f"[validate_model] get dummy inputs with input_options={input_options}...")
         summary["model_id"] = model_id
 
+    iop = input_options or {}
     data = _quiet_or_not_quiet(
         quiet,
         "create",
         summary,
         None,
         (
-            lambda mid=model_id, v=verbose, task=task, tr=trained: (
+            lambda mid=model_id, v=verbose, task=task, tr=trained, iop=iop: (
                 get_untrained_model_with_inputs(
-                    mid, verbose=v, task=task, same_as_pretrained=tr
+                    mid, verbose=v, task=task, same_as_pretrained=tr, inputs_kwargs=iop
                 )
             )
         ),
     )
+    data["input_options"] = input_options
     if "ERR_create" in summary:
         return summary, data
 
@@ -341,11 +346,12 @@ def validate_model(
 
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
-        summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
-        summary["model_shapes"] = string_type(str(data["dynamic_shapes"]))
-        summary["model_class"] = data["model"].__class__.__name__
-        summary["model_config_class"] = data["configuration"].__class__.__name__
-        summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
+    summary["model_inputs_opionts"] = input_options or ""
+    summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
+    summary["model_shapes"] = string_type(str(data["dynamic_shapes"]))
+    summary["model_class"] = data["model"].__class__.__name__
+    summary["model_config_class"] = data["configuration"].__class__.__name__
+    summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
     summary["model_id"] = model_id
 
     if verbose:
@@ -596,7 +602,7 @@ def call_exporter(
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
-    if exporter.startswith("export-"):
+    if exporter == "export" or exporter.startswith("export-"):
         # torch export
         summary, data = call_torch_export_export(
             exporter=exporter,

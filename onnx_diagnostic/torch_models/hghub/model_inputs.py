@@ -97,6 +97,8 @@ def get_untrained_model_with_inputs(
 
     # input kwargs
     kwargs, fct = random_input_kwargs(config, task)
+    if verbose:
+        print(f"[get_untrained_model_with_inputs] use fct={fct}")
     if inputs_kwargs:
         kwargs.update(inputs_kwargs)
 
