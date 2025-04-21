@@ -346,7 +346,7 @@ def validate_model(
 
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
-    summary["model_inputs_opionts"] = input_options or ""
+    summary["model_inputs_opionts"] = str(input_options or "")
     summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
     summary["model_shapes"] = string_type(str(data["dynamic_shapes"]))
     summary["model_class"] = data["model"].__class__.__name__

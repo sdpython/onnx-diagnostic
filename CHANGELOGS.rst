@@ -4,6 +4,7 @@ Change Logs
 0.4.0
 +++++
 
+* :pr:`65`: support SlidingWindowCache
 * :pr:`63`: support option ``--trained``
 * :pr:`61`: improves dynamic shapes for EncoderDecoderCache
 * :pr:`58`: add function use_dyn_not_str to replace string by ``torch.export.Dim.DYNAMIC``,

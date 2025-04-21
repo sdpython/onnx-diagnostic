@@ -1,7 +1,7 @@
 import unittest
 import torch
 import transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import (
     flatten_unflatten_for_dynamic_shapes,
@@ -134,6 +134,7 @@ class TestCacheHelpers(ExtTestCase):
                 self.string_type(c2, with_shape=True),
             )
 
+    @requires_transformers("4.51")  # the structure changes
     def test_make_mamba_cache(self):
         cache = make_mamba_cache(
             [
