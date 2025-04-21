@@ -1,7 +1,7 @@
 import unittest
 import torch
 from transformers.modeling_outputs import BaseModelOutput
-from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
+from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, requires_torch
 from onnx_diagnostic.helpers.cache_helper import (
     make_encoder_decoder_cache,
     make_dynamic_cache,
@@ -175,6 +175,7 @@ class TestPatchSerialization(ExtTestCase):
             self.assertEqualAny([cache], cache2)
 
     @ignore_warnings(UserWarning)
+    @requires_torch("2.7")
     def test_sliding_window_cache_export(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
