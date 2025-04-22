@@ -5,7 +5,7 @@ from ..helpers.config_helper import update_config, check_hasattr
 __TASK__ = "zero-shot-image-classification"
 
 
-def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
+def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     check_hasattr(config, "vision_config", "text_config")
     check_hasattr(config.vision_config, "num_hidden_layers", "num_attention_heads")
@@ -84,7 +84,7 @@ def get_inputs(
     return dict(inputs=inputs, dynamic_shapes=shapes)
 
 
-def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callable]:
+def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
     """
     Inputs kwargs.
 

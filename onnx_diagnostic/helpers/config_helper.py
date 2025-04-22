@@ -28,13 +28,18 @@ def check_hasattr(config: Any, *args: Union[str, Tuple[Any, ...]]):
 def update_config(config: Any, mkwargs: Dict[str, Any]):
     """Updates a configuration with different values."""
     for k, v in mkwargs.items():
+        if k == "attn_implementation":
+            config._attn_implementation = v
+            if getattr(config, "_attn_implementation_autoset", False):
+                config._attn_implementation_autoset = False
+            continue
         if isinstance(v, dict):
             assert hasattr(
                 config, k
             ), f"missing attribute {k!r} in config={config}, cannot update it with {v}"
             update_config(getattr(config, k), v)
-        else:
-            setattr(config, k, v)
+            continue
+        setattr(config, k, v)
 
 
 def _pick(config, *atts):

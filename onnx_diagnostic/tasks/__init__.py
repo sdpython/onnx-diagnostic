@@ -33,7 +33,7 @@ def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
     """Reduces a model size."""
     tasks = {mod.__TASK__: mod.reduce_model_config for mod in __TASKS__}
     assert task in tasks, f"Task {task!r} not found in {sorted(tasks)}"
-    return tasks[task](config, task)
+    return tasks[task](config)
 
 
 def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callable]:
@@ -45,4 +45,4 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
     """
     tasks = {mod.__TASK__: mod.random_input_kwargs for mod in __TASKS__}
     assert task in tasks, f"Task {task!r} not found in {sorted(tasks)}"
-    return tasks[task](config, task)
+    return tasks[task](config)

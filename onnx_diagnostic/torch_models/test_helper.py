@@ -11,10 +11,10 @@ from ..helpers.helper import flatten_object
 from ..helpers.rt_helper import make_feeds
 from ..helpers.torch_test_helper import to_any, torch_deepcopy
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
+from ..tasks import random_input_kwargs
 from ..torch_export_patches import bypass_export_some_errors
 from ..torch_export_patches.patch_inputs import use_dyn_not_str
 from .hghub import get_untrained_model_with_inputs
-from .hghub.model_inputs import random_input_kwargs
 
 
 def empty(value: Any) -> bool:
@@ -221,6 +221,7 @@ def validate_model(
     drop_inputs: Optional[List[str]] = None,
     ortfusiontype: Optional[str] = None,
     input_options: Optional[Dict[str, Any]] = None,
+    model_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -251,6 +252,8 @@ def validate_model(
         see :func:`onnx_diagnostic.torch_models.test_helper.run_ort_fusion`
     :param input_options: additional options to define the dummy inputs
         used to export
+    :param model_options: additional options when creating the model such as
+        ``num_hidden_layers`` or ``attn_implementation``
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -289,10 +292,13 @@ def validate_model(
 
     if verbose:
         print(f"[validate_model] validate model id {model_id!r}")
+        if model_options:
+            print(f"[validate_model] model_options={model_options!r}")
         print(f"[validate_model] get dummy inputs with input_options={input_options}...")
         summary["model_id"] = model_id
 
     iop = input_options or {}
+    mop = model_options or {}
     data = _quiet_or_not_quiet(
         quiet,
         "create",
@@ -301,18 +307,28 @@ def validate_model(
         (
             lambda mid=model_id, v=verbose, task=task, tr=trained, iop=iop: (
                 get_untrained_model_with_inputs(
-                    mid, verbose=v, task=task, same_as_pretrained=tr, inputs_kwargs=iop
+                    mid,
+                    verbose=v,
+                    task=task,
+                    same_as_pretrained=tr,
+                    inputs_kwargs=iop,
+                    model_kwargs=mop,
                 )
             )
         ),
     )
-    data["input_options"] = input_options
+    data["input_options"] = iop
+    data["model_options"] = mop
+    if iop:
+        summary["input_options"] = str(iop)
+    if mop:
+        summary["model_options"] = str(mop)
     if "ERR_create" in summary:
         return summary, data
 
     if drop_inputs:
         if verbose:
-            print(f"[validate_model] -- drop inputs {drop_inputs!r}")
+            print(f"[validate_model] -- drop inputs: {drop_inputs!r}")
             print(f"[validate_model] current inputs: {string_type(data['inputs'])}")
             print(
                 f"[validate_model] current dynnamic_shapes: "

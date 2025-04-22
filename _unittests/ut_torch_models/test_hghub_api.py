@@ -74,7 +74,14 @@ class TestHuggingFaceHubApi(ExtTestCase):
     def test_get_pretrained_config(self):
         conf = get_pretrained_config("microsoft/phi-2")
         self.assertNotEmpty(conf)
-        print(conf)
+
+    @requires_transformers("4.50")
+    @requires_torch("2.7")
+    @hide_stdout()
+    def test_get_pretrained_config_options(self):
+        conf = get_pretrained_config("microsoft/phi-2", num_key_value_heads=16)
+        self.assertNotEmpty(conf)
+        self.assertEqual(conf.num_key_value_heads, 16)
 
     @requires_transformers("4.50")
     @requires_torch("2.7")
