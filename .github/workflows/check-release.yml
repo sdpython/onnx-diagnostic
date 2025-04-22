@@ -7,7 +7,7 @@ on:
   # push:
 
 jobs:
-
+  run:
     name: release-${{ matrix.torch }}-tr-${{ matrix.transformers }}-ci ${{ matrix.os }}-${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     strategy:
