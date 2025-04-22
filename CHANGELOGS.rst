@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.4.1
++++++
+
+* :pr:`70`: support models options in command lines
+
 0.4.0
 +++++
 

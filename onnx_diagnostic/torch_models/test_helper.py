@@ -320,9 +320,9 @@ def validate_model(
     data["input_options"] = iop
     data["model_options"] = mop
     if iop:
-        summary["input_options"] = iop
+        summary["input_options"] = str(iop)
     if mop:
-        summary["model_options"] = mop
+        summary["model_options"] = str(mop)
     if "ERR_create" in summary:
         return summary, data
 

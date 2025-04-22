@@ -220,7 +220,7 @@ def get_parser_config() -> ArgumentParser:
         default=True,
         action=BooleanOptionalAction,
         help="uses cached configuration, only available for some of them, "
-        "moslty for unit test purposes",
+        "mostly for unit test purposes",
     )
     parser.add_argument(
         "--mop",
