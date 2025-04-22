@@ -58,7 +58,9 @@ def get_untrained_model_with_inputs(
         if use_preinstalled:
             print(f"[get_untrained_model_with_inputs] use preinstalled {model_id!r}")
     if config is None:
-        config = get_pretrained_config(model_id, use_preinstalled=use_preinstalled)
+        config = get_pretrained_config(
+            model_id, use_preinstalled=use_preinstalled, **(model_kwargs or {})
+        )
     archs = config.architectures  # type: ignore
     assert archs is not None and len(archs) == 1, (
         f"Unable to determine the architecture for model {model_id!r}, "
@@ -67,7 +69,6 @@ def get_untrained_model_with_inputs(
     arch = archs[0]
     if verbose:
         print(f"[get_untrained_model_with_inputs] architecture={arch!r}")
-    config = get_pretrained_config(model_id)
     if verbose:
         print(f"[get_untrained_model_with_inputs] cls={config.__class__.__name__!r}")
     task = task_from_arch(arch)

@@ -6,7 +6,7 @@ from ..helpers.config_helper import update_config, check_hasattr, _pick
 __TASK__ = "image-text-to-text"
 
 
-def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
+def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     kwargs: Dict[str, Any] = {}
     if hasattr(config, "num_hidden_layers"):
@@ -102,7 +102,7 @@ def get_inputs(
     return dict(inputs=inputs, dynamic_shapes=shapes)
 
 
-def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callable]:
+def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
     """
     Inputs kwargs.
 

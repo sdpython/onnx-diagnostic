@@ -1,8 +1,10 @@
+import copy
 import functools
 import os
 from typing import Any, Dict, List, Optional, Union
 import transformers
 from huggingface_hub import HfApi, model_info
+from ...helpers.config_helper import update_config
 from . import hub_data_cached_configs
 from .hub_data import __date__, __data_tasks__, load_architecture_task, __data_arch_values__
 
@@ -30,7 +32,7 @@ def _retrieve_cached_configurations() -> Dict[str, transformers.PretrainedConfig
     return res
 
 
-def get_cached_configuration(name: str) -> Optional[transformers.PretrainedConfig]:
+def get_cached_configuration(name: str, **kwargs) -> Optional[transformers.PretrainedConfig]:
     """
     Returns cached configuration to avoid having to many accesses to internet.
     It returns None if not Cache. The list of cached models follows.
@@ -46,14 +48,18 @@ def get_cached_configuration(name: str) -> Optional[transformers.PretrainedConfi
     cached = _retrieve_cached_configurations()
     assert cached, "no cached configuration, which is weird"
     if name in cached:
-        return cached[name]()
+        conf = cached[name]()
+        if kwargs:
+            conf = copy.deepcopy(conf)
+            update_config(conf, kwargs)
+        return conf
     if os.environ.get("NOHTTP", ""):
         raise AssertionError(f"Unable to find {name!r} in {sorted(cached)}")
     return None
 
 
 def get_pretrained_config(
-    model_id: str, trust_remote_code: bool = True, use_preinstalled: bool = True
+    model_id: str, trust_remote_code: bool = True, use_preinstalled: bool = True, **kwargs
 ) -> Any:
     """
     Returns the config for a model_id.
@@ -65,14 +71,15 @@ def get_pretrained_config(
         accessing the network, if available, it is returned by
         :func:`get_cached_configuration`, the cached list is mostly for
         unit tests
+    :param kwargs: additional kwargs
     :return: a configuration
     """
     if use_preinstalled:
-        conf = get_cached_configuration(model_id)
+        conf = get_cached_configuration(model_id, **kwargs)
         if conf is not None:
             return conf
     return transformers.AutoConfig.from_pretrained(
-        model_id, trust_remote_code=trust_remote_code
+        model_id, trust_remote_code=trust_remote_code, **kwargs
     )
 
 

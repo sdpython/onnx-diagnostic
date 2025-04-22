@@ -99,6 +99,32 @@ class TestHuggingFaceHubModel(ExtTestCase):
         print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
 
     @never_test()
+    def test_text_generation_phi4(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k phi4
+
+        import torch
+        from transformers import RobertaTokenizer, T5ForConditionalGeneration
+
+        tokenizer = RobertaTokenizer.from_pretrained("microsoft/Phi-4-mini-instruct")
+        model = T5ForConditionalGeneration.from_pretrained("microsoft/Phi-4-mini-instruct")
+
+        text = "def greet(user): print(f'hello <extra_id_0>!')"
+        input_ids = tokenizer(text, return_tensors="pt").input_ids
+        mask = (
+            torch.tensor([1 for i in range(input_ids.shape[1])])
+            .to(torch.int64)
+            .reshape((1, -1))
+        )
+
+        # simply generate a single sequence
+        print()
+        with steal_forward(model):
+            generated_ids = model.generate(
+                decoder_input_ids=input_ids, attention_mask=mask, max_length=100
+            )
+        print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
+
+    @never_test()
     def test_imagetext2text_generation(self):
         # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k etext2t
         # https://huggingface.co/docs/transformers/main/en/tasks/idefics

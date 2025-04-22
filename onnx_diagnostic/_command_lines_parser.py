@@ -214,6 +214,22 @@ def get_parser_config() -> ArgumentParser:
         action=BooleanOptionalAction,
         help="displays the task as well",
     )
+    parser.add_argument(
+        "-c",
+        "--cached",
+        default=True,
+        action=BooleanOptionalAction,
+        help="uses cached configuration, only available for some of them, "
+        "moslty for unit test purposes",
+    )
+    parser.add_argument(
+        "--mop",
+        metavar="KEY=VALUE",
+        nargs="*",
+        help="Additional model options, use to change some parameters of the model, "
+        "example: --mop attn_implementation=eager",
+        action=_ParseDict,
+    )
     return parser
 
 
@@ -222,7 +238,11 @@ def _cmd_config(argv: List[Any]):
 
     parser = get_parser_config()
     args = parser.parse_args(argv[1:])
-    print(get_pretrained_config(args.mid))
+    conf = get_pretrained_config(args.mid, **(args.mop or {}))
+    print(conf)
+    for k, v in sorted(conf.__dict__.items()):
+        if "_implementation" in k:
+            print(f"config.{k}={v!r}")
     if args.task:
         print("------")
         print(f"task: {task_from_id(args.mid)}")
@@ -238,6 +258,19 @@ class _ParseDict(argparse.Action):
                 key = split_items[0].strip()  # we remove blanks around keys, as is logical
                 value = split_items[1]
 
+                if value in ("True", "true", "False", "false"):
+                    d[key] = bool(value)
+                    continue
+                try:
+                    d[key] = int(value)
+                    continue
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    d[key] = float(value)
+                    continue
+                except (TypeError, ValueError):
+                    pass
                 d[key] = value
 
         setattr(namespace, self.dest, d)
@@ -321,6 +354,14 @@ def get_parser_validate() -> ArgumentParser:
         "inputs use to export, example: --iop cls_cache=SlidingWindowCache",
         action=_ParseDict,
     )
+    parser.add_argument(
+        "--mop",
+        metavar="KEY=VALUE",
+        nargs="*",
+        help="Additional model options, use to change some parameters of the model, "
+        "example: --mop attn_implementation=eager",
+        action=_ParseDict,
+    )
     return parser
 
 
@@ -371,6 +412,7 @@ def _cmd_validate(argv: List[Any]):
             drop_inputs=None if not args.drop else args.drop.split(","),
             ortfusiontype=args.ortfusiontype,
             input_options=args.iop,
+            model_options=args.mop,
         )
         print("")
         print("-- summary --")
