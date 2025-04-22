@@ -1,12 +1,14 @@
 import unittest
 import torch
 import transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import (
+    flatten_unflatten_for_dynamic_shapes,
     make_dynamic_cache,
     make_encoder_decoder_cache,
-    flatten_unflatten_for_dynamic_shapes,
+    make_mamba_cache,
+    make_sliding_window_cache,
 )
 from onnx_diagnostic.export import CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
@@ -131,6 +133,37 @@ class TestCacheHelpers(ExtTestCase):
                 "[T1s5x5x5,T1s5x5x5,T1s5x5x5]))",
                 self.string_type(c2, with_shape=True),
             )
+
+    @requires_transformers("4.51")  # the structure changes
+    def test_make_mamba_cache(self):
+        cache = make_mamba_cache(
+            [
+                (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+            ]
+        )
+        text = self.string_type(cache, with_shape=True)
+        self.assertEqual(
+            "MambaCache(conv_states=#3[T10s4x4x4,T10s4x4x4,T10s4x4x4], "
+            "ssm_states=#3[T10s4x4x4,T10s4x4x4,T10s4x4x4])",
+            text,
+        )
+
+    def test_make_sliding_window_cache(self):
+        cache = make_sliding_window_cache(
+            [
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+            ]
+        )
+        text = self.string_type(cache, with_shape=True)
+        self.assertEqual(
+            "SlidingWindowCache(key_cache=#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7], "
+            "value_cache=#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7])",
+            text,
+        )
 
 
 if __name__ == "__main__":

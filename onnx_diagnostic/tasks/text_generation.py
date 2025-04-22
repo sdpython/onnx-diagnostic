@@ -1,6 +1,11 @@
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 import torch
-from ..helpers.cache_helper import make_dynamic_cache, make_mamba_cache
+import transformers
+from ..helpers.cache_helper import (
+    make_dynamic_cache,
+    make_mamba_cache,
+    make_sliding_window_cache,
+)
 from ..helpers.config_helper import update_config, check_hasattr, _pick
 
 __TASK__ = "text-generation"
@@ -88,6 +93,10 @@ def get_inputs(
     cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
 
     if config is not None and config.__class__.__name__ == "FalconMambaConfig":
+        assert cls_cache in (
+            "MambaCache",
+            transformers.cache_utils.MambaCache,
+        ), f"Unexpected value for cls_cache={cls_cache} and config={config}"
         seq_length_multiple = 8
         sequence_length = (
             (sequence_length + seq_length_multiple)
@@ -156,6 +165,13 @@ def get_inputs(
             [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
         ],
     }
+
+    make_cache = (
+        make_sliding_window_cache
+        if cls_cache in ("SlidingWindowCache", transformers.cache_utils.SlidingWindowCache)
+        else make_dynamic_cache
+    )
+
     inputs = dict(
         input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
             torch.int64
@@ -166,7 +182,7 @@ def get_inputs(
         position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
         .to(torch.int64)
         .expand((batch_size, -1)),
-        past_key_values=make_dynamic_cache(
+        past_key_values=make_cache(
             [
                 (
                     torch.randn(batch_size, num_key_value_heads, sequence_length, head_dim),

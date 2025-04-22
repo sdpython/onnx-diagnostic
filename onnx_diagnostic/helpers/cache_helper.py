@@ -26,12 +26,8 @@ def flatten_unflatten_for_dynamic_shapes(obj: Any, use_dict: bool = False) -> An
     subtrees = []
     for subspec in spec.children_specs:
         end += subspec.num_leaves
-        if use_dict and (subspec.type is dict or subspec.context):
-            value = subspec.unflatten(flat[start:end])
-            value = flatten_unflatten_for_dynamic_shapes(value, use_dict=use_dict)
-        else:
-            value = subspec.unflatten(flat[start:end])
-            value = flatten_unflatten_for_dynamic_shapes(value, use_dict=use_dict)
+        value = subspec.unflatten(flat[start:end])
+        value = flatten_unflatten_for_dynamic_shapes(value, use_dict=use_dict)
         subtrees.append(value)
         start = end
     if use_dict and (spec.type is dict or spec.context):
@@ -184,4 +180,37 @@ def make_mamba_cache(
             f"got {key_value_pairs[i][1].shape}"
         )
         cache.ssm_states[i][:, :, :] = key_value_pairs[i][1]
+    return cache
+
+
+def make_sliding_window_cache(
+    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+) -> transformers.cache_utils.MambaCache:
+    "Creates a :class:`transformers.cache_utils.SlidingWindowCache`."
+
+    class _config:
+        def __init__(self):
+            self.head_dim = key_value_pairs[0][0].shape[-1]
+            self.num_attention_heads = key_value_pairs[0][0].shape[1]
+            self.num_hidden_layers = len(key_value_pairs)
+            self.sliding_window = key_value_pairs[0][0].shape[2]
+
+    cache = transformers.cache_utils.SlidingWindowCache(
+        _config(),
+        max_batch_size=key_value_pairs[0][0].shape[0],
+        max_cache_len=key_value_pairs[0][0].shape[2],  # same as sliding_window
+        device=key_value_pairs[0][0].device,
+        dtype=key_value_pairs[0][0].dtype,
+    )
+    for i in range(len(key_value_pairs)):
+        assert cache.key_cache[i].shape == key_value_pairs[i][0].shape, (
+            f"Shape mismatch, expected {cache.key_cache[i].shape}, "
+            f"got {key_value_pairs[i][0].shape}"
+        )
+        cache.key_cache[i][:, :, :, :] = key_value_pairs[i][0]
+        assert cache.value_cache[i].shape == key_value_pairs[i][1].shape, (
+            f"Shape mismatch, expected {cache.value_cache[i].shape}, "
+            f"got {key_value_pairs[i][1].shape}"
+        )
+        cache.value_cache[i][:, :, :, :] = key_value_pairs[i][1]
     return cache

@@ -1,7 +1,7 @@
 import datetime
 import inspect
 import os
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import time
 import onnx
 import torch
@@ -180,6 +180,29 @@ def version_summary() -> Dict[str, Union[int, float, str]]:
     return summary
 
 
+def _quiet_or_not_quiet(
+    quiet: bool,
+    suffix: str,
+    summary: Dict[str, Any],
+    data: Optional[Dict[str, Any]],
+    fct: Callable,
+) -> Any:
+    begin = time.perf_counter()
+    if quiet:
+        try:
+            return fct()
+        except Exception as e:
+            summary[f"ERR_{suffix}"] = str(e)
+            summary[f"time_{suffix}"] = time.perf_counter() - begin
+            if data is None:
+                return {f"ERR_{suffix}": e}
+            data[f"ERR_{suffix}"] = e
+            return None
+    res = fct()
+    summary[f"time_{suffix}"] = time.perf_counter() - begin
+    return res
+
+
 def validate_model(
     model_id: str,
     task: Optional[str] = None,
@@ -197,6 +220,7 @@ def validate_model(
     dump_folder: Optional[str] = None,
     drop_inputs: Optional[List[str]] = None,
     ortfusiontype: Optional[str] = None,
+    input_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -225,6 +249,8 @@ def validate_model(
     :param ortfusiontype: runs ort fusion, the parameters defines the fusion type,
         it accepts multiple values separated by ``|``,
         see :func:`onnx_diagnostic.torch_models.test_helper.run_ort_fusion`
+    :param input_options: additional options to define the dummy inputs
+        used to export
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -263,24 +289,26 @@ def validate_model(
 
     if verbose:
         print(f"[validate_model] validate model id {model_id!r}")
-        print("[validate_model] get dummy inputs...")
+        print(f"[validate_model] get dummy inputs with input_options={input_options}...")
         summary["model_id"] = model_id
 
-    begin = time.perf_counter()
-    if quiet:
-        try:
-            data = get_untrained_model_with_inputs(
-                model_id, verbose=verbose, task=task, same_as_pretrained=trained
+    iop = input_options or {}
+    data = _quiet_or_not_quiet(
+        quiet,
+        "create",
+        summary,
+        None,
+        (
+            lambda mid=model_id, v=verbose, task=task, tr=trained, iop=iop: (
+                get_untrained_model_with_inputs(
+                    mid, verbose=v, task=task, same_as_pretrained=tr, inputs_kwargs=iop
+                )
             )
-        except Exception as e:
-            summary["ERR_create"] = str(e)
-            data["ERR_create"] = e
-            summary["time_create"] = time.perf_counter() - begin
-            return summary, {}
-    else:
-        data = get_untrained_model_with_inputs(
-            model_id, verbose=verbose, task=task, same_as_pretrained=trained
-        )
+        ),
+    )
+    data["input_options"] = input_options
+    if "ERR_create" in summary:
+        return summary, data
 
     if drop_inputs:
         if verbose:
@@ -316,14 +344,14 @@ def validate_model(
         data["inputs"] = to_any(data["inputs"], device)  # type: ignore
         summary["model_device"] = str(device)
 
-    summary["time_create"] = time.perf_counter() - begin
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
-        summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
-        summary["model_shapes"] = string_type(str(data["dynamic_shapes"]))
-        summary["model_class"] = data["model"].__class__.__name__
-        summary["model_config_class"] = data["configuration"].__class__.__name__
-        summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
+    summary["model_inputs_opionts"] = str(input_options or "")
+    summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
+    summary["model_shapes"] = string_type(str(data["dynamic_shapes"]))
+    summary["model_class"] = data["model"].__class__.__name__
+    summary["model_config_class"] = data["configuration"].__class__.__name__
+    summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
     summary["model_id"] = model_id
 
     if verbose:
@@ -344,18 +372,14 @@ def validate_model(
         # We make a copy of the input just in case the model modifies them inplace
         hash_inputs = string_type(data["inputs"], with_shape=True)
         inputs = torch_deepcopy(data["inputs"])
-        begin = time.perf_counter()
-        if quiet:
-            try:
-                expected = data["model"](**inputs)
-            except Exception as e:
-                summary["ERR_run"] = str(e)
-                data["ERR_run"] = e
-                summary["time_run"] = time.perf_counter() - begin
-                return summary, data
-        else:
-            expected = data["model"](**inputs)
-        summary["time_run"] = time.perf_counter() - begin
+        model = data["model"]
+
+        expected = _quiet_or_not_quiet(
+            quiet, "run", summary, data, (lambda m=model, inp=inputs: m(**inp))
+        )
+        if "ERR_run" in summary:
+            return summary, data
+
         summary["model_expected"] = string_type(expected, with_shape=True)
         if verbose:
             print("[validate_model] done (run)")
@@ -397,18 +421,18 @@ def validate_model(
 
                     # We make a copy of the input just in case the model modifies them inplace
                     inputs = torch_deepcopy(data["inputs_export"])
-                    begin = time.perf_counter()
-                    if quiet:
-                        try:
-                            expected = data["model"](**inputs)
-                        except Exception as e:
-                            summary["ERR_run_patched"] = str(e)
-                            data["ERR_run_patched"] = e
-                            summary["time_run_patched"] = time.perf_counter() - begin
-                            return summary, data
-                    else:
-                        expected = data["model"](**inputs)
-                    summary["time_run_patched"] = time.perf_counter() - begin
+                    model = data["model"]
+
+                    expected = _quiet_or_not_quiet(
+                        quiet,
+                        "run_patched",
+                        summary,
+                        data,
+                        (lambda m=model, inp=inputs: m(**inp)),
+                    )
+                    if "ERR_run_patched" in summary:
+                        return summary, data
+
                     disc = max_diff(data["expected"], expected)
                     for k, v in disc.items():
                         summary[f"disc_patched_{k}"] = v
@@ -578,7 +602,7 @@ def call_exporter(
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
-    if exporter.startswith("export-"):
+    if exporter == "export" or exporter.startswith("export-"):
         # torch export
         summary, data = call_torch_export_export(
             exporter=exporter,
@@ -673,23 +697,21 @@ def call_torch_export_export(
         print(f"[call_torch_export_export] dynamic_shapes_export_export={string_type(dse)}")
         print("[call_torch_export_export] export...")
 
-    begin = time.perf_counter()
-    if quiet:
-        try:
-            ep = torch.export.export(
-                data["model"], args, kwargs=kwargs, dynamic_shapes=dse, strict=strict
+    model = data["model"]
+    ep = _quiet_or_not_quiet(
+        quiet,
+        "export_export",
+        summary,
+        data,
+        (
+            lambda m=model, args=args, kws=kwargs, dse=dse, s=strict: (
+                torch.export.export(m, args, kwargs=kws, dynamic_shapes=dse, strict=s)
             )
-        except Exception as e:
-            summary["ERR_export_export"] = str(e)
-            data["ERR_export_export"] = e
-            summary["time_export_export"] = time.perf_counter() - begin
-            return summary, data
-    else:
-        ep = torch.export.export(
-            data["model"], args, kwargs=kwargs, dynamic_shapes=dse, strict=strict
-        )
+        ),
+    )
+    if "ERR_export_export" in summary:
+        return summary, data
 
-    summary["time_export_export"] = time.perf_counter() - begin
     summary["export_graph_nodes"] = len(ep.graph.nodes)
     if verbose:
         print(
@@ -715,18 +737,17 @@ def call_torch_export_export(
         # We make a copy of the input just in case the model modifies them inplace
         inputs = torch_deepcopy(data["inputs_export"])
         model = ep.module()
-        begin = time.perf_counter()
-        if quiet:
-            try:
-                expected = model(**inputs)
-            except Exception as e:
-                summary["ERR_run_exported"] = str(e)
-                data["ERR_run_exported"] = e
-                summary["time_run_exported"] = time.perf_counter() - begin
-                return summary, data
-        else:
-            expected = model(**inputs)
-        summary["time_run_exported"] = time.perf_counter() - begin
+
+        expected = _quiet_or_not_quiet(
+            quiet,
+            "run_exported",
+            summary,
+            data,
+            (lambda m=model, inputs=inputs: (model(**inputs))),
+        )
+        if "ERR_export_export" in summary:
+            return summary, data
+
         disc = max_diff(data["expected"], expected)
         for k, v in disc.items():
             summary[f"disc_exported_{k}"] = v
@@ -797,19 +818,20 @@ def validate_onnx_model(
             f"{providers}..., flavour={flavour!r}"
         )
 
-    begin = time.perf_counter()
-    if quiet:
-        try:
-            sess = onnxruntime.InferenceSession(source, providers=providers)
-        except Exception as e:
-            summary[_mk("ERR_onnx_ort_create")] = str(e)
-            data[_mk("ERR_onnx_ort_create")] = e
-            summary[_mk("time_onnx_ort_create")] = time.perf_counter() - begin
-            return summary, data
-    else:
-        sess = onnxruntime.InferenceSession(source, providers=providers)
+    sess = _quiet_or_not_quiet(
+        quiet,
+        _mk("time_onnx_ort_create"),
+        summary,
+        data,
+        (
+            lambda source=source, providers=providers: onnxruntime.InferenceSession(
+                source, providers=providers
+            )
+        ),
+    )
+    if f"ERR_{_mk('time_onnx_ort_create')}" in summary:
+        return summary, data
 
-    summary[_mk("time_onnx_ort_create")] = time.perf_counter() - begin
     data[_mk("onnx_ort_sess")] = sess
     if verbose:
         print(f"[validate_onnx_model] done (ort_session) flavour={flavour!r}")
@@ -833,17 +855,17 @@ def validate_onnx_model(
     # run ort
     if verbose:
         print("[validate_onnx_model] run session...")
-    begin = time.perf_counter()
-    if quiet:
-        try:
-            got = sess.run(None, feeds)
-        except Exception as e:
-            summary[_mk("ERR_onnx_ort_run")] = str(e)
-            data[_mk("ERR_onnx_ort_run")] = e
-            summary[_mk("time_onnx_ort_run")] = time.perf_counter() - begin
-            return summary, data
-    else:
-        got = sess.run(None, feeds)
+
+    got = _quiet_or_not_quiet(
+        quiet,
+        _mk("time_onnx_ort_run"),
+        summary,
+        data,
+        (lambda sess=sess, feeds=feeds: sess.run(None, feeds)),
+    )
+    if f"ERR_{_mk('time_onnx_ort_run')}" in summary:
+        return summary, data
+
     if verbose:
         print("[validate_onnx_model] done (run)")
         print(f"[validate_onnx_model] got={string_type(got, with_shape=True)}")
@@ -931,29 +953,27 @@ def call_torch_export_onnx(
             f"[call_torch_export_onnx] export_export_kwargs="
             f"{string_type(export_export_kwargs, with_shape=True)}"
         )
-    begin = time.perf_counter()
-    if quiet:
-        try:
-            epo = torch.onnx.export(
-                data["model"],
-                args,
-                kwargs=kwargs,
-                **export_export_kwargs,
-            )
-        except Exception as e:
-            summary["ERR_export_export"] = str(e)
-            data["ERR_export_export"] = e
-            summary["time_export_export"] = time.perf_counter() - begin
-            return summary, data
-    else:
-        epo = torch.onnx.export(
-            data["model"],
-            args,
-            kwargs=kwargs,
-            **export_export_kwargs,
-        )
+    model = data["model"]
 
-    summary["time_export_export"] = time.perf_counter() - begin
+    epo = _quiet_or_not_quiet(
+        quiet,
+        "export_onnx",
+        summary,
+        data,
+        (
+            lambda m=model, args=args, kws=kwargs, ekws=export_export_kwargs: (
+                torch.onnx.export(
+                    m,
+                    args,
+                    kwargs=kws,
+                    **ekws,
+                )
+            )
+        ),
+    )
+    if "ERR_export_onnx" in summary:
+        return summary, data
+
     assert epo is not None, "no onnx export was found"
     if verbose:
         print("[call_torch_export_onnx] done (export)")
@@ -963,21 +983,18 @@ def call_torch_export_onnx(
         print(epo)
         print("[call_torch_export_onnx] -- End of ONNXProgram")
 
-    begin = time.perf_counter()
     if optimization == "ir":
         if verbose:
             print(f"[call_torch_export_onnx] starts optimization={optimization!r}...")
-        if quiet:
-            try:
-                epo.optimize()
-            except Exception as e:
-                summary["ERR_export_optimize_ir"] = str(e)
-                data["ERR_export_optimize_ir"] = e
-                summary["time_export_optimize_ir"] = time.perf_counter() - begin
-                return summary, data
-        else:
-            epo.optimize()
-        summary["time_export_optimize_ir"] = time.perf_counter() - begin
+        _quiet_or_not_quiet(
+            quiet,
+            "export_onnx_opt_ir",
+            summary,
+            data,
+            (lambda epo=epo: epo.optimize()),
+        )
+        if "ERR_export_onnx_opt_ir" in summary:
+            return summary, data
         if verbose:
             print("[call_torch_export_onnx] done (optimization)")
 
@@ -1050,40 +1067,35 @@ def call_torch_export_custom(
         ),
     )
     options = OptimizationOptions(patterns=optimization) if optimization else None
+    model = data["model"]
+    kws = dict(
+        dynamic_shapes=ds,
+        export_options=export_options,
+        options=options,
+        optimize=bool(optimization),
+        large_model=True,
+        return_optimize_report=True,
+        verbose=max(verbose - 2, 0),
+    )
 
-    begin = time.perf_counter()
-    if quiet:
-        try:
-            epo, opt_stats = to_onnx(
-                data["model"],
-                args,
-                kwargs=kwargs,
-                dynamic_shapes=ds,
-                export_options=export_options,
-                options=options,
-                optimize=bool(optimization),
-                large_model=True,
-                return_optimize_report=True,
-                verbose=max(verbose - 2, 0),
+    epo, opt_stats = _quiet_or_not_quiet(
+        quiet,
+        "export_export_onnx_c",
+        summary,
+        data,
+        (
+            lambda m=model, args=args, kwargs=kwargs, kws=kws: (
+                to_onnx(
+                    model,
+                    args,
+                    kwargs=kwargs,
+                    **kws,
+                )
             )
-        except Exception as e:
-            summary["ERR_export_export"] = str(e)
-            data["ERR_export_export"] = e
-            summary["time_export_export"] = time.perf_counter() - begin
-            return summary, data
-    else:
-        epo, opt_stats = to_onnx(
-            data["model"],
-            args,
-            kwargs=kwargs,
-            dynamic_shapes=ds,
-            export_options=export_options,
-            options=options,
-            optimize=bool(optimization),
-            large_model=True,
-            return_optimize_report=True,
-            verbose=max(verbose - 2, 0),
-        )
+        ),
+    )
+    if "ERR_export_onnx_c" in summary:
+        return summary, data
 
     new_stat = {}
     if "optimization" in opt_stats:
@@ -1147,7 +1159,6 @@ def call_torch_export_custom(
             )
         )
 
-    summary["time_export_export"] = time.perf_counter() - begin
     summary.update(new_stat)
     assert epo is not None, "no onnx export was found"
     if verbose:

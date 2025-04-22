@@ -4,7 +4,12 @@ import packaging.version as pv
 import optree
 import torch
 import transformers
-from transformers.cache_utils import DynamicCache, MambaCache, EncoderDecoderCache
+from transformers.cache_utils import (
+    DynamicCache,
+    MambaCache,
+    EncoderDecoderCache,
+    SlidingWindowCache,
+)
 from transformers.modeling_outputs import BaseModelOutput
 from ..helpers import string_type
 
@@ -112,41 +117,43 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
         # To avoid doing it multiple times.
         PATCH_OF_PATCHES.add(BaseModelOutput)
 
-    unregistered_dynamic_cache = _register_class_serialization(
-        DynamicCache,
-        flatten_dynamic_cache,
-        unflatten_dynamic_cache,
-        flatten_with_keys_dynamic_cache,
-        # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
-        verbose=verbose,
-    )
-    unregistered_base_model_output = _register_class_serialization(
-        BaseModelOutput,
-        flatten_base_model_output,
-        unflatten_base_model_output,
-        flatten_with_keys_base_model_output,
-        verbose=verbose,
-    )
-    unregistered_encode_decode_cache = _register_class_serialization(
-        EncoderDecoderCache,
-        flatten_encoder_decoder_cache,
-        unflatten_encoder_decoder_cache,
-        flatten_with_keys_encoder_decoder_cache,
-        verbose=verbose,
-    )
-    unregistered_mamba_cache = _register_class_serialization(
-        MambaCache,
-        flatten_mamba_cache,
-        unflatten_mamba_cache,
-        flatten_with_keys_mamba_cache,
-        verbose=verbose,
-    )
-
     return dict(
-        DynamicCache=unregistered_dynamic_cache,
-        MambaCache=unregistered_mamba_cache,
-        EncoderDecoderCache=unregistered_encode_decode_cache,
-        BaseModelOutput=unregistered_base_model_output,
+        DynamicCache=_register_class_serialization(
+            DynamicCache,
+            flatten_dynamic_cache,
+            unflatten_dynamic_cache,
+            flatten_with_keys_dynamic_cache,
+            # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
+            verbose=verbose,
+        ),
+        MambaCache=_register_class_serialization(
+            MambaCache,
+            flatten_mamba_cache,
+            unflatten_mamba_cache,
+            flatten_with_keys_mamba_cache,
+            verbose=verbose,
+        ),
+        EncoderDecoderCache=_register_class_serialization(
+            EncoderDecoderCache,
+            flatten_encoder_decoder_cache,
+            unflatten_encoder_decoder_cache,
+            flatten_with_keys_encoder_decoder_cache,
+            verbose=verbose,
+        ),
+        BaseModelOutput=_register_class_serialization(
+            BaseModelOutput,
+            flatten_base_model_output,
+            unflatten_base_model_output,
+            flatten_with_keys_base_model_output,
+            verbose=verbose,
+        ),
+        SlidingWindowCache=_register_class_serialization(
+            SlidingWindowCache,
+            flatten_sliding_window_cache,
+            unflatten_sliding_window_cache,
+            flatten_with_keys_sliding_window_cache,
+            verbose=verbose,
+        ),
     )
 
 
@@ -273,6 +280,60 @@ def unflatten_dynamic_cache(
         return transformers.cache_utils._unflatten_dynamic_cache(values, context)
 
     cache = transformers.cache_utils.DynamicCache()
+    values = dict(zip(context, values))
+    for k, v in values.items():
+        setattr(cache, k, v)
+    return cache
+
+
+####################
+# SlidingWindowCache
+####################
+
+
+def flatten_sliding_window_cache(
+    cache: SlidingWindowCache,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    """
+    Serializes a :class:`transformers.cache_utils.SlidingWindowCache`
+    with python objects.
+    """
+    flat = [("key_cache", cache.key_cache), ("value_cache", cache.value_cache)]
+    return [f[1] for f in flat], [f[0] for f in flat]
+
+
+def flatten_with_keys_sliding_window_cache(
+    cache: SlidingWindowCache,
+) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
+    """
+    Serializes a :class:`transformers.cache_utils.SlidingWindowCache`
+    with python objects.
+    """
+    values, context = flatten_sliding_window_cache(cache)
+    return [(torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)], context
+
+
+def unflatten_sliding_window_cache(
+    values: List[Any], context: torch.utils._pytree.Context, output_type=None
+) -> SlidingWindowCache:
+    """Restores a :class:`transformers.cache_utils.SlidingWindowCache` from python objects."""
+    key_cache, value_cache = values
+
+    class _config:
+        def __init__(self):
+            self.head_dim = key_cache[0].shape[-1]
+            self.num_attention_heads = key_cache[0].shape[1]
+            self.num_hidden_layers = len(key_cache)
+            self.sliding_window = key_cache[0].shape[2]
+
+    cache = SlidingWindowCache(
+        _config(),
+        max_batch_size=key_cache[0].shape[0],
+        max_cache_len=key_cache[0].shape[2],  # sligding window
+        device=key_cache[0].device,
+        dtype=key_cache[0].dtype,
+    )
+
     values = dict(zip(context, values))
     for k, v in values.items():
         setattr(cache, k, v)

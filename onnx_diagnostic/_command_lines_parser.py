@@ -1,3 +1,4 @@
+import argparse
 import json
 import sys
 import textwrap
@@ -227,6 +228,21 @@ def _cmd_config(argv: List[Any]):
         print(f"task: {task_from_id(args.mid)}")
 
 
+class _ParseDict(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        d = getattr(namespace, self.dest) or {}
+
+        if values:
+            for item in values:
+                split_items = item.split("=", 1)
+                key = split_items[0].strip()  # we remove blanks around keys, as is logical
+                value = split_items[1]
+
+                d[key] = value
+
+        setattr(namespace, self.dest, d)
+
+
 def get_parser_validate() -> ArgumentParser:
     parser = ArgumentParser(
         prog="test",
@@ -297,6 +313,14 @@ def get_parser_validate() -> ArgumentParser:
     parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
     parser.add_argument("--dtype", help="changes dtype if necessary")
     parser.add_argument("--device", help="changes the device if necessary")
+    parser.add_argument(
+        "--iop",
+        metavar="KEY=VALUE",
+        nargs="*",
+        help="Additional input options, use to change the default "
+        "inputs use to export, example: --iop cls_cache=SlidingWindowCache",
+        action=_ParseDict,
+    )
     return parser
 
 
@@ -346,6 +370,7 @@ def _cmd_validate(argv: List[Any]):
             dump_folder=args.dump_folder,
             drop_inputs=None if not args.drop else args.drop.split(","),
             ortfusiontype=args.ortfusiontype,
+            input_options=args.iop,
         )
         print("")
         print("-- summary --")

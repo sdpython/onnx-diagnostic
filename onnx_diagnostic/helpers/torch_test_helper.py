@@ -4,7 +4,11 @@ from typing import Any, Optional, Tuple, Union
 import numpy as np
 import torch
 from .helper import string_type
-from .cache_helper import make_dynamic_cache, make_encoder_decoder_cache
+from .cache_helper import (
+    make_dynamic_cache,
+    make_encoder_decoder_cache,
+    make_sliding_window_cache,
+)
 
 
 def _forward_(*args, _f=None, _context=None, **kwargs):
@@ -361,6 +365,10 @@ def torch_deepcopy(value: Any) -> Any:
         return value.clone()
     if value.__class__.__name__ == "DynamicCache":
         return make_dynamic_cache(
+            torch_deepcopy(list(zip(value.key_cache, value.value_cache)))
+        )
+    if value.__class__.__name__ == "SlidingWindowCache":
+        return make_sliding_window_cache(
             torch_deepcopy(list(zip(value.key_cache, value.value_cache)))
         )
     if value.__class__.__name__ == "EncoderDecoderCache":

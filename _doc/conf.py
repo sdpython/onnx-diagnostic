@@ -123,6 +123,7 @@ nitpick_ignore = [
     ("py:class", "transformers.cache_utils.DynamicCache"),
     ("py:class", "transformers.cache_utils.EncoderDecoderCache"),
     ("py:class", "transformers.cache_utils.MambaCache"),
+    ("py:class", "transformers.cache_utils.SlidingWindowCache"),
     ("py:class", "transformers.configuration_utils.PretrainedConfig"),
     ("py:func", "torch.export._draft_export.draft_export"),
     ("py:func", "torch._export.tools.report_exportability"),

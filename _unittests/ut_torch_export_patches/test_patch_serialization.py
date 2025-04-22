@@ -1,10 +1,11 @@
 import unittest
 import torch
 from transformers.modeling_outputs import BaseModelOutput
-from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
+from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, requires_torch
 from onnx_diagnostic.helpers.cache_helper import (
     make_encoder_decoder_cache,
     make_dynamic_cache,
+    make_sliding_window_cache,
     flatten_unflatten_for_dynamic_shapes,
 )
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
@@ -163,6 +164,53 @@ class TestPatchSerialization(ExtTestCase):
             unflat = flatten_unflatten_for_dynamic_shapes(bo, use_dict=True)
             self.assertIsInstance(unflat, dict)
             self.assertEqual(list(unflat), ["last_hidden_state"])
+
+    @ignore_warnings(UserWarning)
+    def test_base_sliding_window_cache_unflatten_flatten(self):
+        cache = make_sliding_window_cache(
+            [(torch.rand((4, 4, 4, 4)), torch.rand((4, 4, 4, 4)))]
+        )
+        with bypass_export_some_errors():
+            cache2 = torch_deepcopy([cache])
+            self.assertEqualAny([cache], cache2)
+
+    @ignore_warnings(UserWarning)
+    @requires_torch("2.7")
+    def test_sliding_window_cache_export(self):
+        class Model(torch.nn.Module):
+            def forward(self, cache):
+                return cache.key_cache[0]
+
+        cache = make_sliding_window_cache(
+            [
+                (torch.rand((4, 4, 4, 4)), torch.rand((4, 4, 4, 4))),
+                (torch.rand((4, 4, 4, 4)), torch.rand((4, 4, 4, 4))),
+            ]
+        )
+        model = Model()
+        model(cache)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = [[{0: DYN}, {0: DYN}], [{0: DYN}, {0: DYN}]]
+
+        with bypass_export_some_errors(patch_transformers=True):
+            torch.export.export(model, (cache,), dynamic_shapes=(ds,))
+
+    @ignore_warnings(UserWarning)
+    def test_sliding_window_cache_flatten(self):
+        cache = make_sliding_window_cache(
+            [(torch.rand((4, 4, 4, 4)), torch.rand((4, 4, 4, 4)))]
+        )
+        with bypass_export_some_errors():
+            flat, _spec = torch.utils._pytree.tree_flatten(cache)
+            self.assertEqual(
+                "#2[T1s4x4x4x4,T1s4x4x4x4]",
+                self.string_type(flat, with_shape=True),
+            )
+            cache2 = torch.utils._pytree.tree_unflatten(flat, _spec)
+            self.assertEqual(
+                self.string_type(cache, with_shape=True, with_min_max=True),
+                self.string_type(cache2, with_shape=True, with_min_max=True),
+            )
 
 
 if __name__ == "__main__":
