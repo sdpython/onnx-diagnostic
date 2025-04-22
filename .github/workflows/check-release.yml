@@ -28,7 +28,7 @@ jobs:
 
       - name: Install pytorch
         run: |
-          if [[ "${{ matrix.torch }}" == "main" ]]; then
+          if [ "${{ matrix.torch }}" = "main" ]; then
             python -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cpu
           else
             echo "install torch==${{ matrix.torch }}"
@@ -37,7 +37,7 @@ jobs:
 
       - name: Install transformers ${{ matrix.transformers }}
         run: |
-          if [[ "${{ matrix.transformers }}" == "main" ]]; then
+          if [ "${{ matrix.transformers }}" = "main" ]; then
             echo "install transformers from github"
             git clone https://github.com/huggingface/transformers.git
             cd transformers
