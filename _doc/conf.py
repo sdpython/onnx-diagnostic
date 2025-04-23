@@ -12,6 +12,7 @@ extensions = [
     "sphinx.ext.githubpages",
     "sphinx.ext.ifconfig",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.linkcode",
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.todo",
@@ -63,14 +64,19 @@ issues_github_path = "sdpython/onnx-diagnostic"
 # ]
 
 # The following is used by sphinx.ext.linkcode to provide links to github
-linkcode_resolve = make_linkcode_resolve(
-    "onnx-diagnostic",
+_linkcode_resolve = make_linkcode_resolve(
+    "onnx_diagnostic",
     (
         "https://github.com/sdpython/onnx-diagnostic/"
         "blob/{revision}/{package}/"
         "{path}#L{lineno}"
     ),
 )
+
+
+def linkcode_resolve(domain, info):
+    return _linkcode_resolve(domain, info)
+
 
 latex_elements = {
     "papersize": "a4",
