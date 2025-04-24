@@ -36,6 +36,7 @@ Or:
     fill_mask
     image_classification
     image_text_to_text
+    mixture_of_expert
     sentence_similarity
     text_classification
     text_generation
