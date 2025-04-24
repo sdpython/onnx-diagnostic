@@ -94,10 +94,13 @@ jobs:
       - name: run tests bypassed
         run: PYTHONPATH=. python _unittests/ut_torch_models/test_tiny_llms_bypassed.py
 
+      - name: test zero_shot_image_classification
+        run: PYTHONPATH=. python _unittests/ut_tasks/test_tasks_zero_shot_image_classification.py
+
       - name: run tests
         run: |
           pip install pytest
-          PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py --ignore _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --ignore _unittests/ut_torch_models/test_tiny_llms_bypassed.py
+          PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py --ignore _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --ignore _unittests/ut_torch_models/test_tiny_llms_bypassed.py --ignore _unittests/ut_tasks/test_tasks_zero_shot_image_classification.py
 
       - name: run backend tests python
         run: PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_extended_reference_evaluator.py

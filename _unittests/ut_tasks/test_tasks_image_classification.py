@@ -16,7 +16,7 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         model(**data["inputs2"])
-        if not has_transformers("4.50.999"):
+        if not has_transformers("4.51.999"):
             raise unittest.SkipTest("Requires transformers>=4.52")
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
             torch.export.export(
