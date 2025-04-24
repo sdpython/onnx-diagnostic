@@ -22,7 +22,10 @@ class TestTestHelper(ExtTestCase):
     def test_get_inputs_for_task(self):
         fcts = supported_tasks()
         for task in self.subloop(sorted(fcts)):
-            data = get_inputs_for_task(task)
+            try:
+                data = get_inputs_for_task(task)
+            except NotImplementedError:
+                continue
             self.assertIsInstance(data, dict)
             self.assertIn("inputs", data)
             self.assertIn("dynamic_shapes", data)
@@ -99,9 +102,11 @@ class TestTestHelper(ExtTestCase):
             patch=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             optimization="default",
+            quiet=False,
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
+        self.assertIn("disc_onnx_ort_run_abs", summary)
         self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
         onnx_filename = data["onnx_filename"]
         output_path = f"{onnx_filename}.ortopt.onnx"

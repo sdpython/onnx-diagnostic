@@ -203,7 +203,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         prompt = f"{user_prompt}<|audio_1|>{speech_prompt}{prompt_suffix}{assistant_prompt}"
         print(f">>> Prompt\n{prompt}")
 
-        # Downlowd and open audio file
+        # Download and open audio file
         audio, samplerate = sf.read(io.BytesIO(urlopen(audio_url).read()))
 
         # Process with the model
