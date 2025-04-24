@@ -175,7 +175,7 @@ class TestPatchSerialization(ExtTestCase):
             self.assertEqualAny([cache], cache2)
 
     @ignore_warnings(UserWarning)
-    @requires_torch("2.7")
+    @requires_torch("2.8")
     def test_sliding_window_cache_export(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
