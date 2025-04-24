@@ -34,6 +34,7 @@ def get_inputs(
     input_height: int = 224,
     input_channels: int = 3,
     batch_size_image=3,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
@@ -54,6 +55,7 @@ def get_inputs(
     # attention_mask:T7s2x7
     # pixel_values:T1s2x3x224x224
     """
+    assert not add_second_input, "add_second_input=True not yet implemented"
     assert isinstance(
         input_width, int
     ), f"Unexpected type for input_width {type(input_width)}{config}"

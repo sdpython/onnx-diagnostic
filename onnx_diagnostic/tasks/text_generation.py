@@ -71,6 +71,7 @@ def get_inputs(
     num_key_value_heads: Optional[int] = None,
     head_dim: Optional[int] = None,
     cls_cache: Optional[Union[type, str]] = None,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
@@ -88,6 +89,7 @@ def get_inputs(
         :class:`transformers.cache_utils.DynamicCache`
     :return: dictionary
     """
+    assert not add_second_input, "add_second_input=True not yet implemented"
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
     cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
@@ -192,7 +194,23 @@ def get_inputs(
             ]
         ),
     )
-    return dict(inputs=inputs, dynamic_shapes=shapes)
+    res = dict(inputs=inputs, dynamic_shapes=shapes)
+    if add_second_input:
+        res["inputs2"] = get_inputs(
+            model=model,
+            config=config,
+            dummy_max_token_id=dummy_max_token_id,
+            num_hidden_layers=num_hidden_layers,
+            batch_size=batch_size + 1,
+            sequence_length=sequence_length + 1,
+            sequence_length2=sequence_length2 + 1,
+            dynamic_rope=dynamic_rope,
+            num_key_value_heads=num_key_value_heads,
+            head_dim=head_dim,
+            cls_cache=cls_cache,
+            **kwargs,
+        )
+    return res
 
 
 def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:

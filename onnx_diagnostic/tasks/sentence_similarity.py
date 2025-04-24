@@ -22,6 +22,7 @@ def get_inputs(
     batch_size: int,
     sequence_length: int,
     dummy_max_token_id: int,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
@@ -34,6 +35,7 @@ def get_inputs(
         token_type_ids:T7s1x13[0,0:A0.0],
         attention_mask:T7s1x13[1,1:A1.0])
     """
+    assert not add_second_input, "add_second_input=True not yet implemented"
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = "seq_length"
     shapes = {

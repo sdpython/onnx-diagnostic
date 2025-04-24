@@ -41,6 +41,7 @@ def get_inputs(
     sequence_length2: int = 3,
     n_images: int = 2,
     dynamic_rope: bool = False,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
@@ -60,6 +61,7 @@ def get_inputs(
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :return: dictionary
     """
+    assert not add_second_input, "add_second_input=True not yet implemented"
     raise NotImplementedError(f"get_inputs not yet implemented for task {__TASK__!r}.")
 
 

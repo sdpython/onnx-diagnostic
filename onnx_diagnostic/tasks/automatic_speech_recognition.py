@@ -33,6 +33,7 @@ def get_inputs(
     head_dim: int,
     batch_size: int = 2,
     sequence_length: int = 30,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
@@ -68,6 +69,7 @@ def get_inputs(
             use_cache:bool,return_dict:bool
         )
     """
+    assert not add_second_input, "add_second_input=True not yet implemented"
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = "seq_length"
 

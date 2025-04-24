@@ -27,6 +27,7 @@ def get_inputs(
     input_channels: int,
     batch_size: int = 2,
     dynamic_rope: bool = False,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
@@ -40,6 +41,7 @@ def get_inputs(
     :param input_height: input height
     :return: dictionary
     """
+    assert not add_second_input, "add_second_input=True not yet implemented"
     assert isinstance(
         input_width, int
     ), f"Unexpected type for input_width {type(input_width)}{config}"

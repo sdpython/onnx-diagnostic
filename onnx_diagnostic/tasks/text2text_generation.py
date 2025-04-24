@@ -28,6 +28,7 @@ def get_inputs(
     batch_size: int = 2,
     sequence_length: int = 30,
     sequence_length2: int = 3,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
