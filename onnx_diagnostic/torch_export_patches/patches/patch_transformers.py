@@ -5,6 +5,7 @@ import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.cache_utils import StaticCache, Cache, DynamicCache
+from ...ext_test_case import has_transformers
 from ...helpers.torch_test_helper import is_torchdynamo_exporting
 
 
@@ -50,7 +51,8 @@ class patched_AttentionMaskConverter:
     ``transformers.modeling_attn_mask_utils.AttentionMaskConverter._make_causal_mask``.
     """
 
-    _PATCHES_ = ["_make_causal_mask"]
+    # This method was fixed in 4.51 at least.
+    _PATCHES_ = ["_make_causal_mask"] if not has_transformers("4.50.9999") else []
     _PATCHED_CLASS_ = AttentionMaskConverter
 
     @staticmethod

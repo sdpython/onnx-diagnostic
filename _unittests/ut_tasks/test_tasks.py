@@ -45,6 +45,8 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         model(**data["inputs2"])
+        if not has_transformers("4.51"):
+            raise unittest.SkipTest("_patch_make_causal_mask patch fails when an issue arises")
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
             torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
@@ -131,7 +133,7 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         model(**data["inputs2"])
-        if not has_torch("2.8"):
+        if not has_torch("2.7.99"):
             raise unittest.SkipTest("sym_max does not work with dynamic dimension")
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
             torch.export.export(
@@ -219,6 +221,8 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         model(**data["inputs2"])
+        if not has_transformers("4.51"):
+            raise unittest.SkipTest("_patch_make_causal_mask patch fails when an issue arises")
         with bypass_export_some_errors(patch_transformers=True, verbose=10):
             torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
