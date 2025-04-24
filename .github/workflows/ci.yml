@@ -18,6 +18,15 @@ jobs:
         python: ['3.10', '3.11', '3.12']
         transformers: ['4.48.3', '4.51.3', 'main']
         torch: ['2.6', '2.7', 'main']
+        exclude:
+          - python: '3.10'
+            transformers: 'main'
+          - python: '3.10'
+            torch: '2.7'
+          - python: '3.11'
+            transformers: '4.51.3'
+          - python: '3.11'
+            torch: '2.7'
     steps:
       - uses: actions/checkout@v3
 
