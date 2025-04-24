@@ -749,7 +749,8 @@ class TestDynamicShapes(ExtTestCase):
             {"A": make_dynamic_cache([(torch.ones((2, 2, 2, 2)), torch.ones((2, 2, 2, 2)))])},
             {"A": [[{0: "batch", 2: "last"}], [{0: "batch", 2: "last"}]]},
         )
-        new_inputs = inst.change_dynamic_dimensions()
+        with bypass_export_some_errors(patch_transformers=True):
+            new_inputs = inst.change_dynamic_dimensions()
         self.assertIsInstance(new_inputs["A"], transformers.cache_utils.DynamicCache)
         self.assertEqual((3, 2, 3, 2), new_inputs["A"].key_cache[0].shape)
         self.assertEqual((3, 2, 3, 2), new_inputs["A"].value_cache[0].shape)

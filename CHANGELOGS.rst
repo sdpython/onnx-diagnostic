@@ -4,6 +4,7 @@ Change Logs
 0.4.1
 +++++
 
+* :pr:`72`: fix change_dynamic_dimension for custom classes
 * :pr:`70`: support models options in command lines
 
 0.4.0
