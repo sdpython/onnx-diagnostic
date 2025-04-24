@@ -10,6 +10,8 @@ The algorithm trying to automatically infer shapes after every operator
 in the exported program is something very aggreessive. Here is a case where
 it takes a wrong decision and how to get around it.
 
+**This bug was fixed after 4/24/2025**.
+
 Wrong Model
 +++++++++++
 """
@@ -183,4 +185,4 @@ print("final case:", rewritten_model(x, y, fact).shape, model_ep(x, y, fact).sha
 # is hidden in a custom operator.
 
 
-doc.plot_legend("dynamic shapes\nworkaround\nmax(d1, d2)", "dynamic shapes", "yellow")
+doc.plot_legend("max(d1, d2)\nwith d1, d2 dimensions", "dynamic shapes", "green")

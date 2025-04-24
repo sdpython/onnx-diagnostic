@@ -1,9 +1,11 @@
 from typing import Any, Callable, Dict, List, Tuple
 from . import (
     automatic_speech_recognition,
+    feature_extraction,
     fill_mask,
     image_classification,
     image_text_to_text,
+    mixture_of_expert,
     sentence_similarity,
     text_classification,
     text_generation,
@@ -13,9 +15,11 @@ from . import (
 
 __TASKS__ = [
     automatic_speech_recognition,
+    feature_extraction,
     fill_mask,
     image_classification,
     image_text_to_text,
+    mixture_of_expert,
     sentence_similarity,
     text_classification,
     text_generation,

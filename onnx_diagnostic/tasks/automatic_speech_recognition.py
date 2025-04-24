@@ -36,7 +36,7 @@ def get_inputs(
     **kwargs,  # unused
 ):
     """
-    Generates inputs for task ``text2text-generation``.
+    Generates inputs for task ``automatic-speech-recognition``.
     Example:
 
     ::

@@ -521,7 +521,9 @@ def validate_model(
         if verbose:
             print("[validate_model] done (dump)")
 
-    if not exporter or not exporter.startswith(("onnx-", "custom-")):
+    if not exporter or (
+        not exporter.startswith(("onnx-", "custom-")) and exporter != "custom"
+    ):
         if verbose:
             print("[validate_model] -- done (final)")
         if dump_stats:

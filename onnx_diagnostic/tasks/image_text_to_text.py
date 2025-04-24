@@ -35,7 +35,7 @@ def get_inputs(
     **kwargs,  # unused
 ):
     """
-    Generates input for task ``text-generation``.
+    Generates input for task ``image-text-to-text``.
 
     :param model: model to get the missing information
     :param config: configuration used to generate the model

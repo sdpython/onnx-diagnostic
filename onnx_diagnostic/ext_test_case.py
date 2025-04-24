@@ -461,7 +461,7 @@ def requires_sklearn(version: str, msg: str = "") -> Callable:
     return lambda x: x
 
 
-def requires_experimental(version: str = "", msg: str = "") -> Callable:
+def requires_experimental(version: str = "0.0.0", msg: str = "") -> Callable:
     """Skips a unit test if :epkg:`experimental-experiment` is not recent enough."""
     import packaging.version as pv
 
