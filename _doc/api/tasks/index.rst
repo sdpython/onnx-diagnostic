@@ -9,8 +9,11 @@ All submodules contains the three following functions:
 * ``random_input_kwargs(config) -> kwargs, get_inputs``:
   produces values ``get_inputs`` can take to generate dummy inputs
   suitable for a model defined by its configuration
-* ``get_inputs(model, config, *args, **kwargs) -> dict(inputs=..., dynamic_shapes=...)``:
-  generates the dummy inputs and dynamic shapes for a specific model and configuration.
+* ``get_inputs(model, config, *args, add_second_input=False, **kwargs) -> dict(inputs=..., dynamic_shapes=...)``:
+  generates the dummy inputs and dynamic shapes for a specific model and configuration,
+  if ``add_second_input`` is True, the function should return a different set of inputs,
+  with different values for the dynamic dimension. This is usually better to
+  rely on the function as the dynamic dimensions may be correlated.
 
 For a specific task, you would write:
 

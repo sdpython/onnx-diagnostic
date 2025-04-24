@@ -89,7 +89,6 @@ def get_inputs(
         :class:`transformers.cache_utils.DynamicCache`
     :return: dictionary
     """
-    assert not add_second_input, "add_second_input=True not yet implemented"
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
     cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
@@ -146,55 +145,59 @@ def get_inputs(
                 ]
             ),
         )
-        return dict(inputs=inputs, dynamic_shapes=shapes)
+        res = dict(inputs=inputs, dynamic_shapes=shapes)
+    else:
+        if head_dim is None:
+            assert config, "head_dim is None, the value cannot be set without a configuration"
+            head_dim = config.hidden_size // config.num_attention_heads
 
-    if head_dim is None:
-        assert config, "head_dim is None, the value cannot be set without a configuration"
-        head_dim = config.hidden_size // config.num_attention_heads
+        shapes = {
+            "input_ids": {0: batch, 1: seq_length},
+            "attention_mask": {
+                0: batch,
+                1: "cache+seq",  # cache_length + seq_length
+            },
+            "position_ids": {
+                0: batch,
+                1: "cache+seq",  # cache_length + seq_length
+            },
+            "past_key_values": [
+                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+            ],
+        }
 
-    shapes = {
-        "input_ids": {0: batch, 1: seq_length},
-        "attention_mask": {
-            0: batch,
-            1: "cache+seq",  # cache_length + seq_length
-        },
-        "position_ids": {
-            0: batch,
-            1: "cache+seq",  # cache_length + seq_length
-        },
-        "past_key_values": [
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-        ],
-    }
+        make_cache = (
+            make_sliding_window_cache
+            if cls_cache in ("SlidingWindowCache", transformers.cache_utils.SlidingWindowCache)
+            else make_dynamic_cache
+        )
 
-    make_cache = (
-        make_sliding_window_cache
-        if cls_cache in ("SlidingWindowCache", transformers.cache_utils.SlidingWindowCache)
-        else make_dynamic_cache
-    )
-
-    inputs = dict(
-        input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
-            torch.int64
-        ),
-        attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
-            torch.int64
-        ),
-        position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
-        .to(torch.int64)
-        .expand((batch_size, -1)),
-        past_key_values=make_cache(
-            [
-                (
-                    torch.randn(batch_size, num_key_value_heads, sequence_length, head_dim),
-                    torch.randn(batch_size, num_key_value_heads, sequence_length, head_dim),
-                )
-                for i in range(num_hidden_layers)
-            ]
-        ),
-    )
-    res = dict(inputs=inputs, dynamic_shapes=shapes)
+        inputs = dict(
+            input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
+                torch.int64
+            ),
+            attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
+                torch.int64
+            ),
+            position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
+            .to(torch.int64)
+            .expand((batch_size, -1)),
+            past_key_values=make_cache(
+                [
+                    (
+                        torch.randn(
+                            batch_size, num_key_value_heads, sequence_length, head_dim
+                        ),
+                        torch.randn(
+                            batch_size, num_key_value_heads, sequence_length, head_dim
+                        ),
+                    )
+                    for i in range(num_hidden_layers)
+                ]
+            ),
+        )
+        res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
         res["inputs2"] = get_inputs(
             model=model,
@@ -209,7 +212,7 @@ def get_inputs(
             head_dim=head_dim,
             cls_cache=cls_cache,
             **kwargs,
-        )
+        )["inputs"]
     return res
 
 

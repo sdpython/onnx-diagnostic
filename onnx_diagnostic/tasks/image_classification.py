@@ -41,7 +41,6 @@ def get_inputs(
     :param input_height: input height
     :return: dictionary
     """
-    assert not add_second_input, "add_second_input=True not yet implemented"
     assert isinstance(
         input_width, int
     ), f"Unexpected type for input_width {type(input_width)}{config}"
@@ -61,7 +60,19 @@ def get_inputs(
             -1, 1
         ),
     )
-    return dict(inputs=inputs, dynamic_shapes=shapes)
+    res = dict(inputs=inputs, dynamic_shapes=shapes)
+    if add_second_input:
+        res["inputs2"] = get_inputs(
+            model=model,
+            config=config,
+            input_width=input_width + 1,
+            input_height=input_height + 1,
+            input_channels=input_channels,
+            batch_size=batch_size + 1,
+            dynamic_rope=dynamic_rope,
+            **kwargs,
+        )["inputs"]
+    return res
 
 
 def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
