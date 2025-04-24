@@ -52,7 +52,7 @@ class patched_AttentionMaskConverter:
     """
 
     # This method was fixed in 4.51 at least.
-    _PATCHES_ = ["_make_causal_mask"] if not has_transformers("4.50.9999") else []
+    _PATCHES_ = ["_make_causal_mask"] if not has_transformers("4.48.3") else []
     _PATCHED_CLASS_ = AttentionMaskConverter
 
     @staticmethod
@@ -71,6 +71,9 @@ class patched_AttentionMaskConverter:
         This static method may be called with ``AttentionMaskConverter._make_causal_mask``
         or ``self._make_causal_mask``. That changes this argument is receives.
         That should not matter but...
+        The patch should be implemented in another way. static methods do not play well
+        with a simple replacement.
+        Fortunately, this patch does not seem to be needed anymore with transformers>=4.48.3.
         """
         if args:
             index = 0 if isinstance(args[0], (tuple, torch.Size)) else 1
