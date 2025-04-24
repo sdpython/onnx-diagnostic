@@ -76,6 +76,7 @@ __data_arch__ = textwrap.dedent(
     MobileNetV2Model,image-feature-extraction
     MobileViTForImageClassification,image-classification
     ModernBertForMaskedLM,fill-mask
+    Phi4MMForCausalLM,MoE
     MoonshineForConditionalGeneration,automatic-speech-recognition
     MptForCausalLM,text-generation
     MusicgenForConditionalGeneration,text-to-audio
