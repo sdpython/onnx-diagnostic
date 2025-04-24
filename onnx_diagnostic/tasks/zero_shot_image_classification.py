@@ -34,6 +34,7 @@ def get_inputs(
     input_height: int = 224,
     input_channels: int = 3,
     batch_size_image=3,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
@@ -81,7 +82,21 @@ def get_inputs(
             batch_size_image, input_channels, input_width, input_height
         ).clamp(-1, 1),
     )
-    return dict(inputs=inputs, dynamic_shapes=shapes)
+    res = dict(inputs=inputs, dynamic_shapes=shapes)
+    if add_second_input:
+        res["inputs2"] = get_inputs(
+            model=model,
+            config=config,
+            dummy_max_token_id=dummy_max_token_id,
+            batch_size=batch_size + 1,
+            sequence_length=sequence_length + 1,
+            input_width=input_width,
+            input_height=input_height,
+            input_channels=input_channels,
+            batch_size_image=batch_size_image + 1,
+            **kwargs,
+        )["inputs"]
+    return res
 
 
 def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:

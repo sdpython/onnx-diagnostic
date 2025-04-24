@@ -363,16 +363,20 @@ class CoupleInputsDynamicShapes:
         )
         if flatten_unflatten:
             flatunflat = flatten_unflatten_for_dynamic_shapes(inputs)
-            return cls._generic_walker_step(
+            res = cls._generic_walker_step(
                 processor, flatunflat, ds, flatten_unflatten=flatten_unflatten
             )
-        flat, _spec = torch.utils._pytree.tree_flatten(inputs)
+            # Should we restore the original class?
+            return res
+        flat, spec = torch.utils._pytree.tree_flatten(inputs)
         if all(isinstance(t, torch.Tensor) for t in flat):
             # We need to flatten dynamic shapes as well
             ds = flatten_dynamic_shapes(ds)
-        return cls._generic_walker_step(
+        res = cls._generic_walker_step(
             processor, flat, ds, flatten_unflatten=flatten_unflatten
         )
+        # Then we restore the original class.
+        return torch.utils._pytree.tree_unflatten(res, spec)
 
     class ChangeDimensionProcessor:
         def __init__(self, desired_values):

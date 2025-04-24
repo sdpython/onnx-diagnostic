@@ -666,6 +666,15 @@ def string_type(
             print(f"[string_type] CACHE4:{type(obj)}")
         return f"{obj.__class__.__name__}(...)"
 
+    if obj.__class__.__name__.endswith("Config"):
+        import transformers.configuration_utils as tcu
+
+        if isinstance(obj, tcu.PretrainedConfig):
+            if verbose:
+                print(f"[string_type] CONFIG:{type(obj)}")
+            s = str(obj.to_diff_dict()).replace("\n", "").replace(" ", "")
+            return f"{obj.__class__.__name__}(**{s})"
+
     if verbose:
         print(f"[string_type] END:{type(obj)}")
     raise AssertionError(f"Unsupported type {type(obj).__name__!r} - {type(obj)}")

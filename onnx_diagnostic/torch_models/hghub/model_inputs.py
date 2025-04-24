@@ -17,6 +17,7 @@ def get_untrained_model_with_inputs(
     dynamic_rope: Optional[bool] = None,
     same_as_pretrained: bool = False,
     use_preinstalled: bool = True,
+    add_second_input: bool = False,
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
@@ -34,6 +35,8 @@ def get_untrained_model_with_inputs(
     :param same_as_pretrained: if True, do not change the default values
         to get a smaller model
     :param use_preinstalled: use preinstalled configurations
+    :param add_second_input: provides a second inputs to check a model
+        supports different shapes
     :return: dictionary with a model, inputs, dynamic shapes, and the configuration
 
     Example:
@@ -107,7 +110,7 @@ def get_untrained_model_with_inputs(
     # This line is important. Some models may produce different
     # outputs even with the same inputs in training mode.
     model.eval()
-    res = fct(model, config, **kwargs)
+    res = fct(model, config, add_second_input=add_second_input, **kwargs)
 
     res["input_kwargs"] = kwargs
     res["model_kwargs"] = mkwargs

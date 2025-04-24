@@ -71,6 +71,7 @@ def get_inputs(
     num_key_value_heads: Optional[int] = None,
     head_dim: Optional[int] = None,
     cls_cache: Optional[Union[type, str]] = None,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
@@ -144,55 +145,75 @@ def get_inputs(
                 ]
             ),
         )
-        return dict(inputs=inputs, dynamic_shapes=shapes)
+        res = dict(inputs=inputs, dynamic_shapes=shapes)
+    else:
+        if head_dim is None:
+            assert config, "head_dim is None, the value cannot be set without a configuration"
+            head_dim = config.hidden_size // config.num_attention_heads
 
-    if head_dim is None:
-        assert config, "head_dim is None, the value cannot be set without a configuration"
-        head_dim = config.hidden_size // config.num_attention_heads
+        shapes = {
+            "input_ids": {0: batch, 1: seq_length},
+            "attention_mask": {
+                0: batch,
+                1: "cache+seq",  # cache_length + seq_length
+            },
+            "position_ids": {
+                0: batch,
+                1: "cache+seq",  # cache_length + seq_length
+            },
+            "past_key_values": [
+                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+            ],
+        }
 
-    shapes = {
-        "input_ids": {0: batch, 1: seq_length},
-        "attention_mask": {
-            0: batch,
-            1: "cache+seq",  # cache_length + seq_length
-        },
-        "position_ids": {
-            0: batch,
-            1: "cache+seq",  # cache_length + seq_length
-        },
-        "past_key_values": [
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-        ],
-    }
+        make_cache = (
+            make_sliding_window_cache
+            if cls_cache in ("SlidingWindowCache", transformers.cache_utils.SlidingWindowCache)
+            else make_dynamic_cache
+        )
 
-    make_cache = (
-        make_sliding_window_cache
-        if cls_cache in ("SlidingWindowCache", transformers.cache_utils.SlidingWindowCache)
-        else make_dynamic_cache
-    )
-
-    inputs = dict(
-        input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
-            torch.int64
-        ),
-        attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
-            torch.int64
-        ),
-        position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
-        .to(torch.int64)
-        .expand((batch_size, -1)),
-        past_key_values=make_cache(
-            [
-                (
-                    torch.randn(batch_size, num_key_value_heads, sequence_length, head_dim),
-                    torch.randn(batch_size, num_key_value_heads, sequence_length, head_dim),
-                )
-                for i in range(num_hidden_layers)
-            ]
-        ),
-    )
-    return dict(inputs=inputs, dynamic_shapes=shapes)
+        inputs = dict(
+            input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
+                torch.int64
+            ),
+            attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
+                torch.int64
+            ),
+            position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
+            .to(torch.int64)
+            .expand((batch_size, -1)),
+            past_key_values=make_cache(
+                [
+                    (
+                        torch.randn(
+                            batch_size, num_key_value_heads, sequence_length, head_dim
+                        ),
+                        torch.randn(
+                            batch_size, num_key_value_heads, sequence_length, head_dim
+                        ),
+                    )
+                    for i in range(num_hidden_layers)
+                ]
+            ),
+        )
+        res = dict(inputs=inputs, dynamic_shapes=shapes)
+    if add_second_input:
+        res["inputs2"] = get_inputs(
+            model=model,
+            config=config,
+            dummy_max_token_id=dummy_max_token_id,
+            num_hidden_layers=num_hidden_layers,
+            batch_size=batch_size + 1,
+            sequence_length=sequence_length + 1,
+            sequence_length2=sequence_length2 + 1,
+            dynamic_rope=dynamic_rope,
+            num_key_value_heads=num_key_value_heads,
+            head_dim=head_dim,
+            cls_cache=cls_cache,
+            **kwargs,
+        )["inputs"]
+    return res
 
 
 def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:

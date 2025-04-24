@@ -28,6 +28,7 @@ def get_inputs(
     batch_size: int = 2,
     sequence_length: int = 30,
     sequence_length2: int = 3,
+    add_second_input: bool = False,
     **kwargs,  # unused
 ):
     """
@@ -125,7 +126,22 @@ def get_inputs(
         # encoder_last_hidden_state=torch.randn(batch_size, sequence_length2, encoder_dim),
         # encoder_outputs=torch.randn(batch_size, sequence_length2, encoder_dim),
     )
-    return dict(inputs=inputs, dynamic_shapes=shapes)
+    res = dict(inputs=inputs, dynamic_shapes=shapes)
+    if add_second_input:
+        res["inputs2"] = get_inputs(
+            model=model,
+            config=config,
+            dummy_max_token_id=dummy_max_token_id,
+            num_key_value_heads=num_key_value_heads,
+            num_hidden_layers=num_hidden_layers,
+            head_dim=head_dim,
+            encoder_dim=encoder_dim,
+            batch_size=batch_size + 1,
+            sequence_length=sequence_length + 1,
+            sequence_length2=sequence_length2 + 1,
+            **kwargs,
+        )["inputs"]
+    return res
 
 
 def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
