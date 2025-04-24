@@ -13,6 +13,7 @@ __data_arch__ = textwrap.dedent(
     ASTModel,feature-extraction
     AlbertModel,feature-extraction
     BeitForImageClassification,image-classification
+    BartModel,feature-extraction
     BertForMaskedLM,fill-mask
     BertForSequenceClassification,text-classification
     BertModel,sentence-similarity

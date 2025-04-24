@@ -339,6 +339,22 @@ class TestHuggingFaceHubModel(ExtTestCase):
         print("-- outputs", string_type(output, with_shape=True, with_min_max=True))
 
     @never_test()
+    def test_feature_extraction(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k feature_ex
+        # https://huggingface.co/google-bert/bert-base-multilingual-cased
+
+        from transformers import BartTokenizer, BartModel
+
+        tokenizer = BartTokenizer.from_pretrained("facebook/bart-base")
+        model = BartModel.from_pretrained("facebook/bart-base")
+        text = "Replace me by any text you'd like."
+        encoded_input = tokenizer(text, return_tensors="pt")
+        print()
+        print("-- inputs", string_type(encoded_input, with_shape=True, with_min_max=True))
+        output = model(**encoded_input)
+        print("-- outputs", string_type(output, with_shape=True, with_min_max=True))
+
+    @never_test()
     def test_text_classification(self):
         # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k text_cl
         # https://huggingface.co/Intel/bert-base-uncased-mrpc
