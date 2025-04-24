@@ -1,7 +1,7 @@
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.cache_helper import make_dynamic_cache
-from ..helpers.config_helper import update_config, check_hasattr, _pick
+# from ..helpers.cache_helper import make_dynamic_cache
+from ..helpers.config_helper import update_config  # , check_hasattr, _pick
 
 __TASK__ = "MoE"
 
@@ -43,7 +43,7 @@ def get_inputs(
     **kwargs,  # unused
 ):
     """
-    Generates input for task ``text-generation``.
+    Generates input for task ``MoE``.
 
     :param model: model to get the missing information
     :param config: configuration used to generate the model
@@ -59,55 +59,7 @@ def get_inputs(
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :return: dictionary
     """
-    batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
-    cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
-    images = "images"  # torch.export.Dim("images", min=1, max=4096)
-
-    shapes = {
-        "input_ids": {0: batch, 1: seq_length},
-        "attention_mask": {
-            0: batch,
-            1: "cache+seq",  # cache_length + seq_length
-        },
-        "position_ids": {
-            0: batch,
-            1: "cache+seq",  # cache_length + seq_length
-        },
-        "past_key_values": [
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-        ],
-        "pixel_values": {0: batch, 1: images},
-        "image_attention_mask": {0: batch, 1: seq_length, 2: images},
-    }
-    inputs = dict(
-        input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
-            torch.int64
-        ),
-        attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
-            torch.int64
-        ),
-        position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
-        .to(torch.int64)
-        .expand((batch_size, -1)),
-        past_key_values=make_dynamic_cache(
-            [
-                (
-                    torch.randn(batch_size, num_key_value_heads, sequence_length, head_dim),
-                    torch.randn(batch_size, num_key_value_heads, sequence_length, head_dim),
-                )
-                for i in range(num_hidden_layers)
-            ]
-        ),
-        image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
-            torch.int64
-        ),
-        pixel_values=torch.ones((batch_size, n_images, num_channels, width, height)).to(
-            torch.int64
-        ),
-    )
-    return dict(inputs=inputs, dynamic_shapes=shapes)
+    raise NotImplementedError(f"get_inputs not yet implemented for task {__TASK__!r}.")
 
 
 def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
@@ -116,39 +68,6 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
 
     If the configuration is None, the function selects typical dimensions.
     """
-    if config is not None:
-        check_hasattr(
-            config,
-            "vocab_size",
-            "hidden_size",
-            "num_attention_heads",
-            ("num_key_value_heads", "num_attention_heads"),
-            "intermediate_size",
-            "hidden_size",
-            "vision_config",
-            "audio_processor",
-        )
-        check_hasattr(config.vision_config, "image_size", "num_channels")
-    kwargs = dict(
-        batch_size=2,
-        sequence_length=30,
-        sequence_length2=3,
-        head_dim=(
-            16
-            if config is None
-            else getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
-        ),
-        dummy_max_token_id=31999 if config is None else config.vocab_size - 1,
-        num_hidden_layers=4 if config is None else config.num_hidden_layers,
-        num_key_value_heads=(
-            8
-            if config is None
-            else _pick(config, "num_key_value_heads", "num_attention_heads")
-        ),
-        intermediate_size=1024 if config is None else config.intermediate_size,
-        hidden_size=512 if config is None else config.hidden_size,
-        width=224 if config is None else config.vision_config.image_size,
-        height=224 if config is None else config.vision_config.image_size,
-        num_channels=3 if config is None else config.vision_config.num_channels,
+    raise NotImplementedError(
+        f"random_input_kwargs not yet implemented for task {__TASK__!r}."
     )
-    return kwargs, get_inputs

@@ -125,6 +125,10 @@ class TestHuggingFaceHubModel(ExtTestCase):
         print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
 
     @never_test()
+    @unittest.skip(
+        reason="AttributeError: 'Phi4MMModel' object has no attribute "
+        "'prepare_inputs_for_generation'"
+    )
     def test_text_generation_phi4_moe(self):
         # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k phi4_moe
 
