@@ -1,6 +1,6 @@
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, has_transformers
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
