@@ -39,6 +39,8 @@ from onnx_diagnostic.helpers.onnx_helper import (
     dtype_to_tensor_dtype,
 )
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
+from onnx_diagnostic.torch_models.hghub.hub_api import get_pretrained_config
+
 
 TFLOAT = onnx.TensorProto.FLOAT
 
@@ -483,6 +485,11 @@ class TestHelpers(ExtTestCase):
         self.assertIsInstance(d, str)
         s = string_type(inputs)
         self.assertIn("EncoderDecoderCache", s)
+
+    def test_string_typeçconfig(self):
+        conf = get_pretrained_config("microsoft/phi-2")
+        s = string_type(conf)
+        self.assertStartsWith("PhiConfig(**{", s)
 
 
 if __name__ == "__main__":
