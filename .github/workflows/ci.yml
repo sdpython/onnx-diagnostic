@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python: ['3.11', '3.12']
+        python: ['3.10', '3.11', '3.12']
         transformers: ['4.48.3', '4.51.3', 'main']
         torch: ['2.6', 'main']
 
