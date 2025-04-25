@@ -347,6 +347,8 @@ def torch_deepcopy(value: Any) -> Any:
     """
     Makes a deepcopy.
     """
+    if value is None:
+        return None
     if isinstance(value, (int, float, str)):
         return value
     if isinstance(value, tuple):

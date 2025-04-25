@@ -151,6 +151,9 @@ class TestTorchTestHelper(ExtTestCase):
         hash2 = string_type(at, with_shape=True, with_min_max=True)
         self.assertEqual(hash1, hash2)
 
+    def test_torch_deepcopy_none(self):
+        self.assertEmpty(torch_deepcopy(None))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
