@@ -1404,6 +1404,28 @@ def max_diff(
             f"level={level}"
         )
 
+    if expected.__class__.__name__ == "SlidingWindowCache":
+        if got.__class__.__name__ == "SlidingWindowCache":
+            if verbose >= 6:
+                print(f"[max_diff] DynamicCache: {string_type(expected)} ? {string_type(got)}")
+            return max_diff(
+                [expected.key_cache, expected.value_cache],
+                [got.key_cache, got.value_cache],
+                verbose=verbose,
+            )
+        if isinstance(got, tuple) and len(got) == 2:
+            return max_diff(
+                [expected.key_cache, expected.value_cache],
+                [got[0], got[1]],
+                verbose=verbose,
+            )
+        raise AssertionError(
+            f"SlidingWindowCache not fully implemented with classes "
+            f"{expected.__class__.__name__!r} and {got.__class__.__name__!r}, "
+            f"and expected={string_type(expected)}, got={string_type(got)},\n"
+            f"level={level}"
+        )
+
     if expected.__class__.__name__ == "EncoderDecoderCache":
         if got.__class__.__name__ == "EncoderDecoderCache":
             if verbose >= 6:
