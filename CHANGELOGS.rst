@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.4.2
++++++
+
+* :pr:`73`: supports MambaCache in max_diff, torch_deepcopy
+
 0.4.1
 +++++
 

@@ -145,8 +145,8 @@ class TestCacheHelpers(ExtTestCase):
         )
         text = self.string_type(cache, with_shape=True)
         self.assertEqual(
-            "MambaCache(conv_states=#3[T10s4x4x4,T10s4x4x4,T10s4x4x4], "
-            "ssm_states=#3[T10s4x4x4,T10s4x4x4,T10s4x4x4])",
+            "MambaCache(conv_states=#3[T1s4x4x4,T1s4x4x4,T1s4x4x4], "
+            "ssm_states=#3[T1s4x4x4,T1s4x4x4,T1s4x4x4])",
             text,
         )
 

@@ -8,6 +8,7 @@ from .cache_helper import (
     make_dynamic_cache,
     make_encoder_decoder_cache,
     make_sliding_window_cache,
+    make_mamba_cache,
 )
 
 
@@ -346,6 +347,8 @@ def torch_deepcopy(value: Any) -> Any:
     """
     Makes a deepcopy.
     """
+    if value is None:
+        return None
     if isinstance(value, (int, float, str)):
         return value
     if isinstance(value, tuple):
@@ -376,6 +379,9 @@ def torch_deepcopy(value: Any) -> Any:
             torch_deepcopy(value.self_attention_cache),
             torch_deepcopy(value.cross_attention_cache),
         )
+    if value.__class__.__name__ == "MambaCache":
+        return make_mamba_cache(list(zip(value.conv_states, value.ssm_states)))
+
     if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:
         args, spec = torch.utils._pytree.tree_flatten(value)
         new_args = torch_deepcopy(args)
