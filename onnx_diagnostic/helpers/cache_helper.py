@@ -155,6 +155,7 @@ def make_mamba_cache(
     key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
 ) -> transformers.cache_utils.MambaCache:
     "Creates a :class:`transformers.cache_utils.MambaCache`."
+    dtype = key_value_pairs[0][0].dtype
 
     class _config:
         def __init__(self):
@@ -162,14 +163,23 @@ def make_mamba_cache(
             self.conv_kernel = key_value_pairs[0][0].shape[-1]
             self.state_size = key_value_pairs[0][1].shape[-1]
             self.num_hidden_layers = len(key_value_pairs)
-            self.dtype = key_value_pairs[0][0].dtype
+            self.dtype = dtype
 
     cache = transformers.cache_utils.MambaCache(
         _config(),
         max_batch_size=key_value_pairs[0][0].shape[0],
         device=key_value_pairs[0][0].device,
+        dtype=dtype,
     )
     for i in range(len(key_value_pairs)):
+        assert cache.conv_states[i].dtype == dtype, (
+            f"Type mismatch for cache.conv_states[{i}].dtype="
+            f"{cache.conv_states[i].dtype} != {dtype}"
+        )
+        assert cache.ssm_states[i].dtype == dtype, (
+            f"Type mismatch for cache.ssm_states[{i}].dtype="
+            f"{cache.ssm_states[i].dtype} != {dtype}"
+        )
         assert cache.conv_states[i].shape == key_value_pairs[i][0].shape, (
             f"Shape mismatch, expected {cache.conv_states[i].shape}, "
             f"got {key_value_pairs[i][0].shape}"
