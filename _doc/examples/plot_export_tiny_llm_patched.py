@@ -69,7 +69,7 @@ import transformers
 from onnx_diagnostic import doc
 from onnx_diagnostic.helpers.cache_helper import is_cache_dynamic_registered
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 
 
@@ -101,10 +101,10 @@ print("-- DynamicCache registered: ", is_cache_dynamic_registered())
 
 # %%
 # If they are not registered, function
-# func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
+# func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
 # should take care of it. Then we export.
 
-with bypass_export_some_errors(patch_transformers=True, verbose=10) as modificator:
+with torch_export_patches(patch_transformers=True, verbose=10) as modificator:
     assert is_cache_dynamic_registered()  # it must be true here
     ep = torch.export.export(
         untrained_model,
@@ -126,7 +126,7 @@ model = transformers.AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 
 cloned_inputs = copy.deepcopy(inputs)
 
-with bypass_export_some_errors(patch_transformers=True, verbose=10) as modificator:
+with torch_export_patches(patch_transformers=True, verbose=10) as modificator:
     ep = torch.export.export(
         model,
         (),

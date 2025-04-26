@@ -10,7 +10,7 @@ from onnx_diagnostic.ext_test_case import (
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_models.hghub.hub_api import get_pretrained_config
 from onnx_diagnostic.torch_models.hghub.hub_data import load_models_testing
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestHuggingFaceHubModel(ExtTestCase):
@@ -91,7 +91,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         mid = "openai/clip-vit-base-patch16"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs = data["model"], data["inputs"]
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             model(**inputs)
         # different expected value for different version of transformers
         self.assertIn((data["size"], data["n_weights"]), [(188872708, 47218177)])

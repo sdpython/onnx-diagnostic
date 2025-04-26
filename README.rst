@@ -30,13 +30,13 @@ it helps exporting **pytorch models into ONNX**, mostly designed for LLMs using 
 
 .. code-block:: python
 
-  with bypass_export_some_errors(patch_transformers=True) as f:
+  with torch_export_patches(patch_transformers=True) as f:
       ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
       # ...
 
 It also implements tools to investigate, validate exported models (ExportedProgramm, ONNXProgram, ...).
 See `documentation of onnx-diagnostic <https://sdpython.github.io/doc/onnx-diagnostic/dev/>`_ and
-`bypass_export_some_errors <https://sdpython.github.io/doc/onnx-diagnostic/dev/api/torch_export_patches/index.html#onnx_diagnostic.torch_export_patches.bypass_export_some_errors>`_.
+`torch_export_patches <https://sdpython.github.io/doc/onnx-diagnostic/dev/api/torch_export_patches/index.html#onnx_diagnostic.torch_export_patches.torch_export_patches>`_.
 
 Getting started
 +++++++++++++++

@@ -12,7 +12,7 @@ from onnx_diagnostic.helpers.ort_session import (
     InferenceSessionForNumpy,
     InferenceSessionForTorch,
 )
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 from onnx_diagnostic.helpers.onnx_helper import np_dtype_to_tensor_dtype
@@ -77,7 +77,7 @@ class TestOrtSessionTinyLLM(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         expected = model(**copy.deepcopy(inputs))
 
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             ep = torch.onnx.export(
                 model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=ds, dynamo=True
             )

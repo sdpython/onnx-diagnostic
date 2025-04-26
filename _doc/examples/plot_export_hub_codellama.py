@@ -29,7 +29,7 @@ from onnx_diagnostic.torch_models.hghub.hub_api import (
     get_pretrained_config,
     task_from_id,
 )
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 model_id = "codellama/CodeLlama-7b-Python-hf"
@@ -90,9 +90,9 @@ print("outputs:", string_type(expected_outputs, with_shape=True))
 #
 # The model uses :class:`transformers.cache_utils.DynamicCache`.
 # It still requires patches to be exportable (control flow).
-# See :func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
+# See :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
 
-with bypass_export_some_errors(patch_transformers=True) as f:
+with torch_export_patches(patch_transformers=True) as f:
     ep = torch.export.export(
         model,
         (),

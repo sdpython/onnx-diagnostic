@@ -10,7 +10,7 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
-    bypass_export_some_errors,
+    torch_export_patches,
 )
 
 
@@ -34,7 +34,7 @@ class TestOnnxExportErrors(ExtTestCase):
 
         cache = MambaCache(_config(), max_batch_size=1, device="cpu")
 
-        with bypass_export_some_errors(verbose=1):
+        with torch_export_patches(verbose=1):
             values, spec = py_pytree.tree_flatten(cache)
             cache2 = py_pytree.tree_unflatten(values, spec)
             self.assertEqual(cache.max_batch_size, cache2.max_batch_size)
@@ -78,7 +78,7 @@ class TestOnnxExportErrors(ExtTestCase):
         model = Model()
         model(x, cache)
 
-        with bypass_export_some_errors(verbose=1):
+        with torch_export_patches(verbose=1):
             cache = MambaCache(_config(), max_batch_size=1, device="cpu")
             torch.export.export(Model(), (x, cache))
 
@@ -113,7 +113,7 @@ class TestOnnxExportErrors(ExtTestCase):
         model(x, cache)
         DYN = torch.export.Dim.DYNAMIC
 
-        with bypass_export_some_errors():
+        with torch_export_patches():
             cache = MambaCache(_config(), max_batch_size=2, device="cpu")
             torch.export.export(
                 Model(),

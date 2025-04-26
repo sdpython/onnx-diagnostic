@@ -12,7 +12,7 @@ from ..helpers.rt_helper import make_feeds
 from ..helpers.torch_test_helper import to_any, torch_deepcopy
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 from ..tasks import random_input_kwargs
-from ..torch_export_patches import bypass_export_some_errors
+from ..torch_export_patches import torch_export_patches
 from ..torch_export_patches.patch_inputs import use_dyn_not_str
 from .hghub import get_untrained_model_with_inputs
 
@@ -242,9 +242,9 @@ def validate_model(
         depend on the the exporter
     :param quiet: if quiet, catches exception if any issue
     :param patch: applies patches (``patch_transformers=True``) before exporting,
-        see :func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
+        see :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
     :param stop_if_static: stops if a dynamic dimension becomes static,
-        see :func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
+        see :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
     :param dump_folder: dumps everything in a subfolder of this one
     :param drop_inputs: drops this list of inputs (given their names)
     :param ortfusiontype: runs ort fusion, the parameters defines the fusion type,
@@ -417,7 +417,7 @@ def validate_model(
                     f"[validate_model] applies patches before exporting "
                     f"stop_if_static={stop_if_static}"
                 )
-            with bypass_export_some_errors(  # type: ignore
+            with torch_export_patches(  # type: ignore
                 patch_transformers=True,
                 stop_if_static=stop_if_static,
                 verbose=max(0, verbose - 1),

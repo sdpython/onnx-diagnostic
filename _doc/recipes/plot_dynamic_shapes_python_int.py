@@ -14,7 +14,7 @@ Wrong Model
 import math
 import torch
 from onnx_diagnostic import doc
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class Model(torch.nn.Module):
@@ -73,12 +73,12 @@ print(ep)
 # Find the error
 # ++++++++++++++
 #
-# Function :func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
+# Function :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
 # has a parameter ``stop_if_static`` which patches torch to raise exception
 # when something like that is happening.
 
 
-with bypass_export_some_errors(stop_if_static=True):
+with torch_export_patches(stop_if_static=True):
     ep = torch.export.export(model, (x,), dynamic_shapes=({0: DYN, 1: DYN},))
     print(ep)
 
