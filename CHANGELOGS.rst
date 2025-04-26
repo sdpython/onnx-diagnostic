@@ -4,6 +4,9 @@ Change Logs
 0.4.3
 +++++
 
+* :pr:`75`: renames bypass_export_some_patches into torch_export_patches, keeps the old name
+* :pr:`74`: increases the list of class/architectures
+
 0.4.2
 +++++
 
