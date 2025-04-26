@@ -38,12 +38,14 @@ __data_arch__ = textwrap.dedent(
     DeiTModel,image-feature-extraction
     DetrModel,image-feature-extraction
     Dinov2Model,image-feature-extraction
+    DistilBertForSequenceClassification,text-classification
     DistilBertModel,feature-extraction
     DonutSwinModel,feature-extraction
     ElectraModel,feature-extraction
     EsmModel,feature-extraction
     FalconMambaForCausalLM,text-generation
     GLPNModel,image-feature-extraction
+    GPT2LMHeadModel,text-generation
     GPTBigCodeModel,feature-extraction
     GPTJModel,feature-extraction
     GPTNeoModel,feature-extraction
@@ -64,6 +66,7 @@ __data_arch__ = textwrap.dedent(
     LongT5Model,feature-extraction
     LongformerModel,feature-extraction
     MCTCTModel,feature-extraction
+    MPNetForMaskedLM,sentence-similarity
     MPNetModel,feature-extraction
     MT5Model,feature-extraction
     MarianMTModel,text2text-generation
@@ -96,11 +99,13 @@ __data_arch__ = textwrap.dedent(
     PoolFormerModel,image-feature-extraction
     PvtForImageClassification,image-classification
     Qwen2ForCausalLM,text-generation
+    Qwen2_5_VLForConditionalGeneration,image-text-to-text
     RTDetrForObjectDetection,object-detection
     RegNetModel,image-feature-extraction
     RemBertModel,feature-extraction
     ResNetForImageClassification,image-classification
     RoFormerModel,feature-extraction
+    RobertaForMaskedLM,sentence-similarity
     RobertaModel,feature-extraction
     RtDetrV2ForObjectDetection,object-detection
     SEWDModel,feature-extraction
@@ -118,6 +123,7 @@ __data_arch__ = textwrap.dedent(
     Swinv2Model,image-feature-extraction
     T5ForConditionalGeneration,text2text-generation
     TableTransformerModel,image-feature-extraction
+    TableTransformerForObjectDetection,object-detection
     UniSpeechForSequenceClassification,audio-classification
     ViTForImageClassification,image-classification
     ViTMAEModel,image-feature-extraction
@@ -130,6 +136,9 @@ __data_arch__ = textwrap.dedent(
     WhisperForConditionalGeneration,automatic-speech-recognition
     XLMModel,feature-extraction
     XLMRobertaForCausalLM,text-generation
+    XLMRobertaForMaskedLM,fill-mask
+    XLMRobertaModel,sentence-similarity
+    Wav2Vec2ForCTC,automatic-speech-recognition
     YolosForObjectDetection,object-detection
     YolosModel,image-feature-extraction"""
 )
