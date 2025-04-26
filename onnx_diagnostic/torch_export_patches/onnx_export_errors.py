@@ -277,9 +277,7 @@ def torch_export_patches(
             ShapeEnv._log_guard_remember = ShapeEnv._log_guard
 
             if verbose:
-                print(
-                    "[torch_export_patches] assert when a dynamic dimension turns static"
-                )
+                print("[torch_export_patches] assert when a dynamic dimension turns static")
                 print("[torch_export_patches] replaces ShapeEnv._set_replacement")
 
             f_shape_env__set_replacement = ShapeEnv._set_replacement
