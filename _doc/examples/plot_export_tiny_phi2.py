@@ -26,7 +26,7 @@ from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import max_diff, string_diff, string_type
 from onnx_diagnostic.helpers.cache_helper import is_cache_dynamic_registered
 from onnx_diagnostic.helpers.rt_helper import make_feeds
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_models.hghub import (
     get_untrained_model_with_inputs,
@@ -76,7 +76,7 @@ print(f"expected: {string_type(expected, with_shape=True, with_min_max=True)}")
 # ++++++
 
 
-with bypass_export_some_errors(patch_transformers=True) as modificator:
+with torch_export_patches(patch_transformers=True) as modificator:
 
     # Unnecessary steps but useful in case of an error
     # We check the cache is registered.
@@ -110,7 +110,7 @@ with bypass_export_some_errors(patch_transformers=True) as modificator:
 # applies :meth:`torch.export.ExportedProgram.run_decompositions`
 # may export local pieces of the model again.
 
-with bypass_export_some_errors(patch_transformers=True):
+with torch_export_patches(patch_transformers=True):
     epo = torch.onnx.export(
         ep, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=dynamic_shapes, dynamo=True
     )

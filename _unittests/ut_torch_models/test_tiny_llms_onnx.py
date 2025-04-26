@@ -10,7 +10,7 @@ from onnx_diagnostic.ext_test_case import (
     requires_transformers,
 )
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 try:
     from experimental_experiment.torch_interpreter import to_onnx, ExportOptions
@@ -58,7 +58,7 @@ class TestTinyLlmOnnx(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             onx = to_onnx(
                 model, (), kwargs=inputs, dynamic_shapes=data["dynamic_shapes"], verbose=1
             )
@@ -74,7 +74,7 @@ class TestTinyLlmOnnx(ExtTestCase):
         del inputs["position_ids"]
         del ds["position_ids"]
         self.assertEqual({"attention_mask", "past_key_values", "input_ids"}, set(inputs))
-        with bypass_export_some_errors(patch_transformers=True, verbose=1) as modificator:
+        with torch_export_patches(patch_transformers=True, verbose=1) as modificator:
             new_inputs = modificator(copy.deepcopy(inputs))
             ep = torch.onnx.export(
                 model,
@@ -101,7 +101,7 @@ class TestTinyLlmOnnx(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with bypass_export_some_errors(patch_transformers=True, verbose=1) as modificator:
+        with torch_export_patches(patch_transformers=True, verbose=1) as modificator:
             new_inputs = modificator(copy.deepcopy(inputs))
             ep = torch.onnx.export(
                 model,
@@ -134,7 +134,7 @@ class TestTinyLlmOnnx(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with bypass_export_some_errors(patch_transformers=True, verbose=2) as modificator:
+        with torch_export_patches(patch_transformers=True, verbose=2) as modificator:
             new_inputs = modificator(inputs)
             onx = to_onnx(
                 model,

@@ -13,7 +13,7 @@ from onnx_diagnostic.ext_test_case import (
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
-    bypass_export_some_errors,
+    torch_export_patches,
 )
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 
@@ -56,7 +56,7 @@ class TestOnnxExportErrors(ExtTestCase):
             DYN = torch.export.Dim.DYNAMIC
 
             # patching
-            with bypass_export_some_errors(patch_transformers=True):
+            with torch_export_patches(patch_transformers=True):
                 got = model(*inputs)
                 self.assertEqualArray(expected, got)
                 ep = torch.export.export(
@@ -260,7 +260,7 @@ class TestOnnxExportErrors(ExtTestCase):
             self.assertEqualArray(expected, got)
             return
 
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             ep = torch.export.export(model, (), kwargs=inputs)
 
             args, _spec = torch.utils._pytree.tree_flatten(inputs)
@@ -292,7 +292,7 @@ class TestOnnxExportErrors(ExtTestCase):
             str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
         )
 
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             ep = torch.export.export(
                 model,
                 (),
@@ -330,7 +330,7 @@ class TestOnnxExportErrors(ExtTestCase):
             str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
         )
 
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             ep = torch.export.export(
                 model,
                 (),

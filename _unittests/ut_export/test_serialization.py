@@ -7,7 +7,7 @@ from onnx_diagnostic.helpers.cache_helper import (
     flatten_unflatten_for_dynamic_shapes,
 )
 from onnx_diagnostic.export import ModelInputs
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestSerialization(ExtTestCase):
@@ -49,7 +49,7 @@ class TestSerialization(ExtTestCase):
                 return cache.key_cache[0]
 
         cache = self._get_cache()
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             flat_unflat = flatten_unflatten_for_dynamic_shapes(cache)
             s = string_type(flat_unflat, with_shape=True)
             self.assertEqual("#2[#2[T1s2x4x1x7,T1s2x4x1x7],#2[T1s2x4x1x7,T1s2x4x1x7]]", s)

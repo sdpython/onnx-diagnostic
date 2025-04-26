@@ -14,7 +14,7 @@ from onnx_diagnostic.export import CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
 )
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestCacheHelpers(ExtTestCase):
@@ -67,14 +67,14 @@ class TestCacheHelpers(ExtTestCase):
         )
         self.assertEqual(dynamic_shapes, nds)
 
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             cpl = CoupleInputsDynamicShapes(tuple(), kwargs, dynamic_shapes)
             res = cpl.replace_string_by()
         dsc = res["past_key_values"]
         self.assertEqual([[{0: batch, 2: DYN}], [{0: batch, 2: DYN}]], dsc)
 
     def test_unflatten_flatten_dynamic_cache(self):
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             c1 = make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))])
             self.assertIsInstance(c1, transformers.cache_utils.DynamicCache)
             unflat = flatten_unflatten_for_dynamic_shapes(c1)
@@ -87,7 +87,7 @@ class TestCacheHelpers(ExtTestCase):
             )
 
     def test_unflatten_flatten_encoder_decoder_cache(self):
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             c2 = make_encoder_decoder_cache(
                 make_dynamic_cache(
                     [

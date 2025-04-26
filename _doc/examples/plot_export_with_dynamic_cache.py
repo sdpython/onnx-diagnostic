@@ -30,7 +30,7 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_dynamic_cache,
 )
 from onnx_diagnostic.export import ModelInputs
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class Model(torch.nn.Module):
@@ -99,14 +99,14 @@ pprint.pprint(ds)
 # And finally the export.
 # The export is simple if ``transformers>=4.50``, otherwise,
 # transformers needs to be patched.
-# :func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`
+# :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
 # registers functions to serialize ``DynamicCache``. This one is modified to make
 # the shape inference implemented in :epkg:`torch` happy.
 
 if has_transformers("4.50"):
     ep = torch.export.export(model, inputs[0], dynamic_shapes=ds[0], strict=False)
 else:
-    with bypass_export_some_errors(patch_transformers=True) as modificator:
+    with torch_export_patches(patch_transformers=True) as modificator:
         ep = torch.export.export(
             model, modificator(inputs[0]), dynamic_shapes=ds[0], strict=False
         )

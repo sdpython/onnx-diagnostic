@@ -24,12 +24,12 @@ Sources available at `github/onnx-diagnostic <https://github.com/sdpython/onnx-d
 
 .. code-block:: python
 
-  with bypass_export_some_errors(patch_transformers=True) as f:
+  with torch_export_patches(patch_transformers=True) as f:
       ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
       # ...
 
 It also implements tools to investigate, validate exported models (ExportedProgramm, ONNXProgram, ...).
-:func:`onnx_diagnostic.torch_export_patches.bypass_export_some_errors`.
+:func:`onnx_diagnostic.torch_export_patches.torch_export_patches`.
 
 .. toctree::
     :maxdepth: 1

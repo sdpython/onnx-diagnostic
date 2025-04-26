@@ -6,7 +6,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.torch_models.llms import get_phi2
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
     patched_DynamicCache,
 )
@@ -22,7 +22,7 @@ class TestTinyLlmBypassed(ExtTestCase):
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
 
-        with bypass_export_some_errors(
+        with torch_export_patches(
             patch_torch=False, patch_transformers=True, catch_constraints=False, verbose=10
         ) as modificator:
 
@@ -61,11 +61,11 @@ class TestTinyLlmBypassed(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with bypass_export_some_errors(patch_transformers=True) as modificator:
+        with torch_export_patches(patch_transformers=True) as modificator:
             inputs = modificator(inputs)
             ep = torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
             assert ep
-        with bypass_export_some_errors(patch_transformers=True) as modificator:
+        with torch_export_patches(patch_transformers=True) as modificator:
             inputs = modificator(inputs)
             ep = torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
             assert ep

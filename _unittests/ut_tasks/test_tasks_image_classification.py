@@ -2,7 +2,7 @@ import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, has_transformers
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
@@ -18,7 +18,7 @@ class TestTasks(ExtTestCase):
         model(**data["inputs2"])
         if not has_transformers("4.51.999"):
             raise unittest.SkipTest("Requires transformers>=4.52")
-        with bypass_export_some_errors(patch_transformers=True, verbose=10):
+        with torch_export_patches(patch_transformers=True, verbose=10):
             torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )

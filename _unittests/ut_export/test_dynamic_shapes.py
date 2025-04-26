@@ -5,7 +5,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.export import ModelInputs, CoupleInputsDynamicShapes
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestDynamicShapes(ExtTestCase):
@@ -571,7 +571,7 @@ class TestDynamicShapes(ExtTestCase):
 
         kwargs = {"A": T3x4, "B": (T3x1, cache)}
         Cls = CoupleInputsDynamicShapes
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             self.assertEqual(
                 None,
                 Cls(
@@ -749,7 +749,7 @@ class TestDynamicShapes(ExtTestCase):
             {"A": make_dynamic_cache([(torch.ones((2, 2, 2, 2)), torch.ones((2, 2, 2, 2)))])},
             {"A": [[{0: "batch", 2: "last"}], [{0: "batch", 2: "last"}]]},
         )
-        with bypass_export_some_errors(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True):
             new_inputs = inst.change_dynamic_dimensions()
         self.assertIsInstance(new_inputs["A"], transformers.cache_utils.DynamicCache)
         self.assertEqual((3, 2, 3, 2), new_inputs["A"].key_cache[0].shape)

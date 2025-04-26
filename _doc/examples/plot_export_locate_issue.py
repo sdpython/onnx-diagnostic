@@ -26,7 +26,7 @@ it is difficult to find deep inside a big model.
 import traceback
 import torch
 from onnx_diagnostic import doc
-from onnx_diagnostic.torch_export_patches import bypass_export_some_errors
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class ModelWithIssue(torch.nn.Module):
@@ -80,12 +80,12 @@ except Exception as e:
 # Stop when a dynamic dimension turns static
 # ==========================================
 #
-# We use :func:`bypass_export_some_errors
-# <onnx_diagnostic.torch_export_patches.bypass_export_some_errors>`
+# We use :func:`torch_export_patches
+# <onnx_diagnostic.torch_export_patches.torch_export_patches>`
 # to replace torch implementation by a new one raising the exception
 # mentioned in previous section.
 
-with bypass_export_some_errors(stop_if_static=1, verbose=1):
+with torch_export_patches(stop_if_static=1, verbose=1):
     try:
         torch.export.export(model, inputs, dynamic_shapes=dyn_shapes)
     except (AssertionError, torch._dynamo.exc.TorchRuntimeError) as e:
