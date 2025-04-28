@@ -1046,12 +1046,17 @@ def call_torch_export_custom(
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
-    assert optimization in {
+    available = {
         "",
         "default",
         "default+onnxruntime",
+        "default+os_ort",
+        "default+onnxruntime+os_ort",
         None,
-    }, f"unexpected value for optimization={optimization}"
+    }
+    assert (
+        optimization in available
+    ), f"unexpected value for optimization={optimization}, available={available}"
     assert exporter in {
         "custom",
         "custom-strict",
@@ -1084,6 +1089,10 @@ def call_torch_export_custom(
 
     from experimental_experiment.torch_interpreter import to_onnx, ExportOptions
     from experimental_experiment.xbuilder import OptimizationOptions
+
+    spl = optimization.split("+") if optimization else []
+    os_ort = "os_ort" in spl
+    optimization = "+".join(_ for _ in spl if _ != "os_ort")
 
     export_options = ExportOptions(
         strict=strict,
@@ -1188,6 +1197,9 @@ def call_torch_export_custom(
     assert epo is not None, "no onnx export was found"
     if verbose:
         print("[call_torch_export_custom] done (export)")
+
+    if os_ort:
+        pass
     data["onnx_program"] = epo
     return summary, data
 

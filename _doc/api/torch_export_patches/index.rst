@@ -7,7 +7,6 @@ onnx_diagnostic.torch_export_patches
 
     patches/index
     patch_inputs
-    patch_module
 
 
 .. automodule:: onnx_diagnostic.torch_export_patches
