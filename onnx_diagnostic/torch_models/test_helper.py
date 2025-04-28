@@ -4,6 +4,8 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import time
 import onnx
+import onnxscript
+import onnxscript.rewriter.ort_fusions as ort_fusions
 import torch
 from ..export import CoupleInputsDynamicShapes
 from ..helpers import max_diff, string_type, string_diff
@@ -917,11 +919,10 @@ def call_torch_export_onnx(
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
-    assert optimization in {
-        "",
-        "ir",
-        None,
-    }, f"unexpected value for optimization={optimization}"
+    available = {"", "ir", "os_ort"}
+    assert (
+        optimization in available
+    ), f"unexpected value for optimization={optimization}, available={available}"
     assert exporter in {
         "onnx-dynamo",
         "onnx-script",
@@ -1001,16 +1002,22 @@ def call_torch_export_onnx(
         print(epo)
         print("[call_torch_export_onnx] -- End of ONNXProgram")
 
-    if optimization == "ir":
+    if optimization in {"ir", "os_ort"}:
         if verbose:
             print(f"[call_torch_export_onnx] starts optimization={optimization!r}...")
-        _quiet_or_not_quiet(
-            quiet,
-            "export_onnx_opt_ir",
-            summary,
-            data,
-            (lambda epo=epo: epo.optimize()),
-        )
+        if optimization == "ir":
+            label, f_optim = "export_onnx_opt_ir", (lambda epo=epo: epo.optimize())
+        else:
+
+            def _os_ort_optim(epo):
+                onnxscript.optimizer.optimize_ir(epo.model)
+                optimized = ort_fusions.optimize_for_ort(epo.model)
+                epo.model = (
+                    optimized if isinstance(optimized, onnxscript.ir.Model) else optimized[0]
+                )
+
+            label, f_optim = "export_onnx_opt_os_ort", (lambda epo=epo: _os_ort_optim(epo))
+        _quiet_or_not_quiet(quiet, label, summary, data, f_optim)
         if "ERR_export_onnx_opt_ir" in summary:
             return summary, data
         if verbose:

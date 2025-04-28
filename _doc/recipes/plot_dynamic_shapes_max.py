@@ -185,4 +185,6 @@ print("final case:", rewritten_model(x, y, fact).shape, model_ep(x, y, fact).sha
 # is hidden in a custom operator.
 
 
-doc.plot_legend("max(d1, d2)\nwith d1, d2 dimensions", "dynamic shapes", "green")
+doc.plot_legend(
+    "Fixed in torch==2.8\nmax(d1, d2)\nwith d1, d2\ndimensions", "dynamic shapes", "green"
+)

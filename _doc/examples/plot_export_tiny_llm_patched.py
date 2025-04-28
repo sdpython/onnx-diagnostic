@@ -101,7 +101,7 @@ print("-- DynamicCache registered: ", is_cache_dynamic_registered())
 
 # %%
 # If they are not registered, function
-# func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
+# :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
 # should take care of it. Then we export.
 
 with torch_export_patches(patch_transformers=True, verbose=10) as modificator:

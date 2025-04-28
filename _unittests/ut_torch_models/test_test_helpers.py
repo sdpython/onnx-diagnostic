@@ -66,7 +66,7 @@ class TestTestHelper(ExtTestCase):
     @requires_torch("2.7")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
-    def test_validate_model_onnx_dynamo(self):
+    def test_validate_model_onnx_dynamo_ir(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid,
@@ -86,6 +86,27 @@ class TestTestHelper(ExtTestCase):
         run_ort_fusion(
             onnx_filename, output_path, num_attention_heads=2, hidden_size=192, verbose=10
         )
+
+    @requires_torch("2.7")
+    @hide_stdout()
+    @ignore_warnings(FutureWarning)
+    def test_validate_model_onnx_dynamo_os_ort(self):
+        mid = "arnir0/Tiny-LLM"
+        summary, data = validate_model(
+            mid,
+            do_run=True,
+            verbose=10,
+            exporter="onnx-dynamo",
+            dump_folder="dump_test_validate_model_onnx_dynamo",
+            patch=True,
+            stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
+            optimization="os_ort",
+        )
+        self.assertIsInstance(summary, dict)
+        self.assertIsInstance(data, dict)
+        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
+        onnx_filename = data["onnx_filename"]
+        self.assertExists(onnx_filename)
 
     @requires_torch("2.7")
     @hide_stdout()
