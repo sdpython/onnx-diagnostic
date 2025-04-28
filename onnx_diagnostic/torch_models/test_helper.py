@@ -1012,9 +1012,12 @@ def call_torch_export_onnx(
             def _os_ort_optim(epo):
                 onnxscript.optimizer.optimize_ir(epo.model)
                 optimized = ort_fusions.optimize_for_ort(epo.model)
-                epo.model = (
-                    optimized if isinstance(optimized, onnxscript.ir.Model) else optimized[0]
-                )
+                if isinstance(optimized, tuple):
+                    for k, v in optimized[1].items():
+                        summary[f"op_opt_fused_{k}"] = v
+                    epo.model = optimized[0]
+                else:
+                    epo.model = optimized
 
             label, f_optim = "export_onnx_opt_os_ort", (lambda epo=epo: _os_ort_optim(epo))
         _quiet_or_not_quiet(quiet, label, summary, data, f_optim)
@@ -1199,7 +1202,29 @@ def call_torch_export_custom(
         print("[call_torch_export_custom] done (export)")
 
     if os_ort:
-        pass
+        if verbose:
+            print("[call_torch_export_custom] conversion to IR...")
+        begin = time.perf_counter()
+        ir_model = epo.to_ir()
+        duration = time.perf_counter() - begin
+        summary["time_optim_to_ir"] = duration
+        if verbose:
+            print(f"[call_torch_export_custom] done in {duration}")
+            print("[call_torch_export_custom] start optimization...")
+        begin = time.perf_counter()
+        onnxscript.optimizer.optimize_ir(ir_model)
+        ir_optimized = ort_fusions.optimize_for_ort(ir_model)
+        if isinstance(ir_optimized, tuple):
+            report = ir_optimized[1]
+            for k, v in report.items():
+                summary[f"op_opt_fused_{k}"] = v
+            ir_optimized = ir_optimized[0]
+            epo.model = ir_optimized
+        duration = time.perf_counter() - begin
+        summary["time_optim_os_ort"] = duration
+        if verbose:
+            print(f"[call_torch_export_custom] done in {duration}")
+
     data["onnx_program"] = epo
     return summary, data
 
