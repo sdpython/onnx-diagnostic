@@ -2,7 +2,7 @@ import ast
 import inspect
 import types
 import textwrap
-from typing import Callable
+from typing import Callable, Dict
 import torch
 
 NODE_TYPES = tuple(
@@ -240,7 +240,7 @@ class RewriteControlFlow(ast.NodeTransformer):
 class RewrittenMethod:
     """
     Stores a rewritten method using
-    :func:`onnx_diagnostic.torch_export_patches.path_module.transform_method>`.
+    :func:`onnx_diagnostic.torch_export_patches.patch_module.transform_method>`.
     """
 
     def __init__(self, tree, func):
@@ -286,7 +286,7 @@ def transform_method(func: Callable, wrapper_name="torch_cond") -> RewrittenMeth
                 f"{ast.unparse(new_tree)}\n--TREE--\n"
                 f"{ast.dump(new_tree, **kws)}"
             ) from e
-    namespace = {}
+    namespace: Dict[type, type] = {}
     globs = func.__globals__.copy()
     globs["torch_cond"] = torch.cond
     exec(mod, globs, namespace)
