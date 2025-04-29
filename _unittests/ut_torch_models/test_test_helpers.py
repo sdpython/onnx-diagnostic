@@ -119,7 +119,7 @@ class TestTestHelper(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="custom",
-            dump_folder="test_validate_model_custom_os_ort",
+            dump_folder="dump_validate_model_custom_os_ort",
             patch=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             optimization="default+os_ort",
