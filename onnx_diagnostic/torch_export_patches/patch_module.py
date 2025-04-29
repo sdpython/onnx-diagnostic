@@ -2,6 +2,34 @@ import ast
 import inspect
 import types
 import textwrap
+from typing import Callable
+import torch
+
+NODE_TYPES = tuple(
+    getattr(ast, k)
+    for k in dir(ast)
+    if "A" <= k[0] <= "Z" and isinstance(getattr(ast, k), type)
+)
+
+
+def _settl(node, lineno, level=0):
+    if isinstance(node, (str, int, float)):
+        return node
+    if isinstance(node, list):
+        for n in node:
+            _settl(n, lineno, level=level + 1)
+        return node
+    if isinstance(node, NODE_TYPES):
+        if not hasattr(node, "lineno") or node.lineno is None:
+            node.lineno = lineno
+        for k in dir(node):
+            if k in {"s", "n"}:
+                continue
+            if k[0] == "_":
+                continue
+            v = getattr(node, k)
+            _settl(v, max(lineno, node.lineno), level=level + 1)
+    return node
 
 
 class RewriteControlFlow(ast.NodeTransformer):
@@ -22,6 +50,7 @@ class RewriteControlFlow(ast.NodeTransformer):
         # First recurse into subnodes
         node = self.generic_visit(node)
         test_node = node.test
+
         # Case 1: simple assignment in both branches
         if (
             len(node.body) == 1
@@ -91,12 +120,15 @@ class RewriteControlFlow(ast.NodeTransformer):
                 for n in (then_def, else_def):
                     ast.copy_location(n, node)
                     ast.fix_missing_locations(n)
+                    assert hasattr(n, "lineno")
                 # wrapper call and assignment
                 then_args_tuple = ast.Tuple(
-                    [ast.Name(id=v, ctx=ast.Load()) for v in then_vars], ctx=ast.Load()
+                    [ast.Name(id=v, ctx=ast.Load()) for v in then_vars],
+                    ctx=ast.Load(),
                 )
                 else_args_tuple = ast.Tuple(
-                    [ast.Name(id=v, ctx=ast.Load()) for v in else_vars], ctx=ast.Load()
+                    [ast.Name(id=v, ctx=ast.Load()) for v in else_vars],
+                    ctx=ast.Load(),
                 )
                 call = ast.Call(
                     func=ast.Name(id=self.wrapper_name, ctx=ast.Load()),
@@ -113,6 +145,7 @@ class RewriteControlFlow(ast.NodeTransformer):
                 ast.copy_location(assign, node)
                 ast.fix_missing_locations(assign)
                 return [then_def, else_def, assign]
+
         # Case 2: simple return in both branches
         if (
             len(node.body) == 1
@@ -143,22 +176,33 @@ class RewriteControlFlow(ast.NodeTransformer):
                     if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
                 }
             )
+
+            then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ != "torch")
+
             # build local funcs
-            then_args = [ast.arg(arg=v, annotation=None) for v in then_vars]
+            then_args = [ast.arg(arg=v, annotation=None) for v in then_else_vars]
             then_def = ast.FunctionDef(
                 name=then_name,
                 args=ast.arguments(
-                    posonlyargs=[], args=then_args, kwonlyargs=[], kw_defaults=[], defaults=[]
+                    posonlyargs=[],
+                    args=then_args,
+                    kwonlyargs=[],
+                    kw_defaults=[],
+                    defaults=[],
                 ),
                 body=[ast.Return(then_expr)],
                 decorator_list=[],
                 returns=None,
             )
-            else_args = [ast.arg(arg=v, annotation=None) for v in else_vars]
+            else_args = [ast.arg(arg=v, annotation=None) for v in then_else_vars]
             else_def = ast.FunctionDef(
                 name=else_name,
                 args=ast.arguments(
-                    posonlyargs=[], args=else_args, kwonlyargs=[], kw_defaults=[], defaults=[]
+                    posonlyargs=[],
+                    args=else_args,
+                    kwonlyargs=[],
+                    kw_defaults=[],
+                    defaults=[],
                 ),
                 body=[ast.Return(else_expr)],
                 decorator_list=[],
@@ -168,20 +212,18 @@ class RewriteControlFlow(ast.NodeTransformer):
                 ast.copy_location(n, node)
                 ast.fix_missing_locations(n)
             # wrapper call and return
-            then_args_tuple = ast.Tuple(
-                [ast.Name(id=v, ctx=ast.Load()) for v in then_vars], ctx=ast.Load()
+            then_else_args_list = ast.List(
+                [ast.Name(id=v, ctx=ast.Load()) for v in then_else_vars],
+                ctx=ast.Load(),
             )
-            else_args_tuple = ast.Tuple(
-                [ast.Name(id=v, ctx=ast.Load()) for v in else_vars], ctx=ast.Load()
-            )
+
             call = ast.Call(
                 func=ast.Name(id=self.wrapper_name, ctx=ast.Load()),
                 args=[
                     test_node,
                     ast.Name(id=then_name, ctx=ast.Load()),
                     ast.Name(id=else_name, ctx=ast.Load()),
-                    then_args_tuple,
-                    else_args_tuple,
+                    then_else_args_list,
                 ],
                 keywords=[],
             )
@@ -195,24 +237,29 @@ class RewriteControlFlow(ast.NodeTransformer):
         return super().generic_visit(node)
 
 
-def _fix_missing_locations_node(node):
-    if not hasattr(node, "lineno"):
-        node.lineno = 999
-    for chi in ast.iter_child_nodes(node):
-        _fix_missing_locations_node(chi)
-
-
-def _fix_missing_locations(new_tree):
-    for node in ast.walk(new_tree):
-        _fix_missing_locations_node(node)
-
-
-def transform_method(func, wrapper_name="torch_cond"):
+class RewrittenMethod:
     """
-    Returns a new function based on `func` where every test (if, while, assert,
-    ternary, comparison, boolean op) is replaced by a call to `wrapper_name`.
+    Stores a rewritten method using
+    :func:`onnx_diagnostic.torch_export_patches.path_module.transform_method>`.
+    """
 
-    wrapper_name should refer to a function taking a single boolean argument.
+    def __init__(self, tree, func):
+        self.tree = tree
+        self.func = func
+
+    @property
+    def code(self) -> str:
+        """Returns the source."""
+        return ast.unparse(self.tree)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.func})"
+
+
+def transform_method(func: Callable, wrapper_name="torch_cond") -> RewrittenMethod:
+    """
+    Returns a new function based on `func` where every test (if)
+    is replaced by a call to :func:`torch.cond`.
     """
     # Retrieve source of the function
     src = inspect.getsource(func)
@@ -222,13 +269,28 @@ def transform_method(func, wrapper_name="torch_cond"):
     transformer = RewriteControlFlow(wrapper_name)
     new_tree = transformer.visit(tree)
     ast.fix_missing_locations(new_tree)
-
-    # fix other location
-    _fix_missing_locations(new_tree)
-    mod = compile(new_tree, filename="<ast>", mode="exec")
+    _settl(new_tree, 0)
+    try:
+        mod = compile(new_tree, filename="<ast>", mode="exec")
+    except TypeError as e:
+        if 'required field "lineno" missing from stmt' in str(e):
+            # Could not find a way to avoid compilng a string.
+            # The error message still pops up without indicating which node is not
+            # properly set.
+            code = ast.unparse(new_tree)
+            mod = compile(code, filename="<source>", mode="exec")
+        else:
+            kws = dict(include_attributes=True, annotate_fields=True, indent=4)
+            raise RuntimeError(
+                f"Unable to compile code\n--CODE--\n"
+                f"{ast.unparse(new_tree)}\n--TREE--\n"
+                f"{ast.dump(new_tree, **kws)}"
+            ) from e
     namespace = {}
-    exec(mod, func.__globals__, namespace)
+    globs = func.__globals__.copy()
+    globs["torch_cond"] = torch.cond
+    exec(mod, globs, namespace)
     new_func = namespace.get(func.__name__)
     if not isinstance(new_func, types.FunctionType):
         raise RuntimeError("Transformed function not found")
-    return new_tree, new_func
+    return RewrittenMethod(new_tree, new_func)
