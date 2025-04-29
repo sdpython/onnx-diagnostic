@@ -240,7 +240,10 @@ class RewriteControlFlow(ast.NodeTransformer):
 class RewrittenMethod:
     """
     Stores a rewritten method using
-    :func:`onnx_diagnostic.torch_export_patches.patch_module.transform_method>`.
+    :func:`onnx_diagnostic.torch_export_patches.patch_module.transform_method`.
+
+    :param tree: ast tree
+    :param func: callable compiled from the tree
     """
 
     def __init__(self, tree, func):
@@ -253,20 +256,25 @@ class RewrittenMethod:
         return ast.unparse(self.tree)
 
     def __repr__(self):
+        "usual"
         return f"{self.__class__.__name__}({self.func})"
 
 
-def transform_method(func: Callable, wrapper_name="torch_cond") -> RewrittenMethod:
+def transform_method(func: Callable, if_name="torch_cond") -> RewrittenMethod:
     """
     Returns a new function based on `func` where every test (if)
     is replaced by a call to :func:`torch.cond`.
+
+    :param func: method or function to rewrite
+    :param if_name: function calling the test
+    :return: rewritten method
     """
     # Retrieve source of the function
     src = inspect.getsource(func)
     # Parse into AST
     tree = ast.parse(textwrap.dedent(src))
     # Apply transformation
-    transformer = RewriteControlFlow(wrapper_name)
+    transformer = RewriteControlFlow(if_name)
     new_tree = transformer.visit(tree)
     ast.fix_missing_locations(new_tree)
     _settl(new_tree, 0)
@@ -286,9 +294,9 @@ def transform_method(func: Callable, wrapper_name="torch_cond") -> RewrittenMeth
                 f"{ast.unparse(new_tree)}\n--TREE--\n"
                 f"{ast.dump(new_tree, **kws)}"
             ) from e
-    namespace: Dict[type, type] = {}
+    namespace: Dict[str, type] = {}
     globs = func.__globals__.copy()
-    globs["torch_cond"] = torch.cond
+    globs[if_name] = torch.cond
     exec(mod, globs, namespace)
     new_func = namespace.get(func.__name__)
     if not isinstance(new_func, types.FunctionType):
