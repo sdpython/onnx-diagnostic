@@ -4,6 +4,8 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import time
 import onnx
+import onnxscript
+import onnxscript.rewriter.ort_fusions as ort_fusions
 import torch
 from ..export import CoupleInputsDynamicShapes
 from ..helpers import max_diff, string_type, string_diff
@@ -917,11 +919,10 @@ def call_torch_export_onnx(
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
-    assert optimization in {
-        "",
-        "ir",
-        None,
-    }, f"unexpected value for optimization={optimization}"
+    available = {"", "ir", "os_ort"}
+    assert (
+        optimization in available
+    ), f"unexpected value for optimization={optimization}, available={available}"
     assert exporter in {
         "onnx-dynamo",
         "onnx-script",
@@ -1001,16 +1002,25 @@ def call_torch_export_onnx(
         print(epo)
         print("[call_torch_export_onnx] -- End of ONNXProgram")
 
-    if optimization == "ir":
+    if optimization in {"ir", "os_ort"}:
         if verbose:
             print(f"[call_torch_export_onnx] starts optimization={optimization!r}...")
-        _quiet_or_not_quiet(
-            quiet,
-            "export_onnx_opt_ir",
-            summary,
-            data,
-            (lambda epo=epo: epo.optimize()),
-        )
+        if optimization == "ir":
+            label, f_optim = "export_onnx_opt_ir", (lambda epo=epo: epo.optimize())
+        else:
+
+            def _os_ort_optim(epo):
+                onnxscript.optimizer.optimize_ir(epo.model)
+                optimized = ort_fusions.optimize_for_ort(epo.model)
+                if isinstance(optimized, tuple):
+                    for k, v in optimized[1].items():
+                        summary[f"op_opt_fused_{k}"] = v
+                    epo.model = optimized[0]
+                else:
+                    epo.model = optimized
+
+            label, f_optim = "export_onnx_opt_os_ort", (lambda epo=epo: _os_ort_optim(epo))
+        _quiet_or_not_quiet(quiet, label, summary, data, f_optim)
         if "ERR_export_onnx_opt_ir" in summary:
             return summary, data
         if verbose:
@@ -1039,12 +1049,17 @@ def call_torch_export_custom(
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
-    assert optimization in {
+    available = {
         "",
         "default",
         "default+onnxruntime",
+        "default+os_ort",
+        "default+onnxruntime+os_ort",
         None,
-    }, f"unexpected value for optimization={optimization}"
+    }
+    assert (
+        optimization in available
+    ), f"unexpected value for optimization={optimization}, available={available}"
     assert exporter in {
         "custom",
         "custom-strict",
@@ -1077,6 +1092,10 @@ def call_torch_export_custom(
 
     from experimental_experiment.torch_interpreter import to_onnx, ExportOptions
     from experimental_experiment.xbuilder import OptimizationOptions
+
+    spl = optimization.split("+") if optimization else []
+    os_ort = "os_ort" in spl
+    optimization = "+".join(_ for _ in spl if _ != "os_ort")
 
     export_options = ExportOptions(
         strict=strict,
@@ -1181,6 +1200,31 @@ def call_torch_export_custom(
     assert epo is not None, "no onnx export was found"
     if verbose:
         print("[call_torch_export_custom] done (export)")
+
+    if os_ort:
+        if verbose:
+            print("[call_torch_export_custom] conversion to IR...")
+        begin = time.perf_counter()
+        ir_model = epo.to_ir()
+        duration = time.perf_counter() - begin
+        summary["time_optim_to_ir"] = duration
+        if verbose:
+            print(f"[call_torch_export_custom] done in {duration}")
+            print("[call_torch_export_custom] start optimization...")
+        begin = time.perf_counter()
+        onnxscript.optimizer.optimize_ir(ir_model)
+        ir_optimized = ort_fusions.optimize_for_ort(ir_model)
+        if isinstance(ir_optimized, tuple):
+            report = ir_optimized[1]
+            for k, v in report.items():
+                summary[f"op_opt_fused_{k}"] = v
+            ir_optimized = ir_optimized[0]
+            epo.model = ir_optimized
+        duration = time.perf_counter() - begin
+        summary["time_optim_os_ort"] = duration
+        if verbose:
+            print(f"[call_torch_export_custom] done in {duration}")
+
     data["onnx_program"] = epo
     return summary, data
 
