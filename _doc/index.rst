@@ -65,6 +65,10 @@ or
 Enlightening Examples
 +++++++++++++++++++++
 
+**Where to start to export a model**
+
+* :ref:`l-plot-export_tiny_phi2`
+
 **Torch Export**
 
 * :ref:`l-plot-export-cond`

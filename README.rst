@@ -56,6 +56,11 @@ or
 Enlightening Examples
 +++++++++++++++++++++
 
+**Where to start to export a model**
+
+* `Export microsoft/phi-2
+  <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_tiny_phi2.html>`_
+
 **Torch Export**
 
 * `Use DYNAMIC or AUTO when exporting if dynamic shapes has constraints

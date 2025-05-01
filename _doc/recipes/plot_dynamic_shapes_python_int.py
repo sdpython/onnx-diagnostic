@@ -1,4 +1,6 @@
 """
+.. _l-plot-dynamic-shapes-python-int:
+
 Do not use python int with dynamic shapes
 =========================================
 
