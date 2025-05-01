@@ -198,7 +198,7 @@ doc.plot_legend("export\nuntrained smaller\nmicrosoft/phi-2", "torch.onnx.export
 # DynamicCache or any other cache cannot be exported
 # ++++++++++++++++++++++++++++++++++++++++++++++++++
 #
-# That's the role of :func:`onnx_diagnostic.torch_export_patches./torch_export_patches`.
+# That's the role of :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`.
 # It registers the necessary information into pytorch to make the export
 # work with these. Its need should slowly disappear until :epkg:`transformers`
 # includes the serialization functions.
