@@ -7,6 +7,13 @@ __TASK__ = "image-classification"
 
 def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
+    if (
+        hasattr(config, "model_type")
+        and config.model_type == "timm_wrapper"
+        and not hasattr(config, "num_hidden_layers")
+    ):
+        # We cannot reduce.
+        return {}
     check_hasattr(config, ("num_hidden_layers", "hidden_sizes"))
     kwargs = dict(
         num_hidden_layers=(
@@ -82,6 +89,20 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
     If the configuration is None, the function selects typical dimensions.
     """
     if config is not None:
+        if (
+            hasattr(config, "model_type")
+            and config.model_type == "timm_wrapper"
+            and not hasattr(config, "num_hidden_layers")
+        ):
+            input_size = config.pretrained_cfg["input_size"]
+            kwargs = dict(
+                batch_size=2,
+                input_width=input_size[-2],
+                input_height=input_size[-1],
+                input_channels=input_size[-3],
+            )
+            return kwargs, get_inputs
+
         check_hasattr(config, ("image_size", "architectures"), "num_channels")
     if config is not None:
         if hasattr(config, "image_size"):

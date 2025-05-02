@@ -4,7 +4,7 @@ import torch
 import transformers
 from ...helpers.config_helper import update_config
 from ...tasks import reduce_model_config, random_input_kwargs
-from .hub_api import task_from_arch, get_pretrained_config
+from .hub_api import task_from_arch, task_from_id, get_pretrained_config
 
 
 def get_untrained_model_with_inputs(
@@ -64,17 +64,21 @@ def get_untrained_model_with_inputs(
         config = get_pretrained_config(
             model_id, use_preinstalled=use_preinstalled, **(model_kwargs or {})
         )
+    if hasattr(config, "architecture") and config.architecture:
+        archs = [config.architecture]
     archs = config.architectures  # type: ignore
-    assert archs is not None and len(archs) == 1, (
+    task = None
+    if archs is None:
+        task = task_from_id(model_id)
+    assert task is not None or (archs is not None and len(archs) == 1), (
         f"Unable to determine the architecture for model {model_id!r}, "
         f"architectures={archs!r}, conf={config}"
     )
-    arch = archs[0]
     if verbose:
-        print(f"[get_untrained_model_with_inputs] architecture={arch!r}")
-    if verbose:
+        print(f"[get_untrained_model_with_inputs] architectures={archs!r}")
         print(f"[get_untrained_model_with_inputs] cls={config.__class__.__name__!r}")
-    task = task_from_arch(arch)
+    if task is None:
+        task = task_from_arch(archs[0])
     if verbose:
         print(f"[get_untrained_model_with_inputs] task={task!r}")
 
@@ -106,7 +110,15 @@ def get_untrained_model_with_inputs(
     if inputs_kwargs:
         kwargs.update(inputs_kwargs)
 
-    model = getattr(transformers, arch)(config)
+    if archs is not None:
+        model = getattr(transformers, archs[0])(config)
+    else:
+        assert same_as_pretrained, (
+            f"Model {model_id!r} cannot be built, the model cannot be built. "
+            f"It must be downloaded. Use same_as_pretrained=True."
+        )
+        model = None
+
     # This line is important. Some models may produce different
     # outputs even with the same inputs in training mode.
     model.eval()

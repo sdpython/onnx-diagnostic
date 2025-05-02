@@ -15,6 +15,7 @@ from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 
 class ExtendedReferenceEvaluatorBackendRep(onnx.backend.base.BackendRep):
     def __init__(self, session):
+        super().__init__()
         self._session = session
 
     def run(self, inputs, **kwargs):

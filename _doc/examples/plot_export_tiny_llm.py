@@ -1,11 +1,11 @@
 """
 .. _l-plot-tiny-llm-export:
 
-Steel method forward to guess the dynamic shapes (with Tiny-LLM)
-================================================================
+Steel method forward to guess inputs and dynamic shapes (with Tiny-LLM)
+=======================================================================
 
 Inputs are always dynamic with LLMs that is why dynamic shapes
-needs to be specified when a LLM is exported with:func:`torch.export.export`.
+needs to be specified when a LLM is exported with :func:`torch.export.export`.
 Most of the examples on :epkg:`HuggingFace` use method
 :meth:`transformers.GenerationMixin.generate` but we only want to
 export the model and its method ``forward``.

@@ -78,6 +78,7 @@ __data_arch__ = textwrap.dedent(
     MobileBertModel,feature-extraction
     MobileNetV1Model,image-feature-extraction
     MobileNetV2Model,image-feature-extraction
+    mobilenetv3_small_100,image-classification
     MobileViTForImageClassification,image-classification
     ModernBertForMaskedLM,fill-mask
     Phi4MMForCausalLM,MoE
@@ -202,7 +203,7 @@ def load_models_testing() -> List[str]:
 @functools.cache
 def load_architecture_task() -> Dict[str, str]:
     """
-    Returns a dictionary mapping architecture to task.
+    Returns a dictionary mapping architectures to tasks.
 
     import pprint
     from onnx_diagnostic.torch_models.hghub.hub_data import load_architecture_task
