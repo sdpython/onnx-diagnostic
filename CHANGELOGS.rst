@@ -1,6 +1,12 @@
 Change Logs
 ===========
 
+0.4.4
++++++
+
+* :pr:`79`: implements task ``object-detection``
+* :pr:`78`: uses *onnx-weekly* instead of *onnx* to avoid conflicts with *onnxscript*
+
 0.4.3
 +++++
 
