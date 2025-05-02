@@ -51,9 +51,9 @@ def get_inputs(
     shapes = {
         "pixel_values": {
             0: torch.export.Dim("batch", min=1, max=1024),
-            2: torch.export.Dim("width", min=1, max=4096),
-            3: torch.export.Dim("height", min=1, max=4096),
-        },
+            2: "width",
+            3: "height",
+        }
     }
     inputs = dict(
         pixel_values=torch.randn(batch_size, input_channels, input_width, input_height).clamp(
