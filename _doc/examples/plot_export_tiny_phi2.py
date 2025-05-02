@@ -50,7 +50,7 @@ untrained_model, inputs, dynamic_shapes, config, size, n_weights = (
     data["n_weights"],
 )
 
-print(f"model {size / 2**20:1.3f} Mb with {n_weights // 1000} mille parameters.")
+print(f"model {size / 2**20:1.1f} Mb with {n_weights // 1000} thousands of parameters.")
 # %%
 # The original model has 2.7 billion parameters. It was divided by more than 10.
 # However, it can still be used with
@@ -209,6 +209,7 @@ doc.plot_legend("export\nuntrained smaller\nmicrosoft/phi-2", "torch.onnx.export
 # Every mixture of models goes through a control flow (a test).
 # It also happens when a cache is truncated. The code of the model
 # needs to be changed. See example :ref:`l-plot-export-cond`.
+# Loops are not supported yet.
 #
 # Issue with dynamic shapes
 # +++++++++++++++++++++++++

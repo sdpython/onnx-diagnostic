@@ -88,6 +88,15 @@ def get_model_info(model_id) -> Any:
     return model_info(model_id)
 
 
+def _guess_task_from_config(config: Any) -> Optional[str]:
+    """Tries to infer a task from the configuration."""
+    if hasattr(config, "bbox_loss_coefficient") and hasattr(config, "giou_loss_coefficient"):
+        return "object-detection"
+    if hasattr(config, "architecture") and config.architecture:
+        return task_from_arch(config.architecture)
+    return None
+
+
 @functools.cache
 def task_from_arch(arch: str, default_value: Optional[str] = None) -> str:
     """
@@ -126,7 +135,7 @@ def task_from_id(
     :param default_value: if specified, the function returns this value
         if the task cannot be determined
     :param pretrained: uses the config
-    :param fall_back_to_pretrained: balls back to pretrained config
+    :param fall_back_to_pretrained: falls back to pretrained config
     :return: task
     """
     if not pretrained:
@@ -139,6 +148,9 @@ def task_from_id(
     try:
         return config.pipeline_tag
     except AttributeError:
+        guess = _guess_task_from_config(config)
+        if guess is not None:
+            return guess
         assert config.architectures is not None and len(config.architectures) == 1, (
             f"Cannot return the task of {model_id!r}, pipeline_tag is not setup, "
             f"architectures={config.architectures} in config={config}"
