@@ -93,6 +93,9 @@ def get_untrained_model_with_inputs(
 
     # model kwagrs
     if dynamic_rope is not None:
+        assert (
+            type(config) is not dict
+        ), f"Unable to set dynamic_rope if the configuration is a dictionary\n{config}"
         config.rope_scaling = (
             {"rope_type": "dynamic", "factor": 10.0} if dynamic_rope else None
         )

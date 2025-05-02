@@ -305,7 +305,7 @@ def validate_model(
             print(f"[validate_model] model_options={model_options!r}")
         print(f"[validate_model] get dummy inputs with input_options={input_options}...")
         summary["model_id"] = model_id
-        summary["model_subfolder"] = subfolder
+        summary["model_subfolder"] = subfolder or ""
 
     iop = input_options or {}
     mop = model_options or {}
