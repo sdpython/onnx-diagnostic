@@ -18,6 +18,7 @@ def get_untrained_model_with_inputs(
     same_as_pretrained: bool = False,
     use_preinstalled: bool = True,
     add_second_input: bool = False,
+    subfolder: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
@@ -37,6 +38,7 @@ def get_untrained_model_with_inputs(
     :param use_preinstalled: use preinstalled configurations
     :param add_second_input: provides a second inputs to check a model
         supports different shapes
+    :param subfolder: subfolder to use for this model id
     :return: dictionary with a model, inputs, dynamic shapes, and the configuration
 
     Example:
@@ -62,11 +64,18 @@ def get_untrained_model_with_inputs(
             print(f"[get_untrained_model_with_inputs] use preinstalled {model_id!r}")
     if config is None:
         config = get_pretrained_config(
-            model_id, use_preinstalled=use_preinstalled, **(model_kwargs or {})
+            model_id,
+            use_preinstalled=use_preinstalled,
+            subfolder=subfolder,
+            **(model_kwargs or {}),
         )
     if hasattr(config, "architecture") and config.architecture:
         archs = [config.architecture]
-    archs = config.architectures  # type: ignore
+    if type(config) is dict:
+        assert "_class_name" in config, f"Unable to get the architecture from config={config}"
+        archs = [config["_class_name"]]
+    else:
+        archs = config.architectures  # type: ignore
     task = None
     if archs is None:
         task = task_from_id(model_id)

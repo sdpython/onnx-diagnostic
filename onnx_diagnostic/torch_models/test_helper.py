@@ -109,9 +109,12 @@ def _make_folder_name(
     optimization: Optional[str] = None,
     dtype: Optional[Union[str, torch.dtype]] = None,
     device: Optional[Union[str, torch.device]] = None,
+    subfolder: Optional[str] = None,
 ) -> str:
     "Creates a filename unique based on the given options."
     els = [model_id.replace("/", "_")]
+    if subfolder:
+        els.append(subfolder.replace("/", "_"))
     if exporter:
         els.append(exporter)
     if optimization:
@@ -224,6 +227,7 @@ def validate_model(
     ortfusiontype: Optional[str] = None,
     input_options: Optional[Dict[str, Any]] = None,
     model_options: Optional[Dict[str, Any]] = None,
+    subfolder: Optional[str] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -256,11 +260,11 @@ def validate_model(
         used to export
     :param model_options: additional options when creating the model such as
         ``num_hidden_layers`` or ``attn_implementation``
+    :param subfolder: version or subfolders to uses when retrieving a model id
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
     summary = version_summary()
-
     summary.update(
         dict(
             version_model_id=model_id,
@@ -282,7 +286,7 @@ def validate_model(
     folder_name = None
     if dump_folder:
         folder_name = _make_folder_name(
-            model_id, exporter, optimization, dtype=dtype, device=device
+            model_id, exporter, optimization, dtype=dtype, device=device, subfolder=subfolder
         )
         dump_folder = os.path.join(dump_folder, folder_name)
         if not os.path.exists(dump_folder):
@@ -293,11 +297,15 @@ def validate_model(
             print(f"[validate_model] dump into {folder_name!r}")
 
     if verbose:
-        print(f"[validate_model] validate model id {model_id!r}")
+        if subfolder:
+            print(f"[validate_model] validate model id {model_id!r}, subfolder={subfolder!r}")
+        else:
+            print(f"[validate_model] validate model id {model_id!r}")
         if model_options:
             print(f"[validate_model] model_options={model_options!r}")
         print(f"[validate_model] get dummy inputs with input_options={input_options}...")
         summary["model_id"] = model_id
+        summary["model_subfolder"] = subfolder
 
     iop = input_options or {}
     mop = model_options or {}
@@ -307,7 +315,7 @@ def validate_model(
         summary,
         None,
         (
-            lambda mid=model_id, v=verbose, task=task, tr=trained, iop=iop: (
+            lambda mid=model_id, v=verbose, task=task, tr=trained, iop=iop, sub=subfolder: (
                 get_untrained_model_with_inputs(
                     mid,
                     verbose=v,
@@ -315,6 +323,7 @@ def validate_model(
                     same_as_pretrained=tr,
                     inputs_kwargs=iop,
                     model_kwargs=mop,
+                    subfolder=sub,
                 )
             )
         ),
