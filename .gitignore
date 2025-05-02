@@ -37,6 +37,7 @@ dump_models/*
 dump_bash_bench/*
 dump_llama/*
 dump_test*
+dump_validate*
 dump_sdpa_*
 temp_dump_models/*
 dump_dort_bench/*
