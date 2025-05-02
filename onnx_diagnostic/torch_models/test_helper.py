@@ -1069,15 +1069,16 @@ def call_torch_export_custom(
     assert (
         optimization in available
     ), f"unexpected value for optimization={optimization}, available={available}"
-    assert exporter in {
+    available = {
         "custom",
         "custom-strict",
-        "custom-strict-dec",
+        "custom-strict-default",
         "custom-strict-all",
         "custom-nostrict",
-        "custom-nostrict-dec",
+        "custom-nostrict-default",
         "custom-nostrict-all",
-    }, f"Unexpected value for exporter={exporter!r}"
+    }
+    assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
     summary: Dict[str, Union[str, int, float]] = {}
@@ -1109,7 +1110,7 @@ def call_torch_export_custom(
     export_options = ExportOptions(
         strict=strict,
         decomposition_table=(
-            "dec" if "-dec" in exporter else ("all" if "-all" in exporter else None)
+            "default" if "-default" in exporter else ("all" if "-all" in exporter else None)
         ),
     )
     options = OptimizationOptions(patterns=optimization) if optimization else None
