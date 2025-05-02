@@ -125,6 +125,7 @@ __data_arch__ = textwrap.dedent(
     T5ForConditionalGeneration,text2text-generation
     TableTransformerModel,image-feature-extraction
     TableTransformerForObjectDetection,object-detection
+    UNet2DConditionModel,text-to-image
     UniSpeechForSequenceClassification,audio-classification
     ViTForImageClassification,image-classification
     ViTMAEModel,image-feature-extraction
@@ -163,6 +164,7 @@ __data_tasks__ = [
     "sentence-similarity",
     "text-classification",
     "text-generation",
+    "text-to-image",
     "text-to-audio",
     "text2text-generation",
     "zero-shot-image-classification",

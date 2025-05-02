@@ -4,6 +4,8 @@ Change Logs
 0.4.4
 +++++
 
+* :pr:`82`: exposes ``register_flattening_functions``, add option ``--subfolder``
+* :pr:`81`: fixes missing ``intermediate_size`` in configuration
 * :pr:`79`: implements task ``object-detection``
 * :pr:`78`: uses *onnx-weekly* instead of *onnx* to avoid conflicts with *onnxscript*
 

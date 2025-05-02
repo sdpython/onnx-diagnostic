@@ -337,6 +337,10 @@ def get_parser_validate() -> ArgumentParser:
         "with comma separated values",
     )
     parser.add_argument(
+        "--subfolder",
+        help="subfolder where to find the model and the configuration",
+    )
+    parser.add_argument(
         "--ortfusiontype",
         required=False,
         help="applies onnxruntime fusion, this parameter should contain the "
@@ -413,6 +417,7 @@ def _cmd_validate(argv: List[Any]):
             ortfusiontype=args.ortfusiontype,
             input_options=args.iop,
             model_options=args.mop,
+            subfolder=args.subfolder,
         )
         print("")
         print("-- summary --")

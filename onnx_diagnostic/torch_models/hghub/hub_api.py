@@ -1,9 +1,10 @@
 import copy
 import functools
+import json
 import os
 from typing import Any, Dict, List, Optional, Union
 import transformers
-from huggingface_hub import HfApi, model_info
+from huggingface_hub import HfApi, model_info, hf_hub_download
 from ...helpers.config_helper import update_config
 from . import hub_data_cached_configs
 from .hub_data import __date__, __data_tasks__, load_architecture_task, __data_arch_values__
@@ -59,7 +60,11 @@ def get_cached_configuration(name: str, **kwargs) -> Optional[transformers.Pretr
 
 
 def get_pretrained_config(
-    model_id: str, trust_remote_code: bool = True, use_preinstalled: bool = True, **kwargs
+    model_id: str,
+    trust_remote_code: bool = True,
+    use_preinstalled: bool = True,
+    subfolder: Optional[str] = None,
+    **kwargs,
 ) -> Any:
     """
     Returns the config for a model_id.
@@ -71,13 +76,32 @@ def get_pretrained_config(
         accessing the network, if available, it is returned by
         :func:`get_cached_configuration`, the cached list is mostly for
         unit tests
+    :param subfolder: subfolder for the given model id
     :param kwargs: additional kwargs
     :return: a configuration
     """
     if use_preinstalled:
-        conf = get_cached_configuration(model_id, **kwargs)
+        conf = get_cached_configuration(model_id, subfolder=subfolder, **kwargs)
         if conf is not None:
             return conf
+    if subfolder:
+        try:
+            return transformers.AutoConfig.from_pretrained(
+                model_id, trust_remote_code=trust_remote_code, subfolder=subfolder, **kwargs
+            )
+        except ValueError:
+            # Then we try to download it.
+            config = hf_hub_download(
+                model_id, filename="config.json", subfolder=subfolder, **kwargs
+            )
+            try:
+                return transformers.AutoConfig.from_pretrained(
+                    config, trust_remote_code=trust_remote_code, **kwargs
+                )
+            except ValueError:
+                # Diffusers uses a dictionayr.
+                with open(config, "r") as f:
+                    return json.load(f)
     return transformers.AutoConfig.from_pretrained(
         model_id, trust_remote_code=trust_remote_code, **kwargs
     )
