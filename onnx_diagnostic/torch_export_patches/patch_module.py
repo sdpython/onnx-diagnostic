@@ -46,36 +46,45 @@ class RewriteControlFlow(ast.NodeTransformer):
         self.current_func_args = old_args
         return node
 
-    def _rewrite_if(self, node, then_expr, else_expr):
+    def _find_id(self, exprs):
+        vars = []
+        for expr in exprs:
+            for n in ast.walk(expr):
+                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
+                    vars.append(n.id)
+        return sorted(set(vars))
+
+    def _rewrite_if(self, node, then_exprs, else_exprs, tgt=None):
         test_node = node.test
 
         # extract free variables
         then_name = f"{self.wrapper_name}_then_{self.counter}"
         else_name = f"{self.wrapper_name}_else_{self.counter}"
-        then_vars = sorted(
-            {
-                n.id
-                for n in ast.walk(then_expr)
-                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-            }
-        )
-        else_vars = sorted(
-            {
-                n.id
-                for n in ast.walk(else_expr)
-                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-            }
-        )
-
+        then_vars = self._find_id(then_exprs)
+        else_vars = self._find_id(else_exprs)
         then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ != "torch")
+        then_expr, else_expr = None, None
+        if tgt is None and len(then_exprs) == 1 and len(else_exprs) == 1:
+            # return
+            then_expr = then_exprs[0]
+            else_expr = else_exprs[0]
+        elif len(then_exprs) == 1 and len(else_exprs) == 1:
+            # assignment but only one, so we assume it is the same
+            then_expr = then_exprs[0]
+            else_expr = else_exprs[0]
+        else:
+            raise NotImplementedError(
+                f"Unable to rewrite node {node}, len(then_exprs)={len(then_exprs)}, "
+                f"len(else_exprs)={len(else_exprs)}, "
+                f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+            )
 
         # build local funcs
-        then_args = [ast.arg(arg=v, annotation=None) for v in then_else_vars]
         then_def = ast.FunctionDef(
             name=then_name,
             args=ast.arguments(
                 posonlyargs=[],
-                args=then_args,
+                args=[ast.arg(arg=v, annotation=None) for v in then_else_vars],
                 kwonlyargs=[],
                 kw_defaults=[],
                 defaults=[],
@@ -84,12 +93,11 @@ class RewriteControlFlow(ast.NodeTransformer):
             decorator_list=[],
             returns=None,
         )
-        else_args = [ast.arg(arg=v, annotation=None) for v in then_else_vars]
         else_def = ast.FunctionDef(
             name=else_name,
             args=ast.arguments(
                 posonlyargs=[],
-                args=else_args,
+                args=[ast.arg(arg=v, annotation=None) for v in then_else_vars],
                 kwonlyargs=[],
                 kw_defaults=[],
                 defaults=[],
@@ -124,50 +132,77 @@ class RewriteControlFlow(ast.NodeTransformer):
         # First recurse into subnodes
         node = self.generic_visit(node)
 
-        # Case 1: simple assignment in both branches
-        if (
-            len(node.body) == 1
-            and isinstance(node.body[0], ast.Assign)
-            and len(node.orelse) == 1
-            and isinstance(node.orelse[0], ast.Assign)
-            and self.current_func_args is not None
-        ):
-            then_assign = node.body[0]
-            else_assign = node.orelse[0]
-            tgt = then_assign.targets[0]
-            if (
-                isinstance(tgt, ast.Name)
-                and isinstance(else_assign.targets[0], ast.Name)
-                and tgt.id == else_assign.targets[0].id
-            ):
-                self.counter += 1
-                then_expr = then_assign.value
-                else_expr = else_assign.value
-                then_def, else_def, call = self._rewrite_if(node, then_expr, else_expr)
-                assign = ast.Assign(targets=[tgt], value=call)
-                ast.copy_location(assign, node)
-                ast.fix_missing_locations(assign)
-                return [then_def, else_def, assign]
+        has_then_return = any(isinstance(n, ast.Return) for n in node.body)
+        has_else_return = any(isinstance(n, ast.Return) for n in node.orelse)
+        ok = (has_then_return and has_else_return) or (
+            not has_then_return and not has_else_return
+        )
+        assert ok, (
+            f"Cannot mix return and assignment in a test\n--\n"
+            f"{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+        )
+        assert self.current_func_args is not None, (
+            f"current_func_args is None\n--\n"
+            f"{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+        )
+        self.counter += 1
 
-        # Case 2: simple return in both branches
-        if (
-            len(node.body) == 1
-            and isinstance(node.body[0], ast.Return)
-            and len(node.orelse) == 1
-            and isinstance(node.orelse[0], ast.Return)
-            and self.current_func_args is not None
-        ):
-            then_ret = node.body[0]
-            else_ret = node.orelse[0]
-            then_expr = then_ret.value
-            else_expr = else_ret.value
-            self.counter += 1
-            then_def, else_def, call = self._rewrite_if(node, then_expr, else_expr)
-            ret = ast.Return(call)
-            ast.copy_location(ret, node)
-            ast.fix_missing_locations(ret)
-            return [then_def, else_def, ret]
-        return node
+        if not has_then_return:
+            # Case 1: simple assignment in both branches
+            then_assigns = [n for n in node.body if isinstance(n, ast.Assign)]
+            else_assigns = [n for n in node.orelse if isinstance(n, ast.Assign)]
+            assert then_assigns or else_assigns, (
+                f"Missing assignment\n--\n"
+                f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+            )
+
+            targets = []
+            for a in [*then_assigns, *else_assigns]:
+                for t in a.targets:
+                    if isinstance(t, ast.Name):
+                        targets.append((t.id, t))
+                        continue
+
+                    assert isinstance(t, ast.Tuple) and all(
+                        isinstance(_, ast.Name) for _ in t.elts
+                    ), (
+                        f"Unexpected assignment. Not Supported."
+                        f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+                    )
+                    targets.extend((_.id, _) for _ in t.elts)
+
+            d = [_[1] for _ in sorted(dict(targets).items())]
+            tgt = d[0] if len(d) == 1 else ast.Tuple(d, ctx=ast.Load())
+
+            then_values = [n.value for n in then_assigns]
+            else_values = [n.value for n in else_assigns]
+            then_def, else_def, call = self._rewrite_if(
+                node, then_values, else_values, tgt=tgt
+            )
+
+            assign = ast.Assign(targets=[tgt], value=call)
+            ast.copy_location(assign, node)
+            ast.fix_missing_locations(assign)
+            return [then_def, else_def, assign]
+
+        # Case 2: return in both branches, we assume both branches return the same results.
+        then_ret = node.body[-1]
+        else_ret = node.orelse[-1]
+        assert isinstance(then_ret, ast.Return), (
+            f"return is not the last instruction of then branch"
+            f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+        )
+        assert isinstance(else_ret, ast.Return), (
+            f"return is not the last instruction of else branch"
+            f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+        )
+        then_expr = then_ret.value
+        else_expr = else_ret.value
+        then_def, else_def, call = self._rewrite_if(node, [then_expr], [else_expr])
+        ret = ast.Return(call)
+        ast.copy_location(ret, node)
+        ast.fix_missing_locations(ret)
+        return [then_def, else_def, ret]
 
     def generic_visit(self, node):
         return super().generic_visit(node)
@@ -211,26 +246,24 @@ def transform_method(
     # Retrieve source of the function
     src = inspect.getsource(func)
     if verbose:
-        print(f"[transform_method] -- source -- {func}")
-        print(src)
+        print(f"[transform_method] -- source -- {func}\n\n{src}\n\n[transform_method] --")
     # Parse into AST
     tree = ast.parse(textwrap.dedent(src))
     if verbose > 1:
-        print("[transform_method] -- tree --")
-        print(ast.dump(tree, indent=2))
+        print(f"[transform_method] -- tree --\n\n{ast.dump(tree, indent=2)}")
     # Apply transformation
     transformer = RewriteControlFlow(if_name)
     new_tree = transformer.visit(tree)
     if verbose > 1:
-        print("[transform_method] -- new tree --")
-        print(ast.dump(tree, indent=2))
+        print(f"[transform_method] -- new tree --\n\n{ast.dump(tree, indent=2)}")
     ast.fix_missing_locations(new_tree)
     _settl(new_tree, 0)
 
     if verbose > 0:
-        print("[transform_method] -- new code --")
-        code = ast.unparse(new_tree)
-        print(code)
+        print(
+            f"[transform_method] -- new code --\n\n"
+            f"{ast.unparse(new_tree)}\n\n[transform_method] --"
+        )
     try:
         mod = compile(new_tree, filename="<ast>", mode="exec")
     except TypeError as e:
