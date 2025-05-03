@@ -177,6 +177,7 @@ Size of the package:
 Older versions
 ++++++++++++++
 
+* `0.5.0 <../v0.5.0/index.html>`_
 * `0.4.4 <../v0.4.4/index.html>`_
 * `0.4.3 <../v0.4.3/index.html>`_
 * `0.4.2 <../v0.4.2/index.html>`_
