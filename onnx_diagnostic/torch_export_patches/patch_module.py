@@ -46,10 +46,83 @@ class RewriteControlFlow(ast.NodeTransformer):
         self.current_func_args = old_args
         return node
 
+    def _rewrite_if(self, node, then_expr, else_expr):
+        test_node = node.test
+
+        # extract free variables
+        then_name = f"{self.wrapper_name}_then_{self.counter}"
+        else_name = f"{self.wrapper_name}_else_{self.counter}"
+        then_vars = sorted(
+            {
+                n.id
+                for n in ast.walk(then_expr)
+                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+            }
+        )
+        else_vars = sorted(
+            {
+                n.id
+                for n in ast.walk(else_expr)
+                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+            }
+        )
+
+        then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ != "torch")
+
+        # build local funcs
+        then_args = [ast.arg(arg=v, annotation=None) for v in then_else_vars]
+        then_def = ast.FunctionDef(
+            name=then_name,
+            args=ast.arguments(
+                posonlyargs=[],
+                args=then_args,
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[],
+            ),
+            body=[ast.Return(then_expr)],
+            decorator_list=[],
+            returns=None,
+        )
+        else_args = [ast.arg(arg=v, annotation=None) for v in then_else_vars]
+        else_def = ast.FunctionDef(
+            name=else_name,
+            args=ast.arguments(
+                posonlyargs=[],
+                args=else_args,
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[],
+            ),
+            body=[ast.Return(else_expr)],
+            decorator_list=[],
+            returns=None,
+        )
+        # fix locations
+        for n in (then_def, else_def):
+            ast.copy_location(n, node)
+            ast.fix_missing_locations(n)
+            assert hasattr(n, "lineno")
+        # wrapper call and assignment
+        then_else_args_list = ast.List(
+            [ast.Name(id=v, ctx=ast.Load()) for v in then_else_vars],
+            ctx=ast.Load(),
+        )
+        call = ast.Call(
+            func=ast.Name(id=self.wrapper_name, ctx=ast.Load()),
+            args=[
+                test_node,
+                ast.Name(id=then_name, ctx=ast.Load()),
+                ast.Name(id=else_name, ctx=ast.Load()),
+                then_else_args_list,
+            ],
+            keywords=[],
+        )
+        return then_def, else_def, call
+
     def visit_If(self, node):
         # First recurse into subnodes
         node = self.generic_visit(node)
-        test_node = node.test
 
         # Case 1: simple assignment in both branches
         if (
@@ -68,79 +141,9 @@ class RewriteControlFlow(ast.NodeTransformer):
                 and tgt.id == else_assign.targets[0].id
             ):
                 self.counter += 1
-                then_name = f"{self.wrapper_name}_then_{self.counter}"
-                else_name = f"{self.wrapper_name}_else_{self.counter}"
                 then_expr = then_assign.value
                 else_expr = else_assign.value
-                # extract free variables
-                then_vars = sorted(
-                    {
-                        n.id
-                        for n in ast.walk(then_expr)
-                        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-                    }
-                )
-                else_vars = sorted(
-                    {
-                        n.id
-                        for n in ast.walk(else_expr)
-                        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-                    }
-                )
-                # build local funcs
-                then_args = [ast.arg(arg=v, annotation=None) for v in then_vars]
-                then_def = ast.FunctionDef(
-                    name=then_name,
-                    args=ast.arguments(
-                        posonlyargs=[],
-                        args=then_args,
-                        kwonlyargs=[],
-                        kw_defaults=[],
-                        defaults=[],
-                    ),
-                    body=[ast.Return(then_expr)],
-                    decorator_list=[],
-                    returns=None,
-                )
-                else_args = [ast.arg(arg=v, annotation=None) for v in else_vars]
-                else_def = ast.FunctionDef(
-                    name=else_name,
-                    args=ast.arguments(
-                        posonlyargs=[],
-                        args=else_args,
-                        kwonlyargs=[],
-                        kw_defaults=[],
-                        defaults=[],
-                    ),
-                    body=[ast.Return(else_expr)],
-                    decorator_list=[],
-                    returns=None,
-                )
-                # fix locations
-                for n in (then_def, else_def):
-                    ast.copy_location(n, node)
-                    ast.fix_missing_locations(n)
-                    assert hasattr(n, "lineno")
-                # wrapper call and assignment
-                then_args_tuple = ast.Tuple(
-                    [ast.Name(id=v, ctx=ast.Load()) for v in then_vars],
-                    ctx=ast.Load(),
-                )
-                else_args_tuple = ast.Tuple(
-                    [ast.Name(id=v, ctx=ast.Load()) for v in else_vars],
-                    ctx=ast.Load(),
-                )
-                call = ast.Call(
-                    func=ast.Name(id=self.wrapper_name, ctx=ast.Load()),
-                    args=[
-                        test_node,
-                        ast.Name(id=then_name, ctx=ast.Load()),
-                        ast.Name(id=else_name, ctx=ast.Load()),
-                        then_args_tuple,
-                        else_args_tuple,
-                    ],
-                    keywords=[],
-                )
+                then_def, else_def, call = self._rewrite_if(node, then_expr, else_expr)
                 assign = ast.Assign(targets=[tgt], value=call)
                 ast.copy_location(assign, node)
                 ast.fix_missing_locations(assign)
@@ -159,74 +162,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             then_expr = then_ret.value
             else_expr = else_ret.value
             self.counter += 1
-            then_name = f"{self.wrapper_name}_then_{self.counter}"
-            else_name = f"{self.wrapper_name}_else_{self.counter}"
-            # extract free variables
-            then_vars = sorted(
-                {
-                    n.id
-                    for n in ast.walk(then_expr)
-                    if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-                }
-            )
-            else_vars = sorted(
-                {
-                    n.id
-                    for n in ast.walk(else_expr)
-                    if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-                }
-            )
-
-            then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ != "torch")
-
-            # build local funcs
-            then_args = [ast.arg(arg=v, annotation=None) for v in then_else_vars]
-            then_def = ast.FunctionDef(
-                name=then_name,
-                args=ast.arguments(
-                    posonlyargs=[],
-                    args=then_args,
-                    kwonlyargs=[],
-                    kw_defaults=[],
-                    defaults=[],
-                ),
-                body=[ast.Return(then_expr)],
-                decorator_list=[],
-                returns=None,
-            )
-            else_args = [ast.arg(arg=v, annotation=None) for v in then_else_vars]
-            else_def = ast.FunctionDef(
-                name=else_name,
-                args=ast.arguments(
-                    posonlyargs=[],
-                    args=else_args,
-                    kwonlyargs=[],
-                    kw_defaults=[],
-                    defaults=[],
-                ),
-                body=[ast.Return(else_expr)],
-                decorator_list=[],
-                returns=None,
-            )
-            for n in (then_def, else_def):
-                ast.copy_location(n, node)
-                ast.fix_missing_locations(n)
-            # wrapper call and return
-            then_else_args_list = ast.List(
-                [ast.Name(id=v, ctx=ast.Load()) for v in then_else_vars],
-                ctx=ast.Load(),
-            )
-
-            call = ast.Call(
-                func=ast.Name(id=self.wrapper_name, ctx=ast.Load()),
-                args=[
-                    test_node,
-                    ast.Name(id=then_name, ctx=ast.Load()),
-                    ast.Name(id=else_name, ctx=ast.Load()),
-                    then_else_args_list,
-                ],
-                keywords=[],
-            )
+            then_def, else_def, call = self._rewrite_if(node, then_expr, else_expr)
             ret = ast.Return(call)
             ast.copy_location(ret, node)
             ast.fix_missing_locations(ret)
@@ -260,24 +196,41 @@ class RewrittenMethod:
         return f"{self.__class__.__name__}({self.func})"
 
 
-def transform_method(func: Callable, if_name="torch_cond") -> RewrittenMethod:
+def transform_method(
+    func: Callable, if_name="torch_cond", verbose: int = 0
+) -> RewrittenMethod:
     """
     Returns a new function based on `func` where every test (if)
     is replaced by a call to :func:`torch.cond`.
 
     :param func: method or function to rewrite
     :param if_name: function calling the test
+    :param verbose: verbosity
     :return: rewritten method
     """
     # Retrieve source of the function
     src = inspect.getsource(func)
+    if verbose:
+        print(f"[transform_method] -- source -- {func}")
+        print(src)
     # Parse into AST
     tree = ast.parse(textwrap.dedent(src))
+    if verbose > 1:
+        print("[transform_method] -- tree --")
+        print(ast.dump(tree, indent=2))
     # Apply transformation
     transformer = RewriteControlFlow(if_name)
     new_tree = transformer.visit(tree)
+    if verbose > 1:
+        print("[transform_method] -- new tree --")
+        print(ast.dump(tree, indent=2))
     ast.fix_missing_locations(new_tree)
     _settl(new_tree, 0)
+
+    if verbose > 0:
+        print("[transform_method] -- new code --")
+        code = ast.unparse(new_tree)
+        print(code)
     try:
         mod = compile(new_tree, filename="<ast>", mode="exec")
     except TypeError as e:
