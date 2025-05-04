@@ -194,13 +194,11 @@ class TestPatchModule(ExtTestCase):
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
         expected, expected_ = Model()(x, y), Model()(-x, y)
 
-        rewritten = transform_method(Model.forward, verbose=0)
+        rewritten = transform_method(Model.forward, verbose=1)
         self.assertIn("torch.abs(", rewritten.code)
         self.assertIn("abs", rewritten.dump)
         code = rewritten.code
-        assert ("w, z, u" in code and "u, w, z" not in code) or (
-            "w, z, u" not in code and "u, w, z" in code
-        ), f"Order mismatch in\n{code}"
+        assert "w, z, u" not in code and "u, w, z" not in code, f"None dropped\n{code}"
         Model.forward = rewritten.func
         self.assertEqualAny(expected, Model()(x, y))
         self.assertEqualAny(expected_, Model()(-x, y))

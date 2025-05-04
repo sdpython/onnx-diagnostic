@@ -35,10 +35,13 @@ def _settl(node, lineno, level=0):
 class RewriteControlFlow(ast.NodeTransformer):
     """
     The class rewrites tests with function ``torch_cond`` :func:`torch.cond`.
+    ``empty_tensor`` is a function returning an empty tensor,
+    when a branch returns something the other branch does not.
     """
 
-    def __init__(self, wrapper_name):
+    def __init__(self, wrapper_name, empty_tensor: str = "make_empty_tensor"):
         self.wrapper_name = wrapper_name
+        self.empty_tensor = empty_tensor
         self.counter = 0
         self.current_func_args = None
 
@@ -60,6 +63,7 @@ class RewriteControlFlow(ast.NodeTransformer):
 
     def _rewrite_if(self, node, then_exprs, else_exprs, tgt_mapping=None):
         test_node = node.test
+        drop = set()
 
         # extract free variables
         then_name = f"{self.wrapper_name}_then_{self.counter}"
@@ -69,7 +73,7 @@ class RewriteControlFlow(ast.NodeTransformer):
         then_else_vars = set(
             _
             for _ in [*then_vars, *else_vars]
-            if _ != "torch" and (not tgt_mapping or _ not in tgt_mapping)
+            if _ != "torch"  #  and (not tgt_mapping or _ not in tgt_mapping)
         )
         then_ret, else_ret = None, None
         if tgt_mapping is None and len(then_exprs) == 1 and len(else_exprs) == 1:
@@ -80,15 +84,21 @@ class RewriteControlFlow(ast.NodeTransformer):
             else_exprs = [n for n in node.orelse if not isinstance(n, ast.Return)]
         else:
             assert tgt_mapping, (
-                f"then and else branchs do not have the same number "
+                f"then and else branches do not have the same number "
                 f"of assignments, we need more information to understand "
                 f"which ones to return,"
                 f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
             )
+            drop = set()
             then_exprs, else_exprs = node.body, node.orelse
             then_rets, else_rets = [], []
-            for t in tgt_mapping:
-                then_e, else_e = tgt_mapping[t]
+            for t, then_else in sorted(tgt_mapping.items()):
+                then_e, else_e = then_else
+                if (then_e is None or else_e is None) and t not in then_else_vars:
+                    # The variable is not used by one branch and it is not an input.
+                    # Let's drop it.
+                    drop.add(t)
+                    continue
                 then_rets.append(then_e or ast.Name(else_e.id, ctx=ast.Load()))
                 else_rets.append(else_e or ast.Name(then_e.id, ctx=ast.Load()))
             then_ret = (
@@ -145,7 +155,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             ],
             keywords=[],
         )
-        return then_def, else_def, call
+        return then_def, else_def, call, drop
 
     def _filter_target(self, node, tgt_mapping):
         """
@@ -220,9 +230,13 @@ class RewriteControlFlow(ast.NodeTransformer):
             # the targets we need to export
             tgt, tgt_mapping = self._make_targets(node, then_assigns, else_assigns)
 
-            then_def, else_def, call = self._rewrite_if(
+            then_def, else_def, call, dropped = self._rewrite_if(
                 node, then_assigns, else_assigns, tgt_mapping=tgt_mapping
             )
+            if dropped and isinstance(tgt, ast.Tuple):
+                tgt = ast.Tuple(
+                    tuple(t for t in tgt.elts if t.id not in dropped), ctx=ast.Load()
+                )
 
             assign = ast.Assign(targets=[tgt], value=call)
             ast.copy_location(assign, node)
@@ -242,7 +256,7 @@ class RewriteControlFlow(ast.NodeTransformer):
         )
         then_expr = then_ret.value
         else_expr = else_ret.value
-        then_def, else_def, call = self._rewrite_if(node, [then_expr], [else_expr])
+        then_def, else_def, call, dropped = self._rewrite_if(node, [then_expr], [else_expr])
         ret = ast.Return(call)
         ast.copy_location(ret, node)
         ast.fix_missing_locations(ret)
@@ -281,7 +295,10 @@ class RewrittenMethod:
 
 
 def transform_method(
-    func: Callable, if_name="torch_cond", verbose: int = 0
+    func: Callable,
+    if_name: str = "torch_cond",
+    empty_tensor: str = "make_empty_tensor",
+    verbose: int = 0,
 ) -> RewrittenMethod:
     """
     Returns a new function based on `func` where every test (if)
@@ -291,7 +308,7 @@ def transform_method(
     or assign something. It cannot return in one branch and assign
     in the other branch.
 
-    .. warning:: room for improvment
+    .. warning:: room for improvement
 
         When it assigns a value to a constant,
         the current implementation does check which ones is really used
@@ -301,6 +318,7 @@ def transform_method(
 
     :param func: method or function to rewrite
     :param if_name: function calling the test
+    :param empty_tensor: function creating an empty tensor
     :param verbose: verbosity
     :return: rewritten method
 
@@ -341,7 +359,7 @@ def transform_method(
     if verbose > 1:
         print(f"[transform_method] -- tree --\n\n{ast.dump(tree, indent=2)}")
     # Apply transformation
-    transformer = RewriteControlFlow(if_name)
+    transformer = RewriteControlFlow(if_name, empty_tensor=empty_tensor)
     new_tree = transformer.visit(tree)
     if verbose > 1:
         print(f"[transform_method] -- new tree --\n\n{ast.dump(tree, indent=2)}")
@@ -372,6 +390,7 @@ def transform_method(
     namespace: Dict[str, type] = {}
     globs = func.__globals__.copy()
     globs[if_name] = torch.cond
+    globs[empty_tensor] = lambda: torch.tensor([])
     exec(mod, globs, namespace)
     new_func = namespace.get(func.__name__)
     if not isinstance(new_func, types.FunctionType):
