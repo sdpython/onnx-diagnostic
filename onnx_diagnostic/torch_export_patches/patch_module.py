@@ -66,7 +66,11 @@ class RewriteControlFlow(ast.NodeTransformer):
         else_name = f"{self.wrapper_name}_else_{self.counter}"
         then_vars = self._find_id(then_exprs)
         else_vars = self._find_id(else_exprs)
-        then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ != "torch")
+        then_else_vars = set(
+            _
+            for _ in [*then_vars, *else_vars]
+            if _ != "torch" and (not tgt_mapping or _ not in tgt_mapping)
+        )
         then_ret, else_ret = None, None
         if tgt_mapping is None and len(then_exprs) == 1 and len(else_exprs) == 1:
             # return
@@ -143,6 +147,13 @@ class RewriteControlFlow(ast.NodeTransformer):
         )
         return then_def, else_def, call
 
+    def _filter_target(self, node, tgt_mapping):
+        """
+        This function should reduce the number of elements to return
+        by looking at the one used after the If statement.
+        """
+        return tgt_mapping
+
     def _make_targets(self, node, then_assigns, else_assigns):
         tgt_mapping = {}
         for a, then_or_else in [
@@ -171,6 +182,7 @@ class RewriteControlFlow(ast.NodeTransformer):
                         v = tgt_mapping[_t.id]
                         tgt_mapping[_t.id] = (_t, v[1]) if then_or_else else (v[0], _t)
 
+        tgt_mapping = self._filter_target(node, tgt_mapping)
         d = [(v[0] or v[1]) for k, v in sorted(dict(tgt_mapping).items())]
         tgt = d[0] if len(d) == 1 else ast.Tuple(d, ctx=ast.Load())
         return tgt, tgt_mapping
@@ -184,10 +196,12 @@ class RewriteControlFlow(ast.NodeTransformer):
         ok = (has_then_return and has_else_return) or (
             not has_then_return and not has_else_return
         )
-        assert ok, (
-            f"Cannot mix return and assignment in a test\n--\n"
-            f"{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
-        )
+        if not ok:
+            raise NotImplementedError(
+                f"Cannot mix return and assignment in a test or a "
+                f"unique then branch with a return\n--\n"
+                f"{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+            )
         assert self.current_func_args is not None, (
             f"current_func_args is None\n--\n"
             f"{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
@@ -283,6 +297,7 @@ def transform_method(
         the current implementation does check which ones is really used
         after the test. The rewritten local functions returns every
         assigned variable. This could be reduced.
+        See method ``_filter_target``.
 
     :param func: method or function to rewrite
     :param if_name: function calling the test
