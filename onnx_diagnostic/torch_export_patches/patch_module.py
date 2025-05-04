@@ -70,10 +70,10 @@ class RewriteControlFlow(ast.NodeTransformer):
         then_ret, else_ret = None, None
         if tgt_mapping is None and len(then_exprs) == 1 and len(else_exprs) == 1:
             # return
-            then_exprs = [n for n in node.body if not isinstance(n, ast.Return)]
-            else_exprs = [n for n in node.orelse if not isinstance(n, ast.Return)]
             then_ret = then_exprs[0]
             else_ret = else_exprs[0]
+            then_exprs = [n for n in node.body if not isinstance(n, ast.Return)]
+            else_exprs = [n for n in node.orelse if not isinstance(n, ast.Return)]
         else:
             assert tgt_mapping, (
                 f"then and else branchs do not have the same number "
