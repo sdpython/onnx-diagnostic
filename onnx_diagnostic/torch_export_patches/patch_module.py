@@ -33,6 +33,10 @@ def _settl(node, lineno, level=0):
 
 
 class RewriteControlFlow(ast.NodeTransformer):
+    """
+    The class rewrites tests with function ``torch_cond`` :func:`torch.cond`.
+    """
+
     def __init__(self, wrapper_name):
         self.wrapper_name = wrapper_name
         self.counter = 0
@@ -54,7 +58,7 @@ class RewriteControlFlow(ast.NodeTransformer):
                     vars.append(n.id)
         return sorted(set(vars))
 
-    def _rewrite_if(self, node, then_exprs, else_exprs, tgt=None):
+    def _rewrite_if(self, node, then_exprs, else_exprs, tgt_mapping=None):
         test_node = node.test
 
         # extract free variables
@@ -64,19 +68,41 @@ class RewriteControlFlow(ast.NodeTransformer):
         else_vars = self._find_id(else_exprs)
         then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ != "torch")
         then_expr, else_expr = None, None
-        if tgt is None and len(then_exprs) == 1 and len(else_exprs) == 1:
+        if tgt_mapping is None and len(then_exprs) == 1 and len(else_exprs) == 1:
             # return
             then_expr = then_exprs[0]
             else_expr = else_exprs[0]
-        elif len(then_exprs) == 1 and len(else_exprs) == 1:
-            # assignment but only one, so we assume it is the same
+        elif (
+            tgt_mapping
+            and len(then_exprs) == 1
+            and len(else_exprs) == 1
+            and len(tgt_mapping) == 1
+        ):
+            # assignment but only one
             then_expr = then_exprs[0]
             else_expr = else_exprs[0]
         else:
-            raise NotImplementedError(
-                f"Unable to rewrite node {node}, len(then_exprs)={len(then_exprs)}, "
-                f"len(else_exprs)={len(else_exprs)}, "
+            assert tgt_mapping, (
+                f"then and else branchs do not have the same number "
+                f"of assignments, we need more information to understand "
+                f"which ones to return,"
                 f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+            )
+            then_exprs = []
+            else_exprs = []
+            for t in tgt_mapping:
+                then_e, else_e = tgt_mapping[t]
+                then_exprs.append(then_e or ast.Name(else_e.id, ctx=ast.Load()))
+                else_exprs.append(else_e or ast.Name(then_e.id, ctx=ast.Load()))
+            then_expr = (
+                then_exprs[0]
+                if len(then_exprs) == 1
+                else ast.Tuple(then_exprs, ctx=ast.Load())
+            )
+            else_expr = (
+                else_exprs[0]
+                if len(else_exprs) == 1
+                else ast.Tuple(else_exprs, ctx=ast.Load())
             )
 
         # build local funcs
@@ -128,6 +154,38 @@ class RewriteControlFlow(ast.NodeTransformer):
         )
         return then_def, else_def, call
 
+    def _make_targets(self, node, then_assigns, else_assigns):
+        tgt_mapping = {}
+        for a, then_or_else in [
+            *[(a, True) for a in then_assigns],
+            *[(a, False) for a in else_assigns],
+        ]:
+            for t in a.targets:
+                if isinstance(t, ast.Name):
+                    if t.id not in tgt_mapping:
+                        tgt_mapping[t.id] = (t, None) if then_or_else else (None, t)
+                    else:
+                        v = tgt_mapping[t.id]
+                        tgt_mapping[t.id] = (t, v[1]) if then_or_else else (v[0], t)
+                    continue
+
+                assert isinstance(t, ast.Tuple) and all(
+                    isinstance(_, ast.Name) for _ in t.elts
+                ), (
+                    f"Unexpected assignment. Not Supported."
+                    f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+                )
+                for _t in t.elts:
+                    if _t.id not in tgt_mapping:
+                        tgt_mapping[_t.id] = (_t, None) if then_or_else else (None, _t)
+                    else:
+                        v = tgt_mapping[_t.id]
+                        tgt_mapping[_t.id] = (_t, v[1]) if then_or_else else (v[0], _t)
+
+        d = [(v[0] or v[1]) for k, v in sorted(dict(tgt_mapping).items())]
+        tgt = d[0] if len(d) == 1 else ast.Tuple(d, ctx=ast.Load())
+        return tgt, tgt_mapping
+
     def visit_If(self, node):
         # First recurse into subnodes
         node = self.generic_visit(node)
@@ -152,32 +210,17 @@ class RewriteControlFlow(ast.NodeTransformer):
             then_assigns = [n for n in node.body if isinstance(n, ast.Assign)]
             else_assigns = [n for n in node.orelse if isinstance(n, ast.Assign)]
             assert then_assigns or else_assigns, (
-                f"Missing assignment\n--\n"
+                f"Missing assignment"
                 f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
             )
 
-            targets = []
-            for a in [*then_assigns, *else_assigns]:
-                for t in a.targets:
-                    if isinstance(t, ast.Name):
-                        targets.append((t.id, t))
-                        continue
-
-                    assert isinstance(t, ast.Tuple) and all(
-                        isinstance(_, ast.Name) for _ in t.elts
-                    ), (
-                        f"Unexpected assignment. Not Supported."
-                        f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
-                    )
-                    targets.extend((_.id, _) for _ in t.elts)
-
-            d = [_[1] for _ in sorted(dict(targets).items())]
-            tgt = d[0] if len(d) == 1 else ast.Tuple(d, ctx=ast.Load())
+            # the targets we need to export
+            tgt, tgt_mapping = self._make_targets(node, then_assigns, else_assigns)
 
             then_values = [n.value for n in then_assigns]
             else_values = [n.value for n in else_assigns]
             then_def, else_def, call = self._rewrite_if(
-                node, then_values, else_values, tgt=tgt
+                node, then_values, else_values, tgt_mapping=tgt_mapping
             )
 
             assign = ast.Assign(targets=[tgt], value=call)
@@ -226,6 +269,11 @@ class RewrittenMethod:
         """Returns the source."""
         return ast.unparse(self.tree)
 
+    @property
+    def dump(self) -> str:
+        """Returns the tree dumped as a string."""
+        return ast.dump(self.tree, indent=2)
+
     def __repr__(self):
         "usual"
         return f"{self.__class__.__name__}({self.func})"
@@ -238,10 +286,49 @@ def transform_method(
     Returns a new function based on `func` where every test (if)
     is replaced by a call to :func:`torch.cond`.
 
+    A test must return the same things if it returns something
+    or assign something. It cannot return in one branch and assign
+    in the other branch.
+
+    .. warning:: room for improvment
+
+        When it assigns a value to a constant,
+        the current implementation does check which ones is really used
+        after the test. The rewritten local functions returns every
+        assigned variable. This could be reduced.
+
     :param func: method or function to rewrite
     :param if_name: function calling the test
     :param verbose: verbosity
     :return: rewritten method
+
+    .. runpython::
+        :showcode:
+
+        import torch
+        from onnx_diagnostic.torch_export_patches.patch_module import transform_method
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                if x.sum() > 0:
+                    return x + y, x - y
+                else:
+                    return torch.abs(x) + y, torch.abs(x) - y
+
+        x, y = torch.rand((3, 4)), torch.rand((3, 4))
+        expected = Model()(x, y)
+
+        rewritten = transform_method(Model.forward, verbose=10)
+        print("-- code --")
+        print(rewritten.code)
+
+        print(" -- export --")
+        Model.forward = rewritten.func
+
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
+        print(ep)
     """
     # Retrieve source of the function
     src = inspect.getsource(func)

@@ -8,139 +8,134 @@ class TestPatchModule(ExtTestCase):
     def test_rewrite_forward_return1(self):
 
         class Model(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-
             def forward(self, x, y):
                 if x.sum() > 0:
                     return x + y
                 else:
-                    return torch.abs(x) + y
+                    return torch.abs(x) + y + 1
 
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
-        expected = Model()(x, y)
+        expected, expected_ = Model()(x, y), Model()(-x, y)
 
         rewritten = transform_method(Model.forward)
+        self.assertIn("torch.abs(", rewritten.code)
+        self.assertIn("'abs'", rewritten.dump)
         Model.forward = rewritten.func
-        Model()(x, y)
+        self.assertEqualAny(expected, Model()(x, y))
+        self.assertEqualAny(expected_, Model()(-x, y))
 
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
         self.assertIn("cond", [str(getattr(n, "target", "?")) for n in ep.graph.nodes])
-        got = ep.module()(x, y)
-        self.assertEqualArray(expected, got)
+        self.assertEqualAny(expected, ep.module()(x, y))
+        self.assertEqualAny(expected_, ep.module()(-x, y))
 
     @hide_stdout()
     def test_rewrite_forward_return2(self):
 
         class Model(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-
             def forward(self, x, y):
                 if x.sum() > 0:
                     return x + y, x - y
                 else:
-                    return torch.abs(x) + y, torch.abs(x) - y
+                    return torch.abs(x) + y + 1, torch.abs(x) - y + 1
 
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
-        expected = Model()(x, y)
+        expected, expected_ = Model()(x, y), Model()(-x, y)
 
         rewritten = transform_method(Model.forward, verbose=10)
+        self.assertIn("torch.abs(", rewritten.code)
+        self.assertIn("abs", rewritten.dump)
         Model.forward = rewritten.func
-        Model()(x, y)
+        self.assertEqualAny(expected, Model()(x, y))
+        self.assertEqualAny(expected_, Model()(-x, y))
 
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
         self.assertIn("cond", [str(getattr(n, "target", "?")) for n in ep.graph.nodes])
-        got = ep.module()(x, y)
-        self.assertEqualAny(expected, got)
-        self.assertEqualAny(Model()(-x, y), ep.module()(-x, y))
+        self.assertEqualAny(expected, ep.module()(x, y))
+        self.assertEqualAny(expected_, ep.module()(-x, y))
 
     def test_rewrite_forward_assign1(self):
 
         class Model(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-
             def forward(self, x, y):
                 if x.sum() > 0:
                     z = x + y
                 else:
-                    z = torch.abs(x) + y
+                    z = torch.abs(x) + y + 1
                 return z
 
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
-        expected = Model()(x, y)
+        expected, expected_ = Model()(x, y), Model()(-x, y)
 
         rewritten = transform_method(Model.forward, verbose=0)
+        self.assertIn("torch.abs(", rewritten.code)
+        self.assertIn("abs", rewritten.dump)
         Model.forward = rewritten.func
-        Model()(x, y)
+        self.assertEqualAny(expected, Model()(x, y))
+        self.assertEqualAny(expected_, Model()(-x, y))
 
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
         self.assertIn("cond", [str(getattr(n, "target", "?")) for n in ep.graph.nodes])
-        got = ep.module()(x, y)
-        self.assertEqualArray(expected, got)
-        self.assertEqualArray(Model()(-x, y), ep.module()(-x, y))
+        self.assertEqualAny(expected, ep.module()(x, y))
+        self.assertEqualArray(expected_, ep.module()(-x, y))
 
     def test_rewrite_forward_assign2(self):
 
         class Model(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-
             def forward(self, x, y):
                 if x.sum() > 0:
                     w, z = x + y, x - y
                 else:
-                    w, z = torch.abs(x) + y, torch.abs(x) - y
+                    w, z = torch.abs(x) + y + 1, torch.abs(x) - y + 1
                 return w, z
 
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
-        expected = Model()(x, y)
+        expected, expected_ = Model()(x, y), Model()(-x, y)
 
         rewritten = transform_method(Model.forward, verbose=0)
+        self.assertIn("torch.abs(", rewritten.code)
+        self.assertIn("abs", rewritten.dump)
         Model.forward = rewritten.func
-        Model()(x, y)
+        self.assertEqualAny(expected, Model()(x, y))
+        self.assertEqualAny(expected_, Model()(-x, y))
 
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
         self.assertIn("cond", [str(getattr(n, "target", "?")) for n in ep.graph.nodes])
-        got = ep.module()(x, y)
-        self.assertEqualAny(expected, got)
-        self.assertEqualAny(Model()(-x, y), ep.module()(-x, y))
+        self.assertEqualAny(expected, ep.module()(x, y))
+        self.assertEqualAny(expected_, ep.module()(-x, y))
 
     def test_rewrite_forward_noelse(self):
 
         class Model(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-
             def forward(self, x, y):
                 if x.sum() > 0:
-                    x = torch.abs(x)
+                    x = torch.abs(x) + 1
                 return x + y
 
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
-        expected = Model()(x, y)
+        expected, expected_ = Model()(x, y), Model()(-x, y)
 
         rewritten = transform_method(Model.forward, verbose=0)
+        self.assertIn("torch.abs(", rewritten.code)
+        self.assertIn("abs", rewritten.dump)
         Model.forward = rewritten.func
-        Model()(x, y)
+        self.assertEqualAny(expected, Model()(x, y))
+        self.assertEqualAny(expected_, Model()(-x, y))
 
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
         self.assertIn("cond", [str(getattr(n, "target", "?")) for n in ep.graph.nodes])
-        got = ep.module()(x, y)
-        self.assertEqualAny(expected, got)
-        self.assertEqualAny(Model()(-x, y), ep.module()(-x, y))
-        self.assertEqualAny(Model()(-x, y), ep.module()(-x, y))
+        self.assertEqualAny(expected, ep.module()(x, y))
+        self.assertEqualAny(expected_, ep.module()(-x, y))
 
 
 if __name__ == "__main__":
