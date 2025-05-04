@@ -112,7 +112,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
-    def test_rewrite_forward_noelse(self):
+    def test_rewrite_forward_assign_noelse(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):

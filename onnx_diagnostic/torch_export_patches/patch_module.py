@@ -67,20 +67,13 @@ class RewriteControlFlow(ast.NodeTransformer):
         then_vars = self._find_id(then_exprs)
         else_vars = self._find_id(else_exprs)
         then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ != "torch")
-        then_expr, else_expr = None, None
+        then_ret, else_ret = None, None
         if tgt_mapping is None and len(then_exprs) == 1 and len(else_exprs) == 1:
             # return
-            then_expr = then_exprs[0]
-            else_expr = else_exprs[0]
-        elif (
-            tgt_mapping
-            and len(then_exprs) == 1
-            and len(else_exprs) == 1
-            and len(tgt_mapping) == 1
-        ):
-            # assignment but only one
-            then_expr = then_exprs[0]
-            else_expr = else_exprs[0]
+            then_exprs = [n for n in node.body if not isinstance(n, ast.Return)]
+            else_exprs = [n for n in node.orelse if not isinstance(n, ast.Return)]
+            then_ret = then_exprs[0]
+            else_ret = else_exprs[0]
         else:
             assert tgt_mapping, (
                 f"then and else branchs do not have the same number "
@@ -88,21 +81,17 @@ class RewriteControlFlow(ast.NodeTransformer):
                 f"which ones to return,"
                 f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
             )
-            then_exprs = []
-            else_exprs = []
+            then_exprs, else_exprs = node.body, node.orelse
+            then_rets, else_rets = [], []
             for t in tgt_mapping:
                 then_e, else_e = tgt_mapping[t]
-                then_exprs.append(then_e or ast.Name(else_e.id, ctx=ast.Load()))
-                else_exprs.append(else_e or ast.Name(then_e.id, ctx=ast.Load()))
-            then_expr = (
-                then_exprs[0]
-                if len(then_exprs) == 1
-                else ast.Tuple(then_exprs, ctx=ast.Load())
+                then_rets.append(then_e or ast.Name(else_e.id, ctx=ast.Load()))
+                else_rets.append(else_e or ast.Name(then_e.id, ctx=ast.Load()))
+            then_ret = (
+                then_rets[0] if len(then_rets) == 1 else ast.Tuple(then_rets, ctx=ast.Load())
             )
-            else_expr = (
-                else_exprs[0]
-                if len(else_exprs) == 1
-                else ast.Tuple(else_exprs, ctx=ast.Load())
+            else_ret = (
+                else_rets[0] if len(else_rets) == 1 else ast.Tuple(else_rets, ctx=ast.Load())
             )
 
         # build local funcs
@@ -115,7 +104,7 @@ class RewriteControlFlow(ast.NodeTransformer):
                 kw_defaults=[],
                 defaults=[],
             ),
-            body=[ast.Return(then_expr)],
+            body=[*then_exprs, ast.Return(then_ret)],
             decorator_list=[],
             returns=None,
         )
@@ -128,7 +117,7 @@ class RewriteControlFlow(ast.NodeTransformer):
                 kw_defaults=[],
                 defaults=[],
             ),
-            body=[ast.Return(else_expr)],
+            body=[*else_exprs, ast.Return(else_ret)],
             decorator_list=[],
             returns=None,
         )
@@ -217,10 +206,8 @@ class RewriteControlFlow(ast.NodeTransformer):
             # the targets we need to export
             tgt, tgt_mapping = self._make_targets(node, then_assigns, else_assigns)
 
-            then_values = [n.value for n in then_assigns]
-            else_values = [n.value for n in else_assigns]
             then_def, else_def, call = self._rewrite_if(
-                node, then_values, else_values, tgt_mapping=tgt_mapping
+                node, then_assigns, else_assigns, tgt_mapping=tgt_mapping
             )
 
             assign = ast.Assign(targets=[tgt], value=call)
