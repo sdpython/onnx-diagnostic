@@ -731,6 +731,11 @@ class ExtTestCase(unittest.TestCase):
     _warns: List[Tuple[str, int, Warning]] = []
     _todos: List[Tuple[Callable, str]] = []
 
+    @property
+    def verbose(self):
+        "Returns the the value of environment variable ``VERBOSE``."
+        return int(os.environ.get("VERBOSE", "0"))
+
     @classmethod
     def setUpClass(cls):
         logger = logging.getLogger("onnxscript.optimizer.constant_folding")
