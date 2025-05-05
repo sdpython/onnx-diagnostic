@@ -2,7 +2,7 @@ import ast
 import inspect
 import types
 import textwrap
-from typing import Callable, Dict
+from typing import Callable, Dict, List, Set, Optional
 import torch
 
 NODE_TYPES = tuple(
@@ -23,7 +23,7 @@ def _settl(node, lineno, level=0):
         if not hasattr(node, "lineno") or node.lineno is None:
             node.lineno = lineno
         for k in dir(node):
-            if k in {"s", "n"}:
+            if k in {"s", "n", "parent"}:
                 continue
             if k[0] == "_":
                 continue
@@ -39,11 +39,35 @@ class RewriteControlFlow(ast.NodeTransformer):
     when a branch returns something the other branch does not.
     """
 
-    def __init__(self, wrapper_name, empty_tensor: str = "make_empty_tensor"):
+    def __init__(
+        self,
+        wrapper_name,
+        empty_tensor: str = "make_empty_tensor",
+        skip_objects: Optional[Dict[str, object]] = None,
+        args_names: Optional[Set[str]] = None,
+    ):
         self.wrapper_name = wrapper_name
         self.empty_tensor = empty_tensor
         self.counter = 0
         self.current_func_args = None
+        self.skip_objects = skip_objects or {}
+        self.args_names = args_names or set()
+        self.local_variables = self.args_names.copy()
+
+    def _check(
+        self, cond: bool, node: "ast.Node", msg: str, cls: Optional[type[Exception]] = None
+    ):
+        if cls is not None:
+            if not cond:
+                raise cls(f"{msg}\n\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}")
+            return
+        assert cond, f"{msg}\n\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+
+    def visit_Name(self, node):
+        node = self.generic_visit(node)
+        if isinstance(node.ctx, ast.Store):
+            self.local_variables.add(node.id)
+        return node
 
     def visit_FunctionDef(self, node):
         # Capture argument names for branch functions
@@ -53,15 +77,22 @@ class RewriteControlFlow(ast.NodeTransformer):
         self.current_func_args = old_args
         return node
 
-    def _find_id(self, exprs):
+    def _find_id(self, exprs: List["ast.Node"]) -> List[str]:
         vars = []
         for expr in exprs:
             for n in ast.walk(expr):
-                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
+                if (
+                    isinstance(n, ast.Name)
+                    and isinstance(n.ctx, ast.Store)
+                    and n.id not in self.skip_objects
+                ):
                     vars.append(n.id)
         return sorted(set(vars))
 
-    def _rewrite_if(self, node, then_exprs, else_exprs, tgt_mapping=None):
+    def _rewrite_if(
+        self, node, then_exprs, else_exprs, tgt_mapping=None, known_local_variables=None
+    ):
+        assert known_local_variables is not None, "known_local_variables cannot be None"
         test_node = node.test
         drop = set()
 
@@ -70,11 +101,7 @@ class RewriteControlFlow(ast.NodeTransformer):
         else_name = f"{self.wrapper_name}_else_{self.counter}"
         then_vars = self._find_id(then_exprs)
         else_vars = self._find_id(else_exprs)
-        then_else_vars = set(
-            _
-            for _ in [*then_vars, *else_vars]
-            if _ != "torch"  #  and (not tgt_mapping or _ not in tgt_mapping)
-        )
+        then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ in known_local_variables)
         then_ret, else_ret = None, None
         if tgt_mapping is None and len(then_exprs) == 1 and len(else_exprs) == 1:
             # return
@@ -83,11 +110,12 @@ class RewriteControlFlow(ast.NodeTransformer):
             then_exprs = [n for n in node.body if not isinstance(n, ast.Return)]
             else_exprs = [n for n in node.orelse if not isinstance(n, ast.Return)]
         else:
-            assert tgt_mapping, (
-                f"then and else branches do not have the same number "
-                f"of assignments, we need more information to understand "
-                f"which ones to return,"
-                f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+            self._check(
+                tgt_mapping,
+                node,
+                "then and else branches do not have the same number "
+                "of assignments, we need more information to understand "
+                "which ones to return",
             )
             drop = set()
             then_exprs, else_exprs = node.body, node.orelse
@@ -171,7 +199,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             *[(a, False) for a in else_assigns],
         ]:
             for t in a.targets:
-                if isinstance(t, ast.Name):
+                if isinstance(t, ast.Name) and isinstance(t.ctx, ast.Store):
                     if t.id not in tgt_mapping:
                         tgt_mapping[t.id] = (t, None) if then_or_else else (None, t)
                     else:
@@ -179,13 +207,14 @@ class RewriteControlFlow(ast.NodeTransformer):
                         tgt_mapping[t.id] = (t, v[1]) if then_or_else else (v[0], t)
                     continue
 
-                assert isinstance(t, ast.Tuple) and all(
-                    isinstance(_, ast.Name) for _ in t.elts
-                ), (
-                    f"Unexpected assignment. Not Supported."
-                    f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+                self._check(
+                    isinstance(t, ast.Tuple) and all(isinstance(_, ast.Name) for _ in t.elts),
+                    node,
+                    "Unexpected assignment. Not Supported.",
                 )
                 for _t in t.elts:
+                    if not isinstance(_t, ast.Name) or not isinstance(_t.ctx, ast.Store):
+                        continue
                     if _t.id not in tgt_mapping:
                         tgt_mapping[_t.id] = (_t, None) if then_or_else else (None, _t)
                     else:
@@ -199,6 +228,7 @@ class RewriteControlFlow(ast.NodeTransformer):
 
     def visit_If(self, node):
         # First recurse into subnodes
+        known_local_variables = self.local_variables.copy()
         node = self.generic_visit(node)
 
         has_then_return = any(isinstance(n, ast.Return) for n in node.body)
@@ -206,32 +236,31 @@ class RewriteControlFlow(ast.NodeTransformer):
         ok = (has_then_return and has_else_return) or (
             not has_then_return and not has_else_return
         )
-        if not ok:
-            raise NotImplementedError(
-                f"Cannot mix return and assignment in a test or a "
-                f"unique then branch with a return\n--\n"
-                f"{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
-            )
-        assert self.current_func_args is not None, (
-            f"current_func_args is None\n--\n"
-            f"{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+        self._check(
+            ok,
+            node,
+            "Cannot mix return and assignment in a test or a "
+            "unique then branch with a return",
+            NotImplementedError,
         )
+        self._check(self.current_func_args is not None, node, "current_func_args is None")
         self.counter += 1
 
         if not has_then_return:
             # Case 1: simple assignment in both branches
             then_assigns = [n for n in node.body if isinstance(n, ast.Assign)]
             else_assigns = [n for n in node.orelse if isinstance(n, ast.Assign)]
-            assert then_assigns or else_assigns, (
-                f"Missing assignment"
-                f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
-            )
+            self._check(then_assigns or else_assigns, node, "Missing assignment")
 
             # the targets we need to export
             tgt, tgt_mapping = self._make_targets(node, then_assigns, else_assigns)
 
             then_def, else_def, call, dropped = self._rewrite_if(
-                node, then_assigns, else_assigns, tgt_mapping=tgt_mapping
+                node,
+                then_assigns,
+                else_assigns,
+                tgt_mapping=tgt_mapping,
+                known_local_variables=known_local_variables,
             )
             if dropped and isinstance(tgt, ast.Tuple):
                 tgt = ast.Tuple(
@@ -246,17 +275,21 @@ class RewriteControlFlow(ast.NodeTransformer):
         # Case 2: return in both branches, we assume both branches return the same results.
         then_ret = node.body[-1]
         else_ret = node.orelse[-1]
-        assert isinstance(then_ret, ast.Return), (
-            f"return is not the last instruction of then branch"
-            f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+        self._check(
+            isinstance(then_ret, ast.Return),
+            node,
+            "return is not the last instruction of then branch",
         )
-        assert isinstance(else_ret, ast.Return), (
-            f"return is not the last instruction of else branch"
-            f"\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+        self._check(
+            isinstance(else_ret, ast.Return),
+            node,
+            "return is not the last instruction of else branch",
         )
         then_expr = then_ret.value
         else_expr = else_ret.value
-        then_def, else_def, call, dropped = self._rewrite_if(node, [then_expr], [else_expr])
+        then_def, else_def, call, dropped = self._rewrite_if(
+            node, [then_expr], [else_expr], known_local_variables=known_local_variables
+        )
         ret = ast.Return(call)
         ast.copy_location(ret, node)
         ast.fix_missing_locations(ret)
@@ -294,6 +327,23 @@ class RewrittenMethod:
         return f"{self.__class__.__name__}({self.func})"
 
 
+class _AddParentTransformer(ast.NodeTransformer):
+    parent = None
+
+    def visit(self, node):
+        node.parent = self.parent
+        self.parent = node
+        node = super().visit(node)
+        if isinstance(node, ast.AST):
+            self.parent = node.parent
+        return node
+
+
+def inplace_add_parent(tree: "ast.Node"):
+    """Adds parents to an AST tree."""
+    _AddParentTransformer().visit(tree)
+
+
 def transform_method(
     func: Callable,
     if_name: str = "torch_cond",
@@ -322,6 +372,8 @@ def transform_method(
     :param verbose: verbosity
     :return: rewritten method
 
+    An example with **return**:
+
     .. runpython::
         :showcode:
 
@@ -349,9 +401,44 @@ def transform_method(
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
         print(ep)
+
+    An example with **assginments**:
+
+    .. runpython::
+        :showcode:
+
+        import torch
+        from onnx_diagnostic.torch_export_patches.patch_module import transform_method
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                if x.sum() > 0:
+                    w = x + y
+                    z = x - y
+                else:
+                    w = torch.abs(x) + y
+                    z = torch.abs(x) - y
+                return w, z
+
+        x, y = torch.rand((3, 4)), torch.rand((3, 4))
+        expected = Model()(x, y)
+
+        rewritten = transform_method(Model.forward, verbose=10)
+        print("-- code --")
+        print(rewritten.code)
+
+        print(" -- export --")
+        Model.forward = rewritten.func
+
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
+        print(ep)
     """
     # Retrieve source of the function
+    modules = {k: v for k, v in func.__globals__.items() if inspect.ismodule(v)}
     src = inspect.getsource(func)
+    sig = inspect.signature(func)
     if verbose:
         print(f"[transform_method] -- source -- {func}\n\n{src}\n\n[transform_method] --")
     # Parse into AST
@@ -359,7 +446,13 @@ def transform_method(
     if verbose > 1:
         print(f"[transform_method] -- tree --\n\n{ast.dump(tree, indent=2)}")
     # Apply transformation
-    transformer = RewriteControlFlow(if_name, empty_tensor=empty_tensor)
+    transformer = RewriteControlFlow(
+        if_name,
+        empty_tensor=empty_tensor,
+        skip_objects=modules,
+        args_names=set(sig.parameters),
+    )
+    inplace_add_parent(tree)
     new_tree = transformer.visit(tree)
     if verbose > 1:
         print(f"[transform_method] -- new tree --\n\n{ast.dump(tree, indent=2)}")

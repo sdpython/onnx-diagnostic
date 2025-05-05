@@ -1,10 +1,31 @@
+import ast
+import inspect
+import textwrap
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
-from onnx_diagnostic.torch_export_patches.patch_module import transform_method
+from onnx_diagnostic.torch_export_patches.patch_module import (
+    transform_method,
+    inplace_add_parent,
+)
 
 
 class TestPatchModule(ExtTestCase):
+    def test_parent(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                if x.sum() > 0:
+                    return x + y
+                else:
+                    return torch.abs(x) + y + 1
+
+        src = inspect.getsource(Model.forward)
+        tree = ast.parse(textwrap.dedent(src))
+        inplace_add_parent(tree)
+        assert all(
+            hasattr(node, "parent") for node in ast.walk(tree)
+        ), f"Missing parent in {ast.dump(tree, indent=2)}"
+
     def test_rewrite_forward_return1(self):
 
         class Model(torch.nn.Module):
@@ -71,7 +92,7 @@ class TestPatchModule(ExtTestCase):
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
         expected, expected_ = Model()(x, y), Model()(-x, y)
 
-        rewritten = transform_method(Model.forward, verbose=0)
+        rewritten = transform_method(Model.forward, verbose=self.verbose)
         self.assertIn("torch.abs(", rewritten.code)
         self.assertIn("abs", rewritten.dump)
         Model.forward = rewritten.func
@@ -98,7 +119,7 @@ class TestPatchModule(ExtTestCase):
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
         expected, expected_ = Model()(x, y), Model()(-x, y)
 
-        rewritten = transform_method(Model.forward, verbose=0)
+        rewritten = transform_method(Model.forward, verbose=self.verbose)
         self.assertIn("torch.abs(", rewritten.code)
         self.assertIn("abs", rewritten.dump)
         Model.forward = rewritten.func
@@ -123,7 +144,7 @@ class TestPatchModule(ExtTestCase):
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
         expected, expected_ = Model()(x, y), Model()(-x, y)
 
-        rewritten = transform_method(Model.forward, verbose=0)
+        rewritten = transform_method(Model.forward, verbose=self.verbose)
         self.assertIn("torch.abs(", rewritten.code)
         self.assertIn("abs", rewritten.dump)
         Model.forward = rewritten.func
@@ -146,7 +167,7 @@ class TestPatchModule(ExtTestCase):
                 return x + y
 
         self.assertRaise(
-            lambda: transform_method(Model.forward, verbose=0), NotImplementedError
+            lambda: transform_method(Model.forward, verbose=self.verbose), NotImplementedError
         )
 
     def test_rewrite_forward_assign2_in_2(self):
@@ -164,7 +185,7 @@ class TestPatchModule(ExtTestCase):
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
         expected, expected_ = Model()(x, y), Model()(-x, y)
 
-        rewritten = transform_method(Model.forward, verbose=0)
+        rewritten = transform_method(Model.forward, verbose=self.verbose)
         self.assertIn("torch.abs(", rewritten.code)
         self.assertIn("abs", rewritten.dump)
         Model.forward = rewritten.func
@@ -194,7 +215,7 @@ class TestPatchModule(ExtTestCase):
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
         expected, expected_ = Model()(x, y), Model()(-x, y)
 
-        rewritten = transform_method(Model.forward, verbose=1)
+        rewritten = transform_method(Model.forward, verbose=self.verbose)
         self.assertIn("torch.abs(", rewritten.code)
         self.assertIn("abs", rewritten.dump)
         code = rewritten.code
