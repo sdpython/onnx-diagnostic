@@ -231,6 +231,100 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
+    def test_assign_nested_check(self):
+
+        torch_cond = torch.cond
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                def torch_cond_then_3(y, x):
+
+                    def torch_cond_then_1(y, x):
+                        w = x + y
+                        z = x - y
+                        return (w, z)
+
+                    def torch_cond_else_1(y, x):
+                        u = x + 10
+                        w = x + torch.abs(y) + u
+                        z = x - torch.abs(y) + u
+                        return (w, z)
+
+                    w, z = torch_cond(
+                        y.sum() > 0, torch_cond_then_1, torch_cond_else_1, [y, x]
+                    )
+                    return (w, z)
+
+                def torch_cond_else_3(y, x):
+
+                    def torch_cond_then_2(y):
+                        u = y + 1
+                        return u
+
+                    def torch_cond_else_2(y):
+                        u = torch.abs(y) + 10
+                        return u
+
+                    u = torch_cond(y.sum() > 0, torch_cond_then_2, torch_cond_else_2, [y])
+                    w = torch.abs(x) + u
+                    z = torch.abs(x) - u
+                    return (w, z)
+
+                w, z = torch_cond(x.sum() > 0, torch_cond_then_3, torch_cond_else_3, [y, x])
+                return (w, z)
+
+        x, y = torch.rand((3, 4)), torch.rand((3, 4))
+        Model()(x, y)
+
+    def test_rewrite_forward_assign_nested(self):
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                if x.sum() > 0:
+                    if y.sum() > 0:
+                        w = x + y
+                        z = x - y
+                    else:
+                        u = x + 10
+                        w = x + torch.abs(y) + u
+                        z = x - torch.abs(y) + u
+                else:
+                    if y.sum() > 0:
+                        u = y + 1
+                    else:
+                        u = torch.abs(y) + 10
+                    w = torch.abs(x) + u
+                    z = torch.abs(x) - u
+                return w, z
+
+        x, y = torch.rand((3, 4)), torch.rand((3, 4))
+        expected, expected_, expected_0, expected_1 = (
+            Model()(x, y),
+            Model()(-x, y),
+            Model()(x, -y),
+            Model()(-x, -y),
+        )
+
+        rewritten = transform_method(Model.forward, verbose=self.verbose)
+        self.assertIn("torch.abs(", rewritten.code)
+        self.assertIn("abs", rewritten.dump)
+        code = rewritten.code
+        self.assertIn("branch_cond_else_3", code)
+        Model.forward = rewritten.func
+        self.assertEqualAny(expected, Model()(x, y))
+        self.assertEqualAny(expected_, Model()(-x, y))
+        self.assertEqualAny(expected_0, Model()(x, -y))
+        self.assertEqualAny(expected_1, Model()(-x, -y))
+
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
+        self.assertIn("cond", [str(getattr(n, "target", "?")) for n in ep.graph.nodes])
+        self.assertEqualAny(expected, ep.module()(x, y))
+        self.assertEqualAny(expected_, ep.module()(-x, y))
+        self.assertEqualAny(expected_0, ep.module()(x, -y))
+        self.assertEqualAny(expected_1, ep.module()(-x, -y))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

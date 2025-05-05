@@ -3,7 +3,6 @@ import inspect
 import types
 import textwrap
 from typing import Callable, Dict, List, Set, Optional
-import torch
 
 NODE_TYPES = tuple(
     getattr(ast, k)
@@ -34,22 +33,20 @@ def _settl(node, lineno, level=0):
 
 class RewriteControlFlow(ast.NodeTransformer):
     """
-    The class rewrites tests with function ``torch_cond`` :func:`torch.cond`.
+    The class rewrites tests with function :func:`torch.cond`.
     ``empty_tensor`` is a function returning an empty tensor,
     when a branch returns something the other branch does not.
     """
 
     def __init__(
         self,
-        wrapper_name,
-        empty_tensor: str = "make_empty_tensor",
+        prefix: str = "branch_cond",
         skip_objects: Optional[Dict[str, object]] = None,
         args_names: Optional[Set[str]] = None,
     ):
-        self.wrapper_name = wrapper_name
-        self.empty_tensor = empty_tensor
         self.counter = 0
         self.current_func_args = None
+        self.prefix = prefix
         self.skip_objects = skip_objects or {}
         self.args_names = args_names or set()
         self.local_variables = self.args_names.copy()
@@ -83,7 +80,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             for n in ast.walk(expr):
                 if (
                     isinstance(n, ast.Name)
-                    and isinstance(n.ctx, ast.Store)
+                    and isinstance(n.ctx, ast.Load)
                     and n.id not in self.skip_objects
                 ):
                     vars.append(n.id)
@@ -97,8 +94,8 @@ class RewriteControlFlow(ast.NodeTransformer):
         drop = set()
 
         # extract free variables
-        then_name = f"{self.wrapper_name}_then_{self.counter}"
-        else_name = f"{self.wrapper_name}_else_{self.counter}"
+        then_name = f"{self.prefix}_then_{self.counter}"
+        else_name = f"{self.prefix}_else_{self.counter}"
         then_vars = self._find_id(then_exprs)
         else_vars = self._find_id(else_exprs)
         then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ in known_local_variables)
@@ -173,8 +170,11 @@ class RewriteControlFlow(ast.NodeTransformer):
             [ast.Name(id=v, ctx=ast.Load()) for v in then_else_vars],
             ctx=ast.Load(),
         )
+
         call = ast.Call(
-            func=ast.Name(id=self.wrapper_name, ctx=ast.Load()),
+            func=ast.Attribute(
+                value=ast.Name(id="torch", ctx=ast.Load()), attr="cond", ctx=ast.Load()
+            ),
             args=[
                 test_node,
                 ast.Name(id=then_name, ctx=ast.Load()),
@@ -346,8 +346,7 @@ def inplace_add_parent(tree: "ast.Node"):
 
 def transform_method(
     func: Callable,
-    if_name: str = "torch_cond",
-    empty_tensor: str = "make_empty_tensor",
+    prefix: str = "branch_cond",
     verbose: int = 0,
 ) -> RewrittenMethod:
     """
@@ -367,8 +366,7 @@ def transform_method(
         See method ``_filter_target``.
 
     :param func: method or function to rewrite
-    :param if_name: function calling the test
-    :param empty_tensor: function creating an empty tensor
+    :param prefix: prefix used to create the functions for the branches
     :param verbose: verbosity
     :return: rewritten method
 
@@ -390,7 +388,7 @@ def transform_method(
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
         expected = Model()(x, y)
 
-        rewritten = transform_method(Model.forward, verbose=10)
+        rewritten = transform_method(Model.forward)
         print("-- code --")
         print(rewritten.code)
 
@@ -423,7 +421,7 @@ def transform_method(
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
         expected = Model()(x, y)
 
-        rewritten = transform_method(Model.forward, verbose=10)
+        rewritten = transform_method(Model.forward)
         print("-- code --")
         print(rewritten.code)
 
@@ -447,8 +445,7 @@ def transform_method(
         print(f"[transform_method] -- tree --\n\n{ast.dump(tree, indent=2)}")
     # Apply transformation
     transformer = RewriteControlFlow(
-        if_name,
-        empty_tensor=empty_tensor,
+        prefix=prefix,
         skip_objects=modules,
         args_names=set(sig.parameters),
     )
@@ -482,8 +479,6 @@ def transform_method(
             ) from e
     namespace: Dict[str, type] = {}
     globs = func.__globals__.copy()
-    globs[if_name] = torch.cond
-    globs[empty_tensor] = lambda: torch.tensor([])
     exec(mod, globs, namespace)
     new_func = namespace.get(func.__name__)
     if not isinstance(new_func, types.FunctionType):
