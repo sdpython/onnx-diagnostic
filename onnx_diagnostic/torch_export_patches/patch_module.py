@@ -264,7 +264,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             )
             if dropped and isinstance(tgt, ast.Tuple):
                 tgt = ast.Tuple(
-                    tuple(t for t in tgt.elts if t.id not in dropped), ctx=ast.Load()
+                    tuple(t for t in tgt.elts if t.id not in dropped), ctx=ast.Store()
                 )
 
             assign = ast.Assign(targets=[tgt], value=call)
