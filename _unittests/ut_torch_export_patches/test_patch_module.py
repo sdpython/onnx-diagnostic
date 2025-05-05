@@ -355,7 +355,7 @@ class TestPatchModule(ExtTestCase):
         rewritten = transform_method(PLBartEncoderLayer.forward, verbose=self.verbose)
         self.assertIn(
             (
-                "hidden_states, = torch.cond(hidden_states.dtype == torch.float16 and "
+                "torch.cond(hidden_states.dtype == torch.float16 and "
                 "(torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any()), "
                 "branch_cond_then_1, branch_cond_else_1, [hidden_states])"
             ),
