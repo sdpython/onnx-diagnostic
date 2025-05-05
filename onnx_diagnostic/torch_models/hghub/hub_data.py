@@ -97,6 +97,7 @@ __data_arch__ = textwrap.dedent(
     Phi3ForCausalLM,text-generation
     PhiForCausalLM,text-generation
     Pix2StructForConditionalGeneration,image-to-text
+    PLBartForConditionalGeneration,text2text-generation
     PoolFormerModel,image-feature-extraction
     PvtForImageClassification,image-classification
     Qwen2ForCausalLM,text-generation

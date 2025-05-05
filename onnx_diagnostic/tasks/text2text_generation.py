@@ -164,6 +164,11 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 ("decoder_attention_heads", "encoder_attention_heads"),
             ),
         )
+    # exceptions = {
+    #     "PLBartForConditionalGeneration": (
+    #         lambda c: c.encoder_attention_heads + c.decoder_attention_heads
+    #    )
+    # }
     kwargs = dict(
         batch_size=2,
         sequence_length=30,
@@ -181,6 +186,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 "num_key_value_heads",
                 "num_heads",
                 (sum, "encoder_attention_heads", "decoder_attention_heads"),
+                # exceptions=exceptions,
             )
         ),
         encoder_dim=512 if config is None else _pick(config, "n_positions", "d_model"),
