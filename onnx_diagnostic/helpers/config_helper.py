@@ -2,7 +2,7 @@ import functools
 import importlib
 import inspect
 import re
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 import transformers
 
 
@@ -42,8 +42,16 @@ def update_config(config: Any, mkwargs: Dict[str, Any]):
         setattr(config, k, v)
 
 
-def _pick(config, *atts):
+def _pick(config, *atts, exceptions: Optional[Dict[str, Callable]] = None):
     """Returns the first value found in the configuration."""
+    if (
+        exceptions
+        and hasattr(config, "architectures")
+        and len(config.architectures) == 1
+        and config.architectures[0] in exceptions
+    ):
+        excs = exceptions[config.architectures[0]]
+        return excs(config)
     for a in atts:
         if isinstance(a, str):
             if hasattr(config, a):

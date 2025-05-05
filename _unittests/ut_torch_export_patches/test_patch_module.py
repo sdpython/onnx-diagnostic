@@ -349,6 +349,21 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
+    def test_rewrite_PLBartEncoderLayer(self):
+        from transformers.models.plbart.modeling_plbart import PLBartEncoderLayer
+
+        rewritten = transform_method(PLBartEncoderLayer.forward, verbose=self.verbose)
+        self.assertIn(
+            (
+                "torch.cond(hidden_states.dtype == torch.float16 and "
+                "(torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any()), "
+                "branch_cond_then_1, branch_cond_else_1, [hidden_states])"
+            ),
+            rewritten.code,
+        )
+        print()
+        print(rewritten.code)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

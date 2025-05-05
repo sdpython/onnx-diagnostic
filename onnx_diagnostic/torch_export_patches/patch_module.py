@@ -1,4 +1,5 @@
 import ast
+import copy
 import inspect
 import types
 import textwrap
@@ -341,9 +342,32 @@ class _AddParentTransformer(ast.NodeTransformer):
         return node
 
 
+class _SelectiveAssignNormalizer(ast.NodeTransformer):
+    def visit_If(self, node):
+        self.generic_visit(node)
+        node.body = [self._transform_if_needed(stmt) for stmt in node.body]
+        node.orelse = [self._transform_if_needed(stmt) for stmt in node.orelse]
+        return node
+
+    def _transform_if_needed(self, stmt):
+        if isinstance(stmt, ast.AugAssign):
+            return ast.Assign(
+                targets=[stmt.target],
+                value=ast.BinOp(left=copy.deepcopy(stmt.target), op=stmt.op, right=stmt.value),
+            )
+        if isinstance(stmt, ast.AnnAssign) and stmt.value is not None:
+            return ast.Assign(targets=[stmt.target], value=stmt.value)
+        return self.visit(stmt)
+
+
 def inplace_add_parent(tree: "ast.Node"):
     """Adds parents to an AST tree."""
     _AddParentTransformer().visit(tree)
+
+
+def normalize_assignment_in_test(tree: "ast.Node"):
+    """Split AugAssign into BinOp and Assign to simplify whatever comes after."""
+    _SelectiveAssignNormalizer().visit(tree)
 
 
 def transform_method(
@@ -451,6 +475,7 @@ def transform_method(
         skip_objects=modules,
         args_names=set(sig.parameters),
     )
+    normalize_assignment_in_test(tree)
     inplace_add_parent(tree)
     new_tree = transformer.visit(tree)
     if verbose > 1:
