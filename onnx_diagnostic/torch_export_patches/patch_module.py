@@ -80,7 +80,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             for n in ast.walk(expr):
                 if (
                     isinstance(n, ast.Name)
-                    and isinstance(n.ctx, ast.Load)
+                    # and isinstance(n.ctx, ast.Load)
                     and n.id not in self.skip_objects
                 ):
                     vars.append(n.id)
@@ -267,9 +267,11 @@ class RewriteControlFlow(ast.NodeTransformer):
                     tuple(t for t in tgt.elts if t.id not in dropped), ctx=ast.Store()
                 )
 
+            added = {tgt.id} if isinstance(tgt, ast.Name) else set(t.id for t in tgt.elts)
             assign = ast.Assign(targets=[tgt], value=call)
             ast.copy_location(assign, node)
             ast.fix_missing_locations(assign)
+            self.local_variables = known_local_variables | added
             return [then_def, else_def, assign]
 
         # Case 2: return in both branches, we assume both branches return the same results.
