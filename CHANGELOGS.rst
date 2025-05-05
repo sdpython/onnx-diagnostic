@@ -4,7 +4,7 @@ Change Logs
 0.5.0
 +++++
 
-* :pr:`83`, :pr:`84`: improves the automated rewriting of control flow (test)
+* :pr:`83`, :pr:`85`: improves the automated rewriting of control flow (test)
 
 0.4.4
 +++++
