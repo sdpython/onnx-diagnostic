@@ -402,7 +402,7 @@ def transform_method(
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
         print(ep)
 
-    An example with **assginments**:
+    An example with **assignments**:
 
     .. runpython::
         :showcode:
