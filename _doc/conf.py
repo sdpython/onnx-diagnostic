@@ -107,6 +107,7 @@ intersphinx_mapping = {
 nitpicky = True
 # See also scikit-learn/scikit-learn#26761
 nitpick_ignore = [
+    ("py:class", "ast.Node"),
     ("py:class", "dtype"),
     ("py:class", "False"),
     ("py:class", "True"),

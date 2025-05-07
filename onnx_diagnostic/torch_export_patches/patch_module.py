@@ -400,6 +400,8 @@ def transform_method(
 
     .. runpython::
         :showcode:
+        :process:
+        :store_in_file: test_example_transform_method_1.py
 
         import torch
         from onnx_diagnostic.torch_export_patches.patch_module import transform_method
@@ -430,6 +432,8 @@ def transform_method(
 
     .. runpython::
         :showcode:
+        :process:
+        :store_in_file: test_example_transform_method_2.py
 
         import torch
         from onnx_diagnostic.torch_export_patches.patch_module import transform_method
