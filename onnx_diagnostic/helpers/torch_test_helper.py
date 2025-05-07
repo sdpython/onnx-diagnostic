@@ -81,7 +81,7 @@ def is_torchdynamo_exporting() -> bool:
 
 
 def to_numpy(tensor: "torch.Tensor"):  # noqa: F821
-    """Converts a :class:`torch.Tensor` to :class:`numpy.array`."""
+    """Converts a :class:`torch.Tensor` to :class:`numpy.ndarray`."""
     try:
         return tensor.numpy()
     except TypeError:
