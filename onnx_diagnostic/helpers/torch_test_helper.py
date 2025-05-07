@@ -81,6 +81,7 @@ def steal_forward(
     if "with_shape" not in context and fprint == string_type:
         context["with_shape"] = True
     if not isinstance(model, list):
+        assert isinstance(model, torch.nn.Module), f"Unexpected type {type(model)} for model"
         if submodules:
             models = []
             for idx, m in model.named_modules():
