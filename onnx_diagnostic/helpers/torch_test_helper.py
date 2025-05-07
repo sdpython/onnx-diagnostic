@@ -39,7 +39,8 @@ def _forward_(*args, _f=None, _context=None, **kwargs):
 def steal_forward(model: torch.nn.Module, with_shape: bool = True, with_min_max: bool = False):
     """
     The necessary modification to steem forward method and prints out inputs
-    and outputs. See example :ref:`l-plot-tiny-llm-export`.
+    and outputs using :func:`onnx_diagnostic.helpers.string_type`.
+    See example :ref:`l-plot-tiny-llm-export`.
     """
     context = dict(
         iteration=0,
@@ -58,7 +59,10 @@ def steal_forward(model: torch.nn.Module, with_shape: bool = True, with_min_max:
 
 
 def is_torchdynamo_exporting() -> bool:
-    """Tells if torch is exporting a model."""
+    """
+    Tells if :epkg:`torch` is exporting a model.
+    Relies on ``torch.compiler.is_exporting()``.
+    """
     import torch
 
     if not hasattr(torch.compiler, "is_exporting"):
@@ -77,7 +81,7 @@ def is_torchdynamo_exporting() -> bool:
 
 
 def to_numpy(tensor: "torch.Tensor"):  # noqa: F821
-    """Converts a torch tensor to numy."""
+    """Converts a :class:`torch.Tensor` to :class:`numpy.array`."""
     try:
         return tensor.numpy()
     except TypeError:
@@ -309,10 +313,7 @@ def dummy_llm(
 
 
 def to_any(value: Any, to_value: Union[torch.dtype, torch.device]) -> Any:
-    """
-    Applies torch.to is applicable.
-    Goes recursively.
-    """
+    """Applies torch.to if applicable. Goes recursively."""
     if isinstance(value, (torch.nn.Module, torch.Tensor)):
         return value.to(to_value)
     if isinstance(value, list):
@@ -344,9 +345,7 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device]) -> Any:
 
 
 def torch_deepcopy(value: Any) -> Any:
-    """
-    Makes a deepcopy.
-    """
+    """Makes a deepcopy."""
     if value is None:
         return None
     if isinstance(value, (int, float, str)):
