@@ -4,7 +4,7 @@ Change Logs
 0.5.0
 +++++
 
-* :pr:`88`: extends ``steal_forward`` to dump input, outputs in onnx models
+* :pr:`88`, :pr:`89`: extends ``steal_forward`` to dump input, outputs in onnx models
 * :pr:`83`, :pr:`85`: improves the automated rewriting of control flow (test)
 
 0.4.4
