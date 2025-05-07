@@ -20,6 +20,7 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_mamba_cache,
     make_sliding_window_cache,
 )
+from onnx_diagnostic.helpers.mini_onnx_builder import create_input_tensors_from_onnx_model
 
 TFLOAT = onnx.TensorProto.FLOAT
 
@@ -58,6 +59,90 @@ class TestTorchTestHelper(ExtTestCase):
         model = Model()
         with steal_forward(model):
             model(*inputs)
+
+    @hide_stdout()
+    def test_steal_forward_multi(self):
+        class SubModel(torch.nn.Module):
+            def forward(self, x):
+                return x * x
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.s1 = SubModel()
+                self.s2 = SubModel()
+
+            def forward(self, x, y):
+                return self.s1(x) + self.s2(y)
+
+        inputs = torch.rand(3, 4), torch.rand(3, 4)
+        model = Model()
+        with steal_forward(
+            [
+                (
+                    "main",
+                    model,
+                ),
+                ("  s1", model.s1),
+                ("  s2", model.s2),
+            ]
+        ):
+            model(*inputs)
+
+    @hide_stdout()
+    def test_steal_forward_dump_file(self):
+        class SubModel(torch.nn.Module):
+            def forward(self, x):
+                return x * x
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.s1 = SubModel()
+                self.s2 = SubModel()
+
+            def forward(self, x, y):
+                return self.s1(x) + self.s2(y)
+
+        inputs = torch.rand(3, 4), torch.rand(3, 4)
+        model = Model()
+        dump_file = self.get_dump_file("test_steal_forward_dump_file.onnx")
+        with steal_forward(
+            [
+                (
+                    "main",
+                    model,
+                ),
+                ("  s1", model.s1),
+                ("  s2", model.s2),
+            ],
+            dump_file=dump_file,
+        ):
+            res1 = model(*inputs)
+            res2 = model(*inputs)
+        self.assertExists(dump_file)
+        restored = create_input_tensors_from_onnx_model(dump_file)
+        self.assertEqual(
+            [
+                ("main", 0, "I"),
+                ("main", 0, "O"),
+                ("main", 1, "I"),
+                ("main", 1, "O"),
+                ("s1", 0, "I"),
+                ("s1", 0, "O"),
+                ("s1", 1, "I"),
+                ("s1", 1, "O"),
+                ("s2", 0, "I"),
+                ("s2", 0, "O"),
+                ("s2", 1, "I"),
+                ("s2", 1, "O"),
+            ],
+            sorted(restored),
+        )
+        self.assertEqualAny(restored["main", 0, "I"], (inputs, {}))
+        self.assertEqualAny(restored["main", 1, "I"], (inputs, {}))
+        self.assertEqualAny(restored["main", 0, "O"], res1)
+        self.assertEqualAny(restored["main", 0, "O"], res2)
 
     def test_replace_string_by_dynamic(self):
         example = {

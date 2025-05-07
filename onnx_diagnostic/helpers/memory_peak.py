@@ -223,7 +223,7 @@ def start_spying_on(
 
     .. code-block:: python
 
-        from experimental_experiment.memory_peak import start_spying_on, flatten
+        from onnx_diagnostic.helpers.memory_peak import start_spying_on, flatten
 
         p = start_spying_on()
         # ...

@@ -12,6 +12,7 @@ onnx_diagnostic.helpers
     config_helper
     helper
     memory_peak
+    mini_onnx_builder
     onnx_helper
     ort_session
     rt_helper

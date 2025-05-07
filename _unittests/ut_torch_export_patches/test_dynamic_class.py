@@ -340,8 +340,6 @@ class TestOnnxExportErrors(ExtTestCase):
             )
             # ep = ep.run_decompositions()
 
-            # from experimental_experiment.torch_interpreter.tracing import CustomTracer
-            # CustomTracer.remove_unnecessary_slices(ep.graph)
             memorize = []
 
             class MyInterpreter(torch.fx.Interpreter):

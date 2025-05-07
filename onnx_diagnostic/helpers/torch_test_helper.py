@@ -1,7 +1,8 @@
 import contextlib
 from collections.abc import Iterable
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
+import onnx
 import torch
 from .helper import string_type
 from .cache_helper import (
@@ -10,13 +11,18 @@ from .cache_helper import (
     make_sliding_window_cache,
     make_mamba_cache,
 )
+from .mini_onnx_builder import create_onnx_model_from_input_tensors
 
 
-def _forward_(*args, _f=None, _context=None, **kwargs):
+def _forward_(
+    *args, _f=None, _fprint=string_type, _prefix="", _context=None, _storage=None, **kwargs
+):
     assert _f is not None, "_f cannot be None"
     assert _context is not None, "_context cannot be None"
+    indent = "  " * (len(_prefix) - len(_prefix.lstrip()))
+    _prefix = _prefix.lstrip()
     print(
-        f"---- stolen forward for class {_context['class_name']} "
+        f"{indent}+{_prefix} -- stolen forward for class {_context['class_name']} "
         f"-- iteration {_context['iteration']}"
     )
     kws = dict(
@@ -25,37 +31,74 @@ def _forward_(*args, _f=None, _context=None, **kwargs):
     )
     if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
         # torch.compiler.is_exporting requires torch>=2.7
-        print(f"  <- args={string_type(args, **kws)} --- kwargs={string_type(kwargs, **kws)}")
+        print(f"{indent}  <- args={_fprint(args, **kws)} --- kwargs={_fprint(kwargs, **kws)}")
+    if _storage is not None:
+        it = _context["iteration"]
+        key = (_prefix, it)
+        _storage[(*key, "I")] = (torch_deepcopy(args), torch_deepcopy(kwargs))
     res = _f(*args, **kwargs)
     if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
-        print("  --")
-        print(f"  -> {string_type(res, **kws)}")
-        print(".")
+        print(f"{indent}  -> {_fprint(res, **kws)}")
+        print(f"{indent}-{_prefix}.")
+    if _storage is not None:
+        _storage[(*key, "O")] = torch_deepcopy(res)
     _context["iteration"] += 1
     return res
 
 
 @contextlib.contextmanager
-def steal_forward(model: torch.nn.Module, with_shape: bool = True, with_min_max: bool = False):
+def steal_forward(
+    model: Union[
+        Union[torch.nn.Module, Tuple[str, torch.nn.Module]],
+        List[Union[torch.nn.Module, Tuple[str, torch.nn.Module]]],
+    ],
+    fprint: Callable = string_type,
+    dump_file: Optional[str] = None,
+    **kwargs,
+):
     """
     The necessary modification to steem forward method and prints out inputs
     and outputs using :func:`onnx_diagnostic.helpers.string_type`.
     See example :ref:`l-plot-tiny-llm-export`.
+
+    :param model: a model or a list of models to monitor,
+        every model can also be a tuple(name, model), name is displayed well.
+    :param fprint: function used to print out (or dump), by default, it is
+        :func:`onnx_diagnostic.helpers.string_type`
+    :param kwargs: additional parameters sent to :func:`onnx_diagnostic.helpers.string_type`
+        or any other function defined by ``fprint``
+    :param dump_file: dumps stolen inputs and outputs in an onnx model,
+        they can be restored with :func:`create_input_tensors_from_onnx_model
+        <onnx_diagnostic.helpers.mini_onnx_builder.create_input_tensors_from_onnx_model>`
     """
-    context = dict(
-        iteration=0,
-        class_name=model.__class__.__name__,
-        with_shape=with_shape,
-        with_min_max=with_min_max,
-    )
-    keep_model_forward = model.forward
-    model.forward = lambda *args, _f=keep_model_forward, _context=context, **kwargs: _forward_(
-        *args, _f=_f, _context=_context, **kwargs
-    )
+    context = dict(iteration=0, **kwargs)
+    if "with_shape" not in context and fprint == string_type:
+        context["with_shape"] = True
+    if not isinstance(model, list):
+        model = [model]
+    keep_model_forward = {}
+    storage: Optional[Dict[Any, Any]] = {} if dump_file else None
+    for mt in model:
+        name, m = mt if isinstance(mt, tuple) else ("", mt)
+        keep_model_forward[id(m)] = (m, m.forward)
+        c = context.copy()
+        c["class_name"] = m.__class__.__name__
+        m.forward = lambda *args, _f=m.forward, _fp=fprint, _c=c, _p=name, _s=storage, **kws: _forward_(  # noqa: E501
+            *args, _f=_f, _fprint=_fp, _context=_c, _prefix=_p, _storage=_s, **kws
+        )
     try:
         yield
     finally:
-        model.forward = keep_model_forward
+        for f in keep_model_forward.values():
+            f[0].forward = f[1]
+        if dump_file:
+            proto = create_onnx_model_from_input_tensors(storage)
+            onnx.save(
+                proto,
+                dump_file,
+                save_as_external_data=False,
+                all_tensors_to_one_file=True,
+            )
 
 
 def is_torchdynamo_exporting() -> bool:
