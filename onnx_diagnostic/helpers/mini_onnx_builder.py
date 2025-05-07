@@ -94,7 +94,6 @@ class MiniOnnxBuilder:
         self.nodes: List[NodeProto] = []
         self.opsets = {"": target_opset}
         self.ir_version = ir_version
-        self.torch = torch
         self.sep = sep
 
     def append_output_initializer(
@@ -163,7 +162,7 @@ class MiniOnnxBuilder:
             )
         else:
             assert all(
-                isinstance(t, (np.ndarray, self.torch.Tensor)) for t in tensors
+                isinstance(t, (np.ndarray, torch.Tensor)) for t in tensors
             ), f"Nested sequences are not supported, types are {[type(t) for t in tensors]}"
             names = []
             for i, t in enumerate(tensors):
@@ -197,9 +196,7 @@ class MiniOnnxBuilder:
         self.append_output_initializer(f"{name}{self.sep}keys", np.array(keys, dtype=np.str_))
         self.append_output_sequence(f"{name}{self.sep}values", values)
 
-    def _build_initializers(
-        self, switch_low_high: bool
-    ) -> Tuple[List[TensorProto], Dict[str, TensorProto]]:
+    def _build_initializers(self, switch_low_high: bool) -> List[TensorProto]:
         """
         Builds initializers.
 
@@ -209,7 +206,7 @@ class MiniOnnxBuilder:
         init_dict = self.initializers_dict
         if switch_low_high:
             # Let's try to minimize the time.
-            initializer = []
+            initializer: List[TensorProto] = []
             for k, v in init_dict.items():
                 if isinstance(v, TensorProto):
                     initializer.append(v)
@@ -245,7 +242,7 @@ class MiniOnnxBuilder:
                     continue
                 else:
                     assert isinstance(
-                        v, self.torch.Tensor
+                        v, torch.Tensor
                     ), f"tensor {k!r} has un unexpected type {type(v)}"
                     assert "FakeTensor" not in str(
                         type(v)
@@ -272,9 +269,9 @@ class MiniOnnxBuilder:
             if isinstance(v, TensorProto):
                 res.append(v)
                 continue
-            if isinstance(v, self.torch.Tensor):
+            if isinstance(v, torch.Tensor):
                 # no string tensor
-                t = self.from_array(v, name=k)
+                t = proto_from_array(v, name=k)
                 res.append(t)
                 continue
             if isinstance(v, np.ndarray):
@@ -444,7 +441,7 @@ def _unflatten(
             return pos + 1, torch.from_numpy(outputs[pos]).to(device)
         raise AssertionError(f"Unexpected name {name!r} in {names}")
 
-    res = []
+    res: List[Any] = []
     while True:
         assert pos < len(names), f"Something went wrong with names={names!r}\nres={res!r}"
         name = names[pos]

@@ -1,6 +1,6 @@
 import contextlib
 from collections.abc import Iterable
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import onnx
 import torch
@@ -77,7 +77,7 @@ def steal_forward(
     if not isinstance(model, list):
         model = [model]
     keep_model_forward = {}
-    storage = {} if dump_file else None
+    storage: Optional[Dict[Any, Any]] = {} if dump_file else None
     for mt in model:
         name, m = mt if isinstance(mt, tuple) else ("", mt)
         keep_model_forward[id(m)] = (m, m.forward)
