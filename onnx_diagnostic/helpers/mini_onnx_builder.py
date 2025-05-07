@@ -2,7 +2,7 @@ import ctypes
 import sys
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 import numpy as np
-from onnx import GraphProto, ModelProto, TensorProto
+from onnx import GraphProto, ModelProto, NodeProto, TensorProto
 import onnx.helper as oh
 import torch
 from .onnx_helper import dtype_to_tensor_dtype, tensor_dtype_to_np_dtype, from_array_extended
@@ -34,10 +34,7 @@ def proto_from_array(
         )
 
     # arr.contiguous() is slow after a transpose, maybe there is a way to optimize this.
-    if arr.is_contiguous():
-        arr_cpu = arr.cpu()
-    else:
-        arr_cpu = arr.contiguous().cpu()
+    arr_cpu = arr.cpu() if arr.is_contiguous() else arr.contiguous().cpu()
 
     numel = torch.numel(arr_cpu)
     element_size = arr_cpu.element_size()
@@ -91,10 +88,10 @@ class MiniOnnxBuilder:
     """
 
     def __init__(self, target_opset: int = 18, ir_version: int = 10, sep: str = "___"):
-        self.initializers_dict = {}
-        self.inputs = []
-        self.outputs = []
-        self.nodes = []
+        self.initializers_dict: Dict[str, Any] = {}
+        self.inputs: List[Any] = []
+        self.outputs: List[Any] = []
+        self.nodes: List[NodeProto] = []
         self.opsets = {"": target_opset}
         self.ir_version = ir_version
         self.torch = torch
@@ -270,7 +267,7 @@ class MiniOnnxBuilder:
 
             return initializer
 
-        res = []
+        res: List[TensorProto] = []
         for k, v in init_dict.items():
             if isinstance(v, TensorProto):
                 res.append(v)
@@ -354,12 +351,19 @@ def _flatten_iterator(obj: Any, sep: str) -> Iterator:
                         f"Key {k!r} cannot contain '{sep}'. "
                         f"It would interfere with the serialization."
                     )
+
+                    def _mk(k):
+                        if isinstance(k, tuple):
+                            # this assumes the tuple contains simple types
+                            return f"(({','.join(map(str,k))}))"
+                        return str(k)
+
                     if i == len(obj) - 1:
                         for p, o in _flatten_iterator(v, sep):
-                            yield f"dict._{k}{sep}{p}", o
+                            yield f"dict._{_mk(k)}{sep}{p}", o
                     else:
                         for p, o in _flatten_iterator(v, sep):
-                            yield f"dict_{k}{sep}{p}", o
+                            yield f"dict_{_mk(k)}{sep}{p}", o
         elif obj.__class__.__name__ == "DynamicCache":
             # transformers
             import transformers
@@ -420,7 +424,7 @@ def _unflatten(
     pos: int = 0,
     level: int = 0,
     device: str = "cpu",
-) -> Tuple[int, Tuple[Any, ...]]:
+) -> Tuple[int, Any]:
     """Unflattens a list of outputs flattened with :func:`flatten_iterator`."""
     name = names[pos]
     spl = name.split(sep)
@@ -465,7 +469,7 @@ def _unflatten(
 
         if end:
             if prefix.startswith("dict"):
-                ty = dict
+                ty: type = dict
             elif prefix.startswith("list"):
                 ty = list
             elif prefix.startswith("tuple"):
@@ -479,12 +483,30 @@ def _unflatten(
             break
         pos = next_pos
 
+    def _tryint(s):
+        try:
+            return int(s)
+        except (ValueError, TypeError):
+            if s in {"True", "False"}:
+                return s == "True"
+            return s
+
     def _make(ty: type, res: Any) -> Any:
         if ty.__name__ == "DynamicCache":
             r = ty()
             for k, v in res:
                 setattr(r, k, v)
             return r
+        if ty is dict:
+            d = {}
+            for k, v in res:
+                if k.startswith("((") and k.endswith("))"):
+                    spl = k[2:-2].split(",")
+                    key = tuple(_tryint(s) for s in spl)
+                else:
+                    key = _tryint(k)
+                d[key] = v
+            return d
         return ty(res)
 
     return next_pos, (

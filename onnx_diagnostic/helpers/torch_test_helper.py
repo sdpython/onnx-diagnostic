@@ -2,6 +2,7 @@ import contextlib
 from collections.abc import Iterable
 from typing import Any, Callable, List, Optional, Tuple, Union
 import numpy as np
+import onnx
 import torch
 from .helper import string_type
 from .cache_helper import (
@@ -10,9 +11,12 @@ from .cache_helper import (
     make_sliding_window_cache,
     make_mamba_cache,
 )
+from .mini_onnx_builder import create_onnx_model_from_input_tensors
 
 
-def _forward_(*args, _f=None, _fprint=string_type, _prefix="", _context=None, **kwargs):
+def _forward_(
+    *args, _f=None, _fprint=string_type, _prefix="", _context=None, _storage=None, **kwargs
+):
     assert _f is not None, "_f cannot be None"
     assert _context is not None, "_context cannot be None"
     indent = "  " * (len(_prefix) - len(_prefix.lstrip()))
@@ -28,10 +32,16 @@ def _forward_(*args, _f=None, _fprint=string_type, _prefix="", _context=None, **
     if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
         # torch.compiler.is_exporting requires torch>=2.7
         print(f"{indent}  <- args={_fprint(args, **kws)} --- kwargs={_fprint(kwargs, **kws)}")
+    if _storage is not None:
+        it = _context["iteration"]
+        key = (_prefix, it)
+        _storage[(*key, "I")] = (torch_deepcopy(args), torch_deepcopy(kwargs))
     res = _f(*args, **kwargs)
     if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
         print(f"{indent}  -> {_fprint(res, **kws)}")
         print(f"{indent}-{_prefix}.")
+    if _storage is not None:
+        _storage[(*key, "O")] = torch_deepcopy(res)
     _context["iteration"] += 1
     return res
 
@@ -43,6 +53,7 @@ def steal_forward(
         List[Union[torch.nn.Module, Tuple[str, torch.nn.Module]]],
     ],
     fprint: Callable = string_type,
+    dump_file: Optional[str] = None,
     **kwargs,
 ):
     """
@@ -56,6 +67,9 @@ def steal_forward(
         :func:`onnx_diagnostic.helpers.string_type`
     :param kwargs: additional parameters sent to :func:`onnx_diagnostic.helpers.string_type`
         or any other function defined by ``fprint``
+    :param dump_file: dumps stolen inputs and outputs in an onnx model,
+        they can be restored with :func:`create_input_tensors_from_onnx_model
+        <onnx_diagnostic.helpers.mini_onnx_builder.create_input_tensors_from_onnx_model>`
     """
     context = dict(iteration=0, **kwargs)
     if "with_shape" not in context and fprint == string_type:
@@ -63,19 +77,28 @@ def steal_forward(
     if not isinstance(model, list):
         model = [model]
     keep_model_forward = {}
+    storage = {} if dump_file else None
     for mt in model:
         name, m = mt if isinstance(mt, tuple) else ("", mt)
         keep_model_forward[id(m)] = (m, m.forward)
         c = context.copy()
         c["class_name"] = m.__class__.__name__
-        m.forward = lambda *args, _f=m.forward, _fp=fprint, _c=c, _p=name, **kws: _forward_(
-            *args, _f=_f, _fprint=_fp, _context=_c, _prefix=_p, **kws
+        m.forward = lambda *args, _f=m.forward, _fp=fprint, _c=c, _p=name, _s=storage, **kws: _forward_(  # noqa: E501
+            *args, _f=_f, _fprint=_fp, _context=_c, _prefix=_p, _storage=_s, **kws
         )
     try:
         yield
     finally:
         for f in keep_model_forward.values():
             f[0].forward = f[1]
+        if dump_file:
+            proto = create_onnx_model_from_input_tensors(storage)
+            onnx.save(
+                proto,
+                dump_file,
+                save_as_external_data=False,
+                all_tensors_to_one_file=True,
+            )
 
 
 def is_torchdynamo_exporting() -> bool:
