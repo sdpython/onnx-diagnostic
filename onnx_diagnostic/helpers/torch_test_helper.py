@@ -54,6 +54,7 @@ def steal_forward(
     ],
     fprint: Callable = string_type,
     dump_file: Optional[str] = None,
+    submodules: bool = False,
     **kwargs,
 ):
     """
@@ -70,12 +71,25 @@ def steal_forward(
     :param dump_file: dumps stolen inputs and outputs in an onnx model,
         they can be restored with :func:`create_input_tensors_from_onnx_model
         <onnx_diagnostic.helpers.mini_onnx_builder.create_input_tensors_from_onnx_model>`
+    :param submodules: if True and model is a module, the list extended with all the submodules
+        the module contains
     """
+    assert not submodules or isinstance(
+        model, torch.nn.Module
+    ), f"submodules can only be True if model is a module but is is {type(model)}."
     context = dict(iteration=0, **kwargs)
     if "with_shape" not in context and fprint == string_type:
         context["with_shape"] = True
     if not isinstance(model, list):
-        model = [model]
+        if submodules:
+            models = []
+            for idx, m in model.named_modules():
+                level = str(idx).split(".")
+                ll = len(level)
+                models.append((f"{'  ' * ll}{idx}", m))
+            model = models
+        else:
+            model = [model]
     keep_model_forward = {}
     storage: Optional[Dict[Any, Any]] = {} if dump_file else None
     for mt in model:
