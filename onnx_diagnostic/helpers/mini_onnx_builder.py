@@ -310,7 +310,7 @@ class MiniOnnxBuilder:
         return model
 
 
-def flatten_iterator(obj: Any, sep: str) -> Iterator:
+def _flatten_iterator(obj: Any, sep: str) -> Iterator:
     """Iterates on all object."""
     if obj is not None:
         if isinstance(obj, np.ndarray):
@@ -329,10 +329,10 @@ def flatten_iterator(obj: Any, sep: str) -> Iterator:
             else:
                 for i, o in enumerate(obj):
                     if i == len(obj) - 1:
-                        for p, oo in flatten_iterator(o, sep):
+                        for p, oo in _flatten_iterator(o, sep):
                             yield f"tuple.{sep}{p}", oo
                     else:
-                        for p, oo in flatten_iterator(o, sep):
+                        for p, oo in _flatten_iterator(o, sep):
                             yield f"tuple{sep}{p}", oo
         elif isinstance(obj, list):
             if not obj:
@@ -340,10 +340,10 @@ def flatten_iterator(obj: Any, sep: str) -> Iterator:
             else:
                 for i, o in enumerate(obj):
                     if i == len(obj) - 1:
-                        for p, oo in flatten_iterator(o, sep):
+                        for p, oo in _flatten_iterator(o, sep):
                             yield f"list.{sep}{p}", oo
                     else:
-                        for p, oo in flatten_iterator(o, sep):
+                        for p, oo in _flatten_iterator(o, sep):
                             yield f"list{sep}{p}", oo
         elif isinstance(obj, dict):
             if not obj:
@@ -352,13 +352,13 @@ def flatten_iterator(obj: Any, sep: str) -> Iterator:
                 for i, (k, v) in enumerate(obj.items()):
                     assert sep not in k, (
                         f"Key {k!r} cannot contain '{sep}'. "
-                        f"It would interfer with the serialization."
+                        f"It would interfere with the serialization."
                     )
                     if i == len(obj) - 1:
-                        for p, o in flatten_iterator(v, sep):
+                        for p, o in _flatten_iterator(v, sep):
                             yield f"dict._{k}{sep}{p}", o
                     else:
-                        for p, o in flatten_iterator(v, sep):
+                        for p, o in _flatten_iterator(v, sep):
                             yield f"dict_{k}{sep}{p}", o
         elif obj.__class__.__name__ == "DynamicCache":
             # transformers
@@ -370,10 +370,10 @@ def flatten_iterator(obj: Any, sep: str) -> Iterator:
             atts = ["key_cache", "value_cache"]
             for i, att in enumerate(atts):
                 if i == len(atts) - 1:
-                    for p, o in flatten_iterator(getattr(obj, att), sep):
+                    for p, o in _flatten_iterator(getattr(obj, att), sep):
                         yield f"DynamicCache._{att}{sep}{p}", o
                 else:
-                    for p, o in flatten_iterator(getattr(obj, att), sep):
+                    for p, o in _flatten_iterator(getattr(obj, att), sep):
                         yield f"DynamicCache_{att}{sep}{p}", o
         else:
             raise NotImplementedError(f"Unexpected type {type(obj)}")
@@ -403,7 +403,7 @@ def create_onnx_model_from_input_tensors(
         switch_low_high = sys.byteorder != "big"
 
     builder = MiniOnnxBuilder(sep=sep)
-    for prefix, o in flatten_iterator(inputs, sep):
+    for prefix, o in _flatten_iterator(inputs, sep):
         if o is None:
             builder.append_output_initializer(prefix, np.array([]))
         else:
@@ -413,7 +413,7 @@ def create_onnx_model_from_input_tensors(
     return model
 
 
-def unflatten(
+def _unflatten(
     sep: str,
     names: List[str],
     outputs: List[Any],
@@ -421,9 +421,7 @@ def unflatten(
     level: int = 0,
     device: str = "cpu",
 ) -> Tuple[int, Tuple[Any, ...]]:
-    """
-    Unflattens a list of outputs flattened with :func:`flatten_iterator`.
-    """
+    """Unflattens a list of outputs flattened with :func:`flatten_iterator`."""
     name = names[pos]
     spl = name.split(sep)
     if len(spl) == level + 1:
@@ -448,7 +446,7 @@ def unflatten(
         name = names[pos]
         spl = name.split(sep)
         prefix = spl[level]
-        next_pos, value = unflatten(
+        next_pos, value = _unflatten(
             sep, names, outputs, pos=pos, level=level + 1, device=device
         )
 
@@ -499,7 +497,7 @@ def create_input_tensors_from_onnx_model(
     device: str = "cpu",
     engine: str = "ExtendedReferenceEvaluator",
     sep: str = "___",
-) -> Union[Tuple[Any, ...], Dict[str, Any]]:
+) -> Any:
     """
     Deserializes tensors stored with function
     :func:`create_onnx_model_from_input_tensors`.
@@ -511,7 +509,7 @@ def create_input_tensors_from_onnx_model(
     :param device: moves the tensor to this device
     :param engine: runtime to use, onnx, the default value, onnxruntime
     :param sep: separator
-    :return: ModelProto
+    :return: restored data
     """
     if engine == "ExtendedReferenceEvaluator":
         from ..reference import ExtendedReferenceEvaluator
@@ -552,4 +550,4 @@ def create_input_tensors_from_onnx_model(
             return torch.from_numpy(output).to(device)
         raise AssertionError(f"Unexpected name {name!r} in {names}")
 
-    return unflatten(sep, names, got, device=device)[1]
+    return _unflatten(sep, names, got, device=device)[1]
