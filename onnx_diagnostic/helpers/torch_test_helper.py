@@ -1,6 +1,6 @@
 import contextlib
 from collections.abc import Iterable
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 import numpy as np
 import torch
 from .helper import string_type
@@ -12,11 +12,13 @@ from .cache_helper import (
 )
 
 
-def _forward_(*args, _f=None, _context=None, **kwargs):
+def _forward_(*args, _f=None, _fprint=string_type, _prefix="", _context=None, **kwargs):
     assert _f is not None, "_f cannot be None"
     assert _context is not None, "_context cannot be None"
+    indent = "  " * (len(_prefix) - len(_prefix.lstrip()))
+    _prefix = _prefix.lstrip()
     print(
-        f"---- stolen forward for class {_context['class_name']} "
+        f"{indent}+{_prefix} -- stolen forward for class {_context['class_name']} "
         f"-- iteration {_context['iteration']}"
     )
     kws = dict(
@@ -25,36 +27,54 @@ def _forward_(*args, _f=None, _context=None, **kwargs):
     )
     if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
         # torch.compiler.is_exporting requires torch>=2.7
-        print(f"  <- args={string_type(args, **kws)} --- kwargs={string_type(kwargs, **kws)}")
+        print(f"{indent}  <- args={_fprint(args, **kws)} --- kwargs={_fprint(kwargs, **kws)}")
     res = _f(*args, **kwargs)
     if not hasattr(torch.compiler, "is_exporting") or not torch.compiler.is_exporting():
-        print("  --")
-        print(f"  -> {string_type(res, **kws)}")
-        print(".")
+        print(f"{indent}  -> {_fprint(res, **kws)}")
+        print(f"{indent}-{_prefix}.")
     _context["iteration"] += 1
     return res
 
 
 @contextlib.contextmanager
-def steal_forward(model: torch.nn.Module, with_shape: bool = True, with_min_max: bool = False):
+def steal_forward(
+    model: Union[
+        Union[torch.nn.Module, Tuple[str, torch.nn.Module]],
+        List[Union[torch.nn.Module, Tuple[str, torch.nn.Module]]],
+    ],
+    fprint: Callable = string_type,
+    **kwargs,
+):
     """
     The necessary modification to steem forward method and prints out inputs
     and outputs. See example :ref:`l-plot-tiny-llm-export`.
+
+    :param model: a model or a list of models to monitor,
+        every model can also be a tuple(name, model), name is displayed well.
+    :param fprint: function used to print out (or dump), by default, it is
+        :func:`onnx_diagnostic.helpers.string_type`
+    :param kwargs: additional parameters sent to :func:`onnx_diagnostic.helpers.string_type`
+        or any other function defined by ``fprint``
     """
-    context = dict(
-        iteration=0,
-        class_name=model.__class__.__name__,
-        with_shape=with_shape,
-        with_min_max=with_min_max,
-    )
-    keep_model_forward = model.forward
-    model.forward = lambda *args, _f=keep_model_forward, _context=context, **kwargs: _forward_(
-        *args, _f=_f, _context=_context, **kwargs
-    )
+    context = dict(iteration=0, **kwargs)
+    if "with_shape" not in context and fprint == string_type:
+        context["with_shape"] = True
+    if not isinstance(model, list):
+        model = [model]
+    keep_model_forward = {}
+    for mt in model:
+        name, m = mt if isinstance(mt, tuple) else ("", mt)
+        keep_model_forward[id(m)] = (m, m.forward)
+        c = context.copy()
+        c["class_name"] = m.__class__.__name__
+        m.forward = lambda *args, _f=m.forward, _fp=fprint, _c=c, _p=name, **kws: _forward_(
+            *args, _f=_f, _fprint=_fp, _context=_c, _prefix=_p, **kws
+        )
     try:
         yield
     finally:
-        model.forward = keep_model_forward
+        for f in keep_model_forward.values():
+            f[0].forward = f[1]
 
 
 def is_torchdynamo_exporting() -> bool:

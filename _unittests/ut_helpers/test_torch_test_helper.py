@@ -59,6 +59,35 @@ class TestTorchTestHelper(ExtTestCase):
         with steal_forward(model):
             model(*inputs)
 
+    @hide_stdout()
+    def test_steal_forward_multi(self):
+        class SubModel(torch.nn.Module):
+            def forward(self, x):
+                return x * x
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.s1 = SubModel()
+                self.s2 = SubModel()
+
+            def forward(self, x, y):
+                return self.s1(x) + self.s2(y)
+
+        inputs = torch.rand(3, 4), torch.rand(3, 4)
+        model = Model()
+        with steal_forward(
+            [
+                (
+                    "main",
+                    model,
+                ),
+                ("  s1", model.s1),
+                ("  s2", model.s2),
+            ]
+        ):
+            model(*inputs)
+
     def test_replace_string_by_dynamic(self):
         example = {
             "input_ids": {0: "batch_size", 1: "sequence_length"},
