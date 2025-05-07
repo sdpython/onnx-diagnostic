@@ -165,14 +165,21 @@ class TestTorchTestHelper(ExtTestCase):
         with steal_forward(model, submodules=True, dump_file=dump_file):
             model(*inputs)
         restored = create_input_tensors_from_onnx_model(dump_file)
+        for k, v in sorted(restored.items()):
+            if isinstance(v, tuple):
+                args, kwargs = v
+                print("input", k, args, kwargs)
+            else:
+                print("output", k, v)
+        print(string_type(restored, with_shape=True))
         self.assertEqual(
             [
-                ("", 0, "I"),
-                ("", 0, "O"),
-                ("s1", 0, "I"),
-                ("s1", 0, "O"),
-                ("s2", 0, "I"),
-                ("s2", 0, "O"),
+                ("-Model-159", 0, "I"),
+                ("-Model-159", 0, "O"),
+                ("s1-SubModel-150", 0, "I"),
+                ("s1-SubModel-150", 0, "O"),
+                ("s2-SubModel-150", 0, "I"),
+                ("s2-SubModel-150", 0, "O"),
             ],
             sorted(restored),
         )

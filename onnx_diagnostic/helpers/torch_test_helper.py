@@ -1,4 +1,5 @@
 import contextlib
+import inspect
 from collections.abc import Iterable
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
@@ -73,6 +74,43 @@ def steal_forward(
         <onnx_diagnostic.helpers.mini_onnx_builder.create_input_tensors_from_onnx_model>`
     :param submodules: if True and model is a module, the list extended with all the submodules
         the module contains
+
+    The following examples shows how to steal and dump all the inputs / outputs
+    for a module and its submodules, then restores them.
+
+    .. runpython::
+        :showcode:
+
+        import torch
+        from onnx_diagnostic.helpers.torch_test_helper import steal_forward
+
+        class SubModel(torch.nn.Module):
+            def forward(self, x):
+                return x * x
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.s1 = SubModel()
+                self.s2 = SubModel()
+
+            def forward(self, x, y):
+                return self.s1(x) + self.s2(y)
+
+        inputs = torch.rand(2, 1), torch.rand(2, 1)
+        model = Model()
+        dump_file = "dump_steal_forward_submodules.onnx"
+        with steal_forward(model, submodules=True, dump_file=dump_file):
+            model(*inputs)
+
+        # Let's restore the stolen data.
+        restored = create_input_tensors_from_onnx_model(dump_file)
+        for k, v in sorted(restored.items()):
+            if isinstance(v, tuple):
+                args, kwargs = v
+                print("input", k, args, kwargs)
+            else:
+                print("output", k, v)
     """
     assert not submodules or isinstance(
         model, torch.nn.Module
@@ -87,7 +125,9 @@ def steal_forward(
             for idx, m in model.named_modules():
                 level = str(idx).split(".")
                 ll = len(level)
-                models.append((f"{'  ' * ll}{idx}", m))
+                _, start_line = inspect.getsourcelines(m.forward)
+                name = f"{idx}-{m.__class__.__name__}-{start_line}"
+                models.append((f"{'  ' * ll}{name}", m))
             model = models
         else:
             model = [model]
