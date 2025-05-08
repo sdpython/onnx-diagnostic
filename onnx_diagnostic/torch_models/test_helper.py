@@ -504,6 +504,7 @@ def validate_model(
                 print(f"[validate_model] -- dumps exported program in {dump_folder!r}...")
             with open(os.path.join(dump_folder, f"{folder_name}.ep"), "w") as f:
                 f.write(str(ep))
+            torch.export.save(ep, os.path.join(dump_folder, f"{folder_name}.pt2"))
             with open(os.path.join(dump_folder, f"{folder_name}.graph"), "w") as f:
                 f.write(str(ep.graph))
             if verbose:
