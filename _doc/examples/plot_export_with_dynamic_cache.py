@@ -1,9 +1,9 @@
 """
 .. _l-plot-export-with-dynamic-shape:
 
-===========================================
-Export with DynamicCache and dynamic shapes
-===========================================
+===================================================
+Export with DynamicCache and guessed dynamic shapes
+===================================================
 
 Every LLMs implemented in :epkg:`transformers` use cache.
 One of the most used is :class:`transformers.cache_utils.DynamicCache`.
@@ -84,6 +84,8 @@ inputs = [
 print(string_type(inputs[1], with_shape=True))
 
 # %%
+# .. _l-guess-dynamic-shapes-example:
+#
 # Guess the dynamic shapes
 # ========================
 #
@@ -111,6 +113,17 @@ else:
             model, modificator(inputs[0]), dynamic_shapes=ds[0], strict=False
         )
 print(ep)
+
+# %%
+# Use string instead of DYNAMIC
+# +++++++++++++++++++++++++++++
+#
+# ONNX exporter considers strings instead of DYNAMIC or AUTO
+# to give names to every dimension.
+
+dss = mi.guess_dynamic_shapes(auto="dim")
+pprint.pprint(dss)
+
 
 # %%
 # Do we need to guess?
