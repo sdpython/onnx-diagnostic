@@ -144,6 +144,46 @@ class TestTorchTestHelper(ExtTestCase):
         self.assertEqualAny(restored["main", 0, "O"], res1)
         self.assertEqualAny(restored["main", 0, "O"], res2)
 
+    @hide_stdout()
+    def test_steal_forward_submodules(self):
+        class SubModel(torch.nn.Module):
+            def forward(self, x):
+                return x * x
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.s1 = SubModel()
+                self.s2 = SubModel()
+
+            def forward(self, x, y):
+                return self.s1(x) + self.s2(y)
+
+        inputs = torch.rand(3, 4), torch.rand(3, 4)
+        model = Model()
+        dump_file = self.get_dump_file("test_steal_forward_submodules.onnx")
+        with steal_forward(model, submodules=True, dump_file=dump_file):
+            model(*inputs)
+        restored = create_input_tensors_from_onnx_model(dump_file)
+        for k, v in sorted(restored.items()):
+            if isinstance(v, tuple):
+                args, kwargs = v
+                print("input", k, args, kwargs)
+            else:
+                print("output", k, v)
+        print(string_type(restored, with_shape=True))
+        self.assertEqual(
+            [
+                ("-Model-159", 0, "I"),
+                ("-Model-159", 0, "O"),
+                ("s1-SubModel-150", 0, "I"),
+                ("s1-SubModel-150", 0, "O"),
+                ("s2-SubModel-150", 0, "I"),
+                ("s2-SubModel-150", 0, "O"),
+            ],
+            sorted(restored),
+        )
+
     def test_replace_string_by_dynamic(self):
         example = {
             "input_ids": {0: "batch_size", 1: "sequence_length"},
