@@ -470,6 +470,7 @@ class TestDynamicShapes(ExtTestCase):
             ),
         )
 
+    @requires_transformers("4.51")
     def test_guess_dynamic_shapes_cache_str(self):
         class Model(torch.nn.Module):
             def forward(self, cache, z):
