@@ -470,6 +470,66 @@ class TestDynamicShapes(ExtTestCase):
             ),
         )
 
+    @requires_transformers("4.51")
+    def test_guess_dynamic_shapes_cache_str(self):
+        class Model(torch.nn.Module):
+            def forward(self, cache, z):
+                return (
+                    z
+                    + cache.key_cache[0]
+                    + cache.key_cache[1]
+                    + cache.value_cache[0]
+                    + cache.value_cache[1]
+                )
+
+        model = Model()
+
+        n_layers = 2
+        bsize, nheads, slen, dim = 2, 4, 3, 7
+        cache = make_dynamic_cache(
+            [
+                (torch.randn(bsize, nheads, slen, dim), torch.randn(bsize, nheads, slen, dim))
+                for i in range(n_layers)
+            ]
+        )
+        z = torch.randn((1, 1, 1, 7))
+        model(cache, z)
+
+        cache2 = make_dynamic_cache(
+            [
+                (
+                    torch.randn(bsize, nheads, slen, dim),
+                    torch.randn(bsize + 1, nheads, slen + 1, dim + 1),
+                )
+                for i in range(n_layers)
+            ]
+        )
+        inputs = [
+            (cache, z),
+            (cache2, torch.randn((1, 1, 1, 8))),
+        ]
+
+        mi = ModelInputs(Model(), inputs)
+        self.assertIn("DynamicCache", string_type(mi.inputs, with_shape=True))
+        ds = mi.guess_dynamic_shapes(auto="dim")
+        print(ds)
+        self.assertEqual(
+            ds,
+            (
+                (
+                    [
+                        [{}, {}],
+                        [
+                            {0: "dim_0I_1o_0l0", 2: "dim_0I_1o_0l2", 3: "dim_0I_1o_0l3"},
+                            {0: "dim_0I_1o_1l0", 2: "dim_0I_1o_1l2", 3: "dim_0I_1o_1l3"},
+                        ],
+                    ],
+                    {3: "dim_1I3"},
+                ),
+                {},
+            ),
+        )
+
     def test_couple_input_ds_0(self):
         T3x4 = torch.rand((3, 4))
         T3x1 = torch.rand((3, 1))

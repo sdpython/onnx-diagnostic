@@ -67,7 +67,7 @@ Enlightening Examples
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_with_dynamic_shapes_auto.html>`_
 * `Find and fix an export issue due to dynamic shapes
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_locate_issue.html>`_
-* `Export with DynamicCache and dynamic shapes
+* `Export with DynamicCache and guessed dynamic shapes
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_with_dynamic_cache.html>`_
 * `Steel method forward to guess the dynamic shapes (with Tiny-LLM)
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_tiny_llm.html>`_
@@ -95,10 +95,7 @@ Snapshot of usefuls tools
 
     inputs = (
         torch.rand((3, 4), dtype=torch.float16),
-        [
-            torch.rand((5, 6), dtype=torch.float16),
-            torch.rand((5, 6, 7), dtype=torch.float16),
-        ]
+        [torch.rand((5, 6), dtype=torch.float16), torch.rand((5, 6, 7), dtype=torch.float16)],
     )
 
     # with shapes
@@ -126,4 +123,33 @@ Snapshot of usefuls tools
 
 **max_diff**
 
-Returns the maximum discrancies across nested containers containing tensors.
+.. code-block:: python
+
+    import torch
+    from onnx_diagnostic.helpers import max_diff
+
+    print(
+        max_diff(
+            (torch.Tensor([1, 2]), (torch.Tensor([1, 2]),)),
+            (torch.Tensor([1, 2]), (torch.Tensor([1, 2]),)),
+        )
+    )
+
+::
+
+    >>> {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 4.0, "dnan": 0.0}s
+
+**guess_dynamic_shapes**
+
+.. code-block:: python
+
+    inputs = [
+        (torch.randn((5, 6)), torch.randn((1, 6))),
+        (torch.randn((7, 8)), torch.randn((1, 8))),
+    ]
+    ds = ModelInputs(model, inputs).guess_dynamic_shapes(auto="dim")
+    print(ds)
+
+::
+
+    >>> (({0: 'dim_0I0', 1: 'dim_0I1'}, {1: 'dim_1I1'}), {})

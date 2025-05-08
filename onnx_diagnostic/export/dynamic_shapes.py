@@ -723,13 +723,14 @@ class ModelInputs:
         return f"type({self.name})={self.true_model_name}.{self.method_name}"
 
     def guess_dynamic_dimensions(
-        self, *tensors, auto: bool = False
+        self, *tensors, auto: Union[bool, str] = False
     ) -> Optional[Dict[int, Any]]:
         """
         Infers the dynamic dimension from multiple shapes.
         If auto is True, it returns ``torch.export.Dim.AUTO`` for every dimension
         which cannot be guessed. Two tensors with the same value for one dimension
-        can be guessed, but if there is only 1, it cannot.
+        can be guessed, but if there is only 1, it cannot. ``auto``` can be a string
+        to produce strings.
         """
         if len(tensors) == 1:
             if isinstance(tensors[0], (int, float)):
@@ -740,7 +741,7 @@ class ModelInputs:
             )
             return (
                 {i: torch.export.Dim.AUTO for i in range(len(tensors[0].shape))}  # noqa: C420
-                if auto
+                if auto and not isinstance(auto, str)
                 else {}
             )
         shapes = [t.shape for t in tensors]
@@ -750,22 +751,26 @@ class ModelInputs:
             f"shapes={shapes} for module {self.name!r}, "
             f"class={self.true_model_name!r}"
         )
-        dynamic: Any = torch.export.Dim.DYNAMIC  # type: ignore
+        dynamic: Any = (
+            auto
+            if isinstance(auto, str)
+            else (torch.export.Dim.AUTO if auto else torch.export.Dim.DYNAMIC)
+        )
         rk = set_length.pop()
         res = {}
         for i in range(rk):
             set_dim = set(s[i] for s in shapes)
             if len(set_dim) > 1:
-                res[i] = dynamic
+                res[i] = dynamic if not isinstance(dynamic, str) else f"{dynamic}{i}"
                 continue
             if set_dim == {0}:
                 # It is unexpected to find a null dimension. Let's replace it by a dynamic one.
-                res[i] = dynamic
+                res[i] = dynamic if not isinstance(dynamic, str) else f"{dynamic}{i}"
                 continue
         return res
 
     def guess_dynamic_shape_object(
-        self, *objs: Any, auto: bool = False, msg: Optional[Callable] = None
+        self, *objs: Any, auto: Union[bool, str] = False, msg: Optional[Callable] = None
     ) -> Any:
         """Guesses the dynamic shapes for one argument."""
         if len(objs) == 0:
@@ -790,7 +795,11 @@ class ModelInputs:
             shapes: Any = []
             for i in range(kl.pop()):
                 shapes.append(
-                    self.guess_dynamic_shape_object(*[o[i] for o in objs], auto=auto, msg=msg)
+                    self.guess_dynamic_shape_object(
+                        *[o[i] for o in objs],
+                        auto=auto if isinstance(auto, bool) else f"{auto}_{i}t",
+                        msg=msg,
+                    )
                 )
             return tuple(shapes)
 
@@ -802,7 +811,11 @@ class ModelInputs:
             shapes = []
             for i in range(kl.pop()):
                 shapes.append(
-                    self.guess_dynamic_shape_object(*[o[i] for o in objs], auto=auto, msg=msg)
+                    self.guess_dynamic_shape_object(
+                        *[o[i] for o in objs],
+                        auto=auto if isinstance(auto, bool) else f"{auto}_{i}l",
+                        msg=msg,
+                    )
                 )
             return shapes
 
@@ -814,7 +827,9 @@ class ModelInputs:
             shapes = {}
             for i in obj:
                 shapes[i] = self.guess_dynamic_shape_object(
-                    *[o[i] for o in objs], auto=auto, msg=msg
+                    *[o[i] for o in objs],
+                    auto=auto if isinstance(auto, bool) else f"{auto}_{i}d",
+                    msg=msg,
                 )
             return shapes
 
@@ -834,7 +849,9 @@ class ModelInputs:
             for i in range(kc.pop()):
                 values.append(
                     self.guess_dynamic_shape_object(
-                        *[ca[i] for ca in col_args], auto=auto, msg=msg
+                        *[ca[i] for ca in col_args],
+                        auto=auto if isinstance(auto, bool) else f"{auto}_{i}o",
+                        msg=msg,
                     )
                 )
             return values
@@ -852,12 +869,18 @@ class ModelInputs:
             key_cache = []
             for i in range(kc.pop()):
                 key_cache.append(
-                    self.guess_dynamic_dimensions(*[o.key_cache[i] for o in objs], auto=auto)
+                    self.guess_dynamic_dimensions(
+                        *[o.key_cache[i] for o in objs],
+                        auto=auto if isinstance(auto, bool) else f"{auto}_{i}kdc",
+                    )
                 )
             value_cache = []
             for i in range(vc.pop()):
                 value_cache.append(
-                    self.guess_dynamic_dimensions(*[o.value_cache[i] for o in objs], auto=auto)
+                    self.guess_dynamic_dimensions(
+                        *[o.value_cache[i] for o in objs],
+                        auto=auto if isinstance(auto, bool) else f"{auto}_{i}vdc",
+                    )
                 )
             return [key_cache, value_cache]
 
@@ -867,13 +890,17 @@ class ModelInputs:
             f"this object needs serialization function to be registered."
         )
 
-    def guess_dynamic_shapes(self, auto: bool = False) -> DYNAMIC_SHAPES:
+    def guess_dynamic_shapes(self, auto: Union[bool, str] = False) -> DYNAMIC_SHAPES:
         """
         Guesses the dynamic shapes for that module from two execution.
         If there is only one execution, then that would be static dimensions.
 
         :param auto: if auto is True, use ``torch.export.Dim.AUTO`` for any
-            dimension if the number of inputs is one
+            dimension if the number of inputs is one,
+            if ``auto`` is a string, it uses strings
+        :return: guessed dynamic shapes
+
+        See example :ref:`l-guess-dynamic-shapes-example`.
         """
         if len(self.inputs) == 0:
             # No inputs, unable to guess.
@@ -900,7 +927,9 @@ class ModelInputs:
             objs = [_[0][i] for _ in self.inputs]
             args.append(
                 self.guess_dynamic_shape_object(
-                    *objs, auto=auto, msg=lambda i=i: f" failing input {i}"
+                    *objs,
+                    auto=auto if isinstance(auto, bool) else f"{auto}_{i}I",
+                    msg=lambda i=i: f" failing input {i}",
                 )
             )
         names = s2.pop()
@@ -913,7 +942,9 @@ class ModelInputs:
 
             objs = [_[1][name] for _ in self.inputs]
             kwargs[name] = self.guess_dynamic_shape_object(
-                *objs, auto=auto, msg=lambda name=name: f" failing input {name!r}"
+                *objs,
+                auto=auto if isinstance(auto, bool) else f"{auto}_{i}I",
+                msg=lambda name=name: f" failing input {name!r}",
             )
         return tuple(args), kwargs
 
