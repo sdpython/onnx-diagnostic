@@ -8,6 +8,7 @@ from onnx_diagnostic.ext_test_case import (
     ignore_warnings,
     requires_torch,
     requires_experimental,
+    requires_onnxscript,
 )
 from onnx_diagnostic.torch_models.test_helper import (
     get_inputs_for_task,
@@ -88,6 +89,7 @@ class TestTestHelper(ExtTestCase):
         )
 
     @requires_torch("2.7")
+    @requires_onnxscript("0.4")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     def test_validate_model_onnx_dynamo_os_ort(self):

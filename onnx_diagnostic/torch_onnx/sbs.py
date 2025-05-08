@@ -296,7 +296,7 @@ def run_aligned(
             )
 
     for inp, v in zip(onx.graph.input, args):
-        onnx_results[inp.name] = v.numpy()
+        onnx_results[inp.name] = v.cpu().numpy()
         if verbose:
             print(
                 f"[run_aligned] +onnx-input: {inp.name}: "
