@@ -1,4 +1,4 @@
-
+========================================
 onnx-diagnostic: investigate onnx models
 ========================================
 
@@ -48,7 +48,7 @@ It also implements tools to investigate, validate exported models (ExportedProgr
     license
 
 Getting started
-+++++++++++++++
+===============
 
 ::
 
@@ -63,7 +63,7 @@ or
     pip install onnx-diagnostic
 
 Enlightening Examples
-+++++++++++++++++++++
+=====================
 
 **Where to start to export a model**
 
@@ -85,7 +85,13 @@ Enlightening Examples
 * :ref:`l-plot-failing-onnxruntime-evaluator`
 * :ref:`l-plot-failing-model-extract`
 
-**Some Usefuls Tools**
+Some Usefuls Tools
+==================
+
+string_type
++++++++++++
+
+See :func:`onnx_diagnostic.helpers.string_type`.
 
 .. code-block:: python
 
@@ -107,6 +113,11 @@ Enlightening Examples
 
     >>> (T10s3x4,#2[T10s5x6,T10s5x6x7])
 
+onnx_dtype_name
++++++++++++++++
+
+See :func:`onnx_diagnostic.helpers.onnx_dtype_name`.
+
 .. code-block:: python
 
         import onnx
@@ -121,7 +132,64 @@ Enlightening Examples
     >>> BFLOAT16
     >>> INT64
 
-:func:`onnx_diagnostic.helpers.max_diff`, ...
+max_diff
+++++++++
+
+See :func:`onnx_diagnostic.helpers.max_diff`.
+
+.. code-block:: python
+
+    import torch
+    from onnx_diagnostic.helpers import max_diff
+
+    print(
+        max_diff(
+            (torch.Tensor([1, 2]), (torch.Tensor([1, 2]),)),
+            (torch.Tensor([1, 2]), (torch.Tensor([1, 2]),)),
+        )
+    )
+
+::
+
+    >>> {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 4.0, "dnan": 0.0}s
+
+guess_dynamic_shapes
+++++++++++++++++++++
+
+See :meth:`onnx_diagnostic.export.ModelInputs.guess_dynamic_shapes`.
+
+.. code-block:: python
+
+    inputs = [
+        (torch.randn((5, 6)), torch.randn((1, 6))),
+        (torch.randn((7, 8)), torch.randn((1, 8))),
+    ]
+    ds = ModelInputs(model, inputs).guess_dynamic_shapes(auto="dim")
+    print(ds)
+
+::
+
+    >>> (({0: 'dim_0I0', 1: 'dim_0I1'}, {1: 'dim_1I1'}), {})
+
+use_dyn_for_str
++++++++++++++++
+
+
+
+Older versions
+++++++++++++++
+
+* `0.5.0 <../v0.5.0/index.html>`_
+* `0.4.4 <../v0.4.4/index.html>`_
+* `0.4.3 <../v0.4.3/index.html>`_
+* `0.4.2 <../v0.4.2/index.html>`_
+* `0.4.1 <../v0.4.1/index.html>`_
+* `0.4.0 <../v0.4.0/index.html>`_
+* `0.3.0 <../v0.3.0/index.html>`_
+* `0.2.2 <../v0.2.2/index.html>`_
+* `0.2.1 <../v0.2.1/index.html>`_
+* `0.2.0 <../v0.2.0/index.html>`_
+* `0.1.0 <../v0.1.0/index.html>`_
 
 The documentation was updated on:
 
@@ -173,18 +241,3 @@ Size of the package:
     df = pandas.DataFrame(statistics_on_folder(os.path.dirname(__file__), aggregation=1))
     gr = df[["dir", "ext", "lines", "chars"]].groupby(["ext", "dir"]).sum()
     print(gr)
-
-Older versions
-++++++++++++++
-
-* `0.5.0 <../v0.5.0/index.html>`_
-* `0.4.4 <../v0.4.4/index.html>`_
-* `0.4.3 <../v0.4.3/index.html>`_
-* `0.4.2 <../v0.4.2/index.html>`_
-* `0.4.1 <../v0.4.1/index.html>`_
-* `0.4.0 <../v0.4.0/index.html>`_
-* `0.3.0 <../v0.3.0/index.html>`_
-* `0.2.2 <../v0.2.2/index.html>`_
-* `0.2.1 <../v0.2.1/index.html>`_
-* `0.2.0 <../v0.2.0/index.html>`_
-* `0.1.0 <../v0.1.0/index.html>`_
