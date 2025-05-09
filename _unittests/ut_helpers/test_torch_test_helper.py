@@ -173,14 +173,15 @@ class TestTorchTestHelper(ExtTestCase):
             else:
                 print("output", k, v)
         print(string_type(restored, with_shape=True))
+        l1, l2 = 151, 160
         self.assertEqual(
             [
-                ("-Model-159", 0, "I"),
-                ("-Model-159", 0, "O"),
-                ("s1-SubModel-150", 0, "I"),
-                ("s1-SubModel-150", 0, "O"),
-                ("s2-SubModel-150", 0, "I"),
-                ("s2-SubModel-150", 0, "O"),
+                (f"-Model-{l2}", 0, "I"),
+                (f"-Model-{l2}", 0, "O"),
+                (f"s1-SubModel-{l1}", 0, "I"),
+                (f"s1-SubModel-{l1}", 0, "O"),
+                (f"s2-SubModel-{l1}", 0, "I"),
+                (f"s2-SubModel-{l1}", 0, "O"),
             ],
             sorted(restored),
         )
