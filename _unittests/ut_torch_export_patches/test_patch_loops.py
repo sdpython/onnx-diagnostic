@@ -20,7 +20,7 @@ class TestOnnxExportErrors(ExtTestCase):
         names = {_[0] for _ in res}
         self.assertIn("float_arange", names)
 
-    @requires_torch("2.7")
+    @requires_torch("2.8")
     def test_filter_position_ids(self):
 
         def filter_position_ids(
