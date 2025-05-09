@@ -151,8 +151,8 @@ def steal_forward(
             onnx.save(
                 proto,
                 dump_file,
-                save_as_external_data=False,
-                all_tensors_to_one_file=True,
+                save_as_external_data=True,
+                all_tensors_to_one_file=False,
             )
 
 

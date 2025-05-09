@@ -1,1 +1,1 @@
-from .helper import max_diff, string_diff, string_sig, string_type
+from .helper import flatten_object, max_diff, string_diff, string_sig, string_type
