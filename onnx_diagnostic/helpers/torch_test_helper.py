@@ -487,3 +487,35 @@ def torch_deepcopy(value: Any) -> Any:
     # We should have a code using serialization, deserialization assuming a model
     # cannot be exported without them.
     raise NotImplementedError(f"torch_deepcopy not implemented for type {type(value)}")
+
+
+def model_statistics(model: torch.nn.Module):
+    """Returns statistics on a model in a dictionary."""
+    n_subs = len(list(model.modules()))
+    sizes = {}
+    param_size = 0
+    for param in model.parameters():
+        size = param.nelement() * param.element_size()
+        param_size += size
+        name = str(param.dtype).replace("torch.", "")
+        if name not in sizes:
+            sizes[name] = 0
+        sizes[name] += size
+
+    buffer_size = 0
+    for buffer in model.buffers():
+        size = buffer.nelement() * buffer.element_size()
+        buffer_size += size
+        name = str(buffer.dtype).replace("torch.", "")
+        if name not in sizes:
+            sizes[name] = 0
+        sizes[name] += size
+
+    res = dict(
+        type=model.__class__.__name__,
+        n_modules=n_subs,
+        param_size=size,
+        buffer_size=buffer_size,
+    )
+    res.update(sizes)
+    return res

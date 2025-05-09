@@ -127,7 +127,7 @@ class TestHelpers(ExtTestCase):
         )
         self.print_onnx(proto)
         self.print_model(proto)
-        self.dump_onnx("test_print_pretty_onnx", proto)
+        self.dump_onnx("test_print_pretty.onnx", proto)
         self.check_ort(proto)
         self.assertNotEmpty(proto)
         self.assertEmpty(None)
