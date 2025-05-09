@@ -295,7 +295,14 @@ class TestTorchTestHelper(ExtTestCase):
         model(x, y)
         stat = model_statistics(model)
         self.assertEqual(
-            {"type": "Model", "n_modules": 1, "param_size": 4, "buffer_size": 4, "float32": 8},
+            {
+                "type": "Model",
+                "n_modules": 1,
+                "param_size": 4,
+                "buffer_size": 4,
+                "float32": 8,
+                "size_mb": 0,
+            },
             stat,
         )
 

@@ -514,8 +514,9 @@ def model_statistics(model: torch.nn.Module):
     res = dict(
         type=model.__class__.__name__,
         n_modules=n_subs,
-        param_size=size,
+        param_size=param_size,
         buffer_size=buffer_size,
+        size_mb=(param_size + buffer_size) // 2**20,
     )
     res.update(sizes)
     return res
