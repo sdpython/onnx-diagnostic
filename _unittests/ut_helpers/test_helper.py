@@ -203,6 +203,84 @@ class TestHelpers(ExtTestCase):
         d = string_diff(diff)
         self.assertIsInstance(d, str)
 
+    def test_max_diff_hist_array(self):
+        x = np.arange(12).reshape((3, 4)).astype(dtype=np.float32)
+        y = x.copy()
+        y[0, 1] += 0.1
+        y[0, 2] += 0.01
+        y[0, 3] += 0.001
+        y[1, 1] += 0.0001
+        y[1, 2] += 1
+        y[2, 2] += 10
+        y[1, 3] += 100
+        y[2, 1] += 1000
+        diff = max_diff(x, y, hist=True)
+        self.assertEqual(
+            diff["rep"],
+            {
+                ">0.0": 8,
+                ">0.0001": 8,
+                ">0.001": 6,
+                ">0.01": 5,
+                ">0.1": 5,
+                ">1.0": 3,
+                ">10.0": 2,
+                ">100.0": 1,
+            },
+        )
+
+    def test_max_diff_hist_tensor(self):
+        x = torch.arange(12).reshape((3, 4)).to(dtype=torch.float32)
+        y = x.clone()
+        y[0, 1] += 0.1
+        y[0, 2] += 0.01
+        y[0, 3] += 0.001
+        y[1, 1] += 0.0001
+        y[1, 2] += 1
+        y[2, 2] += 10
+        y[1, 3] += 100
+        y[2, 1] += 1000
+        diff = max_diff(x, y, hist=True)
+        self.assertEqual(
+            diff["rep"],
+            {
+                ">0.0": 8,
+                ">0.0001": 8,
+                ">0.001": 6,
+                ">0.01": 5,
+                ">0.1": 5,
+                ">1.0": 3,
+                ">10.0": 2,
+                ">100.0": 1,
+            },
+        )
+
+    def test_max_diff_hist_tensor_composed(self):
+        x = torch.arange(12).reshape((3, 4)).to(dtype=torch.float32)
+        y = x.clone()
+        y[0, 1] += 0.1
+        y[0, 2] += 0.01
+        y[0, 3] += 0.001
+        y[1, 1] += 0.0001
+        y[1, 2] += 1
+        y[2, 2] += 10
+        y[1, 3] += 100
+        y[2, 1] += 1000
+        diff = max_diff([x, (x, {"e": x})], [y, (y, {"e": y})], hist=True)
+        self.assertEqual(
+            diff["rep"],
+            {
+                ">0.0": 24,
+                ">0.0001": 24,
+                ">0.001": 18,
+                ">0.01": 15,
+                ">0.1": 15,
+                ">1.0": 9,
+                ">10.0": 6,
+                ">100.0": 3,
+            },
+        )
+
     def test_type_info(self):
         for tt in [
             onnx.TensorProto.FLOAT,
