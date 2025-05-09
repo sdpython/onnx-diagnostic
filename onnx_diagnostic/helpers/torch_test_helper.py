@@ -151,9 +151,23 @@ def steal_forward(
             onnx.save(
                 proto,
                 dump_file,
-                save_as_external_data=False,
-                all_tensors_to_one_file=True,
+                save_as_external_data=True,
+                all_tensors_to_one_file=False,
             )
+
+
+@contextlib.contextmanager
+def fake_torchdynamo_exporting():
+    """
+    Sets ``torch.compiler._is_exporting_flag`` to True to trigger
+    pieces of code only enabled during export.
+    """
+    memorize = torch.compiler._is_exporting_flag
+    torch.compiler._is_exporting_flag = True
+    try:
+        yield
+    finally:
+        torch.compiler._is_exporting_flag = memorize
 
 
 def is_torchdynamo_exporting() -> bool:

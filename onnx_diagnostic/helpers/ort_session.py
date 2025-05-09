@@ -101,11 +101,27 @@ class _InferenceSession:
                     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
                 else:
                     raise ValueError(f"Unexpected value for providers={providers!r}")
-            sess = onnxruntime.InferenceSession(
-                sess if isinstance(sess, str) else sess.SerializeToString(),
-                session_options,
-                providers=providers,
-            )
+            try:
+                sess = onnxruntime.InferenceSession(
+                    sess if isinstance(sess, str) else sess.SerializeToString(),
+                    session_options,
+                    providers=providers,
+                )
+            except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
+                if isinstance(sess, onnx.ModelProto):
+                    debug_path = "_debug_onnxruntine_evaluator_failure.onnx"
+                    onnx.save(
+                        sess,
+                        debug_path,
+                        save_as_external_data=True,
+                        all_tensors_to_one_file=True,
+                    )
+                else:
+                    debug_path = sess
+                raise RuntimeError(
+                    f"Unable to create a session stored in {debug_path!r}), "
+                    f"providers={providers}"
+                ) from e
         else:
             assert (
                 session_options is None

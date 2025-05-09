@@ -18,6 +18,8 @@ onnx_diagnostic.helpers
     rt_helper
     torch_test_helper
 
+.. autofunction:: onnx_diagnostic.helpers.flatten_object
+
 .. autofunction:: onnx_diagnostic.helpers.max_diff
 
 .. autofunction:: onnx_diagnostic.helpers.string_diff

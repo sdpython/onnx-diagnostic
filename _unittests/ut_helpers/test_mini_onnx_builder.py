@@ -151,6 +151,48 @@ class TestMiniOnnxBuilder(ExtTestCase):
                 restored = create_input_tensors_from_onnx_model(model, sep="#")
                 self.assertEqualAny(inputs, restored)
 
+    def test_specific_data(self):
+        data = {
+            ("amain", 0, "I"): (
+                (
+                    torch.rand((2, 16, 3, 448, 448), dtype=torch.float16),
+                    torch.rand((2, 16, 32, 32), dtype=torch.float16),
+                    torch.rand((2, 2)).to(torch.int64),
+                ),
+                {},
+            ),
+        }
+        model = create_onnx_model_from_input_tensors(data)
+        shapes = [
+            tuple(d.dim_value for d in i.type.tensor_type.shape.dim)
+            for i in model.graph.output
+        ]
+        self.assertEqual(shapes, [(2, 16, 3, 448, 448), (2, 16, 32, 32), (2, 2), (0,)])
+        names = [i.name for i in model.graph.output]
+        self.assertEqual(
+            [
+                "dict._((amain,0,I))___tuple_0___tuple_0___tensor",
+                "dict._((amain,0,I))___tuple_0___tuple_1___tensor",
+                "dict._((amain,0,I))___tuple_0___tuple_2.___tensor",
+                "dict._((amain,0,I))___tuple_1.___dict.___empty",
+            ],
+            names,
+        )
+        shapes = [tuple(i.dims) for i in model.graph.initializer]
+        self.assertEqual(shapes, [(2, 16, 3, 448, 448), (2, 16, 32, 32), (2, 2), (0,)])
+        names = [i.name for i in model.graph.initializer]
+        self.assertEqual(
+            [
+                "t_dict._((amain,0,I))___tuple_0___tuple_0___tensor",
+                "t_dict._((amain,0,I))___tuple_0___tuple_1___tensor",
+                "t_dict._((amain,0,I))___tuple_0___tuple_2.___tensor",
+                "t_dict._((amain,0,I))___tuple_1.___dict.___empty",
+            ],
+            names,
+        )
+        restored = create_input_tensors_from_onnx_model(model)
+        self.assertEqualAny(data, restored)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
