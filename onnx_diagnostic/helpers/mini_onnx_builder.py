@@ -139,6 +139,9 @@ class MiniOnnxBuilder:
                 return
 
         init_name = f"t_{name}"
+        assert (
+            init_name not in self.initializers_dict
+        ), f"name={init_name!r} already in {sorted(self.initializers_dict)}"
         self.initializers_dict[init_name] = tensor
         shape = tuple(map(int, tensor.shape))
         self.outputs.append(
@@ -324,10 +327,10 @@ def _flatten_iterator(obj: Any, sep: str) -> Iterator:
                 for i, o in enumerate(obj):
                     if i == len(obj) - 1:
                         for p, oo in _flatten_iterator(o, sep):
-                            yield f"tuple.{sep}{p}", oo
+                            yield f"tuple_{i}.{sep}{p}", oo
                     else:
                         for p, oo in _flatten_iterator(o, sep):
-                            yield f"tuple{sep}{p}", oo
+                            yield f"tuple_{i}{sep}{p}", oo
         elif isinstance(obj, list):
             if not obj:
                 yield f"list.{sep}empty", None
@@ -335,10 +338,10 @@ def _flatten_iterator(obj: Any, sep: str) -> Iterator:
                 for i, o in enumerate(obj):
                     if i == len(obj) - 1:
                         for p, oo in _flatten_iterator(o, sep):
-                            yield f"list.{sep}{p}", oo
+                            yield f"list_{i}.{sep}{p}", oo
                     else:
                         for p, oo in _flatten_iterator(o, sep):
-                            yield f"list{sep}{p}", oo
+                            yield f"list_{i}{sep}{p}", oo
         elif isinstance(obj, dict):
             if not obj:
                 yield f"dict.{sep}empty", None
