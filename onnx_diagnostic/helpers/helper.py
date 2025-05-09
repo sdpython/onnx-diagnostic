@@ -2,7 +2,7 @@ import ast
 import enum
 import inspect
 from dataclasses import is_dataclass, fields
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 import numpy as np
 
 
@@ -854,6 +854,12 @@ def flatten_object(x: Any, drop_keys: bool = False) -> Any:
     )
 
 
+def _make_debug_info(msg, level, debug_info, verbose) -> Optional[List[str]]:
+    return (
+        [*(debug_info if debug_info else []), f"{' ' * level}{msg}"] if verbose > 5 else None
+    )
+
+
 def max_diff(
     expected: Any,
     got: Any,
@@ -865,6 +871,7 @@ def max_diff(
     end: int = -1,
     _index: int = 0,
     allow_unique_tensor_with_list_of_one_element: bool = True,
+    hist: Optional[Union[bool, List[float]]] = None,
 ) -> Dict[str, float]:
     """
     Returns the maximum discrepancy.
@@ -880,6 +887,7 @@ def max_diff(
     :param _index: used with begin and end
     :param allow_unique_tensor_with_list_of_one_element:
         allow a comparison between a single tensor and a list of one tensor
+    :param hist: compute an histogram of the discrepancies
     :return: dictionary with many values
 
     * abs: max absolute error
@@ -894,6 +902,20 @@ def max_diff(
     """
     if expected is None and got is None:
         return dict(abs=0, rel=0, sum=0, n=0, dnan=0)
+
+    _dkws_ = dict(
+        verbose=verbose,
+        level=level + 1,
+        begin=begin,
+        end=end,
+        _index=_index,
+        hist=hist,
+    )
+    _dkws = {**_dkws_, "flatten": flatten}
+    _dkwsf = {**_dkws_, "flatten": False}
+
+    _debug = lambda msg: _make_debug_info(msg, level, debug_info, verbose)  # noqa: E731
+
     if allow_unique_tensor_with_list_of_one_element:
         if hasattr(expected, "shape") and isinstance(got, (list, tuple)) and len(got) == 1:
             return max_diff(
@@ -904,6 +926,7 @@ def max_diff(
                 flatten=False,
                 debug_info=debug_info,
                 allow_unique_tensor_with_list_of_one_element=False,
+                hist=hist,
             )
         return max_diff(
             expected,
@@ -916,44 +939,17 @@ def max_diff(
             end=end,
             _index=_index,
             allow_unique_tensor_with_list_of_one_element=False,
+            hist=hist,
         )
     if hasattr(expected, "to_tuple"):
         if verbose >= 6:
             print(f"[max_diff] to_tuple1: {string_type(expected)} ? {string_type(got)}")
-        return max_diff(
-            expected.to_tuple(),
-            got,
-            verbose=verbose,
-            level=level + 1,
-            debug_info=(
-                [*(debug_info if debug_info else []), f"{' ' * level}to_tupleA"]
-                if verbose > 5
-                else None
-            ),
-            begin=begin,
-            end=end,
-            _index=_index,
-            flatten=flatten,
-        )
+        return max_diff(expected.to_tuple(), got, debug_info=_debug("to_tuple1"), **_dkws)
 
     if hasattr(got, "to_tuple"):
         if verbose >= 6:
             print(f"[max_diff] to_tuple2: {string_type(expected)} ? {string_type(got)}")
-        return max_diff(
-            expected,
-            got.to_tuple(),
-            verbose=verbose,
-            level=level + 1,
-            debug_info=(
-                [*(debug_info if debug_info else []), f"{' ' * level}to_tupleB"]
-                if verbose > 5
-                else None
-            ),
-            begin=begin,
-            end=end,
-            _index=_index,
-            flatten=flatten,
-        )
+        return max_diff(expected, got.to_tuple(), debug_info=_debug("to_tuple2"), **_dkws)
 
         if isinstance(got, (list, tuple)):
             if len(got) != 1:
@@ -983,17 +979,7 @@ def max_diff(
                 return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
             if verbose >= 6:
                 print(f"[max_diff] list,tuple,1: {string_type(expected)} ? {string_type(got)}")
-            return max_diff(
-                expected,
-                got[0],
-                verbose=verbose,
-                level=level + 1,
-                begin=begin,
-                end=end,
-                _index=_index,
-                debug_info=debug_info,
-                flatten=flatten,
-            )
+            return max_diff(expected, got[0], debug_info=_debug("lt1"), **_dkws)
 
     if isinstance(expected, (tuple, list)):
         if verbose >= 6:
@@ -1001,17 +987,7 @@ def max_diff(
         if len(expected) == 1 and not isinstance(got, type(expected)):
             if verbose >= 6:
                 print(f"[max_diff] list,tuple,3: {string_type(expected)} ? {string_type(got)}")
-            return max_diff(
-                expected[0],
-                got,
-                verbose=verbose,
-                level=level + 1,
-                begin=begin,
-                end=end,
-                _index=_index,
-                debug_info=debug_info,
-                flatten=flatten,
-            )
+            return max_diff(expected[0], got, debug_info=_debug("lt2"), **_dkws)
         if not isinstance(got, (tuple, list)):
             if verbose >= 6:
                 print(f"[max_diff] list,tuple,4: {string_type(expected)} ? {string_type(got)}")
@@ -1047,11 +1023,6 @@ def max_diff(
                 return max_diff(
                     flat_a,
                     flat_b,
-                    verbose=verbose,
-                    level=level,
-                    begin=begin,
-                    end=end,
-                    _index=_index,
                     debug_info=(
                         [
                             *(debug_info if debug_info else []),
@@ -1063,7 +1034,7 @@ def max_diff(
                         if verbose > 5
                         else None
                     ),
-                    flatten=False,
+                    **_dkwsf,
                 )
 
             if verbose > 2:
@@ -1085,7 +1056,7 @@ def max_diff(
 
         if verbose >= 6:
             print(f"[max_diff] list,tuple,6: {string_type(expected)} ? {string_type(got)}")
-        am, rm, sm, n, dn = 0, 0, 0.0, 0.0, 0
+        am, rm, sm, n, dn, drep = 0, 0, 0.0, 0.0, 0, None
         for ip, (e, g) in enumerate(zip(expected, got)):
             d = max_diff(
                 e,
@@ -1104,20 +1075,31 @@ def max_diff(
                 end=end,
                 _index=_index + ip,
                 flatten=flatten,
+                hist=hist,
             )
             am = max(am, d["abs"])
             dn = max(dn, d["dnan"])
             rm = max(rm, d["rel"])
             sm += d["sum"]
             n += d["n"]
-        return dict(abs=am, rel=rm, sum=sm, n=n, dnan=dn)
+            if "rep" in d:
+                if drep is None:
+                    drep = d["rep"].copy()
+                else:
+                    for k, v in d["rep"].items():
+                        drep[k] += v
+        res = dict(abs=am, rel=rm, sum=sm, n=n, dnan=dn)
+        if drep:
+            res["rep"] = drep
+        return res
 
     if isinstance(expected, dict):
         if verbose >= 6:
             print(f"[max_diff] dict: {string_type(expected)} ? {string_type(got)}")
-        assert (
-            begin == 0 and end == -1
-        ), f"begin={begin}, end={end} not compatible with dictionaries"
+        assert begin == 0 and end == -1, (
+            f"begin={begin}, end={end} not compatible with dictionaries, "
+            f"keys={sorted(expected)}"
+        )
         if isinstance(got, dict):
             if len(expected) != len(got):
                 return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
@@ -1127,30 +1109,15 @@ def max_diff(
             return max_diff(
                 [expected[k] for k in keys],
                 [got[k] for k in keys],
-                level=level,
-                flatten=flatten,
-                debug_info=debug_info,
-                begin=begin,
-                end=end,
-                _index=_index,
-                verbose=verbose,
+                debug_info=_debug("dict1"),
+                **_dkws,
             )
 
         if not isinstance(got, (tuple, list)):
             return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
         if len(expected) != len(got):
             return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
-        return max_diff(
-            list(expected.values()),
-            got,
-            level=level,
-            flatten=flatten,
-            debug_info=debug_info,
-            begin=begin,
-            end=end,
-            _index=_index,
-            verbose=verbose,
-        )
+        return max_diff(list(expected.values()), got, debug_info=_debug("dict2"), **_dkws)
 
     import torch
 
@@ -1159,7 +1126,6 @@ def max_diff(
             expected = expected.detach().cpu().numpy()
         if isinstance(got, torch.Tensor):
             got = got.detach().cpu().numpy()
-
         if verbose >= 6:
             print(f"[max_diff] tensor: {string_type(expected)} ? {string_type(got)}")
 
@@ -1253,7 +1219,16 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        return dict(abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff)
+        res = dict(abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff)
+        if hist:
+            if isinstance(hist, bool):
+                hist = np.array([0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype)
+            ind = np.digitize(diff.reshape((-1,)), hist, right=True)
+            cou = np.bincount(ind, minlength=ind.shape[0] + 1)
+            res["rep"] = dict(
+                zip([f">{x}" for x in hist], [int(i) for i in (cou.sum() - np.cumsum(cou))])
+            )
+        return res
 
     if isinstance(expected, torch.Tensor) and isinstance(got, torch.Tensor):
         if verbose >= 6:
@@ -1339,7 +1314,21 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        return dict(abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff)
+        res = dict(abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff)
+        if hist:
+            if isinstance(hist, bool):
+                hist = torch.tensor(
+                    [0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype
+                )
+            ind = torch.bucketize(diff.reshape((-1,)), hist, right=False)
+            cou = torch.bincount(ind, minlength=ind.shape[0] + 1)
+            res["rep"] = dict(
+                zip(
+                    [f">{x}" for x in hist],
+                    [int(i) for i in (cou.sum() - torch.cumsum(cou, 0))],
+                )
+            )
+        return res
 
     if "SquashedNormal" in expected.__class__.__name__:
         if verbose >= 6:
@@ -1348,16 +1337,7 @@ def max_diff(
             expected.mean.detach().to("cpu"),
             expected.scale.detach().to("cpu"),
         )
-        return max_diff(
-            values,
-            got,
-            verbose=verbose,
-            level=level + 1,
-            begin=begin,
-            end=end,
-            _index=_index,
-            flatten=flatten,
-        )
+        return max_diff(values, got, debug_info=_debug("SquashedNormal"), **_dkws)
 
     if expected.__class__ in torch.utils._pytree.SUPPORTED_NODES:
         if got.__class__ not in torch.utils._pytree.SUPPORTED_NODES:
@@ -1370,15 +1350,7 @@ def max_diff(
         expected_args, _spec = torch.utils._pytree.tree_flatten(expected)
         got_args, _spec = torch.utils._pytree.tree_flatten(got)
         return max_diff(
-            expected_args,
-            got_args,
-            level=level,
-            flatten=flatten,
-            debug_info=debug_info,
-            begin=begin,
-            end=end,
-            _index=_index,
-            verbose=verbose,
+            expected_args, got_args, debug_info=_debug(expected.__class__.__name__), **_dkws
         )
 
     # backup function in case pytorch does not know how to serialize.
@@ -1390,12 +1362,14 @@ def max_diff(
                 [expected.key_cache, expected.value_cache],
                 [got.key_cache, got.value_cache],
                 verbose=verbose,
+                hist=hist,
             )
         if isinstance(got, tuple) and len(got) == 2:
             return max_diff(
                 [expected.key_cache, expected.value_cache],
                 [got[0], got[1]],
-                verbose=verbose,
+                debug_info=_debug(expected.__class__.__name__),
+                **_dkws,
             )
         raise AssertionError(
             f"DynamicCache not fully implemented with classes "
@@ -1412,12 +1386,14 @@ def max_diff(
                 [expected.key_cache, expected.value_cache],
                 [got.key_cache, got.value_cache],
                 verbose=verbose,
+                hist=hist,
             )
         if isinstance(got, tuple) and len(got) == 2:
             return max_diff(
                 [expected.key_cache, expected.value_cache],
                 [got[0], got[1]],
-                verbose=verbose,
+                debug_info=_debug(expected.__class__.__name__),
+                **_dkws,
             )
         raise AssertionError(
             f"SlidingWindowCache not fully implemented with classes "
@@ -1437,12 +1413,14 @@ def max_diff(
                 [expected.self_attention_cache, expected.cross_attention_cache],
                 [got.self_attention_cache, got.cross_attention_cache],
                 verbose=verbose,
+                hist=hist,
             )
         if isinstance(got, tuple) and len(got) == 2:
             return max_diff(
                 [expected.self_attention_cache, expected.cross_attention_cache],
                 [got[0], got[1]],
-                verbose=verbose,
+                debug_info=_debug(expected.__class__.__name__),
+                **_dkws,
             )
         raise AssertionError(
             f"EncoderDecoderCache not fully implemented with classes "
@@ -1466,13 +1444,8 @@ def max_diff(
         return max_diff(
             [getattr(expected, k) for k in atts],
             [getattr(got, k) for k in atts],
-            level=level,
-            flatten=flatten,
-            debug_info=debug_info,
-            begin=begin,
-            end=end,
-            _index=_index,
-            verbose=verbose,
+            debug_info=_debug(expected.__class__.__name__),
+            **_dkws,
         )
 
     raise AssertionError(
@@ -1485,10 +1458,20 @@ def max_diff(
 def string_diff(diff: Dict[str, Any]) -> str:
     """Renders discrepancies return by :func:`max_diff` into one string."""
     # dict(abs=, rel=, sum=, n=n_diff, dnan=)
+    suffix = ""
+    if "rep" in diff:
+        rows = []
+        for k, v in diff["rep"].items():
+            if v > 0:
+                rows.append(f"#{v}{k}")
+        suffix = "-".join(rows)
+        suffix = f"/{suffix}"
     if diff.get("dnan", None):
         if diff["abs"] == 0 or diff["rel"] == 0:
-            return f"abs={diff['abs']}, rel={diff['rel']}, dnan={diff['dnan']}"
-        return f"abs={diff['abs']}, rel={diff['rel']}, n={diff['n']}, dnan={diff['dnan']}"
+            return f"abs={diff['abs']}, rel={diff['rel']}, dnan={diff['dnan']}{suffix}"
+        return (
+            f"abs={diff['abs']}, rel={diff['rel']}, n={diff['n']}, dnan={diff['dnan']}{suffix}"
+        )
     if diff["abs"] == 0 or diff["rel"] == 0:
-        return f"abs={diff['abs']}, rel={diff['rel']}"
-    return f"abs={diff['abs']}, rel={diff['rel']}, n={diff['n']}"
+        return f"abs={diff['abs']}, rel={diff['rel']}{suffix}"
+    return f"abs={diff['abs']}, rel={diff['rel']}, n={diff['n']}{suffix}"

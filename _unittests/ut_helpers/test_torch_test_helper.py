@@ -9,6 +9,7 @@ from onnx_diagnostic.helpers.torch_test_helper import (
     dummy_llm,
     to_numpy,
     is_torchdynamo_exporting,
+    model_statistics,
     steal_forward,
     replace_string_by_dynamic,
     to_any,
@@ -172,14 +173,15 @@ class TestTorchTestHelper(ExtTestCase):
             else:
                 print("output", k, v)
         print(string_type(restored, with_shape=True))
+        l1, l2 = 151, 160
         self.assertEqual(
             [
-                ("-Model-159", 0, "I"),
-                ("-Model-159", 0, "O"),
-                ("s1-SubModel-150", 0, "I"),
-                ("s1-SubModel-150", 0, "O"),
-                ("s2-SubModel-150", 0, "I"),
-                ("s2-SubModel-150", 0, "O"),
+                (f"-Model-{l2}", 0, "I"),
+                (f"-Model-{l2}", 0, "O"),
+                (f"s1-SubModel-{l1}", 0, "I"),
+                (f"s1-SubModel-{l1}", 0, "O"),
+                (f"s2-SubModel-{l1}", 0, "I"),
+                (f"s2-SubModel-{l1}", 0, "O"),
             ],
             sorted(restored),
         )
@@ -278,6 +280,32 @@ class TestTorchTestHelper(ExtTestCase):
 
     def test_torch_deepcopy_none(self):
         self.assertEmpty(torch_deepcopy(None))
+
+    def test_model_statistics(self):
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.p1 = torch.nn.Parameter(torch.tensor([1], dtype=torch.float32))
+                self.b1 = torch.nn.Buffer(torch.tensor([1], dtype=torch.float32))
+
+            def forward(self, x, y=None):
+                return x + y + self.p1 + self.b1
+
+        model = Model()
+        x, y = torch.rand((3, 4)), torch.rand((3, 4))
+        model(x, y)
+        stat = model_statistics(model)
+        self.assertEqual(
+            {
+                "type": "Model",
+                "n_modules": 1,
+                "param_size": 4,
+                "buffer_size": 4,
+                "float32": 8,
+                "size_mb": 0,
+            },
+            stat,
+        )
 
 
 if __name__ == "__main__":
