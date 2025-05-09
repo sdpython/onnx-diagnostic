@@ -1070,6 +1070,11 @@ class ExtTestCase(unittest.TestCase):
         if not full.startswith(prefix):
             raise AssertionError(f"prefix={prefix!r} does not start string  {full!r}.")
 
+    def assertEndsWith(self, suffix: str, full: str):
+        """In the name"""
+        if not full.endswith(suffix):
+            raise AssertionError(f"suffix={suffix!r} does not end string  {full!r}.")
+
     def capture(self, fct: Callable):
         """
         Runs a function and capture standard output and error.

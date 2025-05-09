@@ -1458,10 +1458,20 @@ def max_diff(
 def string_diff(diff: Dict[str, Any]) -> str:
     """Renders discrepancies return by :func:`max_diff` into one string."""
     # dict(abs=, rel=, sum=, n=n_diff, dnan=)
+    suffix = ""
+    if "rep" in diff:
+        rows = []
+        for k, v in diff["rep"].items():
+            if v > 0:
+                rows.append(f"#{v}{k}")
+        suffix = "-".join(rows)
+        suffix = f"/{suffix}"
     if diff.get("dnan", None):
         if diff["abs"] == 0 or diff["rel"] == 0:
-            return f"abs={diff['abs']}, rel={diff['rel']}, dnan={diff['dnan']}"
-        return f"abs={diff['abs']}, rel={diff['rel']}, n={diff['n']}, dnan={diff['dnan']}"
+            return f"abs={diff['abs']}, rel={diff['rel']}, dnan={diff['dnan']}{suffix}"
+        return (
+            f"abs={diff['abs']}, rel={diff['rel']}, n={diff['n']}, dnan={diff['dnan']}{suffix}"
+        )
     if diff["abs"] == 0 or diff["rel"] == 0:
-        return f"abs={diff['abs']}, rel={diff['rel']}"
-    return f"abs={diff['abs']}, rel={diff['rel']}, n={diff['n']}"
+        return f"abs={diff['abs']}, rel={diff['rel']}{suffix}"
+    return f"abs={diff['abs']}, rel={diff['rel']}, n={diff['n']}{suffix}"
