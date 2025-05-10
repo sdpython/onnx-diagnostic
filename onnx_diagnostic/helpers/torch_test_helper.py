@@ -152,7 +152,7 @@ def steal_forward(
                 proto,
                 dump_file,
                 save_as_external_data=True,
-                all_tensors_to_one_file=False,
+                all_tensors_to_one_file=True,
             )
 
 
