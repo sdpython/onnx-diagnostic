@@ -33,6 +33,7 @@ from .ops.op_qlinear_conv import QLinearConv
 from .ops.op_quick_gelu import QuickGelu
 from .ops.op_replace_zero import ReplaceZero
 from .ops.op_rotary import Rotary
+from .ops.op_scan import Scan
 from .ops.op_scatter_elements import ScatterElements
 from .ops.op_scatternd_of_shape import MaskedScatterNDOfShape, ScatterNDOfShape
 from .ops.op_simplified_layer_normalization import SimplifiedLayerNormalization
@@ -99,6 +100,7 @@ class ExtendedReferenceEvaluator(ReferenceEvaluator):
         QuickGelu,
         ReplaceZero,
         Rotary,
+        Scan,
         ScatterElements,
         ScatterNDOfShape,
         SimplifiedLayerNormalization,

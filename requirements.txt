@@ -1,6 +1,6 @@
 numpy
 onnx>=1.16.0
-onnxruntime
+onnxruntime>=1.21
 optree
-torch>=2.6
+torch>=2.7
 torch_geometric
