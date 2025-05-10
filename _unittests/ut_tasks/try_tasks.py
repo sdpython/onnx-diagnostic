@@ -1,3 +1,4 @@
+import os
 import unittest
 from onnx_diagnostic.ext_test_case import ExtTestCase, never_test
 from onnx_diagnostic.helpers import string_type
@@ -539,6 +540,113 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 f"Detected {model.config.id2label[label.item()]} with confidence "
                 f"{round(score.item(), 3)} at location {box}"
             )
+
+    @never_test()
+    def test_qwen_image(self):
+        # clear&&NEVERTEST=1 VIDEO=0 python _unittests/ut_tasks/try_tasks.py -k qwen_1
+        # https://huggingface.co/tiiuae/falcon-mamba-7b
+
+        from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+        from qwen_vl_utils import process_vision_info
+
+        model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            "Qwen/Qwen2.5-VL-3B-Instruct", torch_dtype="auto", device_map="auto"
+        )
+
+        # default processer
+        processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-3B-Instruct")
+
+        video = int(os.environ.get("VIDEO", "0"))
+        if video:
+            # Messages containing a video url and a text query
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "video",
+                            "video": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-VL/space_woaudio.mp4",
+                        },
+                        {"type": "text", "text": "Describe this video."},
+                    ],
+                }
+            ]
+
+            text = processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            image_inputs, video_inputs, video_kwargs = process_vision_info(
+                messages, return_video_kwargs=True
+            )
+            inputs = processor(
+                text=[text],
+                images=image_inputs,
+                videos=video_inputs,
+                padding=True,
+                return_tensors="pt",
+                **video_kwargs,
+            )
+        else:
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "image": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg",
+                        },
+                        {
+                            "type": "image",
+                            "image": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg",
+                        },
+                        {"type": "text", "text": "Describe these images."},
+                    ],
+                }
+            ]
+
+            # Preparation for inference
+            text = processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            image_inputs, video_inputs = process_vision_info(messages)
+            inputs = processor(
+                text=[text],
+                images=image_inputs,
+                videos=video_inputs,
+                padding=True,
+                return_tensors="pt",
+            )
+        inputs = inputs.to("cuda")
+
+        # Inference: Generation of the output
+        print()
+        with steal_forward(model, with_min_max=True):
+            generated_ids = model.generate(**inputs, max_new_tokens=128)
+        generated_ids_trimmed = [
+            out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+        ]
+        output_text = processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+        print(output_text)
+
+        """
+        ---- stolen forward for class Qwen2_5_VLForConditionalGeneration -- iteration 0
+        cache_position:T7s3602,
+        past_key_values:DynamicCache(key_cache=#0[], value_cache=#0[]),
+        input_ids:T7s1x3602,
+        attention_mask:T7s1x3602
+        pixel_values:T1s14308x1176
+        image_grid_thw:T7s2x3
+        ---- stolen forward for class Qwen2_5_VLForConditionalGeneration -- iteration 1
+        cache_position:T7s1,
+        past_key_values:DynamicCache(key_cache=#36[T16s1x2x3602x128,...],
+                                     value_cache=#36[T16s1x2x3602x128,...]),
+        input_ids:T7s1x1,
+        attention_mask:T7s1x3603,
+        pixel_values_videos:None,
+        image_grid_thw:T7s2x3
+        """
 
 
 if __name__ == "__main__":
