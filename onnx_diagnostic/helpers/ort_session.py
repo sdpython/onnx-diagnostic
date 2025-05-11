@@ -155,6 +155,19 @@ class _InferenceSession:
 
         self._torch_from_dlpack = _from_dlpack
 
+    def run(
+        self,
+        output_names: Optional[List[str]],
+        feeds: Union[Dict[str, np.ndarray], Dict[str, "OrtValue"]],  # noqa: F821
+    ) -> Union[List[np.ndarray], List["OrtValue"]]:  # noqa: F821
+        """Calls :meth:`onnxruntime.InferenceSession.run`."""
+        if any(isinstance(t, np.ndarray) for t in feeds.values()):
+            return self.sess.run(output_names, feeds)
+        ort_outputs = self.sess._sess.run_with_ort_values(
+            feeds, output_names or self.output_names, self.run_options
+        )
+        return ort_outputs
+
 
 class InferenceSessionForNumpy(_InferenceSession):
     """
