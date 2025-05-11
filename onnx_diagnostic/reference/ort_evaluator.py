@@ -105,7 +105,6 @@ class OnnxruntimeEvaluator:
             self.nodes = None
             self.rt_inits_ = None
             self.rt_nodes_ = None
-            self.local_functions = None
         else:
             self.nodes = (
                 [self.proto]
@@ -124,19 +123,19 @@ class OnnxruntimeEvaluator:
                 else {}
             )
             self.rt_nodes_ = self.nodes.copy()
-            self.local_functions: Dict[
-                Tuple[str, str], "OnnxruntimeEvaluator"  # noqa: UP037
-            ] = (
-                {(f.domain, f.name): self.__class__(f) for f in self.proto.functions}
-                if hasattr(self.proto, "functions")
-                else {}
-            )
-            if local_functions:
-                self.local_functions.update(local_functions)
+
+        self.local_functions: Dict[Tuple[str, str], "OnnxruntimeEvaluator"] = (  # noqa: UP037
+            {(f.domain, f.name): self.__class__(f) for f in self.proto.functions}
+            if hasattr(self.proto, "functions")
+            else {}
+        )
+        if local_functions:
+            self.local_functions.update(local_functions)
 
     @property
     def input_names(self) -> List[str]:
         "Returns input names."
+        assert self.proto, "self.proto is empty"
         if isinstance(self.proto, NodeProto):
             return self.nodes[0].input
         return [
@@ -149,6 +148,7 @@ class OnnxruntimeEvaluator:
     @property
     def output_names(self) -> List[str]:
         "Returns output names."
+        assert self.proto, "self.proto is empty"
         if isinstance(self.proto, NodeProto):
             return self.nodes[0].output
         return [
@@ -218,19 +218,20 @@ class OnnxruntimeEvaluator:
             # runs a whole
             if self.sess_ is None:
                 _, self.sess_ = self._get_sess(self.proto, list(feed_inputs.values()))
+            assert self.sess_, "mypy not happy"
             return self.sess_.run(outputs, feed_inputs)
         if outputs is None:
             outputs = self.output_names
-        results: Dict[str, Any] = self.rt_inits_.copy()
+        results: Dict[str, Any] = (self.rt_inits_ or {}).copy()
 
-        for k, v in self.rt_inits_.items():
+        for k, v in results.items():
             self._log(2, " +C %s: %s", k, v)
         for k, v in feed_inputs.items():
             assert not isinstance(v, str), f"Unexpected type str for {k!r}"
             self._log(2, " +I %s: %s", k, v)
             results[k] = v
 
-        for node in self.rt_nodes_:
+        for node in self.rt_nodes_ or []:
             self._log(1, "%s(%s) -> %s", node.op_type, node.input, node.output)
             for i in node.input:
                 if i != "" and i not in results:
