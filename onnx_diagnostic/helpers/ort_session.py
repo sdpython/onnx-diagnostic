@@ -158,8 +158,8 @@ class _InferenceSession:
     def run(
         self,
         output_names: Optional[List[str]],
-        feeds: Union[Dict[str, np.ndarray], Dict[str, "OrtValue"]],  # noqa: F821
-    ) -> Union[List[np.ndarray], List["OrtValue"]]:  # noqa: F821
+        feeds: Union[Dict[str, np.ndarray], Dict[str, ORTC.OrtValue]],
+    ) -> Union[List[np.ndarray], List[ORTC.OrtValue]]:
         """Calls :meth:`onnxruntime.InferenceSession.run`."""
         if any(isinstance(t, np.ndarray) for t in feeds.values()):
             return self.sess.run(output_names, feeds)
@@ -411,7 +411,7 @@ class InferenceSessionForTorch(_InferenceSession):
                 self.torch.cuda.nvtx.range_pop()
         return tuple(res)
 
-    def run(
+    def run(  # type: ignore
         self, output_names: Optional[List[str]], feeds: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, ...]:
         """
