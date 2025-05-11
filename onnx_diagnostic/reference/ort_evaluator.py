@@ -100,11 +100,11 @@ class OnnxruntimeEvaluator:
         )
 
         self.verbose = verbose
-        self.sess_ = None
+        self.sess_: Optional[_InferenceSession] = None
         if whole:
-            self.nodes = None
-            self.rt_inits_ = None
-            self.rt_nodes_ = None
+            self.nodes: Optional[List[NodeProto]] = None
+            self.rt_inits_: Optional[Dict[str, Any]] = None
+            self.rt_nodes_: Optional[List[NodeProto]] = None
         else:
             self.nodes = (
                 [self.proto]
