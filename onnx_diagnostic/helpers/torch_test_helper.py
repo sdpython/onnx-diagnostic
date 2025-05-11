@@ -47,7 +47,13 @@ def _forward_(
     return res
 
 
+_steal_forward_status = [False]
 _additional_stolen_objects = {}
+
+
+def is_stealing() -> bool:
+    """Returns true if :func:`steal_forward` was yielded."""
+    return _steal_forward_status[0]
 
 
 def steal_append(name: str, obj: Any):
@@ -63,17 +69,18 @@ def steal_append(name: str, obj: Any):
     The same code can executed multiple times, then
     the name can extended with a number.
     """
-    if name in _additional_stolen_objects:
-        i = 1
-        n = f"{name}_{i}"
-        while n in _additional_stolen_objects:
-            i += 1
+    if is_stealing():
+        if name in _additional_stolen_objects:
+            i = 1
             n = f"{name}_{i}"
-        print(f"-- stolen {name!r} renamed in {n!r}: {string_type(obj, with_shape=True)}")
-        _additional_stolen_objects[n] = obj
-    else:
-        print(f"-- stolen {name!r}: {string_type(obj, with_shape=True)}")
-        _additional_stolen_objects[name] = obj
+            while n in _additional_stolen_objects:
+                i += 1
+                n = f"{name}_{i}"
+            print(f"-- stolen {name!r} renamed in {n!r}: {string_type(obj, with_shape=True)}")
+            _additional_stolen_objects[n] = obj
+        else:
+            print(f"-- stolen {name!r}: {string_type(obj, with_shape=True)}")
+            _additional_stolen_objects[name] = obj
 
 
 @contextlib.contextmanager
@@ -142,8 +149,11 @@ def steal_forward(
                 print("output", k, v)
 
     Function :func:`steal_append` can be used to dump more tensors.
+    When inside the context, func:`is_stealing` returns True, False otherwise.
     """
+    assert not is_stealing(), "steal_forward was already called."
     # We clear the cache.
+    _steal_forward_status[0] = True
     _additional_stolen_objects.clear()
     assert not submodules or isinstance(
         model, torch.nn.Module
@@ -177,6 +187,7 @@ def steal_forward(
     try:
         yield
     finally:
+        _steal_forward_status[0] = False
         for f in keep_model_forward.values():
             f[0].forward = f[1]
         if dump_file:

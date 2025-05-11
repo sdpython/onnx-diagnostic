@@ -4,6 +4,8 @@ Change Logs
 0.5.0
 +++++
 
+* :pr:`96`: implements ``is_stealing``, ``steal_append`` to complement ``steal_forward``
+* :pr:`95`: fix Scan implementation for ``OnnxruntimeEvaluator``
 * :pr:`93`: introduce patched expression to get around annoying export issues
 * :pr:`92`: support errors distribution in max_diff
 * :pr:`91`: enable strings in ``guess_dynamic_shapes``
