@@ -137,6 +137,9 @@ class OnnxruntimeEvaluator:
         "Returns input names."
         assert self.proto, "self.proto is empty"
         if isinstance(self.proto, NodeProto):
+            assert isinstance(
+                self.nodes, list
+            ), f"Unexpected type {type(self.nodes)} for self.nodes"
             return self.nodes[0].input
         return [
             getattr(o, "name", o)
@@ -150,6 +153,9 @@ class OnnxruntimeEvaluator:
         "Returns output names."
         assert self.proto, "self.proto is empty"
         if isinstance(self.proto, NodeProto):
+            assert isinstance(
+                self.nodes, list
+            ), f"Unexpected type {type(self.nodes)} for self.nodes"
             return self.nodes[0].output
         return [
             getattr(o, "name", o)
@@ -217,6 +223,7 @@ class OnnxruntimeEvaluator:
         if self.rt_nodes_ is None:
             # runs a whole
             if self.sess_ is None:
+                assert self.proto, "self.proto is empty"
                 _, self.sess_ = self._get_sess(self.proto, list(feed_inputs.values()))
             assert self.sess_, "mypy not happy"
             return self.sess_.run(outputs, feed_inputs)
@@ -237,7 +244,7 @@ class OnnxruntimeEvaluator:
                 if i != "" and i not in results:
                     raise RuntimeError(
                         f"Unable to find input {i!r} in known results {sorted(results)}, "
-                        f"self.rt_inits_ has {sorted(self.rt_inits_)}, "
+                        f"self.rt_inits_ has {sorted((self.rt_inits_ or {}))}, "
                         f"feed_inputs has {sorted(feed_inputs)}."
                     )
             inputs = [(results[i] if i != "" else None) for i in node.input]
