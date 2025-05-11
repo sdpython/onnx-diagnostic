@@ -47,6 +47,35 @@ def _forward_(
     return res
 
 
+_additional_stolen_objects = {}
+
+
+def steal_append(name: str, obj: Any):
+    """
+    When outside a forward method, it is still possible to add
+    a python object which contains tensors and dump after the execution
+    of the model.
+
+    .. code-block:: python
+
+        steal_append("quantize", [t1, t2])
+
+    The same code can executed multiple times, then
+    the name can extended with a number.
+    """
+    if name in _additional_stolen_objects:
+        i = 1
+        n = f"{name}_{i}"
+        while n in _additional_stolen_objects:
+            i += 1
+            n = f"{name}_{i}"
+        print(f"-- stolen {name!r} renamed in {n!r}: {string_type(obj, with_shape=True)}")
+        _additional_stolen_objects[n] = obj
+    else:
+        print(f"-- stolen {name!r}: {string_type(obj, with_shape=True)}")
+        _additional_stolen_objects[name] = obj
+
+
 @contextlib.contextmanager
 def steal_forward(
     model: Union[
@@ -111,7 +140,11 @@ def steal_forward(
                 print("input", k, args, kwargs)
             else:
                 print("output", k, v)
+
+    Function :func:`steal_append` can be used to dump more tensors.
     """
+    # We clear the cache.
+    _additional_stolen_objects.clear()
     assert not submodules or isinstance(
         model, torch.nn.Module
     ), f"submodules can only be True if model is a module but is is {type(model)}."
@@ -147,6 +180,10 @@ def steal_forward(
         for f in keep_model_forward.values():
             f[0].forward = f[1]
         if dump_file:
+            # Let's add the cached tensor
+            storage.update(_additional_stolen_objects)
+            # We clear the cache.
+            _additional_stolen_objects.clear()
             proto = create_onnx_model_from_input_tensors(storage)
             onnx.save(
                 proto,
