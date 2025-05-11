@@ -44,6 +44,7 @@ class OnnxruntimeEvaluator:
     :param local_functions: additional local function
     :param ir_version: ir version to use when unknown
     :param opsets: opsets to use when unknown
+    :param whole: if True, do not split node by node
     """
 
     def __init__(
@@ -65,6 +66,7 @@ class OnnxruntimeEvaluator:
         ] = None,
         ir_version: int = 10,
         opsets: Optional[Union[int, Dict[str, int]]] = None,
+        whole: bool = False,
     ):
         if isinstance(proto, str):
             self.proto: Proto = load(proto)
@@ -97,22 +99,31 @@ class OnnxruntimeEvaluator:
             use_training_api=use_training_api,
         )
 
-        self.nodes = (
-            [self.proto]
-            if isinstance(self.proto, NodeProto)
-            else (
-                list(
-                    self.proto.graph.node if hasattr(self.proto, "graph") else self.proto.node
+        self.verbose = verbose
+        self.sess_: Optional[_InferenceSession] = None
+        if whole:
+            self.nodes: Optional[List[NodeProto]] = None
+            self.rt_inits_: Optional[Dict[str, Any]] = None
+            self.rt_nodes_: Optional[List[NodeProto]] = None
+        else:
+            self.nodes = (
+                [self.proto]
+                if isinstance(self.proto, NodeProto)
+                else (
+                    list(
+                        self.proto.graph.node
+                        if hasattr(self.proto, "graph")
+                        else self.proto.node
+                    )
                 )
             )
-        )
-        self.rt_inits_ = (
-            {init.name: to_array_extended(init) for init in self.proto.graph.initializer}
-            if hasattr(self.proto, "graph")
-            else {}
-        )
-        self.rt_nodes_ = self.nodes.copy()
-        self.verbose = verbose
+            self.rt_inits_ = (
+                {init.name: to_array_extended(init) for init in self.proto.graph.initializer}
+                if hasattr(self.proto, "graph")
+                else {}
+            )
+            self.rt_nodes_ = self.nodes.copy()
+
         self.local_functions: Dict[Tuple[str, str], "OnnxruntimeEvaluator"] = (  # noqa: UP037
             {(f.domain, f.name): self.__class__(f) for f in self.proto.functions}
             if hasattr(self.proto, "functions")
@@ -124,7 +135,11 @@ class OnnxruntimeEvaluator:
     @property
     def input_names(self) -> List[str]:
         "Returns input names."
+        assert self.proto, "self.proto is empty"
         if isinstance(self.proto, NodeProto):
+            assert isinstance(
+                self.nodes, list
+            ), f"Unexpected type {type(self.nodes)} for self.nodes"
             return self.nodes[0].input
         return [
             getattr(o, "name", o)
@@ -136,7 +151,11 @@ class OnnxruntimeEvaluator:
     @property
     def output_names(self) -> List[str]:
         "Returns output names."
+        assert self.proto, "self.proto is empty"
         if isinstance(self.proto, NodeProto):
+            assert isinstance(
+                self.nodes, list
+            ), f"Unexpected type {type(self.nodes)} for self.nodes"
             return self.nodes[0].output
         return [
             getattr(o, "name", o)
@@ -201,28 +220,38 @@ class OnnxruntimeEvaluator:
         :return: outputs, as a list if return_all is False,
             as a dictionary if return_all is True
         """
+        if self.rt_nodes_ is None:
+            # runs a whole
+            if self.sess_ is None:
+                assert self.proto, "self.proto is empty"
+                _, self.sess_ = self._get_sess(self.proto, list(feed_inputs.values()))
+            assert self.sess_, "mypy not happy"
+            return self.sess_.run(outputs, feed_inputs)
         if outputs is None:
             outputs = self.output_names
-        results: Dict[str, Any] = self.rt_inits_.copy()
+        results: Dict[str, Any] = (self.rt_inits_ or {}).copy()
 
-        for k, v in self.rt_inits_.items():
+        for k, v in results.items():
             self._log(2, " +C %s: %s", k, v)
         for k, v in feed_inputs.items():
+            assert not isinstance(v, str), f"Unexpected type str for {k!r}"
             self._log(2, " +I %s: %s", k, v)
             results[k] = v
 
-        for node in self.rt_nodes_:
+        for node in self.rt_nodes_ or []:
             self._log(1, "%s(%s) -> %s", node.op_type, node.input, node.output)
             for i in node.input:
                 if i != "" and i not in results:
                     raise RuntimeError(
                         f"Unable to find input {i!r} in known results {sorted(results)}, "
-                        f"self.rt_inits_ has {sorted(self.rt_inits_)}, "
+                        f"self.rt_inits_ has {sorted((self.rt_inits_ or {}))}, "
                         f"feed_inputs has {sorted(feed_inputs)}."
                     )
             inputs = [(results[i] if i != "" else None) for i in node.input]
             if node.op_type == "If" and node.domain == "":
                 outputs = self._run_if(node, inputs, results)
+            elif node.op_type == "Scan" and node.domain == "":
+                outputs = self._run_scan(node, inputs, results)
             elif self._is_local_function(node):
                 outputs = self._run_local(node, inputs, results)
             else:
@@ -274,20 +303,24 @@ class OnnxruntimeEvaluator:
         return onx
 
     def _get_sess(
-        self, node: NodeProto, inputs: List[Any]
+        self, node: Union[ModelProto, NodeProto], inputs: List[Any]
     ) -> Tuple[ModelProto, _InferenceSession]:
-        unique_names = set()
-        vinputs = []
-        for i, it in zip(node.input, inputs):
-            if i == "" or i in unique_names:
-                continue
-            unique_names.add(i)
-            value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(it.dtype), it.shape)
-            vinputs.append(value)
+        if isinstance(node, ModelProto):
+            onx = node
+        else:
+            assert isinstance(node, NodeProto), f"Unexpected type {type(node)} for node"
+            unique_names = set()
+            vinputs = []
+            for i, it in zip(node.input, inputs):
+                if i == "" or i in unique_names:
+                    continue
+                unique_names.add(i)
+                value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(it.dtype), it.shape)
+                vinputs.append(value)
 
-        # no need to run shape inference
-        voutputs = [oh.make_value_info(o, TypeProto()) for o in node.output]
-        onx = self._make_model_proto([node], vinputs, voutputs)
+            # no need to run shape inference
+            voutputs = [oh.make_value_info(o, TypeProto()) for o in node.output]
+            onx = self._make_model_proto([node], vinputs, voutputs)
 
         cls = (
             InferenceSessionForNumpy
@@ -307,9 +340,9 @@ class OnnxruntimeEvaluator:
             ) from e
         return onx, sess
 
-    def _get_sess_if(
-        self, node: NodeProto, branch: str, inputs: List[Any], context: Dict[str, Any]
-    ) -> Tuple[ModelProto, "OnnxruntimeEvaluator"]:
+    def _get_sess_init_subgraph(
+        self, node: NodeProto, inputs: List[Any], context: Dict[str, Any]
+    ) -> List[Any]:
         unique_names = set()
         vinputs = []
         for i, it in zip(node.input, inputs):
@@ -324,14 +357,27 @@ class OnnxruntimeEvaluator:
                 unique_names.add(i)
                 value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(v.dtype), v.shape)
                 vinputs.append(value)
+        return vinputs
 
+    def _get_sess_if(
+        self, node: NodeProto, branch: str, inputs: List[Any], context: Dict[str, Any]
+    ) -> Tuple[ModelProto, "OnnxruntimeEvaluator"]:
+        vinputs = self._get_sess_init_subgraph(node, inputs, context)
+
+        g = None
         for att in node.attribute:
             if att.name == branch:
                 g = att.g
+        assert g, f"Missing attribute {branch!r}"
 
         voutputs = g.output
 
-        onx = self._make_model_proto(g.node, vinputs, voutputs)
+        identities = [
+            oh.make_node("Identity", [iname], [ginput.name])
+            for iname, ginput in zip(node.input, g.input)
+        ]
+
+        onx = self._make_model_proto([*identities, *g.node], vinputs, voutputs)
         sess = OnnxruntimeEvaluator(
             onx,
             local_functions=self.local_functions,
@@ -378,7 +424,7 @@ class OnnxruntimeEvaluator:
     def _run_if(
         self, node: NodeProto, inputs: List[Any], results: Dict[str, Any]
     ) -> List[Any]:
-        """Runs a node if."""
+        """Runs a node If."""
         feeds = dict(zip(node.input, inputs))
         feeds.update(results)
         if feeds[node.input[0]]:
@@ -391,6 +437,59 @@ class OnnxruntimeEvaluator:
             sess = self._cache[key][1]
         else:
             self._cache[key] = onx, sess = self._get_sess_if(node, name, inputs, results)
+
+        assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
+        outputs = sess.run(None, feeds)
+        assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
+        return outputs
+
+    def _get_sess_scan(
+        self, node: NodeProto, branch: str, inputs: List[Any], context: Dict[str, Any]
+    ) -> Tuple[ModelProto, "OnnxruntimeEvaluator"]:
+        vinputs = self._get_sess_init_subgraph(node, inputs, context)
+
+        g = None
+        for att in node.attribute:
+            if att.name == branch:
+                g = att.g
+        assert g, f"Missing attribute {branch!r}"
+
+        voutputs = []
+        for name, goutput in zip(node.output, g.output):
+            b = goutput.SerializeToString()
+            v = ValueInfoProto()
+            v.ParseFromString(b)
+            v.name = name
+            voutputs.append(v)
+
+        # identities = []
+        # for iname, ginput in zip(node.input, g.input):
+        #    identities.append(oh.make_node("Identity", [iname], [ginput.name]))
+
+        onx = self._make_model_proto([node], vinputs, voutputs)
+        sess = OnnxruntimeEvaluator(
+            onx,
+            local_functions=self.local_functions,
+            verbose=self.verbose,
+            ir_version=self.ir_version,
+            opsets=self.opsets,
+            whole=True,
+            **self.session_kwargs,
+        )
+        return onx, sess
+
+    def _run_scan(
+        self, node: NodeProto, inputs: List[Any], results: Dict[str, Any]
+    ) -> List[Any]:
+        """Runs a node Scan."""
+        feeds = dict(zip(node.input, inputs))
+        feeds.update(results)
+        name = "body"
+        key = (id(node), name)
+        if key in self._cache:
+            sess = self._cache[key][1]
+        else:
+            self._cache[key] = onx, sess = self._get_sess_scan(node, name, inputs, results)
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
         outputs = sess.run(None, feeds)

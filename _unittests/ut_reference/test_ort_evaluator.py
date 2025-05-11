@@ -20,6 +20,7 @@ from onnx_diagnostic.helpers.onnx_helper import (
     onnx_dtype_to_np_dtype,
 )
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
+from onnx_diagnostic.helpers.ort_session import _InferenceSession
 
 TFLOAT = TensorProto.FLOAT
 
@@ -77,6 +78,18 @@ class TestOnnxruntimeEvaluatoruator(ExtTestCase):
         got, out, _ = self.capture(lambda: ort_eval.run(None, feeds)[0])
         self.assertEqualArray(expected, got, atol=1e-4)
         self.assertIn("Reshape(xm, shape3) -> Z", out)
+
+    @ignore_warnings(DeprecationWarning)
+    def test__inference(self):
+        model = self._get_model()
+
+        feeds = {"X": self._range(32, 128), "Y": self._range(3, 5, 128, 64)}
+        ref = ExtendedReferenceEvaluator(model)
+        expected = ref.run(None, feeds)[0]
+
+        ort_eval = _InferenceSession(model)
+        got = ort_eval.run(None, feeds)[0]
+        self.assertEqualArray(expected, got, atol=1e-4)
 
     @ignore_warnings(DeprecationWarning)
     @requires_cuda()
