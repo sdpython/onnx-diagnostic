@@ -109,7 +109,7 @@ class _InferenceSession:
                 )
             except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
                 if isinstance(sess, onnx.ModelProto):
-                    debug_path = "_debug_onnxruntine_evaluator_failure.onnx"
+                    debug_path = "_debug_InferenceSession_last_failure.onnx"
                     onnx.save(
                         sess,
                         debug_path,
