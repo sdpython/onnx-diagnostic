@@ -267,7 +267,8 @@ class OnnxruntimeEvaluator:
                 self._log(2, " + %s: %s", name, value)  # type: ignore[arg-type]
                 assert isinstance(name, str), f"unexpected type for name {type(name)}"
                 results[name] = value
-            self._clean_unused_inplace(i_node, node, results)
+            if not intermediate:
+                self._clean_unused_inplace(i_node, node, results)
 
         if intermediate:
             return results
@@ -314,16 +315,18 @@ class OnnxruntimeEvaluator:
         if not self.garbage_collector:
             return
         for name in node.input:
-            if self.garbage_collector[name] == i_node:
+            if self.garbage_collector[name] == i_node and name in results:
                 if self.verbose:
-                    print(f" - deletes: {name}")
+                    t = results[name]
+                    print(f" - deletes: {name} - {t.dtype}:{t.shape}")
                 del results[name]
         if node.op_type in {"Scan", "If", "Loop"}:
             hidden = self._get_hidden_node_inputs(node)
             for name in hidden:
                 if self.garbage_collector[name] == i_node and name in results:
                     if self.verbose:
-                        print(f" - deletes: {name}")
+                        t = results[name]
+                        print(f" - deletes: {name} - {t.dtype}:{t.shape}")
                     del results[name]
 
     def _make_model_proto(
