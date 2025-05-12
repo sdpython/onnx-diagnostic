@@ -173,6 +173,23 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         self.assertEqual(got.dtype, torch.bool)
         self.assertEqual(got[0], True)
 
+    def test_ort_eval_loop(self):
+        model = torch.nn.EmbeddingBag(num_embeddings=49157, embedding_dim=32, mode="sum")
+        a = torch.tensor([[39906, 39906]]).long()
+        example_args = (a,)
+        model_eval = model.eval()
+        expected = model(*example_args)
+
+        onx = to_onnx(model_eval, example_args, optimize=True)
+        self.assertIn("Loop", set(n.op_type for n in onx.graph.node))
+
+        ref = OnnxruntimeEvaluator(onx, verbose=10)
+        feeds = dict(
+            zip([i.name for i in onx.graph.input], [t.detach().numpy() for t in example_args])
+        )
+        got = ref.run(None, feeds)
+        self.assertEqualArray(expected, got[0])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

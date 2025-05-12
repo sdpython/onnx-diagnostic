@@ -135,6 +135,7 @@ class OnnxruntimeEvaluator:
         )
         if local_functions:
             self.local_functions.update(local_functions)
+        self.garbage_collector = self._build_garbage_collector() if self.rt_nodes_ else {}
 
     @property
     def input_names(self) -> List[str]:
@@ -242,7 +243,7 @@ class OnnxruntimeEvaluator:
             self._log(2, " +I %s: %s", k, v)
             results[k] = v
 
-        for node in self.rt_nodes_ or []:
+        for i_node, node in enumerate(self.rt_nodes_ or []):
             self._log(1, "%s(%s) -> %s", node.op_type, node.input, node.output)
             for i in node.input:
                 if i != "" and i not in results:
@@ -266,6 +267,7 @@ class OnnxruntimeEvaluator:
                 self._log(2, " + %s: %s", name, value)  # type: ignore[arg-type]
                 assert isinstance(name, str), f"unexpected type for name {type(name)}"
                 results[name] = value
+            self._clean_unused_inplace(i_node, node, results)
 
         if intermediate:
             return results
@@ -279,6 +281,50 @@ class OnnxruntimeEvaluator:
                     f"in {sorted(results)}, proto is\n{pretty_onnx(self.proto)}"
                 )
         return [results[name] for name in output_names if name != ""]
+
+    def _build_garbage_collector(self) -> Dict[str, int]:
+        """
+        Memorizes the results not needed anymore for every node.
+        Returns a dictionary with the last node using the results.
+        """
+        needed = {}
+        for i, node in enumerate(self.rt_nodes_):
+            for name in node.input:
+                needed[name] = i
+            if node.op_type in {"Scan", "If", "Loop"}:
+                hidden = self._get_hidden_node_inputs(node)
+                for name in hidden:
+                    needed[name] = i
+        if isinstance(self.proto, ModelProto):
+            for o in self.proto.graph.output:
+                needed[o.name] = len(self.rt_nodes_)
+        elif isinstance(self.proto, GraphProto):
+            for o in self.proto.output:
+                needed[o.name] = len(self.rt_nodes_)
+        elif isinstance(self.proto, FunctionProto):
+            for o in self.proto.output:
+                needed[o] = len(self.rt_nodes_)
+        return needed
+
+    def _clean_unused_inplace(self, i_node: int, node: NodeProto, results: Dict[str, Any]):
+        """
+        Cleans all results not needed anymore. Some models requires to clean the memory
+        to be able to run.
+        """
+        if not self.garbage_collector:
+            return
+        for name in node.input:
+            if self.garbage_collector[name] == i_node:
+                if self.verbose:
+                    print(f" - deletes: {name}")
+                del results[name]
+        if node.op_type in {"Scan", "If", "Loop"}:
+            hidden = self._get_hidden_node_inputs(node)
+            for name in hidden:
+                if self.garbage_collector[name] == i_node and name in results:
+                    if self.verbose:
+                        print(f" - deletes: {name}")
+                    del results[name]
 
     def _make_model_proto(
         self,
@@ -304,6 +350,8 @@ class OnnxruntimeEvaluator:
         else:
             onx.opset_import.append(oh.make_opsetid("", onnx_opset_version()))
 
+        # That helps fixing bugs.
+        onx = shi.infer_shapes(onx)
         return onx
 
     @classmethod
@@ -326,6 +374,17 @@ class OnnxruntimeEvaluator:
                     hidden |= less
             memo |= set(node.output)
         return hidden
+
+    @classmethod
+    def _get_hidden_node_inputs(self, node: NodeProto) -> Set[str]:
+        """Calls multiple _get_hidden_inputs on every attribute."""
+        if node.op_type not in {"Loop", "Scan", "If"}:
+            return set()
+        hidden = set()
+        for att in node.attribute:
+            if att.type == AttributeProto.GRAPH:
+                hidden |= self._get_hidden_inputs(att.g)
+        return hidden - (hidden & set(node.input))
 
     def _get_sess(
         self, node: Union[ModelProto, NodeProto], inputs: List[Any]
@@ -360,8 +419,6 @@ class OnnxruntimeEvaluator:
                 voutputs = [oh.make_value_info(o, TypeProto()) for o in node.output]
 
             onx = self._make_model_proto([node], vinputs, voutputs)
-            # That helps fixing bugs.
-            onx = shi.infer_shapes(onx)
 
         cls = (
             InferenceSessionForNumpy
@@ -496,11 +553,11 @@ class OnnxruntimeEvaluator:
         assert g, f"Missing attribute {branch!r}"
         vinputs = self._get_sess_init_subgraph(node, inputs, context, g)
 
+        begin = 0 if node.op_type == "Scan" else 1
         voutputs = []
-        for name, goutput in zip(node.output, g.output):
-            b = goutput.SerializeToString()
+        for name, _goutput in zip(node.output, g.output[begin:]):
             v = ValueInfoProto()
-            v.ParseFromString(b)
+            # v.ParseFromString(goutput.SerializeToString())
             v.name = name
             voutputs.append(v)
 
