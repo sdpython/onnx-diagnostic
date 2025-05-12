@@ -1,8 +1,11 @@
 import unittest
+import numpy as np
 import onnx
+import onnx.helper as oh
 import torch
 import onnxruntime
 from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.reference import OnnxruntimeEvaluator, ExtendedReferenceEvaluator
 
 try:
@@ -95,6 +98,97 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
             self.assertEqual(len(expected), len(got))
             for e, g in zip(expected, got):
                 self.assertEqualArray(e, g, atol=1e-5)
+
+    def test_constant_bool(self):
+        node = oh.make_node(
+            "Constant",
+            [],
+            ["cbool"],
+            value=from_array_extended(np.array(True, dtype=np.bool_)),
+        )
+        ref = ExtendedReferenceEvaluator(node)
+        got = ref.run(None, {})[0]
+        self.assertEqual(got.dtype, np.bool_)
+        self.assertEqual(got, True)
+        ref = OnnxruntimeEvaluator(node, opsets=21)
+        got = ref.run(None, {})[0]
+        self.assertEqual(len(ref._cache), 1)
+        values = list(ref._cache.values())
+        _, sess = values[0]
+        got2 = sess.run(None, {})[0]
+        self.assertIn(got2.dtype, (torch.bool, np.bool_))
+        self.assertEqual(got2, True)
+
+        self.assertIn(got.dtype, (torch.bool, np.bool_))
+        self.assertEqual(got, True)
+
+    def test_constant_bool_array(self):
+        node = oh.make_node(
+            "Constant",
+            [],
+            ["cbool"],
+            value=from_array_extended(np.array([True], dtype=np.bool_)),
+        )
+        ref = ExtendedReferenceEvaluator(node)
+        got = ref.run(None, {})[0]
+        self.assertEqual(got.dtype, np.bool_)
+        self.assertEqual(got[0], True)
+        ref = OnnxruntimeEvaluator(node, opsets=21)
+        got = ref.run(None, {})[0]
+        self.assertEqual(len(ref._cache), 1)
+        values = list(ref._cache.values())
+        _, sess = values[0]
+        got2 = sess.run(None, {})[0]
+        self.assertIn(got2.dtype, (torch.bool, np.bool_))
+        self.assertEqual(got2[0], True)
+
+        self.assertIn(got.dtype, (torch.bool, np.bool_))
+        self.assertEqual(got[0], True)
+
+    def test_constant_bool_input(self):
+        node = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["bin"], ["bout"])],
+                "test",
+                [oh.make_tensor_value_info("bin", onnx.TensorProto.BOOL, [1])],
+                [oh.make_tensor_value_info("bin", onnx.TensorProto.BOOL, [1])],
+            ),
+            ir_version=10,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        feeds = dict(bin=np.array([True], dtype=np.bool_))
+        ref = ExtendedReferenceEvaluator(node)
+
+        got = ref.run(None, feeds)[0]
+        self.assertEqual(got.dtype, np.bool_)
+        self.assertEqual(got[0], True)
+
+        ref = OnnxruntimeEvaluator(node, opsets=21)
+        got = ref.run(None, feeds)[0]
+        self.assertEqual(got.dtype, np.bool_)
+        self.assertEqual(got[0], True)
+
+        feeds = dict(bin=torch.tensor([True], dtype=torch.bool))
+        got = ref.run(None, feeds)[0]
+        self.assertEqual(got.dtype, torch.bool)
+        self.assertEqual(got[0], True)
+
+    def test_ort_eval_loop(self):
+        model = torch.nn.EmbeddingBag(num_embeddings=49157, embedding_dim=32, mode="sum")
+        a = torch.tensor([[39906, 39906]]).long()
+        example_args = (a,)
+        model_eval = model.eval()
+        expected = model(*example_args)
+
+        onx = to_onnx(model_eval, example_args, optimize=True)
+        self.assertIn("Loop", set(n.op_type for n in onx.graph.node))
+
+        ref = OnnxruntimeEvaluator(onx, verbose=10)
+        feeds = dict(
+            zip([i.name for i in onx.graph.input], [t.detach().numpy() for t in example_args])
+        )
+        got = ref.run(None, feeds)
+        self.assertEqualArray(expected, got[0])
 
 
 if __name__ == "__main__":

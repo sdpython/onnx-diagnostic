@@ -109,7 +109,7 @@ class _InferenceSession:
                 )
             except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
                 if isinstance(sess, onnx.ModelProto):
-                    debug_path = "_debug_onnxruntine_evaluator_failure.onnx"
+                    debug_path = "_debug_InferenceSession_last_failure.onnx"
                     onnx.save(
                         sess,
                         debug_path,
@@ -154,6 +154,7 @@ class _InferenceSession:
                 )
 
         self._torch_from_dlpack = _from_dlpack
+        self.sess_bool_outputs = [i.type == "tensor(bool)" for i in sess.get_outputs()]
 
     def run(
         self,
@@ -166,7 +167,19 @@ class _InferenceSession:
         ort_outputs = self.sess._sess.run_with_ort_values(
             feeds, output_names or self.output_names, self.run_options
         )
-        return ort_outputs
+        return self._post_process_inplace(ort_outputs)
+
+    def _post_process_inplace(self, outputs):
+        for i in range(len(outputs)):
+            o = outputs[i]
+            if self.sess_bool_outputs[i]:
+                if isinstance(o, np.ndarray):
+                    if o.dtype != np.bool_:
+                        outputs[i] = o.astype(np.bool_)
+                else:
+                    if o.dtype != torch.bool:
+                        outputs[i] = o.to(torch.bool)
+        return outputs
 
 
 class InferenceSessionForNumpy(_InferenceSession):
@@ -221,7 +234,7 @@ class InferenceSessionForNumpy(_InferenceSession):
         """Calls :meth:`onnxruntime.InferenceSession.run`."""
         # sess.run does not support blfoat16
         # res = self.sess.run(output_names, feeds)
-        return list(self.run_dlpack(output_names, feeds))
+        return self._post_process_inplace(list(self.run_dlpack(output_names, feeds)))
 
     def run_dlpack(
         self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
@@ -231,17 +244,23 @@ class InferenceSessionForNumpy(_InferenceSession):
         feeds is a dictionary of :class:`np.ndarray`.
         The output device is CPU even if the outputs are on CUDA.
         """
+        memory = []
         new_feeds = {}
         for k, v in feeds.items():
             if not k:
                 continue
-            new_feeds[k] = (
-                ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
+            if isinstance(v, np.ndarray):
+                new_feeds[k] = ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
                     v, np_dtype_to_tensor_dtype(v.dtype)
                 )
-                if isinstance(v, np.ndarray)
-                else ORTC.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
-            )
+            elif v.dtype == torch.bool:
+                vi = v.detach().cpu().numpy()
+                memory.append(vi)
+                new_feeds[k] = ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
+                    vi, onnx.TensorProto.BOOL
+                )
+            else:
+                new_feeds[k] = ORTC.OrtValue.from_dlpack(v.__dlpack__(), False)
 
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("run_with_ort_values")
@@ -421,7 +440,7 @@ class InferenceSessionForTorch(_InferenceSession):
         if self.use_training_api:
             inputs = [feeds[i] for i in self.input_names]
             return self.run_training_api(*inputs, output_names=output_names)
-        return self.run_dlpack(output_names, feeds)
+        return self._post_process_inplace(list(self.run_dlpack(output_names, feeds)))
 
     def run_training_api(
         self, *inputs, output_names: Optional[List[str]] = None
@@ -471,7 +490,14 @@ class InferenceSessionForTorch(_InferenceSession):
             assert hasattr(v, "__dlpack__"), f"class {type(v)} should be serialized"
             if not v.is_contiguous():
                 v = v.contiguous()
-            new_feeds[k] = ORTC.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
+            if v.dtype == torch.bool:
+                # It does not work with dlpack
+                # unless onnxruntime updates the version it is using.
+                new_feeds[k] = ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
+                    v.detach().numpy(), onnx.TensorProto.BOOL
+                )
+            else:
+                new_feeds[k] = ORTC.OrtValue.from_dlpack(v.__dlpack__(), False)
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("run_with_ort_values")
         ort_outputs = self.sess._sess.run_with_ort_values(

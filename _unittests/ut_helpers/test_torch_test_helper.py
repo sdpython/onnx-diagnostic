@@ -15,6 +15,7 @@ from onnx_diagnostic.helpers.torch_test_helper import (
     replace_string_by_dynamic,
     to_any,
     torch_deepcopy,
+    torch_tensor_size,
 )
 from onnx_diagnostic.helpers.cache_helper import (
     make_dynamic_cache,
@@ -204,7 +205,7 @@ class TestTorchTestHelper(ExtTestCase):
             else:
                 print("output", k, v)
         print(string_type(restored, with_shape=True))
-        l1, l2 = 182, 191
+        l1, l2 = 183, 192
         self.assertEqual(
             [
                 (f"-Model-{l2}", 0, "I"),
@@ -264,6 +265,7 @@ class TestTorchTestHelper(ExtTestCase):
         c1.key_cache[0] += 1000
         hash2 = string_type(at, with_shape=True, with_min_max=True)
         self.assertEqual(hash1, hash2)
+        self.assertGreater(torch_tensor_size(cc), 1)
 
     def test_torch_deepcopy_mamba_cache(self):
         cache = make_mamba_cache(
@@ -280,6 +282,7 @@ class TestTorchTestHelper(ExtTestCase):
         cache.conv_states[0] += 1000
         hash2 = string_type(at, with_shape=True, with_min_max=True)
         self.assertEqual(hash1, hash2)
+        self.assertGreater(torch_tensor_size(cache), 1)
 
     def test_torch_deepcopy_base_model_outputs(self):
         bo = transformers.modeling_outputs.BaseModelOutput(
@@ -292,6 +295,7 @@ class TestTorchTestHelper(ExtTestCase):
         bo.last_hidden_state[0] += 1000
         hash2 = string_type(at, with_shape=True, with_min_max=True)
         self.assertEqual(hash1, hash2)
+        self.assertGreater(torch_tensor_size(bo), 1)
 
     def test_torch_deepcopy_sliding_windon_cache(self):
         cache = make_sliding_window_cache(
@@ -308,9 +312,11 @@ class TestTorchTestHelper(ExtTestCase):
         cache.key_cache[0] += 1000
         hash2 = string_type(at, with_shape=True, with_min_max=True)
         self.assertEqual(hash1, hash2)
+        self.assertGreater(torch_tensor_size(cache), 1)
 
     def test_torch_deepcopy_none(self):
         self.assertEmpty(torch_deepcopy(None))
+        self.assertEqual(torch_tensor_size(None), 0)
 
     def test_model_statistics(self):
         class Model(torch.nn.Module):

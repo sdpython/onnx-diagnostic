@@ -1,11 +1,12 @@
 import contextlib
 import inspect
+import os
 from collections.abc import Iterable
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import onnx
 import torch
-from .helper import string_type
+from .helper import string_type, size_type
 from .cache_helper import (
     make_dynamic_cache,
     make_encoder_decoder_cache,
@@ -16,7 +17,15 @@ from .mini_onnx_builder import create_onnx_model_from_input_tensors
 
 
 def _forward_(
-    *args, _f=None, _fprint=string_type, _prefix="", _context=None, _storage=None, **kwargs
+    *args,
+    _f=None,
+    _fprint=string_type,
+    _prefix="",
+    _context=None,
+    _storage=None,
+    _storage_limit=2**27,
+    _verbose=0,
+    **kwargs,
 ):
     assert _f is not None, "_f cannot be None"
     assert _context is not None, "_context cannot be None"
@@ -42,7 +51,20 @@ def _forward_(
         print(f"{indent}  -> {_fprint(res, **kws)}")
         print(f"{indent}-{_prefix}.")
     if _storage is not None:
-        _storage[(*key, "O")] = torch_deepcopy(res)
+        size = torch_tensor_size(res)
+        if size < _storage_limit:
+            if _verbose:
+                print(
+                    f"-- stores key={key}, size {size // 2**10}Kb -- "
+                    f"{string_type(res, with_shape=True)}"
+                )
+            _storage[(*key, "O")] = torch_deepcopy(res)
+        else:
+            if _verbose:
+                print(
+                    f"-- skips key={key}, size {size // 2**10}Kb -- "
+                    f"{string_type(res, with_shape=True)}"
+                )
     _context["iteration"] += 1
     return res
 
@@ -92,6 +114,8 @@ def steal_forward(
     fprint: Callable = string_type,
     dump_file: Optional[str] = None,
     submodules: bool = False,
+    verbose: int = 0,
+    storage_limit: int = 2**27,
     **kwargs,
 ):
     """
@@ -110,6 +134,8 @@ def steal_forward(
         <onnx_diagnostic.helpers.mini_onnx_builder.create_input_tensors_from_onnx_model>`
     :param submodules: if True and model is a module, the list extended with all the submodules
         the module contains
+    :param verbose: verbosity
+    :param storage_limit: do not stored object bigger than this
 
     The following examples shows how to steal and dump all the inputs / outputs
     for a module and its submodules, then restores them.
@@ -181,8 +207,16 @@ def steal_forward(
         keep_model_forward[id(m)] = (m, m.forward)
         c = context.copy()
         c["class_name"] = m.__class__.__name__
-        m.forward = lambda *args, _f=m.forward, _fp=fprint, _c=c, _p=name, _s=storage, **kws: _forward_(  # noqa: E501
-            *args, _f=_f, _fprint=_fp, _context=_c, _prefix=_p, _storage=_s, **kws
+        m.forward = lambda *args, _f=m.forward, _fp=fprint, _c=c, _p=name, _s=storage, _v=verbose, _sl=storage_limit, **kws: _forward_(  # noqa: E501
+            *args,
+            _f=_f,
+            _fprint=_fp,
+            _context=_c,
+            _prefix=_p,
+            _storage=_s,
+            _verbose=_v,
+            _storage_limit=_sl,
+            **kws,
         )
     try:
         yield
@@ -196,13 +230,21 @@ def steal_forward(
             storage.update(_additional_stolen_objects)
             # We clear the cache.
             _additional_stolen_objects.clear()
+            if verbose:
+                size = torch_tensor_size(storage)
+                print(f"-- gather stored {len(storage)} objects, size={size // 2 ** 20} Mb")
             proto = create_onnx_model_from_input_tensors(storage)
+            if verbose:
+                print("-- dumps stored objects")
             onnx.save(
                 proto,
                 dump_file,
                 save_as_external_data=True,
                 all_tensors_to_one_file=True,
+                location=f"{os.path.split(dump_file)[-1]}.data",
             )
+            if verbose:
+                print("-- done dump stored objects")
 
 
 @contextlib.contextmanager
@@ -550,6 +592,37 @@ def torch_deepcopy(value: Any) -> Any:
     # We should have a code using serialization, deserialization assuming a model
     # cannot be exported without them.
     raise NotImplementedError(f"torch_deepcopy not implemented for type {type(value)}")
+
+
+def torch_tensor_size(value: Any) -> Any:
+    """Returns the number of bytes stored in tensors."""
+    if value is None:
+        return 0
+    if isinstance(value, (int, float, str)):
+        return 0
+    if isinstance(value, (tuple, list, set)):
+        return sum(torch_tensor_size(v) for v in value)
+    if isinstance(value, dict):
+        return sum(torch_tensor_size(v) for v in value.values())
+    if isinstance(value, np.ndarray):
+        return value.copy()
+    if hasattr(value, "clone"):
+        return value.numel() * size_type(value.dtype)
+    if value.__class__.__name__ in {"DynamicCache", "SlidingWindowCache"}:
+        return torch_tensor_size(value.key_cache) + torch_tensor_size(value.value_cache)
+    if value.__class__.__name__ == "EncoderDecoderCache":
+        return torch_tensor_size(value.self_attention_cache) + torch_tensor_size(
+            value.cross_attention_cache
+        )
+    if value.__class__.__name__ == "MambaCache":
+        return torch_tensor_size(value.conv_states) + torch_tensor_size(value.ssm_states)
+    if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:
+        args, spec = torch.utils._pytree.tree_flatten(value)
+        return sum(torch_tensor_size(a) for a in args)
+
+    # We should have a code using serialization, deserialization assuming a model
+    # cannot be exported without them.
+    raise NotImplementedError(f"torch_tensor_size not implemented for type {type(value)}")
 
 
 def model_statistics(model: torch.nn.Module):
