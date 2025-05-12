@@ -1,6 +1,7 @@
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 import numpy as np
 from onnx import (
+    AttributeProto,
     GraphProto,
     FunctionProto,
     ModelProto,
@@ -250,7 +251,7 @@ class OnnxruntimeEvaluator:
             inputs = [(results[i] if i != "" else None) for i in node.input]
             if node.op_type == "If" and node.domain == "":
                 outputs = self._run_if(node, inputs, results)
-            elif node.op_type == "Scan" and node.domain == "":
+            elif node.op_type in {"Scan", "Loop"} and node.domain == "":
                 outputs = self._run_scan(node, inputs, results)
             elif self._is_local_function(node):
                 outputs = self._run_local(node, inputs, results)
@@ -302,6 +303,27 @@ class OnnxruntimeEvaluator:
 
         return onx
 
+    @classmethod
+    def _get_hidden_inputs(self, graph: GraphProto) -> Set[str, Any]:
+        """
+        Returns the hidden inputs (inputs coming from an upper context)
+        used by a subgraph.
+        """
+        hidden = set()
+        memo = set(i.name for i in graph.initializer)
+        memo |= set(i.name for i in graph.sparse_initializer)
+        for node in graph.node:
+            for i in node.input:
+                if i not in memo:
+                    hidden.add(i)
+            for att in node.attribute:
+                if att.type == AttributeProto.GRAPH and att.g:
+                    hid = self._get_hidden_inputs(att.g)
+                    less = set(h for h in hid if h not in memo)
+                    hidden |= less
+            memo |= set(node.output)
+        return hidden
+
     def _get_sess(
         self, node: Union[ModelProto, NodeProto], inputs: List[Any]
     ) -> Tuple[ModelProto, _InferenceSession]:
@@ -341,7 +363,7 @@ class OnnxruntimeEvaluator:
         return onx, sess
 
     def _get_sess_init_subgraph(
-        self, node: NodeProto, inputs: List[Any], context: Dict[str, Any]
+        self, node: NodeProto, inputs: List[Any], context: Dict[str, Any], g: GraphProto
     ) -> List[Any]:
         unique_names = set()
         vinputs = []
@@ -352,8 +374,9 @@ class OnnxruntimeEvaluator:
             value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(it.dtype), it.shape)
             vinputs.append(value)
 
+        reduced_set = self._get_hidden_inputs(g)
         for i, v in context.items():
-            if i not in unique_names:
+            if i in reduced_set and i not in unique_names:
                 unique_names.add(i)
                 value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(v.dtype), v.shape)
                 vinputs.append(value)
@@ -362,13 +385,12 @@ class OnnxruntimeEvaluator:
     def _get_sess_if(
         self, node: NodeProto, branch: str, inputs: List[Any], context: Dict[str, Any]
     ) -> Tuple[ModelProto, "OnnxruntimeEvaluator"]:
-        vinputs = self._get_sess_init_subgraph(node, inputs, context)
-
         g = None
         for att in node.attribute:
             if att.name == branch:
                 g = att.g
         assert g, f"Missing attribute {branch!r}"
+        vinputs = self._get_sess_init_subgraph(node, inputs, context, g)
 
         voutputs = g.output
 
@@ -439,6 +461,8 @@ class OnnxruntimeEvaluator:
             self._cache[key] = onx, sess = self._get_sess_if(node, name, inputs, results)
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
+        input_names = [i.name for i in sess.get_inputs()]
+        feeds = {name: results[name] for name in input_names}
         outputs = sess.run(None, feeds)
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs
@@ -446,13 +470,12 @@ class OnnxruntimeEvaluator:
     def _get_sess_scan(
         self, node: NodeProto, branch: str, inputs: List[Any], context: Dict[str, Any]
     ) -> Tuple[ModelProto, "OnnxruntimeEvaluator"]:
-        vinputs = self._get_sess_init_subgraph(node, inputs, context)
-
         g = None
         for att in node.attribute:
             if att.name == branch:
                 g = att.g
         assert g, f"Missing attribute {branch!r}"
+        vinputs = self._get_sess_init_subgraph(node, inputs, context, g)
 
         voutputs = []
         for name, goutput in zip(node.output, g.output):
@@ -492,6 +515,8 @@ class OnnxruntimeEvaluator:
             self._cache[key] = onx, sess = self._get_sess_scan(node, name, inputs, results)
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
+        input_names = [i.name for i in sess.get_inputs()]
+        feeds = {name: results[name] for name in input_names}
         outputs = sess.run(None, feeds)
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs

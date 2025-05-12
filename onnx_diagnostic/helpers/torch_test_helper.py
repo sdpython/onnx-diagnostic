@@ -241,7 +241,7 @@ def steal_forward(
                 dump_file,
                 save_as_external_data=True,
                 all_tensors_to_one_file=True,
-                location=f"{os.path.split(dump_file)[-1]}.weight",
+                location=f"{os.path.split(dump_file)[-1]}.data",
             )
             if verbose:
                 print("-- done dump stored objects")
