@@ -10,6 +10,7 @@ from onnx_diagnostic.helpers.torch_test_helper import (
     to_numpy,
     is_torchdynamo_exporting,
     model_statistics,
+    steal_append,
     steal_forward,
     replace_string_by_dynamic,
     to_any,
@@ -146,6 +147,36 @@ class TestTorchTestHelper(ExtTestCase):
         self.assertEqualAny(restored["main", 0, "O"], res2)
 
     @hide_stdout()
+    def test_steal_forward_dump_file_steal_append(self):
+        class SubModel(torch.nn.Module):
+            def forward(self, x):
+                return x * x
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.s1 = SubModel()
+                self.s2 = SubModel()
+
+            def forward(self, x, y):
+                sx = self.s1(x)
+                steal_append("sx", sx)
+                return sx + self.s2(y)
+
+        inputs = torch.rand(3, 4), torch.rand(3, 4)
+        model = Model()
+        dump_file = self.get_dump_file("test_steal_forward_dump_file.onnx")
+        with steal_forward(model, dump_file=dump_file):
+            model(*inputs)
+            model(*inputs)
+        self.assertExists(dump_file)
+        restored = create_input_tensors_from_onnx_model(dump_file)
+        self.assertEqual(
+            {("", 1, "I"), ("", 1, "O"), "sx", ("", 0, "O"), "sx_1", ("", 0, "I")},
+            set(restored),
+        )
+
+    @hide_stdout()
     def test_steal_forward_submodules(self):
         class SubModel(torch.nn.Module):
             def forward(self, x):
@@ -173,7 +204,7 @@ class TestTorchTestHelper(ExtTestCase):
             else:
                 print("output", k, v)
         print(string_type(restored, with_shape=True))
-        l1, l2 = 151, 160
+        l1, l2 = 182, 191
         self.assertEqual(
             [
                 (f"-Model-{l2}", 0, "I"),

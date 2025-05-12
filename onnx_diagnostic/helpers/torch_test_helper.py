@@ -47,6 +47,42 @@ def _forward_(
     return res
 
 
+_steal_forward_status = [False]
+_additional_stolen_objects = {}
+
+
+def is_stealing() -> bool:
+    """Returns true if :func:`steal_forward` was yielded."""
+    return _steal_forward_status[0]
+
+
+def steal_append(name: str, obj: Any):
+    """
+    When outside a forward method, it is still possible to add
+    a python object which contains tensors and dump after the execution
+    of the model.
+
+    .. code-block:: python
+
+        steal_append("quantize", [t1, t2])
+
+    The same code can executed multiple times, then
+    the name can extended with a number.
+    """
+    if is_stealing():
+        if name in _additional_stolen_objects:
+            i = 1
+            n = f"{name}_{i}"
+            while n in _additional_stolen_objects:
+                i += 1
+                n = f"{name}_{i}"
+            print(f"-- stolen {name!r} renamed in {n!r}: {string_type(obj, with_shape=True)}")
+            _additional_stolen_objects[n] = obj
+        else:
+            print(f"-- stolen {name!r}: {string_type(obj, with_shape=True)}")
+            _additional_stolen_objects[name] = obj
+
+
 @contextlib.contextmanager
 def steal_forward(
     model: Union[
@@ -111,7 +147,14 @@ def steal_forward(
                 print("input", k, args, kwargs)
             else:
                 print("output", k, v)
+
+    Function :func:`steal_append` can be used to dump more tensors.
+    When inside the context, func:`is_stealing` returns True, False otherwise.
     """
+    assert not is_stealing(), "steal_forward was already called."
+    # We clear the cache.
+    _steal_forward_status[0] = True
+    _additional_stolen_objects.clear()
     assert not submodules or isinstance(
         model, torch.nn.Module
     ), f"submodules can only be True if model is a module but is is {type(model)}."
@@ -144,9 +187,15 @@ def steal_forward(
     try:
         yield
     finally:
+        _steal_forward_status[0] = False
         for f in keep_model_forward.values():
             f[0].forward = f[1]
         if dump_file:
+            # Let's add the cached tensor
+            assert storage is not None, "storage cannot be None but mypy is confused here."
+            storage.update(_additional_stolen_objects)
+            # We clear the cache.
+            _additional_stolen_objects.clear()
             proto = create_onnx_model_from_input_tensors(storage)
             onnx.save(
                 proto,
