@@ -145,6 +145,34 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         self.assertIn(got.dtype, (torch.bool, np.bool_))
         self.assertEqual(got[0], True)
 
+    def test_constant_bool_input(self):
+        node = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["bin"], ["bout"])],
+                "test",
+                [oh.make_tensor_value_info("bin", onnx.TensorProto.BOOL, [1])],
+                [oh.make_tensor_value_info("bin", onnx.TensorProto.BOOL, [1])],
+            ),
+            ir_version=10,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        feeds = dict(bin=np.array([True], dtype=np.bool_))
+        ref = ExtendedReferenceEvaluator(node)
+
+        got = ref.run(None, feeds)[0]
+        self.assertEqual(got.dtype, np.bool_)
+        self.assertEqual(got[0], True)
+
+        ref = OnnxruntimeEvaluator(node)
+        got = ref.run(None, feeds)[0]
+        self.assertEqual(got.dtype, np.bool_)
+        self.assertEqual(got[0], True)
+
+        feeds = dict(bin=torch.tensor([True], dtype=torch.bool))
+        got = ref.run(None, feeds)[0]
+        self.assertEqual(got.dtype, torch.bool)
+        self.assertEqual(got[0], True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
