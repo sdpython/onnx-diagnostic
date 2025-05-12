@@ -1,8 +1,11 @@
 import unittest
+import numpy as np
 import onnx
+import onnx.helper as oh
 import torch
 import onnxruntime
 from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.reference import OnnxruntimeEvaluator, ExtendedReferenceEvaluator
 
 try:
@@ -95,6 +98,52 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
             self.assertEqual(len(expected), len(got))
             for e, g in zip(expected, got):
                 self.assertEqualArray(e, g, atol=1e-5)
+
+    def test_constant_bool(self):
+        node = oh.make_node(
+            "Constant",
+            [],
+            ["cbool"],
+            value=from_array_extended(np.array(True, dtype=np.bool_)),
+        )
+        ref = ExtendedReferenceEvaluator(node)
+        got = ref.run(None, {})[0]
+        self.assertEqual(got.dtype, np.bool_)
+        self.assertEqual(got, True)
+        ref = OnnxruntimeEvaluator(node)
+        got = ref.run(None, {})[0]
+        self.assertEqual(len(ref._cache), 1)
+        values = list(ref._cache.values())
+        _, sess = values[0]
+        got2 = sess.run(None, {})[0]
+        self.assertIn(got2.dtype, (torch.bool, np.bool_))
+        self.assertEqual(got2, True)
+
+        self.assertIn(got.dtype, (torch.bool, np.bool_))
+        self.assertEqual(got, True)
+
+    def test_constant_bool_array(self):
+        node = oh.make_node(
+            "Constant",
+            [],
+            ["cbool"],
+            value=from_array_extended(np.array([True], dtype=np.bool_)),
+        )
+        ref = ExtendedReferenceEvaluator(node)
+        got = ref.run(None, {})[0]
+        self.assertEqual(got.dtype, np.bool_)
+        self.assertEqual(got[0], True)
+        ref = OnnxruntimeEvaluator(node)
+        got = ref.run(None, {})[0]
+        self.assertEqual(len(ref._cache), 1)
+        values = list(ref._cache.values())
+        _, sess = values[0]
+        got2 = sess.run(None, {})[0]
+        self.assertIn(got2.dtype, (torch.bool, np.bool_))
+        self.assertEqual(got2[0], True)
+
+        self.assertIn(got.dtype, (torch.bool, np.bool_))
+        self.assertEqual(got[0], True)
 
 
 if __name__ == "__main__":

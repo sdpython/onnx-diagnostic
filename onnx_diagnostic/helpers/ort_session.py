@@ -154,6 +154,7 @@ class _InferenceSession:
                 )
 
         self._torch_from_dlpack = _from_dlpack
+        self.sess_bool_outputs = [i.type == "tensor(bool)" for i in sess.get_outputs()]
 
     def run(
         self,
@@ -166,7 +167,19 @@ class _InferenceSession:
         ort_outputs = self.sess._sess.run_with_ort_values(
             feeds, output_names or self.output_names, self.run_options
         )
-        return ort_outputs
+        return self._post_process_inplace(ort_outputs)
+
+    def _post_process_inplace(self, outputs):
+        for i in range(len(outputs)):
+            o = outputs[i]
+            if self.sess_bool_outputs[i]:
+                if isinstance(o, np.ndarray):
+                    if o.dtype != np.bool_:
+                        outputs[i] = o.astype(np.bool_)
+                else:
+                    if o.dtype != torch.bool:
+                        outputs[i] = o.to(torch.bool)
+        return outputs
 
 
 class InferenceSessionForNumpy(_InferenceSession):
@@ -221,7 +234,7 @@ class InferenceSessionForNumpy(_InferenceSession):
         """Calls :meth:`onnxruntime.InferenceSession.run`."""
         # sess.run does not support blfoat16
         # res = self.sess.run(output_names, feeds)
-        return list(self.run_dlpack(output_names, feeds))
+        return self._post_process_inplace(list(self.run_dlpack(output_names, feeds)))
 
     def run_dlpack(
         self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
@@ -421,7 +434,7 @@ class InferenceSessionForTorch(_InferenceSession):
         if self.use_training_api:
             inputs = [feeds[i] for i in self.input_names]
             return self.run_training_api(*inputs, output_names=output_names)
-        return self.run_dlpack(output_names, feeds)
+        return self._post_process_inplace(list(self.run_dlpack(output_names, feeds)))
 
     def run_training_api(
         self, *inputs, output_names: Optional[List[str]] = None

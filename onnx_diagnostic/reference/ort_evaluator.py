@@ -10,6 +10,8 @@ from onnx import (
     ValueInfoProto,
     helper as oh,
     load,
+    save as onnx_save,
+    shape_inference as shi,
 )
 from onnx.defs import onnx_opset_version
 import onnxruntime
@@ -20,6 +22,7 @@ from ..helpers.ort_session import (
     InferenceSessionForNumpy,
     _InferenceSession,
 )
+from .evaluator import ExtendedReferenceEvaluator
 
 PROTO = (FunctionProto, ModelProto, GraphProto, NodeProto)
 Proto = Union[FunctionProto, ModelProto, GraphProto, NodeProto]
@@ -304,7 +307,7 @@ class OnnxruntimeEvaluator:
         return onx
 
     @classmethod
-    def _get_hidden_inputs(self, graph: GraphProto) -> Set[str, Any]:
+    def _get_hidden_inputs(self, graph: GraphProto) -> Set[str]:
         """
         Returns the hidden inputs (inputs coming from an upper context)
         used by a subgraph.
@@ -331,18 +334,34 @@ class OnnxruntimeEvaluator:
             onx = node
         else:
             assert isinstance(node, NodeProto), f"Unexpected type {type(node)} for node"
-            unique_names = set()
-            vinputs = []
-            for i, it in zip(node.input, inputs):
-                if i == "" or i in unique_names:
-                    continue
-                unique_names.add(i)
-                value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(it.dtype), it.shape)
-                vinputs.append(value)
+            if node.op_type == "Constant":
+                # We force the type to be a boolean.
+                ref = ExtendedReferenceEvaluator(node)
+                cst = ref.run(None, {})[0]
+                vinputs = []
+                voutputs = [
+                    oh.make_tensor_value_info(
+                        node.output[0], dtype_to_tensor_dtype(cst.dtype), cst.shape
+                    )
+                ]
+            else:
+                unique_names = set()
+                vinputs = []
+                for i, it in zip(node.input, inputs):
+                    if i == "" or i in unique_names:
+                        continue
+                    unique_names.add(i)
+                    value = oh.make_tensor_value_info(
+                        i, dtype_to_tensor_dtype(it.dtype), it.shape
+                    )
+                    vinputs.append(value)
 
-            # no need to run shape inference
-            voutputs = [oh.make_value_info(o, TypeProto()) for o in node.output]
+                # no need to run shape inference
+                voutputs = [oh.make_value_info(o, TypeProto()) for o in node.output]
+
             onx = self._make_model_proto([node], vinputs, voutputs)
+            # That helps fixing bugs.
+            onx = shi.infer_shapes(onx)
 
         cls = (
             InferenceSessionForNumpy
@@ -356,6 +375,7 @@ class OnnxruntimeEvaluator:
             onnxruntime.capi.onnxruntime_pybind11_state.InvalidGraph,
             onnxruntime.capi.onnxruntime_pybind11_state.InvalidArgument,
         ) as e:
+            onnx_save(onx, "_debug_OnnxruntimeEvaluator_last_failure.onnx")
             raise RuntimeError(
                 f"Unable to infer a session with inputs\n{string_type(inputs)}"
                 f"\ndue to {e}\n{pretty_onnx(onx)}"
@@ -461,8 +481,7 @@ class OnnxruntimeEvaluator:
             self._cache[key] = onx, sess = self._get_sess_if(node, name, inputs, results)
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
-        input_names = [i.name for i in sess.get_inputs()]
-        feeds = {name: results[name] for name in input_names}
+        feeds = {name: results[name] for name in sess.input_names}
         outputs = sess.run(None, feeds)
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs
@@ -515,8 +534,7 @@ class OnnxruntimeEvaluator:
             self._cache[key] = onx, sess = self._get_sess_scan(node, name, inputs, results)
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
-        input_names = [i.name for i in sess.get_inputs()]
-        feeds = {name: results[name] for name in input_names}
+        feeds = {name: results[name] for name in sess.input_names}
         outputs = sess.run(None, feeds)
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs
