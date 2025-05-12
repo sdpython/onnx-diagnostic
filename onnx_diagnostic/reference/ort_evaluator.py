@@ -338,7 +338,7 @@ class OnnxruntimeEvaluator:
                 # We force the type to be a boolean.
                 ref = ExtendedReferenceEvaluator(node)
                 cst = ref.run(None, {})[0]
-                vinputs = []
+                vinputs: List[ValueInfoProto] = []
                 voutputs = [
                     oh.make_tensor_value_info(
                         node.output[0], dtype_to_tensor_dtype(cst.dtype), cst.shape

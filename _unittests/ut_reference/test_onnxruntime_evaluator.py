@@ -110,7 +110,7 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         got = ref.run(None, {})[0]
         self.assertEqual(got.dtype, np.bool_)
         self.assertEqual(got, True)
-        ref = OnnxruntimeEvaluator(node)
+        ref = OnnxruntimeEvaluator(node, opsets=21)
         got = ref.run(None, {})[0]
         self.assertEqual(len(ref._cache), 1)
         values = list(ref._cache.values())
@@ -133,7 +133,7 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         got = ref.run(None, {})[0]
         self.assertEqual(got.dtype, np.bool_)
         self.assertEqual(got[0], True)
-        ref = OnnxruntimeEvaluator(node)
+        ref = OnnxruntimeEvaluator(node, opsets=21)
         got = ref.run(None, {})[0]
         self.assertEqual(len(ref._cache), 1)
         values = list(ref._cache.values())
@@ -163,7 +163,7 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         self.assertEqual(got.dtype, np.bool_)
         self.assertEqual(got[0], True)
 
-        ref = OnnxruntimeEvaluator(node)
+        ref = OnnxruntimeEvaluator(node, opsets=21)
         got = ref.run(None, feeds)[0]
         self.assertEqual(got.dtype, np.bool_)
         self.assertEqual(got[0], True)
