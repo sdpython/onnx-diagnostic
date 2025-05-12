@@ -192,6 +192,7 @@ def steal_forward(
             f[0].forward = f[1]
         if dump_file:
             # Let's add the cached tensor
+            assert storage is not None, "storage cannot be None but mypy is confused here."
             storage.update(_additional_stolen_objects)
             # We clear the cache.
             _additional_stolen_objects.clear()

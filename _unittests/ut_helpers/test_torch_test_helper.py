@@ -204,7 +204,7 @@ class TestTorchTestHelper(ExtTestCase):
             else:
                 print("output", k, v)
         print(string_type(restored, with_shape=True))
-        l1, l2 = 151, 160
+        l1, l2 = 182, 191
         self.assertEqual(
             [
                 (f"-Model-{l2}", 0, "I"),
