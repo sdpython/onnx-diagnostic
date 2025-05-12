@@ -289,7 +289,7 @@ class OnnxruntimeEvaluator:
         Returns a dictionary with the last node using the results.
         """
         needed = {}
-        for i, node in enumerate(self.rt_nodes_):
+        for i, node in enumerate(self.rt_nodes_ or []):
             for name in node.input:
                 needed[name] = i
             if node.op_type in {"Scan", "If", "Loop"}:
@@ -298,13 +298,13 @@ class OnnxruntimeEvaluator:
                     needed[name] = i
         if isinstance(self.proto, ModelProto):
             for o in self.proto.graph.output:
-                needed[o.name] = len(self.rt_nodes_)
+                needed[o.name] = len(self.rt_nodes_ or [])
         elif isinstance(self.proto, GraphProto):
             for o in self.proto.output:
-                needed[o.name] = len(self.rt_nodes_)
+                needed[o.name] = len(self.rt_nodes_ or [])
         elif isinstance(self.proto, FunctionProto):
             for o in self.proto.output:
-                needed[o] = len(self.rt_nodes_)
+                needed[o] = len(self.rt_nodes_ or [])
         return needed
 
     def _clean_unused_inplace(self, i_node: int, node: NodeProto, results: Dict[str, Any]):

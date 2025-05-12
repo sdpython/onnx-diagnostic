@@ -244,17 +244,23 @@ class InferenceSessionForNumpy(_InferenceSession):
         feeds is a dictionary of :class:`np.ndarray`.
         The output device is CPU even if the outputs are on CUDA.
         """
+        memory = []
         new_feeds = {}
         for k, v in feeds.items():
             if not k:
                 continue
-            new_feeds[k] = (
-                ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
+            if isinstance(v, np.ndarray):
+                new_feeds[k] = ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
                     v, np_dtype_to_tensor_dtype(v.dtype)
                 )
-                if isinstance(v, np.ndarray)
-                else ORTC.OrtValue.from_dlpack(v.__dlpack__(), v.dtype == torch.bool)
-            )
+            elif v.dtype == torch.bool:
+                vi = v.detach().cpu().numpy()
+                memory.append(vi)
+                new_feeds[k] = ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
+                    vi, onnx.TensorProto.BOOL
+                )
+            else:
+                new_feeds[k] = ORTC.OrtValue.from_dlpack(v.__dlpack__(), False)
 
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("run_with_ort_values")
