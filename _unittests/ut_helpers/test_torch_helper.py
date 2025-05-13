@@ -1,11 +1,12 @@
 import unittest
+import numpy as np
 import ml_dtypes
 import onnx
 import torch
 import transformers
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.helpers import max_diff, string_type
-from onnx_diagnostic.helpers.torch_test_helper import (
+from onnx_diagnostic.helpers.torch_helper import (
     dummy_llm,
     to_numpy,
     is_torchdynamo_exporting,
@@ -24,6 +25,8 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_sliding_window_cache,
 )
 from onnx_diagnostic.helpers.mini_onnx_builder import create_input_tensors_from_onnx_model
+from onnx_diagnostic.helpers.onnx_helper import from_array_extended, to_array_extended
+from onnx_diagnostic.helpers.torch_helper import to_tensor
 
 TFLOAT = onnx.TensorProto.FLOAT
 
@@ -205,7 +208,7 @@ class TestTorchTestHelper(ExtTestCase):
             else:
                 print("output", k, v)
         print(string_type(restored, with_shape=True))
-        l1, l2 = 183, 192
+        l1, l2 = 186, 195
         self.assertEqual(
             [
                 (f"-Model-{l2}", 0, "I"),
@@ -343,6 +346,35 @@ class TestTorchTestHelper(ExtTestCase):
             },
             stat,
         )
+
+    def test_to_tensor(self):
+        for dtype in [
+            np.int8,
+            np.uint8,
+            np.int16,
+            np.uint16,
+            np.int32,
+            np.uint32,
+            np.int64,
+            np.uint64,
+            np.float16,
+            np.float32,
+            np.float64,
+        ]:
+            with self.subTest(dtype=dtype):
+                a = np.random.rand(4, 5).astype(dtype)
+                proto = from_array_extended(a)
+                b = to_array_extended(proto)
+                self.assertEqualArray(a, b)
+                c = to_tensor(proto)
+                self.assertEqualArray(a, c)
+
+        for dtype in [torch.bfloat16]:
+            with self.subTest(dtype=dtype):
+                a = torch.rand((4, 5), dtype=dtype)
+                proto = from_array_extended(a)
+                c = to_tensor(proto)
+                self.assertEqualArray(a, c)
 
 
 if __name__ == "__main__":

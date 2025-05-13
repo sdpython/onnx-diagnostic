@@ -11,7 +11,7 @@ from onnx_diagnostic.helpers.cache_helper import (
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     torch_export_patches,
 )
-from onnx_diagnostic.helpers.torch_test_helper import torch_deepcopy
+from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 
 
 class TestPatchSerialization(ExtTestCase):

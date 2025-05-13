@@ -4,7 +4,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 import torch
 from ..helpers import string_type, max_diff, string_diff
-from ..helpers.torch_test_helper import torch_deepcopy
+from ..helpers.torch_helper import torch_deepcopy
 from .dynamic_shapes import CoupleInputsDynamicShapes
 
 

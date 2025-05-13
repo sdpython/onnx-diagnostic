@@ -1,6 +1,6 @@
 from typing import Callable, Set
 import torch
-from ..helpers.torch_test_helper import is_torchdynamo_exporting
+from ..helpers.torch_helper import is_torchdynamo_exporting
 
 
 def make_undefined_dimension(i: int) -> torch.SymInt:

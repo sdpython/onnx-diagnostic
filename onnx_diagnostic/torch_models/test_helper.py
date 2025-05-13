@@ -11,7 +11,7 @@ from ..export import CoupleInputsDynamicShapes
 from ..helpers import max_diff, string_type, string_diff
 from ..helpers.helper import flatten_object
 from ..helpers.rt_helper import make_feeds
-from ..helpers.torch_test_helper import to_any, torch_deepcopy
+from ..helpers.torch_helper import to_any, torch_deepcopy
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 from ..tasks import random_input_kwargs
 from ..torch_export_patches import torch_export_patches

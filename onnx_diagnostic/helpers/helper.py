@@ -439,7 +439,7 @@ def string_type(
             print(f"[string_type] F2:{type(obj)}")
         return f"{prefix}F{i}s{'x'.join(map(str, obj.shape))}"
     if isinstance(obj, torch.Tensor):
-        from .onnx_helper import torch_dtype_to_onnx_dtype
+        from .torch_helper import torch_dtype_to_onnx_dtype
 
         if with_min_max:
             s = string_type(obj, with_shape=with_shape, with_device=with_device)

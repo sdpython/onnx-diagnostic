@@ -871,7 +871,7 @@ class ExtTestCase(unittest.TestCase):
                 raise AssertionError("\n".join(rows))  # noqa: B904
             return
 
-        from .helpers.torch_test_helper import to_numpy
+        from .helpers.torch_helper import to_numpy
 
         if hasattr(expected, "detach"):
             expected = to_numpy(expected.detach().cpu())
