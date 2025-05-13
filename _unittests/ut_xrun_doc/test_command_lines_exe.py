@@ -20,6 +20,15 @@ class TestCommandLines(ExtTestCase):
         text = st.getvalue()
         self.assertIn("Add", text)
 
+    def test_parser_stats(self):
+        output = self.get_dump_file("test_parser_stats.xlsx")
+        st = StringIO()
+        with redirect_stdout(st):
+            main(["stats", "-i", self.dummy_path, "-o", output, "-r", ".*"])
+        text = st.getvalue()
+        self.assertIn("processing", text)
+        self.assertExists(output)
+
     def test_parser_find(self):
         st = StringIO()
         with redirect_stdout(st):

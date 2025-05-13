@@ -8,7 +8,7 @@ from onnx_diagnostic.ext_test_case import (
     requires_onnxscript,
 )
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
-from onnx_diagnostic.helpers.torch_test_helper import is_torchdynamo_exporting
+from onnx_diagnostic.helpers.torch_helper import is_torchdynamo_exporting
 
 try:
     from experimental_experiment.torch_interpreter import to_onnx

@@ -1,10 +1,14 @@
 import contextlib
+import ctypes
 import inspect
 import os
+import sys
+import warnings
 from collections.abc import Iterable
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import onnx
+from onnx.external_data_helper import load_external_data_for_tensor, uses_external_data
 import torch
 from .helper import string_type, size_type
 from .cache_helper import (
@@ -14,6 +18,171 @@ from .cache_helper import (
     make_mamba_cache,
 )
 from .mini_onnx_builder import create_onnx_model_from_input_tensors
+from .onnx_helper import (
+    to_array_extended,
+    tensor_dtype_to_np_dtype,
+    _STORAGE_TYPE,
+    onnx_dtype_name,
+)
+
+
+def proto_from_tensor(
+    arr: "torch.Tensor",  # noqa: F821
+    name: Optional[str] = None,
+    verbose: int = 0,
+) -> onnx.TensorProto:
+    """
+    Converts a torch Tensor into a TensorProto.
+
+    :param arr: tensor
+    :param verbose: display the type and shape
+    :return: a TensorProto
+    """
+    import torch
+
+    if not isinstance(arr, torch.Tensor):
+        raise TypeError(f"Unexpected type {type(arr)}.")
+    if arr.is_sparse:
+        raise NotImplementedError(
+            f"Sparse tensor is not supported yet but initializer {name!r} is."
+        )
+
+    # arr.contiguous() is slow after a transpose, maybe there is a way to optimize this.
+    if arr.is_contiguous():
+        arr_cpu = arr.cpu()
+    else:
+        arr_cpu = arr.contiguous().cpu()
+
+    numel = torch.numel(arr_cpu)
+    element_size = arr_cpu.element_size()
+
+    if arr_cpu.dtype in {torch.bfloat16}:
+        np_arr = arr_cpu
+    elif arr_cpu.data_ptr() == arr.data_ptr():
+        copy = arr_cpu.clone().detach().requires_grad_(False)
+        assert (
+            arr_cpu.data_ptr() == 0 or arr_cpu.data_ptr() != copy.data_ptr()
+        ), f"Pointers are not null and different {arr_cpu.data_ptr()} != {copy.data_ptr()}"
+        np_arr = np.from_dlpack(copy)
+    else:
+        np_arr = np.from_dlpack(arr_cpu.detach())
+
+    tensor = onnx.TensorProto()
+    tensor.dims.extend(arr_cpu.shape)
+    if name:
+        tensor.name = name
+    itype = torch_dtype_to_onnx_dtype(arr_cpu.dtype)
+    assert not hasattr(onnx.TensorProto, "INT4") or itype not in {
+        onnx.TensorProto.INT4,
+        onnx.TensorProto.UINT4,
+    }, f"Type {arr.dtype} is not supported yet for name={name!r}"
+    tensor.data_type = itype
+
+    if verbose > 1 and numel > 100:
+        print(f"[proto_from_array] {tensor.data_type}[{arr_cpu.shape}]")
+
+    if isinstance(np_arr, torch.Tensor):
+        byte_data = (ctypes.c_ubyte * numel * element_size).from_address(np_arr.data_ptr())
+        tensor.raw_data = bytes(byte_data)
+        if sys.byteorder == "big":
+            np_dtype = _STORAGE_TYPE[tensor.data_type]  # type: ignore
+            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)  # type: ignore
+    else:
+        tensor.raw_data = np_arr.tobytes()
+        if sys.byteorder == "big":
+            np_dtype = tensor_dtype_to_np_dtype(tensor.data_type)
+            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)
+    return tensor
+
+
+def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821
+    """
+    Converts an onnx type into a torch dtype.
+
+    :param to: onnx dtype
+    :return: torch dtype
+    """
+    import torch
+
+    if itype == onnx.TensorProto.FLOAT:
+        return torch.float32
+    if itype == onnx.TensorProto.FLOAT16:
+        return torch.float16
+    if itype == onnx.TensorProto.BFLOAT16:
+        return torch.bfloat16
+    if itype == onnx.TensorProto.DOUBLE:
+        return torch.float64
+    if itype == onnx.TensorProto.INT32:
+        return torch.int32
+    if itype == onnx.TensorProto.INT64:
+        return torch.int64
+    if itype == onnx.TensorProto.UINT32:
+        return torch.uint32
+    if itype == onnx.TensorProto.UINT64:
+        return torch.uint64
+    if itype == onnx.TensorProto.BOOL:
+        return torch.bool
+    if itype == onnx.TensorProto.INT16:
+        return torch.int16
+    if itype == onnx.TensorProto.UINT16:
+        return torch.uint16
+    if itype == onnx.TensorProto.INT8:
+        return torch.int8
+    if itype == onnx.TensorProto.UINT8:
+        return torch.uint8
+    if itype == onnx.TensorProto.COMPLEX64:
+        return torch.complex64
+    if itype == onnx.TensorProto.COMPLEX128:
+        return torch.complex128
+    raise NotImplementedError(
+        f"Unable to convert onnx type {onnx_dtype_name(itype)} to torch.type."
+    )
+
+
+def torch_dtype_to_onnx_dtype(to: "torch.dtype") -> int:  # noqa: F821
+    """
+    Converts a torch dtype into a onnx element type.
+
+    :param to: torch dtype
+    :return: onnx type
+    """
+    import torch
+
+    if to == torch.float32:
+        return onnx.TensorProto.FLOAT
+    if to == torch.float16:
+        return onnx.TensorProto.FLOAT16
+    if to == torch.bfloat16:
+        return onnx.TensorProto.BFLOAT16
+    if to == torch.float64:
+        return onnx.TensorProto.DOUBLE
+    if to == torch.int64:
+        return onnx.TensorProto.INT64
+    if to == torch.int32:
+        return onnx.TensorProto.INT32
+    if to == torch.uint64:
+        return onnx.TensorProto.UINT64
+    if to == torch.uint32:
+        return onnx.TensorProto.UINT32
+    if to == torch.bool:
+        return onnx.TensorProto.BOOL
+    if to == torch.SymInt:
+        return onnx.TensorProto.INT64
+    if to == torch.int16:
+        return onnx.TensorProto.INT16
+    if to == torch.uint16:
+        return onnx.TensorProto.UINT16
+    if to == torch.int8:
+        return onnx.TensorProto.INT8
+    if to == torch.uint8:
+        return onnx.TensorProto.UINT8
+    if to == torch.SymFloat:
+        return onnx.TensorProto.FLOAT
+    if to == torch.complex64:
+        return onnx.TensorProto.COMPLEX64
+    if to == torch.complex128:
+        return onnx.TensorProto.COMPLEX128
+    raise NotImplementedError(f"Unable to convert torch dtype {to!r} to onnx dtype.")
 
 
 def _forward_(
@@ -144,7 +313,7 @@ def steal_forward(
         :showcode:
 
         import torch
-        from onnx_diagnostic.helpers.torch_test_helper import steal_forward
+        from onnx_diagnostic.helpers.torch_helper import steal_forward
 
         class SubModel(torch.nn.Module):
             def forward(self, x):
@@ -331,7 +500,7 @@ def dummy_llm(
     .. runpython::
         :showcode:
 
-        from onnx_diagnostic.helpers.torch_test_helper import dummy_llm
+        from onnx_diagnostic.helpers.torch_helper import dummy_llm
         print(dummy_llm())
     """
 
@@ -656,3 +825,38 @@ def model_statistics(model: torch.nn.Module):
     )
     res.update(sizes)
     return res
+
+
+def to_tensor(tensor: onnx.TensorProto, base_dir: str = "") -> torch.Tensor:
+    """
+    Converts a TensorProto to a numpy array.
+
+    :param tensor: a TensorProto object.
+    :param base_dir: if external tensor exists, base_dir can help to find the path to it
+    :return: the converted tensor
+    """
+    assert not tensor.HasField("segment"), "Currently not supporting loading segments."
+    assert (
+        tensor.data_type != onnx.TensorProto.UNDEFINED
+    ), "The element type in the input tensor is not defined."
+    assert tensor.data_type != onnx.TensorProto.STRING, "to_tensor not implemented for strings"
+
+    tensor_dtype = tensor.data_type
+    torch_dtype = onnx_dtype_to_torch_dtype(tensor_dtype)
+    dims = tuple(tensor.dims)
+    if uses_external_data(tensor):
+        # Load raw data from external tensor if it exists
+        load_external_data_for_tensor(tensor, base_dir)
+
+    if tensor.HasField("raw_data"):
+        raw_data = tensor.raw_data
+        if sys.byteorder == "big":
+            # Convert endian from little to big
+            raw_data = torch.frombuffer(raw_data, dtype=torch_dtype).byteswap().tobytes()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return torch.frombuffer(raw_data, dtype=torch_dtype).reshape(dims)
+
+    # Other cases, it should be small tensor. We use numpy.
+    np_tensor = to_array_extended(tensor)
+    return torch.from_numpy(np_tensor)

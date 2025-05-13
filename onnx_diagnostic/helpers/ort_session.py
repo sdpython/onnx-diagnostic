@@ -8,11 +8,12 @@ import onnxruntime
 from onnxruntime.capi import _pybind_state as ORTC
 from .helper import size_type
 from .onnx_helper import (
-    torch_dtype_to_onnx_dtype,
     onnx_dtype_to_np_dtype,
     np_dtype_to_tensor_dtype,
     onnx_dtype_name,
 )
+from .torch_helper import torch_dtype_to_onnx_dtype
+
 
 DEVICES = {-1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memory(), 0)}
 

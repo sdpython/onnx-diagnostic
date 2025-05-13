@@ -7,7 +7,7 @@ from onnx_diagnostic.torch_export_patches.patch_expressions import (
     patched_selector,
     patched_float_arange,
 )
-from onnx_diagnostic.helpers.torch_test_helper import fake_torchdynamo_exporting
+from onnx_diagnostic.helpers.torch_helper import fake_torchdynamo_exporting
 
 
 class TestOnnxExportErrors(ExtTestCase):

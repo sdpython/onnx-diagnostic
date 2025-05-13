@@ -1,9 +1,9 @@
-import ctypes
 import functools
 import json
 import os
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+import warnings
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
 import numpy as np
 import numpy.typing as npt
 import onnx
@@ -331,9 +331,10 @@ def onnx_dtype_name(itype: int) -> str:
         print(onnx_dtype_name(7))
     """
     for k in dir(TensorProto):
-        v = getattr(TensorProto, k)
-        if v == itype:
-            return k
+        if "FLOAT" in k or "INT" in k or "TEXT" in k or "BOOL" in k:
+            v = getattr(TensorProto, k)
+            if v == itype:
+                return k
     raise ValueError(f"Unexpected value itype: {itype}")
 
 
@@ -518,76 +519,6 @@ _STORAGE_TYPE = {
 }
 
 
-def proto_from_tensor(
-    arr: "torch.Tensor",  # noqa: F821
-    name: Optional[str] = None,
-    verbose: int = 0,
-) -> TensorProto:
-    """
-    Converts a torch Tensor into a TensorProto.
-
-    :param arr: tensor
-    :param verbose: display the type and shape
-    :return: a TensorProto
-    """
-    import torch
-
-    if not isinstance(arr, torch.Tensor):
-        raise TypeError(f"Unexpected type {type(arr)}.")
-    if arr.is_sparse:
-        raise NotImplementedError(
-            f"Sparse tensor is not supported yet but initializer {name!r} is."
-        )
-
-    # arr.contiguous() is slow after a transpose, maybe there is a way to optimize this.
-    if arr.is_contiguous():
-        arr_cpu = arr.cpu()
-    else:
-        arr_cpu = arr.contiguous().cpu()
-
-    numel = torch.numel(arr_cpu)
-    element_size = arr_cpu.element_size()
-
-    if arr_cpu.dtype in {torch.bfloat16}:
-        np_arr = arr_cpu
-    elif arr_cpu.data_ptr() == arr.data_ptr():
-        copy = arr_cpu.clone().detach().requires_grad_(False)
-        assert (
-            arr_cpu.data_ptr() == 0 or arr_cpu.data_ptr() != copy.data_ptr()
-        ), f"Pointers are not null and different {arr_cpu.data_ptr()} != {copy.data_ptr()}"
-        np_arr = np.from_dlpack(copy)
-    else:
-        np_arr = np.from_dlpack(arr_cpu.detach())
-
-    tensor = TensorProto()
-    tensor.dims.extend(arr_cpu.shape)
-    if name:
-        tensor.name = name
-    itype = torch_dtype_to_onnx_dtype(arr_cpu.dtype)
-    assert not hasattr(TensorProto, "INT4") or itype not in {
-        TensorProto.INT4,
-        TensorProto.UINT4,
-    }, f"Type {arr.dtype} is not supported yet for name={name!r}"
-    tensor.data_type = itype
-
-    if verbose > 1 and numel > 100:
-        print(f"[proto_from_array] {tensor.data_type}[{arr_cpu.shape}]")
-
-    if isinstance(np_arr, torch.Tensor):
-        byte_data = (ctypes.c_ubyte * numel * element_size).from_address(np_arr.data_ptr())
-        tensor.raw_data = bytes(byte_data)
-        if sys.byteorder == "big":
-            np_dtype = _STORAGE_TYPE[tensor.data_type]  # type: ignore
-            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)  # type: ignore
-    else:
-        tensor.raw_data = np_arr.tobytes()
-        if sys.byteorder == "big":
-            np_dtype = tensor_dtype_to_np_dtype(tensor.data_type)
-            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)
-
-    return tensor
-
-
 def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
     """
     Converts an array into a :class:`onnx.TensorProto`.
@@ -596,11 +527,13 @@ def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> Te
     :param name: name
     :return: TensorProto
     """
-    try:
+    if not isinstance(tensor, np.ndarray):
         import torch
-    except ImportError:
-        torch = None
-    if torch is not None and isinstance(tensor, torch.Tensor):
+        from .torch_helper import proto_from_tensor
+
+        assert isinstance(
+            tensor, torch.Tensor
+        ), f"Unable to convert type {type(tensor)} into TensorProto."
         return proto_from_tensor(tensor, name=name)
 
     from onnx.reference.ops.op_cast import (
@@ -657,50 +590,6 @@ def to_array_extended(proto: TensorProto) -> npt.ArrayLike:
     return arr
 
 
-def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821
-    """
-    Converts an onnx type into a torch dtype.
-
-    :param to: onnx dtype
-    :return: torch dtype
-    """
-    import torch
-
-    if itype == TensorProto.FLOAT:
-        return torch.float32
-    if itype == TensorProto.FLOAT16:
-        return torch.float16
-    if itype == TensorProto.BFLOAT16:
-        return torch.bfloat16
-    if itype == TensorProto.DOUBLE:
-        return torch.float64
-    if itype == TensorProto.INT32:
-        return torch.int32
-    if itype == TensorProto.INT64:
-        return torch.int64
-    if itype == TensorProto.UINT32:
-        return torch.uint32
-    if itype == TensorProto.UINT64:
-        return torch.uint64
-    if itype == TensorProto.BOOL:
-        return torch.bool
-    if itype == TensorProto.INT16:
-        return torch.int16
-    if itype == TensorProto.UINT16:
-        return torch.uint16
-    if itype == TensorProto.INT8:
-        return torch.int16
-    if itype == TensorProto.UINT8:
-        return torch.uint16
-    if itype == TensorProto.COMPLEX64:
-        return torch.complex64
-    if itype == TensorProto.COMPLEX128:
-        return torch.complex128
-    raise NotImplementedError(
-        f"Unable to convert onnx type {onnx_dtype_name(itype)} to torch.type."
-    )
-
-
 def onnx_dtype_to_np_dtype(itype: int) -> Any:
     """
     Converts an onnx type into a to numpy dtype.
@@ -746,52 +635,6 @@ def onnx_dtype_to_np_dtype(itype: int) -> Any:
     )
 
 
-def torch_dtype_to_onnx_dtype(to: "torch.dtype") -> int:  # noqa: F821
-    """
-    Converts a torch dtype into a onnx element type.
-
-    :param to: torch dtype
-    :return: onnx type
-    """
-    import torch
-
-    if to == torch.float32:
-        return TensorProto.FLOAT
-    if to == torch.float16:
-        return TensorProto.FLOAT16
-    if to == torch.bfloat16:
-        return TensorProto.BFLOAT16
-    if to == torch.float64:
-        return TensorProto.DOUBLE
-    if to == torch.int64:
-        return TensorProto.INT64
-    if to == torch.int32:
-        return TensorProto.INT32
-    if to == torch.uint64:
-        return TensorProto.UINT64
-    if to == torch.uint32:
-        return TensorProto.UINT32
-    if to == torch.bool:
-        return TensorProto.BOOL
-    if to == torch.SymInt:
-        return TensorProto.INT64
-    if to == torch.int16:
-        return TensorProto.INT16
-    if to == torch.uint16:
-        return TensorProto.UINT16
-    if to == torch.int8:
-        return TensorProto.INT8
-    if to == torch.uint8:
-        return TensorProto.UINT8
-    if to == torch.SymFloat:
-        return TensorProto.FLOAT
-    if to == torch.complex64:
-        return TensorProto.COMPLEX64
-    if to == torch.complex128:
-        return TensorProto.COMPLEX128
-    raise NotImplementedError(f"Unable to convert torch dtype {to!r} to onnx dtype.")
-
-
 def dtype_to_tensor_dtype(dt: Union[np.dtype, "torch.dtype"]) -> int:  # noqa: F821
     """
     Converts a torch dtype or numpy dtype into a onnx element type.
@@ -803,6 +646,8 @@ def dtype_to_tensor_dtype(dt: Union[np.dtype, "torch.dtype"]) -> int:  # noqa: F
         return np_dtype_to_tensor_dtype(dt)
     except (KeyError, TypeError, ValueError):
         pass
+    from .torch_helper import torch_dtype_to_onnx_dtype
+
     return torch_dtype_to_onnx_dtype(dt)
 
 
@@ -919,3 +764,147 @@ def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
         return mapping[tensor_dtype]
 
     return oh.tensor_dtype_to_np_dtype(tensor_dtype)
+
+
+def iterator_initializer_constant(
+    model: Union[onnx.FunctionProto, onnx.GraphProto, onnx.ModelProto],
+    use_numpy: bool = True,
+    prefix: str = "",
+) -> Iterator[Tuple[str, Union["torch.Tensor", np.ndarray]]]:  # noqa: F821
+    """
+    Iterates on iniatialiers and constant in an onnx model.
+
+    :param model: model
+    :param use_numpy: use numpy or pytorch
+    :param prefix: for subgraph
+    :return: iterator
+    """
+    if not isinstance(model, onnx.FunctionProto):
+        graph = model if isinstance(model, onnx.GraphProto) else model.graph
+        if not use_numpy:
+            from .torch_helper import to_tensor
+        if prefix:
+            prefix += "."
+        for init in graph.initializer:
+            yield f"{prefix}{init.name}", (
+                to_array_extended(init) if use_numpy else to_tensor(init)
+            )
+        nodes = graph.node
+        name = graph.name
+        if isinstance(model, onnx.ModelProto):
+            for f in model.functions:
+                yield from iterator_initializer_constant(
+                    f, use_numpy=use_numpy, prefix=f"{prefix}{f.name}"
+                )
+    else:
+        nodes = model.node
+        name = model.name
+    for node in nodes:
+        if node.op_type == "Constant" and node.domain == "":
+            from ..reference import ExtendedReferenceEvaluator as Inference
+
+            if not use_numpy:
+                import torch
+            sess = Inference(node)
+            value = sess.run(None, {})[0]
+            yield f"{prefix}{node.output[0]}", (
+                value if use_numpy else torch.from_numpy(value)
+            )
+
+        if node.op_type in {"Loop", "Body", "Scan"}:
+            for att in node.attribute:
+                assert (
+                    att.type != onnx.AttributeProto.GRAPHS
+                ), "Not implemented for type AttributeProto.GRAPHS."
+                if att.type == onnx.AttributeProto.GRAPH:
+                    yield from iterator_initializer_constant(
+                        att.g, use_numpy=use_numpy, prefix=f"{prefix}{name}"
+                    )
+
+
+def tensor_statistics(tensor: Union[np.ndarray, TensorProto]) -> Dict[str, Union[float, str]]:
+    """
+    Produces statistics on a tensor.
+
+    :param tensor: tensor
+    :return: statistics
+
+    .. runpython::
+        :showcode:
+
+        import pprint
+        import numpy as np
+        from onnx_diagnostic.helper.onnx_helper import tensor_statistics
+
+        t = np.random.rand(40, 50).astype(np.float16)
+        pprint.pprint(tensor_statistics(t))
+    """
+    from .helper import size_type
+
+    if isinstance(tensor, TensorProto):
+        tensor = to_array_extended(tensor)
+    itype = np_dtype_to_tensor_dtype(tensor.dtype)
+    stat = dict(
+        mean=float(tensor.mean()),
+        std=float(tensor.std()),
+        shape="x".join(map(str, tensor.shape)),
+        numel=tensor.size,
+        size=tensor.size * size_type(tensor.dtype),
+        itype=itype,
+        stype=onnx_dtype_name(itype),
+        min=float(tensor.min()),
+        max=float(tensor.max()),
+        nnan=float(np.isnan(tensor).sum()),
+    )
+
+    if tensor.size < 8:
+        return stat
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            hist = np.array(
+                [
+                    0,
+                    1e-10,
+                    1e-8,
+                    1e-7,
+                    1e-6,
+                    1e-5,
+                    0.0001,
+                    0.001,
+                    0.01,
+                    0.1,
+                    0.5,
+                    1,
+                    1.96,
+                    10,
+                    1e2,
+                    1e3,
+                    1e4,
+                    1e5,
+                    1e6,
+                    1e7,
+                    1e8,
+                    1e10,
+                    1e50,
+                ],
+                dtype=tensor.dtype,
+            )
+        except OverflowError as e:
+            from .helper import string_type
+
+            raise ValueError(
+                f"Unable to convert one value into {tensor.dtype}, "
+                f"tensor={string_type(tensor, with_shape=True)}"
+            ) from e
+    hist = np.array(sorted(set(hist[~np.isinf(hist)])), dtype=tensor.dtype)
+    ind = np.digitize(np.abs(tensor).reshape((-1,)), hist, right=True)
+    cou = np.bincount(ind, minlength=ind.shape[0] + 1)
+    stat.update(
+        dict(zip([f">{x}" for x in hist], [int(i) for i in (cou.sum() - np.cumsum(cou))]))
+    )
+    ii = (np.arange(9) + 1) / 10
+    qu = np.quantile(tensor, ii)
+    stat.update({f"q{i}": float(q) for i, q in zip(ii, qu)})
+    return stat

@@ -14,11 +14,8 @@ from onnx_diagnostic.ext_test_case import (
     ignore_warnings,
     requires_cuda,
 )
-from onnx_diagnostic.helpers.onnx_helper import (
-    from_array_extended,
-    onnx_dtype_to_torch_dtype,
-    onnx_dtype_to_np_dtype,
-)
+from onnx_diagnostic.helpers.onnx_helper import from_array_extended, onnx_dtype_to_np_dtype
+from onnx_diagnostic.helpers.torch_helper import onnx_dtype_to_torch_dtype
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 from onnx_diagnostic.helpers.ort_session import _InferenceSession
 

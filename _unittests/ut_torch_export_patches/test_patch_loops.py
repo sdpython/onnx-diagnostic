@@ -1,7 +1,7 @@
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
-from onnx_diagnostic.helpers.torch_test_helper import (
+from onnx_diagnostic.helpers.torch_helper import (
     is_torchdynamo_exporting,
     fake_torchdynamo_exporting,
 )

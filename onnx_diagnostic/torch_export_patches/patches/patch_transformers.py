@@ -6,7 +6,7 @@ import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.cache_utils import StaticCache, Cache, DynamicCache
 from ...ext_test_case import has_transformers
-from ...helpers.torch_test_helper import is_torchdynamo_exporting
+from ...helpers.torch_helper import is_torchdynamo_exporting
 
 
 def _patch_make_causal_mask(
