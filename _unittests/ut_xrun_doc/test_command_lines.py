@@ -8,6 +8,7 @@ from onnx_diagnostic._command_lines_parser import (
     get_parser_find,
     get_parser_lighten,
     get_parser_print,
+    get_parser_stats,
     get_parser_unlighten,
     get_parser_validate,
 )
@@ -62,6 +63,13 @@ class TestCommandLines(ExtTestCase):
             get_parser_validate().print_help()
         text = st.getvalue()
         self.assertIn("mid", text)
+
+    def test_parser_stats(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            get_parser_stats().print_help()
+        text = st.getvalue()
+        self.assertIn("input", text)
 
 
 if __name__ == "__main__":

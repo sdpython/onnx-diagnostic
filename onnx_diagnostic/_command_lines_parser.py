@@ -1,5 +1,7 @@
 import argparse
 import json
+import os
+import re
 import sys
 import textwrap
 import onnx
@@ -425,6 +427,106 @@ def _cmd_validate(argv: List[Any]):
             print(f":{k},{v};")
 
 
+def get_parser_stats() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="stats",
+        description=dedent(
+            """
+        Prints out statistics on an ONNX model.
+        """
+        ),
+        epilog="",
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        type=str,
+        required=True,
+        help="ONNX file",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        required=False,
+        default="",
+        help="outputs the statistics in a file",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        required=False,
+        default=1,
+        type=int,
+        help="verbosity",
+    )
+    parser.add_argument(
+        "-e",
+        "--end",
+        required=False,
+        default=-1,
+        type=int,
+        help="ends after this many tensors",
+    )
+    parser.add_argument(
+        "-b",
+        "--begin",
+        required=False,
+        default=0,
+        type=int,
+        help="starts after this many tensors",
+    )
+    parser.add_argument(
+        "-r",
+        "--regex",
+        required=False,
+        default="",
+        type=str,
+        help="keeps only tensors whose name verifies "
+        "this regular expression, empty = no filter",
+    )
+    return parser
+
+
+def _cmd_stats(argv: List[Any]):
+    from .helpers.onnx_helper import iterator_initializer_constant, tensor_statistics
+
+    parser = get_parser_stats()
+    args = parser.parse_args(argv[1:])
+    assert os.path.exists(args.input), f"Missing filename {args.input!r}"
+    if args.verbose:
+        print(f"Loading {args.input}")
+    onx = onnx.load(args.input)
+    reg = re.compile(args.regex) if args.regex else None
+    data = []
+    for index, (name, init) in enumerate(iterator_initializer_constant(onx)):
+        if reg and not reg.seach(name):
+            continue
+        if index < args.begin:
+            continue
+        if args.end > 0 and index >= args.end:
+            break
+        if args.verbose:
+            print(f"processing {index + 1}: {name!r}")
+        stats = tensor_statistics(init)
+        if not args.output:
+            print(f"{name}: {stats}")
+        stats["name"] = name
+        data.append(stats)
+    if args.output:
+        if args.verbose:
+            print(f"saving into {args.output!r}")
+        import pandas
+
+        df = pandas.DataFrame(data)
+        ext = os.path.splitext(args.output)
+        if ext[-1] == ".xlsx":
+            df.to_excel(args.output, index=False)
+        else:
+            df.to_csv(args.output, index=False)
+    if args.verbose:
+        print("done.")
+
+
 def get_main_parser() -> ArgumentParser:
     parser = ArgumentParser(
         prog="onnx_diagnostic",
@@ -441,12 +543,13 @@ def get_main_parser() -> ArgumentParser:
         unlighten  - restores an onnx model produces by the previous experiment
         print      - prints the model on standard output
         validate   - validate a model
+        stats      - produces statistics on a model
         """
         ),
     )
     parser.add_argument(
         "cmd",
-        choices=["config", "find", "lighten", "print", "unlighten", "validate"],
+        choices=["config", "find", "lighten", "print", "stats", "unlighten", "validate"],
         help="Selects a command.",
     )
     return parser
@@ -460,6 +563,7 @@ def main(argv: Optional[List[Any]] = None):
         find=_cmd_find,
         config=_cmd_config,
         validate=_cmd_validate,
+        stats=_cmd_stats,
     )
 
     if argv is None:
@@ -480,6 +584,7 @@ def main(argv: Optional[List[Any]] = None):
                 find=get_parser_find,
                 config=get_parser_config,
                 validate=get_parser_validate,
+                stats=get_parser_stats,
             )
             cmd = argv[0]
             if cmd not in parsers:

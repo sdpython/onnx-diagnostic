@@ -246,7 +246,10 @@ class TestOnnxHelper(ExtTestCase):
     def test_statistics(self):
         rnd = np.random.rand(40, 50).astype(np.float16)
         stat = tensor_statistics(rnd)
-        print(stat)
+        self.assertEqual(stat["stype"], "FLOAT16")
+        rnd = np.random.rand(40, 50).astype(np.float32)
+        stat = tensor_statistics(rnd)
+        self.assertEqual(stat["stype"], "FLOAT")
 
 
 if __name__ == "__main__":

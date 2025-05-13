@@ -2,6 +2,7 @@ import functools
 import json
 import os
 import sys
+import warnings
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
 import numpy as np
 import numpy.typing as npt
@@ -330,9 +331,10 @@ def onnx_dtype_name(itype: int) -> str:
         print(onnx_dtype_name(7))
     """
     for k in dir(TensorProto):
-        v = getattr(TensorProto, k)
-        if v == itype:
-            return k
+        if "FLOAT" in k or "INT" in k or "TEXT" in k or "BOOL" in k:
+            v = getattr(TensorProto, k)
+            if v == itype:
+                return k
     raise ValueError(f"Unexpected value itype: {itype}")
 
 
@@ -841,47 +843,61 @@ def tensor_statistics(tensor: Union[np.ndarray, TensorProto]) -> Dict[str, Union
 
     if isinstance(tensor, TensorProto):
         tensor = to_array_extended(tensor)
+    itype = np_dtype_to_tensor_dtype(tensor.dtype)
     stat = dict(
         mean=float(tensor.mean()),
         std=float(tensor.std()),
         shape="x".join(map(str, tensor.shape)),
         numel=tensor.size,
         size=tensor.size * size_type(tensor.dtype),
-        itype=np_dtype_to_tensor_dtype(tensor.dtype),
-        stype=onnx_dtype_name(np_dtype_to_tensor_dtype(tensor.dtype)),
+        itype=itype,
+        stype=onnx_dtype_name(itype),
         min=float(tensor.min()),
         max=float(tensor.max()),
-        nnan=np.isnan(tensor).sum(),
+        nnan=float(np.isnan(tensor).sum()),
     )
 
-    hist = np.array(
-        [
-            0,
-            1e-10,
-            1e-8,
-            1e-7,
-            1e-6,
-            1e-5,
-            0.0001,
-            0.001,
-            0.01,
-            0.1,
-            0.5,
-            1,
-            1.96,
-            10,
-            100,
-            1e3,
-            1e4,
-            1e5,
-            1e6,
-            1e7,
-            1e8,
-            1e10,
-            1e50,
-        ],
-        dtype=tensor.dtype,
-    )
+    if tensor.size < 8:
+        return stat
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            hist = np.array(
+                [
+                    0,
+                    1e-10,
+                    1e-8,
+                    1e-7,
+                    1e-6,
+                    1e-5,
+                    0.0001,
+                    0.001,
+                    0.01,
+                    0.1,
+                    0.5,
+                    1,
+                    1.96,
+                    10,
+                    1e2,
+                    1e3,
+                    1e4,
+                    1e5,
+                    1e6,
+                    1e7,
+                    1e8,
+                    1e10,
+                    1e50,
+                ],
+                dtype=tensor.dtype,
+            )
+        except OverflowError as e:
+            from .helper import string_type
+
+            raise ValueError(
+                f"Unable to convert one value into {tensor.dtype}, "
+                f"tensor={string_type(tensor, with_shape=True)}"
+            ) from e
     hist = np.array(sorted(set(hist[~np.isinf(hist)])), dtype=tensor.dtype)
     ind = np.digitize(np.abs(tensor).reshape((-1,)), hist, right=True)
     cou = np.bincount(ind, minlength=ind.shape[0] + 1)
