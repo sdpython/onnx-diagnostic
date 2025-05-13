@@ -15,13 +15,14 @@ from onnx_diagnostic.helpers.onnx_helper import (
     check_model_ort,
     iterator_initializer_constant,
     from_array_extended,
+    tensor_statistics,
 )
 
 
 TFLOAT = TensorProto.FLOAT
 
 
-class TestOnnxTools(ExtTestCase):
+class TestOnnxHelper(ExtTestCase):
 
     def _get_model(self):
         model = oh.make_model(
@@ -241,6 +242,11 @@ class TestOnnxTools(ExtTestCase):
         self.assertEqual(li[0][0], "CDist_euclideanCDist_euclidean.axis")
         self.assertEqualArray(li[0][1], np.array([1], dtype=np.int64))
         self.assertIsInstance(li[0][1], torch.Tensor)
+
+    def test_statistics(self):
+        rnd = np.random.rand(40, 50).astype(np.float16)
+        stat = tensor_statistics(rnd)
+        print(stat)
 
 
 if __name__ == "__main__":

@@ -427,7 +427,7 @@ def string_type(
 
     # Tensors
     if isinstance(obj, torch._subclasses.fake_tensor.FakeTensor):
-        from .onnx_helper import torch_dtype_to_onnx_dtype
+        from .torch_helper import torch_dtype_to_onnx_dtype
 
         i = torch_dtype_to_onnx_dtype(obj.dtype)
         prefix = ("G" if obj.get_device() >= 0 else "C") if with_device else ""

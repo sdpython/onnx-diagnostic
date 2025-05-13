@@ -818,3 +818,77 @@ def iterator_initializer_constant(
                     yield from iterator_initializer_constant(
                         att.g, use_numpy=use_numpy, prefix=f"{prefix}{name}"
                     )
+
+
+def tensor_statistics(tensor: Union[np.ndarray, TensorProto]) -> Dict[str, Union[float, str]]:
+    """
+    Produces statistics on a tensor.
+
+    :param tensor: tensor
+    :return: statistics
+
+    .. runpython::
+        :showcode:
+
+        import pprint
+        import numpy as np
+        from onnx_diagnostic.helper.onnx_helper import tensor_statistics
+
+        t = np.random.rand(40, 50).astype(np.float16)
+        pprint.pprint(tensor_statistics(t))
+    """
+    from .helper import size_type
+
+    if isinstance(tensor, TensorProto):
+        tensor = to_array_extended(tensor)
+    stat = dict(
+        mean=float(tensor.mean()),
+        std=float(tensor.std()),
+        shape="x".join(map(str, tensor.shape)),
+        numel=tensor.size,
+        size=tensor.size * size_type(tensor.dtype),
+        itype=np_dtype_to_tensor_dtype(tensor.dtype),
+        stype=onnx_dtype_name(np_dtype_to_tensor_dtype(tensor.dtype)),
+        min=float(tensor.min()),
+        max=float(tensor.max()),
+        nnan=np.isnan(tensor).sum(),
+    )
+
+    hist = np.array(
+        [
+            0,
+            1e-10,
+            1e-8,
+            1e-7,
+            1e-6,
+            1e-5,
+            0.0001,
+            0.001,
+            0.01,
+            0.1,
+            0.5,
+            1,
+            1.96,
+            10,
+            100,
+            1e3,
+            1e4,
+            1e5,
+            1e6,
+            1e7,
+            1e8,
+            1e10,
+            1e50,
+        ],
+        dtype=tensor.dtype,
+    )
+    hist = np.array(sorted(set(hist[~np.isinf(hist)])), dtype=tensor.dtype)
+    ind = np.digitize(np.abs(tensor).reshape((-1,)), hist, right=True)
+    cou = np.bincount(ind, minlength=ind.shape[0] + 1)
+    stat.update(
+        dict(zip([f">{x}" for x in hist], [int(i) for i in (cou.sum() - np.cumsum(cou))]))
+    )
+    ii = (np.arange(9) + 1) / 10
+    qu = np.quantile(tensor, ii)
+    stat.update({f"q{i}": float(q) for i, q in zip(ii, qu)})
+    return stat
