@@ -1262,8 +1262,19 @@ def max_diff(
         # is likely caused by nans
         exp_cpu = expected.to(torch.float64).nan_to_num(1e10)
         got_cpu = got.to(torch.float64).nan_to_num(1e10)
+        if got_cpu.device != exp_cpu.device:
+            if torch.device("cuda:0") in {got_cpu.device, exp_cpu.device}:
+                got_cpu = got_cpu.to("cuda:0")
+                exp_cpu = exp_cpu.to("cuda:0")
+                expected = expected.to("cuda:0")
+                got = got.to("cuda:0")
+            else:
+                got_cpu = got_cpu.detach().to("cpu")
+                exp_cpu = exp_cpu.detach().to("cpu")
+                expected = expected.to("cpu")
+                got = got.to("cpu")
         diff = (got_cpu - exp_cpu).abs()
-        ndiff = (expected.isnan().cpu().to(int) - got.isnan().to(int)).abs()
+        ndiff = (expected.isnan().to(int) - got.isnan().to(int)).abs()
         rdiff = diff / (exp_cpu.abs() + 1e-3)
         if diff.numel() > 0:
             abs_diff, rel_diff, sum_diff, n_diff, nan_diff = (
@@ -1320,6 +1331,7 @@ def max_diff(
                 hist = torch.tensor(
                     [0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype
                 )
+            hist = hist.to(diff.device)
             ind = torch.bucketize(diff.reshape((-1,)), hist, right=False)
             cou = torch.bincount(ind, minlength=ind.shape[0] + 1)
             res["rep"] = dict(
