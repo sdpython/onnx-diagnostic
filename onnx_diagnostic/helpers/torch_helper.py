@@ -5,7 +5,7 @@ import os
 import sys
 import warnings
 from collections.abc import Iterable
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import onnx
 from onnx.external_data_helper import load_external_data_for_tensor, uses_external_data
@@ -858,19 +858,5 @@ def to_tensor(tensor: onnx.TensorProto, base_dir: str = "") -> torch.Tensor:
             return torch.frombuffer(raw_data, dtype=torch_dtype).reshape(dims)
 
     # Other cases, it should be small tensor. We use numpy.
-    np_tensor = to_array_extended(tensor, base_dir)
+    np_tensor = to_array_extended(tensor)
     return torch.from_numpy(np_tensor)
-
-
-def iterator_initializer_constant(
-    model: onnx.ModelProto, use_numpy: bool = True
-) -> Iterator[Tuple[str, Union[torch.Tensor, np.ndarray]]]:
-    """
-    Iterates on iniatialiers and constant in an onnx model.
-
-    :param model: model
-    :param use_numpy: use numpy or pytorch
-    :return: iterator
-    """
-    for init in model.graph.initializer:
-        yield init.name, (to_array_extended(init) if use_numpy else to_tensor(init))

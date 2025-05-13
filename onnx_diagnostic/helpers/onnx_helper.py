@@ -2,7 +2,7 @@ import functools
 import json
 import os
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
 import numpy as np
 import numpy.typing as npt
 import onnx
@@ -762,3 +762,59 @@ def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
         return mapping[tensor_dtype]
 
     return oh.tensor_dtype_to_np_dtype(tensor_dtype)
+
+
+def iterator_initializer_constant(
+    model: Union[onnx.FunctionProto, onnx.GraphProto, onnx.ModelProto],
+    use_numpy: bool = True,
+    prefix: str = "",
+) -> Iterator[Tuple[str, Union["torch.Tensor", np.ndarray]]]:  # noqa: F821
+    """
+    Iterates on iniatialiers and constant in an onnx model.
+
+    :param model: model
+    :param use_numpy: use numpy or pytorch
+    :param prefix: for subgraph
+    :return: iterator
+    """
+    if not isinstance(model, onnx.FunctionProto):
+        graph = model if isinstance(model, onnx.GraphProto) else model.graph
+        if not use_numpy:
+            from .torch_helper import to_tensor
+        if prefix:
+            prefix += "."
+        for init in graph.initializer:
+            yield f"{prefix}{init.name}", (
+                to_array_extended(init) if use_numpy else to_tensor(init)
+            )
+        nodes = graph.node
+        name = graph.name
+        if isinstance(model, onnx.ModelProto):
+            for f in model.functions:
+                yield from iterator_initializer_constant(
+                    f, use_numpy=use_numpy, prefix=f"{prefix}{f.name}"
+                )
+    else:
+        nodes = model.node
+        name = model.name
+    for node in nodes:
+        if node.op_type == "Constant" and node.domain == "":
+            from ..reference import ExtendedReferenceEvaluator as Inference
+
+            if not use_numpy:
+                import torch
+            sess = Inference(node)
+            value = sess.run(None, {})[0]
+            yield f"{prefix}{node.output[0]}", (
+                value if use_numpy else torch.from_numpy(value)
+            )
+
+        if node.op_type in {"Loop", "Body", "Scan"}:
+            for att in node.attribute:
+                assert (
+                    att.type != onnx.AttributeProto.GRAPHS
+                ), "Not implemented for type AttributeProto.GRAPHS."
+                if att.type == onnx.AttributeProto.GRAPH:
+                    yield from iterator_initializer_constant(
+                        att.g, use_numpy=use_numpy, prefix=f"{prefix}{name}"
+                    )

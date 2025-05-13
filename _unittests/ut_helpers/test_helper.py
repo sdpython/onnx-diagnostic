@@ -28,15 +28,17 @@ from onnx_diagnostic.helpers.onnx_helper import (
     get_onnx_signature,
     type_info,
     onnx_dtype_name,
-    onnx_dtype_to_torch_dtype,
     onnx_dtype_to_np_dtype,
     np_dtype_to_tensor_dtype,
-    torch_dtype_to_onnx_dtype,
     from_array_extended,
     to_array_extended,
     convert_endian,
     from_array_ml_dtypes,
     dtype_to_tensor_dtype,
+)
+from onnx_diagnostic.helpers.torch_helper import (
+    onnx_dtype_to_torch_dtype,
+    torch_dtype_to_onnx_dtype,
 )
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 from onnx_diagnostic.torch_models.hghub.hub_api import get_pretrained_config
