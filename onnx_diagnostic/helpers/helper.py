@@ -1260,10 +1260,10 @@ def max_diff(
             return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
         # nan are replace by 1e10, any discrepancies in that order of magnitude
         # is likely caused by nans
-        exp_cpu = expected.to(torch.float64).cpu().nan_to_num(1e10)
-        got_cpu = got.to(torch.float64).cpu().nan_to_num(1e10)
+        exp_cpu = expected.to(torch.float64).nan_to_num(1e10)
+        got_cpu = got.to(torch.float64).nan_to_num(1e10)
         diff = (got_cpu - exp_cpu).abs()
-        ndiff = (expected.isnan().cpu().to(int) - got.isnan().cpu().to(int)).abs()
+        ndiff = (expected.isnan().cpu().to(int) - got.isnan().to(int)).abs()
         rdiff = diff / (exp_cpu.abs() + 1e-3)
         if diff.numel() > 0:
             abs_diff, rel_diff, sum_diff, n_diff, nan_diff = (
