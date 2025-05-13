@@ -24,7 +24,7 @@ class TestCommandLines(ExtTestCase):
         output = self.get_dump_file("test_parser_stats.xlsx")
         st = StringIO()
         with redirect_stdout(st):
-            main(["stats", "-i", self.dummy_path, "-o", output])
+            main(["stats", "-i", self.dummy_path, "-o", output, "-r", ".*"])
         text = st.getvalue()
         self.assertIn("processing", text)
         self.assertExists(output)

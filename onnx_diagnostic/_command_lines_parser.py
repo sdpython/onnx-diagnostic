@@ -499,7 +499,7 @@ def _cmd_stats(argv: List[Any]):
     reg = re.compile(args.regex) if args.regex else None
     data = []
     for index, (name, init) in enumerate(iterator_initializer_constant(onx)):
-        if reg and not reg.seach(name):
+        if reg and not reg.search(name):
             continue
         if index < args.begin:
             continue
