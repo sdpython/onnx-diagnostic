@@ -2,8 +2,8 @@
 Reproducible Parallelized Reduction is difficult
 ================================================
 
-A reduction is a frequent operation in neural network. It appears in layer normalization,
-softmax. Because of the float precision, the result of the computation
+A reduction is a frequent operation with neural networks. It appears in layer normalization,
+softmax... Because of the float precision, the result of the computation
 changes based on the order of the elements. The following examples show the variation
 based on different hypothesis on the vector distribution.
 We consider a vector :math:`X = (x_1, ..., x_n)`.
@@ -19,11 +19,13 @@ Or the normalization of the vector:
 
     norm(X)_i = \\frac{ X_i  - \\mathbb{E}X}{ \\sqrt{ \\mathbb{V}X}}
 
-We draw 128 random permutation of X. The average or mean should not change.
-And the normalized vector should have the same value. In the first case, we compute
+With :math:`\\mathbb{E}X = mean(X)`,
+:math:`\\mathbb{V}X = mean\\left(\\left(X - mean(X)\\rigth)^2\\right)`.
+We draw 128 random permutations of X. The average or mean should not change.
+And the normalized vector should have the same values. In the first case, we compute
 the difference between the highest and the lowest values obtained for the average.
 In the second case, we look for the maximum difference between the original normalized
-vector and the permuted one (both sorted).
+vector and the permuted one, both sorted.
 
 The computation code
 ++++++++++++++++++++
@@ -144,7 +146,8 @@ mean = compute(values, lambda x: np.mean(x).astype(x.dtype))
 mean["name"] = "fixed"
 print(mean)
 
-
+# %%
+# And the normalized vector.
 ln = compute(values, layer_norm)
 ln["name"] = "fixed"
 DATA.append(ln.reset_index(drop=True).max(axis=0))
@@ -163,7 +166,8 @@ mean = compute(values, lambda x: np.mean(x).astype(x.dtype))
 mean["name"] = "normal"
 print(mean)
 
-
+# %%
+# And the normalized vector.
 ln = compute(values, layer_norm)
 ln["name"] = "pareto"
 DATA.append(ln.reset_index(drop=True).max(axis=0))
@@ -175,7 +179,6 @@ print(ln)
 #
 # We consider the maximum difference obtained for any sample size.
 
-print(DATA)
 df = pandas.DataFrame(DATA).set_index("name")
 print(df)
 
@@ -192,7 +195,7 @@ fig.savefig("plot_parallelized_reduction.png")
 #
 # Some of the vector have 500 values, 16x32x1024x1024. A layer normalization
 # does 16x32x1024 ~ 2M reductions, over 20 layers.
-# When a deep neural network is computed with a difference code,
+# When a deep neural network is computed with a different code
 # doing a different parallelization (GPU/CPU for example),
 # the order of the reduction may change and therefore,
 # some errors will appear and propagate.
