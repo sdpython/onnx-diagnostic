@@ -245,7 +245,7 @@ class TestHelpers(ExtTestCase):
         diff = max_diff(x, y, hist=True)
         s = string_diff(diff)
         self.assertEndsWith(
-            "/#8>0.0-#8>0.0001-#6>0.001-#5>0.01-#5>0.1-#3>1.0-#2>10.0-#1>100.0", s
+            "/#8>0.0-#8>0.0001-#6>0.001-#5>0.01-#5>0.1-#3>1.0-#2>10.0-#1>100.0,amax=2,1", s
         )
 
     def test_max_diff_hist_tensor(self):

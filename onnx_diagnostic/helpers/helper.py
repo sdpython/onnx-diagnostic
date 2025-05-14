@@ -2,7 +2,7 @@ import ast
 import enum
 import inspect
 from dataclasses import is_dataclass, fields
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 
 
@@ -872,7 +872,7 @@ def max_diff(
     _index: int = 0,
     allow_unique_tensor_with_list_of_one_element: bool = True,
     hist: Optional[Union[bool, List[float]]] = None,
-) -> Dict[str, float]:
+) -> Dict[str, Union[float, str, int, Tuple[int, ...]]]:
     """
     Returns the maximum discrepancy.
 
@@ -1221,7 +1221,7 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        res = dict(
+        res: Dict[str, Union[str, int, float, Tuple[int, ...]]] = dict(
             abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
         )
         if hist:
@@ -1332,7 +1332,7 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        res = dict(
+        res: Dict[str, Union[str, int, float, Tuple[int, ...]]] = dict(
             abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
         )
         if hist:
@@ -1488,7 +1488,12 @@ def string_diff(diff: Dict[str, Any]) -> str:
         suffix = "-".join(rows)
         suffix = f"/{suffix}"
     if "argm" in diff:
-        suffix += f", argmax={diff['argm']}"
+        sa = (
+            ",".join(map(str, diff["argm"]))
+            if isinstance(diff["argm"], tuple)
+            else str(diff["argm"])
+        )
+        suffix += f",amax={sa}"
     if diff.get("dnan", None):
         if diff["abs"] == 0 or diff["rel"] == 0:
             return f"abs={diff['abs']}, rel={diff['rel']}, dnan={diff['dnan']}{suffix}"
