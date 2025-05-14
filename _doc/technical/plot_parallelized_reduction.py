@@ -20,7 +20,7 @@ Or the normalization of the vector:
     norm(X)_i = \\frac{ X_i  - \\mathbb{E}X}{ \\sqrt{ \\mathbb{V}X}}
 
 With :math:`\\mathbb{E}X = mean(X)`,
-:math:`\\mathbb{V}X = mean\\left(\\left(X - mean(X)\\rigth)^2\\right)`.
+:math:`\\mathbb{V}X = mean\\left(\\left(X - mean(X)\\right)^2\\right)`.
 We draw 128 random permutations of X. The average or mean should not change.
 And the normalized vector should have the same values. In the first case, we compute
 the difference between the highest and the lowest values obtained for the average.
