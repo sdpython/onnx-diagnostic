@@ -39,6 +39,7 @@ It also implements tools to investigate, validate exported models (ExportedProgr
     cmds/index
     auto_examples/index
     auto_recipes/index
+    auto_technical/index
 
 .. toctree::
     :maxdepth: 1
@@ -116,12 +117,12 @@ See :func:`onnx_diagnostic.helpers.string_type`.
 onnx_dtype_name
 +++++++++++++++
 
-See :func:`onnx_diagnostic.helpers.onnx_dtype_name`.
+See :func:`onnx_diagnostic.helpers.onnx_helper.onnx_dtype_name`.
 
 .. code-block:: python
 
         import onnx
-        from onnx_diagnostic.helpers import onnx_dtype_name
+        from onnx_diagnostic.helpers.onnx_helper import onnx_dtype_name
 
         itype = onnx.TensorProto.BFLOAT16
         print(onnx_dtype_name(itype))

@@ -105,14 +105,14 @@ class TestBenchRun(ExtTestCase):
     def test_max_diff(self):
         self.assertEqual(
             max_diff(torch.Tensor([1, 2]), torch.Tensor([1, 2])),
-            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0},
+            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0, "argm": (0,)},
         )
         self.assertEqual(
             max_diff(
                 (torch.Tensor([1, 2]),),
                 (torch.Tensor([1, 2])),
             ),
-            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0},
+            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0, "argm": (0,)},
         )
         self.assertEqual(
             max_diff(

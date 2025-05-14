@@ -834,7 +834,7 @@ def tensor_statistics(tensor: Union[np.ndarray, TensorProto]) -> Dict[str, Union
 
         import pprint
         import numpy as np
-        from onnx_diagnostic.helper.onnx_helper import tensor_statistics
+        from onnx_diagnostic.helpers.onnx_helper import tensor_statistics
 
         t = np.random.rand(40, 50).astype(np.float16)
         pprint.pprint(tensor_statistics(t))

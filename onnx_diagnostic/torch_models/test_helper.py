@@ -780,7 +780,7 @@ def call_torch_export_export(
 
         disc = max_diff(data["expected"], expected)
         for k, v in disc.items():
-            summary[f"disc_exported_{k}"] = v
+            summary[f"disc_exported_{k}"] = str(v)
         if verbose:
             print("[validate_model] done (exported run)")
             print(f"[validate_model] exported discrepancies={string_diff(disc)}")

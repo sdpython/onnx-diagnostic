@@ -2,7 +2,7 @@ import ast
 import enum
 import inspect
 from dataclasses import is_dataclass, fields
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 
 
@@ -872,7 +872,7 @@ def max_diff(
     _index: int = 0,
     allow_unique_tensor_with_list_of_one_element: bool = True,
     hist: Optional[Union[bool, List[float]]] = None,
-) -> Dict[str, float]:
+) -> Dict[str, Union[float, int, Tuple[int, ...]]]:
     """
     Returns the maximum discrepancy.
 
@@ -1080,8 +1080,8 @@ def max_diff(
             am = max(am, d["abs"])
             dn = max(dn, d["dnan"])
             rm = max(rm, d["rel"])
-            sm += d["sum"]
-            n += d["n"]
+            sm += d["sum"]  # type: ignore
+            n += d["n"]  # type: ignore
             if "rep" in d:
                 if drep is None:
                     drep = d["rep"].copy()
@@ -1091,7 +1091,7 @@ def max_diff(
         res = dict(abs=am, rel=rm, sum=sm, n=n, dnan=dn)
         if drep:
             res["rep"] = drep
-        return res
+        return res  # type: ignore
 
     if isinstance(expected, dict):
         if verbose >= 6:
@@ -1181,6 +1181,7 @@ def max_diff(
                 if exp_cpu.size == got_cpu.size
                 else (np.inf, np.inf, np.inf, 0, np.inf)
             )
+            argm = None
         else:
             abs_diff, rel_diff, sum_diff, n_diff, nan_diff = (
                 float(diff.max()),
@@ -1189,6 +1190,7 @@ def max_diff(
                 float(diff.size),
                 float(ndiff.sum()),
             )
+            argm = tuple(map(int, np.unravel_index(diff.argmax(), diff.shape)))
         if verbose >= 10 and (abs_diff >= 10 or rel_diff >= 10):
             # To understand the value it comes from.
             if debug_info:
@@ -1219,7 +1221,9 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        res = dict(abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff)
+        res: Dict[str, float] = dict(  # type: ignore
+            abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
+        )
         if hist:
             if isinstance(hist, bool):
                 hist = np.array([0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype)
@@ -1228,7 +1232,7 @@ def max_diff(
             res["rep"] = dict(
                 zip([f">{x}" for x in hist], [int(i) for i in (cou.sum() - np.cumsum(cou))])
             )
-        return res
+        return res  # type: ignore
 
     if isinstance(expected, torch.Tensor) and isinstance(got, torch.Tensor):
         if verbose >= 6:
@@ -1284,8 +1288,10 @@ def max_diff(
                 float(diff.numel()),
                 float(ndiff.sum()),
             )
+            argm = tuple(map(int, torch.unravel_index(diff.argmax(), diff.shape)))
         elif got_cpu.numel() == exp_cpu.numel():
             abs_diff, rel_diff, sum_diff, n_diff, nan_diff = (0.0, 0.0, 0.0, 0.0, 0.0)
+            argm = None
         else:
             abs_diff, rel_diff, sum_diff, n_diff, nan_diff = (
                 np.inf,
@@ -1294,6 +1300,7 @@ def max_diff(
                 np.inf,
                 np.inf,
             )
+            argm = None
 
         if verbose >= 10 and (abs_diff >= 10 or rel_diff >= 10):
             # To understand the value it comes from.
@@ -1325,7 +1332,9 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        res = dict(abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff)
+        res: Dict[str, float] = dict(  # type: ignore
+            abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
+        )
         if hist:
             if isinstance(hist, bool):
                 hist = torch.tensor(
@@ -1340,7 +1349,7 @@ def max_diff(
                     [int(i) for i in (cou.sum() - torch.cumsum(cou, 0))],
                 )
             )
-        return res
+        return res  # type: ignore
 
     if "SquashedNormal" in expected.__class__.__name__:
         if verbose >= 6:
@@ -1478,6 +1487,13 @@ def string_diff(diff: Dict[str, Any]) -> str:
                 rows.append(f"#{v}{k}")
         suffix = "-".join(rows)
         suffix = f"/{suffix}"
+    if "argm" in diff:
+        sa = (
+            ",".join(map(str, diff["argm"]))
+            if isinstance(diff["argm"], tuple)
+            else str(diff["argm"])
+        )
+        suffix += f",amax={sa}"
     if diff.get("dnan", None):
         if diff["abs"] == 0 or diff["rel"] == 0:
             return f"abs={diff['abs']}, rel={diff['rel']}, dnan={diff['dnan']}{suffix}"

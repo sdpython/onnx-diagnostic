@@ -65,6 +65,25 @@ rm _doc/recipes/*.script.onnx
 rm _doc/recipes/dump_models -rf
 rm _doc/recipes/dump_onx_*
 
+rm _doc/technical/plot*.onnx
+rm _doc/technical/plot*.onnx.weight
+rm _doc/technical/plot*.onnx.data
+rm _doc/technical/plot*.txt
+rm _doc/technical/ort*.onnx
+rm _doc/technical/*.sarif
+rm _doc/technical/*.json
+rm _doc/technical/*.png
+rm _doc/technical/*.csv
+rm _doc/technical/*.pte
+rm _doc/technical/*.xlsx
+rm _doc/technical/dummy*.onnx
+rm _doc/technical/evaluation*-script.onnx
+rm _doc/technical/*.opt.onnx
+rm _doc/technical/*.dynamo.onnx
+rm _doc/technical/*.script.onnx
+rm _doc/technical/dump_models -rf
+rm _doc/technical/dump_onx_*
+
 rm _tools/bin -rf
 rm _tools/mambaroot -rf
 rm _tools/repos -rf

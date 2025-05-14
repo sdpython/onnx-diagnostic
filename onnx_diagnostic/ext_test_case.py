@@ -1195,7 +1195,9 @@ class ExtTestCase(unittest.TestCase):
         if verbose:
             print(f"[{vname}] diff {string_diff(diff)}")
         assert (
-            not numpy.isnan(diff["abs"])
+            isinstance(diff["abs"], float)
+            and isinstance(diff["rel"], float)
+            and not numpy.isnan(diff["abs"])
             and diff["abs"] <= atol
             and not numpy.isnan(diff["rel"])
             and diff["rel"] <= rtol

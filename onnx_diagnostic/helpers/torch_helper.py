@@ -102,8 +102,6 @@ def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821
     :param to: onnx dtype
     :return: torch dtype
     """
-    import torch
-
     if itype == onnx.TensorProto.FLOAT:
         return torch.float32
     if itype == onnx.TensorProto.FLOAT16:
@@ -314,6 +312,9 @@ def steal_forward(
 
         import torch
         from onnx_diagnostic.helpers.torch_helper import steal_forward
+        from onnx_diagnostic.helpers.mini_onnx_builder import (
+            create_input_tensors_from_onnx_model,
+        )
 
         class SubModel(torch.nn.Module):
             def forward(self, x):
@@ -363,7 +364,11 @@ def steal_forward(
             for idx, m in model.named_modules():
                 level = str(idx).split(".")
                 ll = len(level)
-                _, start_line = inspect.getsourcelines(m.forward)
+                try:
+                    _, start_line = inspect.getsourcelines(m.forward)
+                except OSError:
+                    # The code is not available.
+                    start_line = 0
                 name = f"{idx}-{m.__class__.__name__}-{start_line}"
                 models.append((f"{'  ' * ll}{name}", m))
             model = models
