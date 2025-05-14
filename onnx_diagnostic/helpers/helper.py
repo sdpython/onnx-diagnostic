@@ -1221,7 +1221,7 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        res: Dict[str, Union[int, float, Tuple[int, ...]]] = dict(
+        res: Dict[str, float] = dict(
             abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
         )
         if hist:
@@ -1332,7 +1332,7 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        res: Dict[str, Union[int, float, Tuple[int, ...]]] = dict(
+        res: Dict[str, float] = dict(
             abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
         )
         if hist:
