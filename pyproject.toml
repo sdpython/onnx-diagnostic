@@ -8,6 +8,7 @@ packages = ["onnx_diagnostic"]
 exclude = [
     "^_doc/auto_examples",  # skips examples in the documentation
     "^_doc/auto_recipes",  # skips examples in the documentation
+    "^_doc/auto_technical",  # skips examples in the documentation
     "^_doc/conf.py",
     "^_doc/examples",
     "^_unittests",  # skips unit tests
@@ -102,6 +103,7 @@ select = [
 "_doc/examples/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_doc/notebooks/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_doc/recipes/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
+"_doc/technical/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_unittests/*/test*.py" = ["B008", "B904", "PIE808", "SIM117", "SIM105", "UP008"]
 "onnx_diagnostic/export/__init__.py" = ["F401"]
 "onnx_diagnostic/helpers/__init__.py" = ["F401"]

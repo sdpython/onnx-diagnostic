@@ -1080,8 +1080,8 @@ def max_diff(
             am = max(am, d["abs"])
             dn = max(dn, d["dnan"])
             rm = max(rm, d["rel"])
-            sm += d["sum"]
-            n += d["n"]
+            sm += d["sum"]  # type: ignore
+            n += d["n"]  # type: ignore
             if "rep" in d:
                 if drep is None:
                     drep = d["rep"].copy()
@@ -1091,7 +1091,7 @@ def max_diff(
         res = dict(abs=am, rel=rm, sum=sm, n=n, dnan=dn)
         if drep:
             res["rep"] = drep
-        return res
+        return res  # type: ignore
 
     if isinstance(expected, dict):
         if verbose >= 6:
@@ -1221,7 +1221,7 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        res: Dict[str, float] = dict(
+        res: Dict[str, float] = dict(  # type: ignore
             abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
         )
         if hist:
@@ -1232,7 +1232,7 @@ def max_diff(
             res["rep"] = dict(
                 zip([f">{x}" for x in hist], [int(i) for i in (cou.sum() - np.cumsum(cou))])
             )
-        return res
+        return res  # type: ignore
 
     if isinstance(expected, torch.Tensor) and isinstance(got, torch.Tensor):
         if verbose >= 6:
@@ -1332,7 +1332,7 @@ def max_diff(
                     f"_index={_index}"
                 )
 
-        res: Dict[str, float] = dict(
+        res: Dict[str, float] = dict(  # type: ignore
             abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
         )
         if hist:
@@ -1349,7 +1349,7 @@ def max_diff(
                     [int(i) for i in (cou.sum() - torch.cumsum(cou, 0))],
                 )
             )
-        return res
+        return res  # type: ignore
 
     if "SquashedNormal" in expected.__class__.__name__:
         if verbose >= 6:

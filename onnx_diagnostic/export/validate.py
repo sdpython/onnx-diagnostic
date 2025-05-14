@@ -96,7 +96,10 @@ def compare_modules(
             )
             print(f"[compare_modules] discrepancies={string_diff(diff)}")
         assert not exc or (
-            diff["abs"] <= atol and diff["rel"] <= rtol
+            isinstance(diff["abs"], float)
+            and isinstance(diff["rel"], float)
+            and diff["abs"] <= atol
+            and diff["rel"] <= rtol
         ), f"Discrepancies={string_diff(diff)} higher than expected."
         return dict(args=args, kwargs=kwargs, expected=expected, got=got, diff=diff)
     return dict(args=args, kwargs=kwargs, got=got)

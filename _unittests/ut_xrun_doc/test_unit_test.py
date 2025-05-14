@@ -52,7 +52,11 @@ class TestUnitTest(ExtTestCase):
 
         df = pandas.DataFrame(stat)
         gr = df.drop("name", axis=1).groupby(["ext", "dir"]).sum().reset_index()
-        gr = gr[(gr["dir"] != "_doc/auto_examples") & (gr["dir"] != "_doc/auto_recipes")]
+        gr = gr[
+            (gr["dir"] != "_doc/auto_examples")
+            & (gr["dir"] != "_doc/auto_recipes")
+            & (gr["dir"] != "_doc/auto_technical")
+        ]
         total = (
             gr[gr["dir"].str.contains("onnx_diagnostic/")]
             .drop(["ext", "dir"], axis=1)
