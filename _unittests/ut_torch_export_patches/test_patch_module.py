@@ -2,12 +2,16 @@ import ast
 import inspect
 import textwrap
 import unittest
+import numpy as np
+from scipy.spatial.distance import cdist
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.torch_export_patches import torch_export_patches, torch_export_rewrite
 from onnx_diagnostic.torch_export_patches.patch_module import (
     transform_method,
     inplace_add_parent,
+    ShapeFinder,
+    RewriteControlFlow,
 )
 
 
@@ -42,7 +46,7 @@ class TestPatchModule(ExtTestCase):
             hasattr(node, "parent") for node in ast.walk(tree)
         ), f"Missing parent in {ast.dump(tree, indent=2)}"
 
-    def test_rewrite_forward_return1(self):
+    def test_rewrite_test_in_forward_return1(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -69,7 +73,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
     @hide_stdout()
-    def test_rewrite_forward_return2(self):
+    def test_rewrite_test_in_forward_return2(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -95,7 +99,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
-    def test_rewrite_forward_assign1(self):
+    def test_rewrite_test_in_forward_assign1(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -122,7 +126,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualArray(expected_, ep.module()(-x, y))
 
-    def test_rewrite_forward_assign2(self):
+    def test_rewrite_test_in_forward_assign2(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -149,7 +153,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
-    def test_rewrite_forward_assign_noelse(self):
+    def test_rewrite_test_in_forward_assign_noelse(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -174,7 +178,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
-    def test_rewrite_forward_return_noelse(self):
+    def test_rewrite_test_in_forward_return_noelse(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -186,7 +190,7 @@ class TestPatchModule(ExtTestCase):
             lambda: transform_method(Model.forward, verbose=self.verbose), NotImplementedError
         )
 
-    def test_rewrite_forward_assign2_in_2(self):
+    def test_rewrite_test_in_forward_assign2_in_2(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -215,7 +219,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
-    def test_rewrite_forward_assign2_in_3(self):
+    def test_rewrite_test_in_forward_assign2_in_3(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -292,7 +296,7 @@ class TestPatchModule(ExtTestCase):
         x, y = torch.rand((3, 4)), torch.rand((3, 4))
         Model()(x, y)
 
-    def test_rewrite_forward_assign_nested(self):
+    def test_rewrite_test_in_forward_assign_nested(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -341,7 +345,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_0, ep.module()(x, -y))
         self.assertEqualAny(expected_1, ep.module()(-x, -y))
 
-    def test_rewrite_forward_none(self):
+    def test_rewrite_test_in_forward_none(self):
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -365,7 +369,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
-    def test_rewrite_PLBartEncoderLayer(self):
+    def test_rewrite_test_in_PLBartEncoderLayer(self):
         from transformers.models.plbart.modeling_plbart import PLBartEncoderLayer
 
         rewritten = transform_method(PLBartEncoderLayer.forward, verbose=self.verbose)
@@ -442,6 +446,91 @@ class TestPatchModule(ExtTestCase):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
             got = ep.module()(x, y)
             self.assertEqualArray(expected, got)
+
+    def test_shape_finder(self):
+        expr = "range(x.shape[0])"
+        node = ast.parse(expr)
+        sh = ShapeFinder()
+        sh.visit(node)
+        self.assertEqual({"x"}, sh.found_shape)
+
+    def test__find_loop_vars(self):
+        code = textwrap.dedent(
+            """
+            for i in range(x.shape[0]):
+                z[i, :] = ((x[i : i + 1, :] - y) ** 2).sum(dim=-1)
+            """
+        )
+        node = ast.parse(code)
+        tr = RewriteControlFlow()
+        vars = tr._find_loop_vars(node.body[0])
+        self.assertEqual(
+            {"loop": ["i"], "scan": ["x"], "input": ["y"], "output": ["z"], "init": []}, vars
+        )
+
+    def test_rewrite_loop(self):
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                z = torch.empty((x.shape[0], y.shape[0]))
+                for i in range(x.shape[0]):
+                    z[i, :] = ((x[i : i + 1, :] - y) ** 2).sum(dim=-1)
+                return z
+
+        class RewrittenModel(torch.nn.Module):
+            def forward(self, x, y):
+                def loop_body_0(x, y):
+                    x = x.reshape((-1, *x.shape))
+                    z = ((x - y) ** 2).sum(dim=-1)
+                    return [z]
+
+                z = torch.ops.higher_order.scan(loop_body_0, [], [x], [y])
+                return z[0]
+
+        class RewrittenModel2(torch.nn.Module):
+            def forward(self, x, y):
+                def loop_body_1(z, i, x, y):
+                    z = z.clone()
+                    z[i, :] = ((x[i, :] - y) ** 2).sum(dim=-1)
+                    return [z, i]
+
+                z = torch.empty((x.shape[0], y.shape[0]))
+                r = torch.ops.higher_order.scan(
+                    loop_body_1, [z], [torch.arange(x.shape[0], dtype=torch.int64)], [x, y]
+                )
+                return r[0]
+
+        x, y = torch.rand((3, 4)), torch.rand((5, 4))
+        expected = Model()(x, y)
+        self.assertEqualArray(
+            expected.numpy(),
+            cdist(x.numpy(), y.numpy(), metric="sqeuclidean").astype(np.float32),
+            atol=1e-5,
+        )
+        rewritten_expected = RewrittenModel()(x, y)
+        self.assertEqualArray(expected, rewritten_expected)
+        rewritten_expected2 = RewrittenModel2()(x, y)
+        self.assertEqualArray(expected, rewritten_expected2)
+
+        rewritten = transform_method(Model.forward, verbose=self.verbose)
+        print(rewritten.code)
+
+        self.assertIn("torch.ops.higher_order.scan(", rewritten.code)
+        Model.forward = rewritten.func
+        self.assertEqualAny(expected, Model()(x, y))
+
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
+        self.assertEqualAny(expected, ep.module()(x, y))
+
+        """
+        z = torch.empty((x.shape[0], y.shape[0]))
+        def loop_body_0(i, x_row, y, z):
+            z[i, :] = ((x_row - y) ** 2).sum(dim=-1)
+            return z
+        z = torch.ops.higher_order.scan(loop_body_0, [x], [y], [])
+        """
 
 
 if __name__ == "__main__":

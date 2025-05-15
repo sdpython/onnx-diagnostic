@@ -34,11 +34,61 @@ def _settl(node, lineno, level=0):
     return node
 
 
+class UsedVarsFinder(ast.NodeVisitor):
+    """Finds used and defined local variables with a section."""
+
+    def __init__(self):
+        self.used = set()
+        self.defined = set()
+
+    def visit_Name(self, node):
+        if isinstance(node.ctx, ast.Load):
+            self.used.add(node.id)
+        elif isinstance(node.ctx, ast.Store):
+            self.defined.add(node.id)
+        self.generic_visit(node)
+
+    def visit_Global(self, node):
+        pass
+
+    def visit_Nonlocal(self, node):
+        pass
+
+
+class ShapeFinder(ast.NodeVisitor):
+    """Finds <x> in the expression ``x.shape[0]``."""
+
+    def __init__(self):
+        self.found_shape = set()
+        super().__init__()
+
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Name) and node.func.id == "range" and len(node.args) == 1:
+            n = node.args[0]
+            if (
+                isinstance(n, ast.Subscript)
+                and isinstance(n.slice, ast.Constant)
+                and isinstance(n.slice.value, int)
+                and n.slice.value == 0
+                and isinstance(n.value, ast.Attribute)
+                and isinstance(n.value.value, ast.Name)
+                and n.value.attr == "shape"
+            ):
+                self.found_shape.add(n.value.value.id)
+
+        self.generic_visit(node)
+
+
 class RewriteControlFlow(ast.NodeTransformer):
     """
     The class rewrites tests with function :func:`torch.cond`.
     ``empty_tensor`` is a function returning an empty tensor,
     when a branch returns something the other branch does not.
+
+    :param prefix: prefix used for nested tests
+    :param skip_objects: to skip variable names if included in that list
+        such as modules
+    :param args_names: defines the local variables
     """
 
     def __init__(
@@ -47,16 +97,24 @@ class RewriteControlFlow(ast.NodeTransformer):
         skip_objects: Optional[Dict[str, object]] = None,
         args_names: Optional[Set[str]] = None,
     ):
-        self.counter = 0
+        self.counter_test = 0
+        self.counter_loop = 0
         self.current_func_args = None
         self.prefix = prefix
         self.skip_objects = skip_objects or {}
         self.args_names = args_names or set()
         self.local_variables = self.args_names.copy()
 
+    def generic_visit(self, node):
+        return super().generic_visit(node)
+
     def _check(
         self, cond: bool, node: "ast.Node", msg: str, cls: Optional[type[Exception]] = None
     ):
+        """
+        Checks the condition is True, otherwise raises an exception with an error message
+        including the parsed code.
+        """
         if cls is not None:
             if not cond:
                 raise cls(f"{msg}\n\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}")
@@ -97,8 +155,8 @@ class RewriteControlFlow(ast.NodeTransformer):
         drop = set()
 
         # extract free variables
-        then_name = f"{self.prefix}_then_{self.counter}"
-        else_name = f"{self.prefix}_else_{self.counter}"
+        then_name = f"{self.prefix}_then_{self.counter_test}"
+        else_name = f"{self.prefix}_else_{self.counter_test}"
         then_vars = self._find_id(then_exprs)
         else_vars = self._find_id(else_exprs)
         then_else_vars = set(_ for _ in [*then_vars, *else_vars] if _ in known_local_variables)
@@ -247,7 +305,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             NotImplementedError,
         )
         self._check(self.current_func_args is not None, node, "current_func_args is None")
-        self.counter += 1
+        self.counter_test += 1
 
         if not has_then_return:
             # Case 1: simple assignment in both branches
@@ -300,8 +358,114 @@ class RewriteControlFlow(ast.NodeTransformer):
         ast.fix_missing_locations(ret)
         return [then_def, else_def, ret]
 
-    def generic_visit(self, node):
-        return super().generic_visit(node)
+    def _find_loop_vars(self, node):
+        assert isinstance(node, ast.For), f"Unexpected type {type(node)} for node"
+        finder = ShapeFinder()
+        finder.visit(node.iter)
+        scan_vars = finder.found_shape
+
+        finder = UsedVarsFinder()
+        for stmt in node.body:
+            finder.visit(stmt)
+
+        extra_defined = set()
+        for stmt in node.body:
+            if isinstance(stmt, ast.Assign):
+                for tgt in stmt.targets:
+                    if isinstance(tgt, ast.Subscript):
+                        if isinstance(tgt.value, ast.Name):
+                            extra_defined.add(tgt.value.id)
+
+        loop_vars = set()
+        if isinstance(node.target, ast.Name):
+            loop_vars.add(node.target.id)
+        elif isinstance(node.target, (ast.Tuple, ast.List)):
+            loop_vars |= {elt.id for elt in node.target.elts if isinstance(elt, ast.Name)}
+
+        output_vars = finder.defined | extra_defined
+        input_vars = finder.used - finder.defined - loop_vars - scan_vars - output_vars
+        return dict(
+            init=[],
+            loop=sorted(loop_vars),
+            scan=sorted(scan_vars),
+            input=sorted(input_vars),
+            output=sorted(output_vars),
+        )
+
+    def visit_For(self, node):
+        # For nested loops.
+        self.generic_visit(node)
+        # look for variables, loop, inputs and outputs of the body
+        vars = self._find_loop_vars(node)
+        init_vars, loop_vars, scan_vars, input_vars, output_vars = [
+            vars[k] for k in ["init", "loop", "scan", "input", "output"]
+        ]
+
+        # return, one value or a tuple of values
+        return_stmt = ast.Return(
+            value=(
+                ast.Name(id=output_vars[0], ctx=ast.Load())
+                if len(output_vars) == 1
+                else ast.Tuple(
+                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in output_vars], ctx=ast.Load()
+                )
+            )
+        )
+
+        # creates the function
+        func_name = f"loop_body_{self.counter_loop}"
+        self.counter_loop += 1
+        func_def = ast.FunctionDef(
+            name=func_name,
+            args=ast.arguments(
+                posonlyargs=[],
+                args=[ast.arg(arg=v) for v in [*init_vars, *scan_vars, *input_vars]],
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[],
+            ),
+            body=[*node.body, return_stmt],
+            decorator_list=[],
+            ctx=ast.Store(),
+        )
+
+        # final rewriting
+        call = ast.Call(
+            func=(
+                ast.Attribute(
+                    value=ast.Attribute(
+                        value=ast.Attribute(
+                            value=ast.Name(id="torch", ctx=ast.Load()),
+                            attr="ops",
+                            ctx=ast.Load(),
+                        ),
+                        attr="higher_order",
+                        ctx=ast.Load(),
+                    ),
+                    attr="scan",
+                    ctx=ast.Load(),
+                )
+            ),
+            args=[
+                ast.Name(id=func_name, ctx=ast.Load()),
+                ast.List(
+                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in init_vars], ctx=ast.Store()
+                ),
+                ast.List(
+                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in scan_vars], ctx=ast.Store()
+                ),
+                ast.List(
+                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in input_vars], ctx=ast.Store()
+                ),
+            ],
+            keywords=[],
+            ctx=ast.Load(),
+        )
+        target = ast.List(
+            [ast.Name(id=v, ctx=ast.Store()) for v in output_vars], ctx=ast.Store()
+        )
+        assign = ast.Assign(targets=[target], value=call)
+        return [func_def, assign]
 
 
 class RewrittenMethod:
