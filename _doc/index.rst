@@ -89,6 +89,28 @@ Enlightening Examples
 Some Usefuls Tools
 ==================
 
+torch_export_patches
+++++++++++++++++++++
+
+See :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`.
+
+.. code-block:: python
+
+  with torch_export_patches(patch_transformers=True) as f:
+      ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
+      # ...
+
+torch_export_rewrite
+++++++++++++++++++++
+
+See :func:`onnx_diagnostic.torch_export_patches.torch_export_rewrite`.
+
+.. code-block:: python
+
+  with torch_export_rewrite(rewrite=[Model.forward]) as f:
+      ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
+      # ...
+
 string_type
 +++++++++++
 

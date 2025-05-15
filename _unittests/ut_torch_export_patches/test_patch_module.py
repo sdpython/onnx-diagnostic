@@ -392,7 +392,7 @@ class TestPatchModule(ExtTestCase):
         expected = model(x, y)
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
-        with torch_export_patches(rewrite_methods=[(Model, "forward")], verbose=2):
+        with torch_export_patches(rewrite=[(Model, "forward")], verbose=2):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
             got = ep.module()(x, y)
             self.assertEqualArray(expected, got)
@@ -411,7 +411,7 @@ class TestPatchModule(ExtTestCase):
         expected = model(x, y)
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
-        with torch_export_rewrite(rewrite_methods=[(Model, "forward")], verbose=1):
+        with torch_export_rewrite(rewrite=[(Model, "forward")], verbose=1):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
             got = ep.module()(x, y)
             self.assertEqualArray(expected, got)
@@ -422,7 +422,7 @@ class TestPatchModule(ExtTestCase):
         expected = model(x, y)
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
-        with torch_export_rewrite(rewrite_methods=[_ModelForATest.forward], verbose=0):
+        with torch_export_rewrite(rewrite=[_ModelForATest.forward], verbose=0):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
             got = ep.module()(x, y)
             self.assertEqualArray(expected, got)
@@ -438,7 +438,7 @@ class TestPatchModule(ExtTestCase):
         expected = model(x, y)
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
-        with torch_export_rewrite(rewrite_methods=[_single_forward], verbose=1):
+        with torch_export_rewrite(rewrite=[_single_forward], verbose=1):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
             got = ep.module()(x, y)
             self.assertEqualArray(expected, got)

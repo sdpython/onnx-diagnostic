@@ -521,13 +521,13 @@ def transform_method(
 
 @contextlib.contextmanager
 def torch_export_rewrite(
-    rewrite_methods: Optional[List[Union[Tuple[type, str], Callable]]] = None, verbose: int = 0
+    rewrite: Optional[List[Union[Tuple[type, str], Callable]]] = None, verbose: int = 0
 ):
     """
-    Automatically rewrite the methods given in `rewrite_methods` to export
+    Automatically rewrite the methods given in `rewrite` to export
     control flows (test and loops).
 
-    :param rewrite_methods: methods to rewrite, if not empty, the function may try
+    :param rewrite: methods of functions to rewrite, if not empty, the function may try
         to discover them, a method is defined by its class (a type) and its name
         if the class is local, by itself otherwise
     :param verbose: verbosity, up to 10, 10 shows the rewritten code,
@@ -549,14 +549,14 @@ def torch_export_rewrite(
         x, y = torch.rand((4, 5)), torch.rand((4, 5))
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
-        with torch_export_rewrite(rewrite_methods=[(Model, "forward")]):
+        with torch_export_rewrite(rewrite=[(Model, "forward")]):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
 
     If the method to rewrite is not local, then the following can be used:
 
     .. code-block:: python
 
-        with torch_export_rewrite(rewrite_methods=[Model.forward]):
+        with torch_export_rewrite(rewrite=[Model.forward]):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
 
     Functions (if not local) can also be rewritten:
@@ -577,14 +577,12 @@ def torch_export_rewrite(
         x, y = torch.rand((4, 5)), torch.rand((4, 5))
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
-        with torch_export_rewrite(rewrite_methods=[outside]):
+        with torch_export_rewrite(rewrite=[outside]):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
     """
-    assert (
-        rewrite_methods
-    ), "rewrite_methods is empty, automated discovery is not implemented yet"
+    assert rewrite, "rewrite is empty, automated discovery is not implemented yet"
     keep = {}
-    for me in rewrite_methods:
+    for me in rewrite:
         if isinstance(me, tuple):
             assert len(me) == 2, f"Unexpected value for a rewritten method or function {me}"
             cls, name = me

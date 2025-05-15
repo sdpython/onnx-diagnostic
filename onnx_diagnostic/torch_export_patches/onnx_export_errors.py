@@ -102,7 +102,7 @@ def torch_export_patches(
     verbose: int = 0,
     patch: bool = True,
     custom_patches: Optional[List[type["torch.nn.Module"]]] = None,  # noqa: F821
-    rewrite_methods: Optional[List[Callable]] = None,
+    rewrite: Optional[List[Callable]] = None,
 ) -> Callable:
     """
     Tries to bypass some situations :func:`torch.export.export` does not support.
@@ -124,7 +124,7 @@ def torch_export_patches(
     :param custom_patches: to apply custom patches,
         every patched class must define static attributes
         ``_PATCHES_``, ``_PATCHED_CLASS_``
-    :param rewrite_methods: list of methods to automatically rewrite
+    :param rewrite: list of methods to automatically rewrite
         before exporting, methods with control flow need to be rewritten
         before being exported if the execution path depends on the inputs,
         this is done by function :func:`transform_method
@@ -183,12 +183,10 @@ def torch_export_patches(
     may appear ``AssertionError: Mutating module attribute _seen_tokens during export.``.
     It can be avoided by setting ``strict=False`` when call :func:`torch.export.export`.
     """
-    if rewrite_methods:
+    if rewrite:
         from .patch_module import torch_export_rewrite
 
-        with torch_export_rewrite(
-            rewrite_methods=rewrite_methods, verbose=verbose
-        ), torch_export_patches(
+        with torch_export_rewrite(rewrite=rewrite, verbose=verbose), torch_export_patches(
             patch_sympy=patch_sympy,
             patch_torch=patch_torch,
             patch_transformers=patch_transformers,
