@@ -1,9 +1,11 @@
 import ast
 import copy
+import contextlib
 import inspect
 import types
 import textwrap
-from typing import Callable, Dict, List, Set, Optional
+import sys
+from typing import Callable, Dict, List, Set, Optional, Tuple, Union
 
 NODE_TYPES = tuple(
     getattr(ast, k)
@@ -515,3 +517,78 @@ def transform_method(
     if not isinstance(new_func, types.FunctionType):
         raise RuntimeError("Transformed function not found")
     return RewrittenMethod(new_tree, new_func)
+
+
+@contextlib.contextmanager
+def torch_export_rewrite(
+    rewrite_methods: Optional[List[Union[Tuple[type, str], Callable]]] = None, verbose: int = 0
+):
+    """
+    Automatically rewrite the methods given in `rewrite_methods` to export
+    control flows (test and loops).
+
+    :param rewrite_methods: methods to rewrite, if not empty, the function may try
+        to discover them, a method is defined by its class (a type) and its name
+        if the class is local, by itself otherwise
+    :param verbose: verbosity, up to 10, 10 shows the rewritten code
+    """
+    assert (
+        rewrite_methods
+    ), "rewrite_methods is empty, automated discovery is not implemented yet"
+    keep = {}
+    for me in rewrite_methods:
+        if isinstance(me, tuple):
+            assert len(me) == 2, f"Unexpected value for a rewritten method or function {me}"
+            cls, name = me
+            to_rewrite = getattr(cls, name)
+            kind = "method"
+        else:
+            name = me.__qualname__
+            spl = name.split(".")
+            if len(spl) == 1:
+                # This a function
+                module = me.__module__
+                if module in me.__globals__:
+                    mod = me.__globals__[module]
+                else:
+                    assert module in sys.modules, (
+                        f"Cannot find module name {module!r} in sys.modules or "
+                        f"__globals__={sorted(me.__globals__)}"
+                    )
+                    mod = sys.modules[module]
+                cls = mod
+                name = name
+                to_rewrite = me
+                kind = "function"
+            else:
+                kind = "method"
+                # This is a method
+                assert len(spl) >= 2, (
+                    f"{me} is not method, its name {name!r} does not contain a class name, "
+                    f"dir(me)={dir(me)}"
+                )
+                cls_name = spl[-2]
+                assert cls_name in me.__globals__, (
+                    f"Class name {cls_name!r} from method {name!r} "
+                    f"could not be found in set(me.__globals__)={sorted(me.__globals__)}"
+                )
+                cls = me.__globals__[cls_name]
+                name = me.__name__
+                to_rewrite = me
+                assert hasattr(
+                    cls, name
+                ), f"Method {name!r} inferred form {me} was not found in class {cls}."
+        assert (cls, name) not in keep, f"{kind} {me} cannot be rewritten twice."
+        if verbose:
+            print(f"[torch_export_rewrite] rewrites {kind} {cls.__name__}.{name}")
+        keep[cls, name] = to_rewrite
+        rewr = transform_method(to_rewrite, verbose=max(verbose - 1, 0))
+        setattr(cls, name, rewr.func)
+
+    try:
+        yield
+    finally:
+        for (cls, name), me in keep.items():
+            if verbose:
+                print(f"[torch_export_rewrite] restored {kind} {cls.__name__}.{name}")
+            setattr(cls, name, me)

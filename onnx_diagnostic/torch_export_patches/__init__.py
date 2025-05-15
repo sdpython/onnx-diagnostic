@@ -2,6 +2,7 @@ from .onnx_export_errors import (
     torch_export_patches,
     register_additional_serialization_functions,
 )
+from .patch_module import torch_export_rewrite
 
 
 # bypass_export_some_errors is the first name given to the patches.

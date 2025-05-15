@@ -4,10 +4,26 @@ import textwrap
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.torch_export_patches import torch_export_patches, torch_export_rewrite
 from onnx_diagnostic.torch_export_patches.patch_module import (
     transform_method,
     inplace_add_parent,
 )
+
+
+class _ModelForATest(torch.nn.Module):
+    def forward(self, x, y):
+        if x.sum() > 0:
+            return x + y
+        else:
+            return torch.abs(x) + y + 1
+
+
+def _single_forward(x, y):
+    if x.sum() > 0:
+        return x + y
+    else:
+        return torch.abs(x) + y + 1
 
 
 class TestPatchModule(ExtTestCase):
@@ -361,8 +377,71 @@ class TestPatchModule(ExtTestCase):
             ),
             rewritten.code,
         )
-        print()
-        print(rewritten.code)
+
+    @hide_stdout()
+    def test_torch_export_patch_method_tuple(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                if x.sum() > 0:
+                    return x + y
+                else:
+                    return torch.abs(x) + y + 1
+
+        model = Model()
+        x, y = torch.rand((4, 5)), torch.rand((4, 5))
+        expected = model(x, y)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        with torch_export_patches(rewrite_methods=[(Model, "forward")], verbose=2):
+            ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
+            got = ep.module()(x, y)
+            self.assertEqualArray(expected, got)
+
+    @hide_stdout()
+    def test_torch_export_rewrite_method_tuple(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                if x.sum() > 0:
+                    return x + y
+                else:
+                    return torch.abs(x) + y + 1
+
+        model = Model()
+        x, y = torch.rand((4, 5)), torch.rand((4, 5))
+        expected = model(x, y)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        with torch_export_rewrite(rewrite_methods=[(Model, "forward")], verbose=1):
+            ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
+            got = ep.module()(x, y)
+            self.assertEqualArray(expected, got)
+
+    def test_torch_export_rewrite_method_only(self):
+        model = _ModelForATest()
+        x, y = torch.rand((4, 5)), torch.rand((4, 5))
+        expected = model(x, y)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        with torch_export_rewrite(rewrite_methods=[_ModelForATest.forward], verbose=0):
+            ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
+            got = ep.module()(x, y)
+            self.assertEqualArray(expected, got)
+
+    @hide_stdout()
+    def test_torch_export_rewrite_function(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return _single_forward(x, y)
+
+        model = Model()
+        x, y = torch.rand((4, 5)), torch.rand((4, 5))
+        expected = model(x, y)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        with torch_export_rewrite(rewrite_methods=[_single_forward], verbose=1):
+            ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
+            got = ep.module()(x, y)
+            self.assertEqualArray(expected, got)
 
 
 if __name__ == "__main__":

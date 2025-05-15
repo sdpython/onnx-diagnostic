@@ -3,7 +3,6 @@ from typing import Any, Dict, Optional, Tuple
 import torch
 import transformers
 from ..helpers import string_type
-from ..helpers.cache_helper import make_dynamic_cache
 
 
 def _process_cache(k: str, v):
@@ -16,6 +15,8 @@ def _process_cache(k: str, v):
         and set(len(t) for t in v) == {2}
     ):
         # A dynamicCache
+        from ..helpers.cache_helper import make_dynamic_cache
+
         cache = make_dynamic_cache(v)
         return cache
     if isinstance(v, torch.Tensor):
