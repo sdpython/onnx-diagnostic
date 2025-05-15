@@ -102,6 +102,7 @@ def torch_export_patches(
     verbose: int = 0,
     patch: bool = True,
     custom_patches: Optional[List[type["torch.nn.Module"]]] = None,  # noqa: F821
+    rewrite: Optional[List[Callable]] = None,
 ) -> Callable:
     """
     Tries to bypass some situations :func:`torch.export.export` does not support.
@@ -123,6 +124,12 @@ def torch_export_patches(
     :param custom_patches: to apply custom patches,
         every patched class must define static attributes
         ``_PATCHES_``, ``_PATCHED_CLASS_``
+    :param rewrite: list of methods to automatically rewrite
+        before exporting, methods with control flow need to be rewritten
+        before being exported if the execution path depends on the inputs,
+        this is done by function :func:`transform_method
+        <onnx_diagnostic.torch_export_patches.patch_module.transform_method>`,
+        its documentation provides possible values
     :param verbose: to show which patches is applied
 
     The list of available patches.
@@ -143,13 +150,13 @@ def torch_export_patches(
 
     Examples:
 
-    ::
+    .. code-block:: python
 
         with torch_export_patches(patch_transformers=True) as modificator:
             inputs = modificator(inputs)
             onx = to_onnx(..., inputs, ...)
 
-    ::
+    .. code-block:: python
 
         with torch_export_patches(patch_transformers=True) as modificator:
             inputs = modificator(inputs)
@@ -157,7 +164,7 @@ def torch_export_patches(
 
     It can be used as well to fix the torch export:
 
-    ::
+    .. code-block:: python
 
         with torch_export_patches(patch_transformers=True) as modificator:
             inputs = modificator(inputs)
@@ -166,7 +173,7 @@ def torch_export_patches(
     When running the model through the exported program, only the
     serialization functions need to be restored:
 
-    ::
+    .. code-block:: python
 
         with register_additional_serialization_functions() as modificator:
             inputs = modificator(inputs)
@@ -176,7 +183,24 @@ def torch_export_patches(
     may appear ``AssertionError: Mutating module attribute _seen_tokens during export.``.
     It can be avoided by setting ``strict=False`` when call :func:`torch.export.export`.
     """
-    if not patch:
+    if rewrite:
+        from .patch_module import torch_export_rewrite
+
+        with torch_export_rewrite(rewrite=rewrite, verbose=verbose), torch_export_patches(
+            patch_sympy=patch_sympy,
+            patch_torch=patch_torch,
+            patch_transformers=patch_transformers,
+            catch_constraints=catch_constraints,
+            stop_if_static=stop_if_static,
+            verbose=verbose,
+            patch=patch,
+            custom_patches=custom_patches,
+        ):
+            try:
+                yield
+            finally:
+                pass
+    elif not patch:
         fct_callable = lambda x: x  # noqa: E731
         done = _register_cache_serialization(verbose=verbose)
         try:
