@@ -530,7 +530,55 @@ def torch_export_rewrite(
     :param rewrite_methods: methods to rewrite, if not empty, the function may try
         to discover them, a method is defined by its class (a type) and its name
         if the class is local, by itself otherwise
-    :param verbose: verbosity, up to 10, 10 shows the rewritten code
+    :param verbose: verbosity, up to 10, 10 shows the rewritten code,
+        ``verbose=1`` shows the rewritten function,
+        ``verbose=2`` shows the rewritten code as well
+
+    Example:
+
+    .. code-block:: python
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                if x.sum() > 0:
+                    return x + y
+                else:
+                    return torch.abs(x) + y + 1
+
+        model = Model()
+        x, y = torch.rand((4, 5)), torch.rand((4, 5))
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        with torch_export_rewrite(rewrite_methods=[(Model, "forward")]):
+            ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
+
+    If the method to rewrite is not local, then the following can be used:
+
+    .. code-block:: python
+
+        with torch_export_rewrite(rewrite_methods=[Model.forward]):
+            ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
+
+    Functions (if not local) can also be rewritten:
+
+    .. code-block:: python
+
+        def outside(x, y):
+            if x.sum() > 0:
+                return x + y
+            else:
+                return torch.abs(x) + y + 1
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return outside(x, y)
+
+        model = Model()
+        x, y = torch.rand((4, 5)), torch.rand((4, 5))
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        with torch_export_rewrite(rewrite_methods=[outside]):
+            ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
     """
     assert (
         rewrite_methods

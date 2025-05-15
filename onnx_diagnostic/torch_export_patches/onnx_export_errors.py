@@ -128,7 +128,8 @@ def torch_export_patches(
         before exporting, methods with control flow need to be rewritten
         before being exported if the execution path depends on the inputs,
         this is done by function :func:`transform_method
-        <onnx_diagnostic.torch_export_patches.patch_module.transform_method>`
+        <onnx_diagnostic.torch_export_patches.patch_module.transform_method>`,
+        its documentation provides possible values
     :param verbose: to show which patches is applied
 
     The list of available patches.
