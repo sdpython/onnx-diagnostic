@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 from scipy.spatial.distance import cdist
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, has_torch
 from onnx_diagnostic.torch_export_patches import torch_export_patches, torch_export_rewrite
 from onnx_diagnostic.torch_export_patches.patch_module import (
     transform_method,
@@ -498,7 +498,7 @@ class TestPatchModule(ExtTestCase):
                 def loop_body_0(x, y):
                     x = x.reshape((-1, *x.shape))
                     z = ((x - y) ** 2).sum(dim=-1)
-                    return [z]
+                    return (z,)
 
                 z = torch.ops.higher_order.scan(loop_body_0, [], [x], [y])
                 return z[0]
@@ -510,29 +510,61 @@ class TestPatchModule(ExtTestCase):
         ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
         torch.export.export(RewrittenModel(), (x, y), dynamic_shapes=ds)
 
+        class RewrittenModelLoop(torch.nn.Module):
+            def forward(self, z, iv, x, y):
+                z = z.clone()
+                i = iv.item()
+                z[i, :] = ((x[i, :] - y) ** 2).sum(dim=-1)
+                return (z, iv)
+
+        inputs = (
+            torch.empty((x.shape[0], y.shape[0])),
+            torch.tensor([2], dtype=torch.int64),
+            x,
+            y,
+        )
+        RewrittenModelLoop()(*inputs)
+        try:
+            from experimental_experiment.torch_interpreter.tracing import CustomTracer
+        except ImportError:
+            CustomTracer = None
+        if CustomTracer:
+            graph = CustomTracer().trace(RewrittenModelLoop())
+            self.assertNotEmpty(graph)
+
+        # does not wiork
+        # dsl = ({0: DYN, 1: DYN}, {}, {0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        # torch.export.export(RewrittenModelLoop(), inputs, dynamic_shapes=dsl)
+
         class RewrittenModel2(torch.nn.Module):
             def forward(self, x, y):
                 def loop_body_1(z, iv, x, y):
                     z = z.clone()
                     i = iv.item()
                     z[i, :] = ((x[i, :] - y) ** 2).sum(dim=-1)
-                    return [z, iv]
+                    return (z, iv)
 
                 z = torch.empty((x.shape[0], y.shape[0]))
                 r = torch.ops.higher_order.scan(
-                    loop_body_1, [z], [torch.arange(x.shape[0], dtype=torch.int64)], [x, y]
+                    loop_body_1,
+                    [z],
+                    [torch.arange(x.shape[0], dtype=torch.int64).reshape((-1, 1))],
+                    [x, y],
                 )
                 return r[0]
-
-        rewritten_expected2 = RewrittenModel2()(x, y)
-        self.assertEqualArray(expected, rewritten_expected2)
-        torch.export.export(RewrittenModel2(), (x, y), dynamic_shapes=ds, strict=False)
 
         rewritten = transform_method(Model.forward, verbose=self.verbose)
         self.assertIn("torch.ops.higher_order.scan(", rewritten.code)
         Model.forward = rewritten.func
         self.assertEqualAny(expected, Model()(x, y))
 
+        rewritten_expected2 = RewrittenModel2()(x, y)
+        self.assertEqualArray(expected, rewritten_expected2)
+
+        if not has_torch("2.9"):
+            raise unittest.SkipTest("skipped export, torch must be >= 2.9")
+
+        torch.export.export(RewrittenModel2(), (x, y), dynamic_shapes=ds, strict=False)
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds, strict=False)
         self.assertEqualAny(expected, ep.module()(x, y))
 
