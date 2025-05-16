@@ -195,9 +195,9 @@ def torch_export_patches(
             verbose=verbose,
             patch=patch,
             custom_patches=custom_patches,
-        ):
+        ) as f:
             try:
-                yield
+                yield f
             finally:
                 pass
     elif not patch:
