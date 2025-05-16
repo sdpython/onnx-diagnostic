@@ -526,27 +526,15 @@ class TestPatchModule(ExtTestCase):
 
         rewritten_expected2 = RewrittenModel2()(x, y)
         self.assertEqualArray(expected, rewritten_expected2)
-        torch.export.export(RewrittenModel2(), (x, y), dynamic_shapes=ds)
+        torch.export.export(RewrittenModel2(), (x, y), dynamic_shapes=ds, strict=False)
 
         rewritten = transform_method(Model.forward, verbose=self.verbose)
-        print("-------")
-        print(rewritten.code)
-        print("-------")
-
         self.assertIn("torch.ops.higher_order.scan(", rewritten.code)
         Model.forward = rewritten.func
         self.assertEqualAny(expected, Model()(x, y))
 
-        ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
+        ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds, strict=False)
         self.assertEqualAny(expected, ep.module()(x, y))
-
-        """
-        z = torch.empty((x.shape[0], y.shape[0]))
-        def loop_body_0(i, x_row, y, z):
-            z[i, :] = ((x_row - y) ** 2).sum(dim=-1)
-            return z
-        z = torch.ops.higher_order.scan(loop_body_0, [x], [y], [])
-        """
 
 
 if __name__ == "__main__":
