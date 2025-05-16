@@ -465,7 +465,15 @@ class TestPatchModule(ExtTestCase):
         tr = RewriteControlFlow()
         vars = tr._find_loop_vars(node.body[0])
         self.assertEqual(
-            {"loop": ["i"], "scan": ["x"], "input": ["y"], "output": ["z"], "init": []}, vars
+            {
+                "init": ["z"],
+                "input": ["y"],
+                "loop": ["i"],
+                "output": [],
+                "scan": [],
+                "scan_shape": ["x"],
+            },
+            vars,
         )
 
     def test_rewrite_loop(self):
@@ -474,8 +482,16 @@ class TestPatchModule(ExtTestCase):
             def forward(self, x, y):
                 z = torch.empty((x.shape[0], y.shape[0]))
                 for i in range(x.shape[0]):
-                    z[i, :] = ((x[i : i + 1, :] - y) ** 2).sum(dim=-1)
+                    z[i, :] = ((x[i, :] - y) ** 2).sum(dim=-1)
                 return z
+
+        x, y = torch.rand((3, 4)), torch.rand((5, 4))
+        expected = Model()(x, y)
+        self.assertEqualArray(
+            expected.numpy(),
+            cdist(x.numpy(), y.numpy(), metric="sqeuclidean").astype(np.float32),
+            atol=1e-5,
+        )
 
         class RewrittenModel(torch.nn.Module):
             def forward(self, x, y):
@@ -487,12 +503,20 @@ class TestPatchModule(ExtTestCase):
                 z = torch.ops.higher_order.scan(loop_body_0, [], [x], [y])
                 return z[0]
 
+        rewritten_expected = RewrittenModel()(x, y)
+        self.assertEqualArray(expected, rewritten_expected)
+
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        torch.export.export(RewrittenModel(), (x, y), dynamic_shapes=ds)
+
         class RewrittenModel2(torch.nn.Module):
             def forward(self, x, y):
-                def loop_body_1(z, i, x, y):
+                def loop_body_1(z, iv, x, y):
                     z = z.clone()
+                    i = iv.item()
                     z[i, :] = ((x[i, :] - y) ** 2).sum(dim=-1)
-                    return [z, i]
+                    return [z, iv]
 
                 z = torch.empty((x.shape[0], y.shape[0]))
                 r = torch.ops.higher_order.scan(
@@ -500,27 +524,19 @@ class TestPatchModule(ExtTestCase):
                 )
                 return r[0]
 
-        x, y = torch.rand((3, 4)), torch.rand((5, 4))
-        expected = Model()(x, y)
-        self.assertEqualArray(
-            expected.numpy(),
-            cdist(x.numpy(), y.numpy(), metric="sqeuclidean").astype(np.float32),
-            atol=1e-5,
-        )
-        rewritten_expected = RewrittenModel()(x, y)
-        self.assertEqualArray(expected, rewritten_expected)
         rewritten_expected2 = RewrittenModel2()(x, y)
         self.assertEqualArray(expected, rewritten_expected2)
+        torch.export.export(RewrittenModel2(), (x, y), dynamic_shapes=ds)
 
         rewritten = transform_method(Model.forward, verbose=self.verbose)
+        print("-------")
         print(rewritten.code)
+        print("-------")
 
         self.assertIn("torch.ops.higher_order.scan(", rewritten.code)
         Model.forward = rewritten.func
         self.assertEqualAny(expected, Model()(x, y))
 
-        DYN = torch.export.Dim.DYNAMIC
-        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
         self.assertEqualAny(expected, ep.module()(x, y))
 

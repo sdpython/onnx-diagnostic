@@ -117,9 +117,13 @@ class RewriteControlFlow(ast.NodeTransformer):
         """
         if cls is not None:
             if not cond:
-                raise cls(f"{msg}\n\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}")
+                smsg = msg if isinstance(msg, str) else msg()
+                raise cls(f"{smsg}\n\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}")
             return
-        assert cond, f"{msg}\n\n--\n{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+        assert cond, (
+            f"{msg if isinstance(msg, str) else msg()}\n\n--\n"
+            f"{ast.unparse(node)}\n--\n{ast.dump(node, indent=2)}"
+        )
 
     def visit_Name(self, node):
         node = self.generic_visit(node)
@@ -362,18 +366,30 @@ class RewriteControlFlow(ast.NodeTransformer):
         assert isinstance(node, ast.For), f"Unexpected type {type(node)} for node"
         finder = ShapeFinder()
         finder.visit(node.iter)
-        scan_vars = finder.found_shape
+        scan_shape_vars = finder.found_shape
+        scan_vars = set()
 
         finder = UsedVarsFinder()
         for stmt in node.body:
             finder.visit(stmt)
+
+        assigned_in_body = set()
+        for stmt in node.body:
+            if isinstance(stmt, ast.Assign):
+                for tgt in stmt.targets:
+                    if isinstance(tgt, ast.Name) and isinstance(tgt.value.ctx, ast.Store):
+                        assigned_in_body |= {tgt.value.id}
 
         extra_defined = set()
         for stmt in node.body:
             if isinstance(stmt, ast.Assign):
                 for tgt in stmt.targets:
                     if isinstance(tgt, ast.Subscript):
-                        if isinstance(tgt.value, ast.Name):
+                        # It means the target existed before.
+                        if (
+                            isinstance(tgt.value, ast.Name)
+                            and tgt.value.id not in assigned_in_body
+                        ):
                             extra_defined.add(tgt.value.id)
 
         loop_vars = set()
@@ -382,11 +398,21 @@ class RewriteControlFlow(ast.NodeTransformer):
         elif isinstance(node.target, (ast.Tuple, ast.List)):
             loop_vars |= {elt.id for elt in node.target.elts if isinstance(elt, ast.Name)}
 
-        output_vars = finder.defined | extra_defined
-        input_vars = finder.used - finder.defined - loop_vars - scan_vars - output_vars
+        output_vars = finder.defined | assigned_in_body
+        input_vars = (
+            finder.used
+            - finder.defined
+            - loop_vars
+            - scan_shape_vars
+            - scan_vars
+            - output_vars
+            - assigned_in_body
+            - extra_defined
+        )
         return dict(
-            init=[],
+            init=sorted(extra_defined),
             loop=sorted(loop_vars),
+            scan_shape=sorted(scan_shape_vars),
             scan=sorted(scan_vars),
             input=sorted(input_vars),
             output=sorted(output_vars),
@@ -397,19 +423,30 @@ class RewriteControlFlow(ast.NodeTransformer):
         self.generic_visit(node)
         # look for variables, loop, inputs and outputs of the body
         vars = self._find_loop_vars(node)
-        init_vars, loop_vars, scan_vars, input_vars, output_vars = [
-            vars[k] for k in ["init", "loop", "scan", "input", "output"]
+        init_vars, loop_vars, scan_shape_vars, scan_vars, input_vars, output_vars = [
+            vars[k] for k in ["init", "loop", "scan_shape", "scan", "input", "output"]
         ]
-
-        # return, one value or a tuple of values
-        return_stmt = ast.Return(
-            value=(
-                ast.Name(id=output_vars[0], ctx=ast.Load())
-                if len(output_vars) == 1
-                else ast.Tuple(
-                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in output_vars], ctx=ast.Load()
-                )
-            )
+        self._check(
+            len(scan_shape_vars) == len(loop_vars),
+            node,
+            lambda: (
+                f"Inconsistencies between loop_vars={loop_vars} "
+                f"and scan_shape_vars={scan_shape_vars}"
+            ),
+        )
+        self._check(
+            len(scan_shape_vars) in {0, 1},
+            node,
+            lambda: f"Inconsistencies with scan_shape_vars={scan_shape_vars}",
+        )
+        self._check(
+            (len(scan_shape_vars) == 0 or len(scan_vars) == 0)
+            and (scan_shape_vars or scan_vars),
+            node,
+            lambda: (
+                f"Inconsistencies between scan_vars={scan_vars} "
+                f"and scan_shape_vars={scan_shape_vars}"
+            ),
         )
 
         # creates the function
@@ -419,12 +456,50 @@ class RewriteControlFlow(ast.NodeTransformer):
             name=func_name,
             args=ast.arguments(
                 posonlyargs=[],
-                args=[ast.arg(arg=v) for v in [*init_vars, *scan_vars, *input_vars]],
+                args=[
+                    ast.arg(arg=v)
+                    for v in [
+                        *init_vars,
+                        *loop_vars,
+                        *scan_vars,
+                        *scan_shape_vars,
+                        *input_vars,
+                    ]
+                ],
                 kwonlyargs=[],
                 kw_defaults=[],
                 defaults=[],
             ),
-            body=[*node.body, return_stmt],
+            body=[
+                *[
+                    ast.Assign(
+                        targets=[ast.Name(id=i, ctx=ast.Load())],
+                        value=[
+                            ast.Call(
+                                func=ast.Attribute(
+                                    value=ast.Name(id=i, ctx=ast.Load()),
+                                    attr="clone",
+                                    ctx=ast.Load(),
+                                ),
+                                args=[],
+                                keywords=[],
+                                ctx=ast.Load(),
+                            )
+                        ],
+                    )
+                    for i in init_vars
+                ],
+                *node.body,
+                ast.Return(
+                    value=ast.List(
+                        [
+                            ast.Name(id=v, ctx=ast.Load())
+                            for v in [*init_vars, *loop_vars, *output_vars]
+                        ],
+                        ctx=ast.Load(),
+                    )
+                ),
+            ],
             decorator_list=[],
             ctx=ast.Store(),
         )
@@ -452,17 +527,56 @@ class RewriteControlFlow(ast.NodeTransformer):
                     elts=[ast.Name(id=v, ctx=ast.Load()) for v in init_vars], ctx=ast.Store()
                 ),
                 ast.List(
-                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in scan_vars], ctx=ast.Store()
+                    elts=[
+                        *[
+                            ast.Call(
+                                ast.Attribute(
+                                    value=ast.Name(id="torch", ctx=ast.Load()),
+                                    attr="arange",
+                                    ctx=ast.Load(),
+                                ),
+                                args=[
+                                    ast.Subscript(
+                                        value=ast.Attribute(
+                                            value=ast.Name(id=v, ctx=ast.Load()),
+                                            attr="shape",
+                                            ctx=ast.Load(),
+                                        ),
+                                        slice=ast.Constant(value=0, ctx=ast.Load()),
+                                        ctx=ast.Load(),
+                                    ),
+                                ],
+                                keywords=[
+                                    ast.keyword(
+                                        arg="dtype",
+                                        value=ast.Attribute(
+                                            value=ast.Name(id="torch", ctx=ast.Load()),
+                                            attr="int64",
+                                            ctx=ast.Load(),
+                                        ),
+                                    )
+                                ],
+                                ctx=ast.Load(),
+                            )
+                            for v in scan_shape_vars
+                        ],
+                        *[ast.Name(id=v, ctx=ast.Load()) for v in scan_vars],
+                    ],
+                    ctx=ast.Store(),
                 ),
                 ast.List(
-                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in input_vars], ctx=ast.Store()
+                    elts=[
+                        ast.Name(id=v, ctx=ast.Load()) for v in [*scan_shape_vars, *input_vars]
+                    ],
+                    ctx=ast.Store(),
                 ),
             ],
             keywords=[],
             ctx=ast.Load(),
         )
-        target = ast.List(
-            [ast.Name(id=v, ctx=ast.Store()) for v in output_vars], ctx=ast.Store()
+        target = ast.Tuple(
+            [ast.Name(id=v, ctx=ast.Store()) for v in [*init_vars, *loop_vars, *output_vars]],
+            ctx=ast.Store(),
         )
         assign = ast.Assign(targets=[target], value=call)
         return [func_def, assign]
