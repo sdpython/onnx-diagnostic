@@ -568,6 +568,13 @@ class TestPatchModule(ExtTestCase):
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds, strict=False)
         self.assertEqualAny(expected, ep.module()(x, y))
 
+        """
+                    position_encodings = torch.cat(
+                [weight[:, :required_pos_encodings_columns]
+                 for weight in broadcasted_weights], dim=-1
+            )
+        """
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
