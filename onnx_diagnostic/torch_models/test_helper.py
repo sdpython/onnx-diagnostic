@@ -482,6 +482,7 @@ def validate_model(
                     verbose=verbose,
                     optimization=optimization,
                     do_run=do_run,
+                    dump_folder=dump_folder,
                 )
         else:
             data["inputs_export"] = data["inputs"]
@@ -493,6 +494,7 @@ def validate_model(
                 verbose=verbose,
                 optimization=optimization,
                 do_run=do_run,
+                dump_folder=dump_folder,
             )
         summary.update(summary_export)
 
@@ -618,6 +620,7 @@ def call_exporter(
     verbose: int = 0,
     optimization: Optional[str] = None,
     do_run: bool = False,
+    dump_folder: Optional[None] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Calls an exporter on a model;
@@ -629,6 +632,7 @@ def call_exporter(
     :param verbose: verbosity
     :param optimization: optimization to do
     :param do_run: runs and compute discrepancies
+    :param dump_folder: to dump additional information
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -661,6 +665,7 @@ def call_exporter(
             quiet=quiet,
             verbose=verbose,
             optimization=optimization,
+            dump_folder=dump_folder,
         )
         return summary, data
     raise NotImplementedError(
@@ -1045,6 +1050,7 @@ def call_torch_export_custom(
     quiet: bool = False,
     verbose: int = 0,
     optimization: Optional[str] = None,
+    dump_folder: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx.
@@ -1056,6 +1062,7 @@ def call_torch_export_custom(
     :param quiet: catch exception or not
     :param verbose: verbosity
     :param optimization: optimization to do
+    :param dump_folder: to store additional information
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1113,6 +1120,7 @@ def call_torch_export_custom(
         decomposition_table=(
             "default" if "-default" in exporter else ("all" if "-all" in exporter else None)
         ),
+        save_ep=(os.path.join(dump_folder, f"{exporter}.ep") if dump_folder else None),
     )
     options = OptimizationOptions(patterns=optimization) if optimization else None
     model = data["model"]

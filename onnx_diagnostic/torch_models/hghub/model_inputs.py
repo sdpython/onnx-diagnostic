@@ -69,6 +69,7 @@ def get_untrained_model_with_inputs(
             subfolder=subfolder,
             **(model_kwargs or {}),
         )
+
     if hasattr(config, "architecture") and config.architecture:
         archs = [config.architecture]
     if type(config) is dict:
@@ -115,6 +116,17 @@ def get_untrained_model_with_inputs(
                 mkwargs[k] = v
     if mkwargs:
         update_config(config, mkwargs)
+
+    # SDPA
+    if model_kwargs and "attn_implementation" in model_kwargs:
+        if hasattr(config, "_attn_implementation_autoset"):
+            config._attn_implementation_autoset = False
+        config._attn_implementation = model_kwargs["attn_implementation"]
+        if verbose:
+            print(
+                f"[get_untrained_model_with_inputs] config._attn_implementation="
+                f"{config._attn_implementation!r}"
+            )
 
     # input kwargs
     kwargs, fct = random_input_kwargs(config, task)
