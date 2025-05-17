@@ -620,7 +620,7 @@ def call_exporter(
     verbose: int = 0,
     optimization: Optional[str] = None,
     do_run: bool = False,
-    dump_folder: Optional[None] = None,
+    dump_folder: Optional[str] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Calls an exporter on a model;

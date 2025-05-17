@@ -121,11 +121,11 @@ def get_untrained_model_with_inputs(
     if model_kwargs and "attn_implementation" in model_kwargs:
         if hasattr(config, "_attn_implementation_autoset"):
             config._attn_implementation_autoset = False
-        config._attn_implementation = model_kwargs["attn_implementation"]
+        config._attn_implementation = model_kwargs["attn_implementation"]  # type: ignore[union-attr]
         if verbose:
             print(
                 f"[get_untrained_model_with_inputs] config._attn_implementation="
-                f"{config._attn_implementation!r}"
+                f"{config._attn_implementation!r}"  # type: ignore[union-attr]
             )
 
     # input kwargs
