@@ -1,4 +1,5 @@
 import inspect
+import os
 from typing import Any, Dict, Optional, Tuple
 import torch
 import transformers
@@ -132,6 +133,11 @@ def get_untrained_model_with_inputs(
     kwargs, fct = random_input_kwargs(config, task)
     if verbose:
         print(f"[get_untrained_model_with_inputs] use fct={fct}")
+        if os.environ.get("PRINT_CONFIG") in (1, "1"):
+            import pprint
+
+            print(f"-- input kwargs for task {task!r}")
+            pprint.pprint(kwargs)
     if inputs_kwargs:
         kwargs.update(inputs_kwargs)
 

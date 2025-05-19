@@ -264,6 +264,11 @@ def validate_model(
     :param subfolder: version or subfolders to uses when retrieving a model id
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
+
+    The following environment variables can be used to print out some
+    information:
+
+    * ``PRINT_CONFIG``: prints the model configuration
     """
     summary = version_summary()
     summary.update(
@@ -331,6 +336,11 @@ def validate_model(
     )
     data["input_options"] = iop
     data["model_options"] = mop
+    if os.environ.get("PRINT_CONFIG", "0") in (1, "1"):
+        print("[validate_model] -- PRINT CONFIG")
+        print("-- type(config)", type(data["configuration"]))
+        print(data["configuration"])
+        print("[validate_model] -- END PRINT CONFIG")
     if iop:
         summary["input_options"] = str(iop)
     if mop:

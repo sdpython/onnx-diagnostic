@@ -13,6 +13,7 @@ __data_arch__ = textwrap.dedent(
     ASTModel,feature-extraction
     AlbertModel,feature-extraction
     BeitForImageClassification,image-classification
+    BartForConditionalGeneration,summarization
     BartModel,feature-extraction
     BertForMaskedLM,fill-mask
     BertForSequenceClassification,text-classification
@@ -163,6 +164,7 @@ __data_tasks__ = [
     "object-detection",
     "reinforcement-learning",
     "sentence-similarity",
+    "summarization",
     "text-classification",
     "text-generation",
     "text-to-image",
