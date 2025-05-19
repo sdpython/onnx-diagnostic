@@ -1,7 +1,7 @@
 import io
 import functools
 import textwrap
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 __date__ = "2025-03-26"
 
@@ -13,6 +13,7 @@ __data_arch__ = textwrap.dedent(
     ASTModel,feature-extraction
     AlbertModel,feature-extraction
     BeitForImageClassification,image-classification
+    BartForConditionalGeneration,summarization
     BartModel,feature-extraction
     BertForMaskedLM,fill-mask
     BertForSequenceClassification,text-classification
@@ -163,6 +164,7 @@ __data_tasks__ = [
     "object-detection",
     "reinforcement-learning",
     "sentence-similarity",
+    "summarization",
     "text-classification",
     "text-generation",
     "text-to-image",
@@ -195,6 +197,28 @@ hf-internal-testing/tiny-random-YolosModel
 hf-internal-testing/tiny-xlm-roberta
 HuggingFaceM4/tiny-random-idefics
 """
+
+
+def code_needing_rewriting(cls_name: str) -> Optional[List[Any]]:
+    """
+    Returns a known list of methods or functions to rewrite because of control flow
+    for a specific model class.
+
+    :param cls_name: name of the class
+    :return: a list of rewriting
+
+    .. runpython::
+        :showcode:
+
+        from onnx_diagnostic.torch_models.hghub.hub_data import code_needing_rewriting
+
+        print(code_needing_rewriting("BartForConditionalGeneration"))
+    """
+    if cls_name in {"BartForConditionalGeneration", "BartEncoderLayer"}:
+        import transformers
+
+        return [transformers.models.bart.modeling_bart.BartEncoderLayer.forward]
+    return None
 
 
 @functools.cache

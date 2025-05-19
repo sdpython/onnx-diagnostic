@@ -4,6 +4,8 @@ Change Logs
 0.5.0
 +++++
 
+* :pr:`104`: add summarization task, add rewrite to command line validate
+* :pr:`101`: first draft to rewrite loops
 * :pr:`100`: implements a context to automatically rewrite methods or function with control flows
 * :pr:`96`: implements ``is_stealing``, ``steal_append`` to complement ``steal_forward``
 * :pr:`95`: fixzq Scan implementation for ``OnnxruntimeEvaluator``

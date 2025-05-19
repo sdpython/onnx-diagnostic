@@ -689,9 +689,22 @@ def dummy_llm(
     raise NotImplementedError(f"cls_name={cls_name}")
 
 
-def to_any(value: Any, to_value: Union[torch.dtype, torch.device]) -> Any:
+def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
     """Applies torch.to if applicable. Goes recursively."""
-    if isinstance(value, (torch.nn.Module, torch.Tensor)):
+    if isinstance(value, (torch.nn.Module, torch.Tensor)) and value.__class__.__name__ not in {
+        "DynamicCache",
+        "EncoderDecoderCache",
+    }:
+        if (
+            (
+                isinstance(to_value, torch.dtype)
+                or to_value in {"float16", "bfloat16", "float32", "float64"}
+            )
+            and hasattr(value, "dtype")
+            and value.dtype in {torch.int32, torch.int64, torch.int8, torch.int16}
+        ):
+            # int vector should not be changed.
+            return value
         return value.to(to_value)
     if isinstance(value, list):
         return [to_any(t, to_value) for t in value]
@@ -701,8 +714,6 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device]) -> Any:
         return {to_any(t, to_value) for t in value}
     if isinstance(value, dict):
         return {k: to_any(t, to_value) for k, t in value.items()}
-    if hasattr(value, "to"):
-        return value.to(to_value)
     if value.__class__.__name__ == "DynamicCache":
         return make_dynamic_cache(
             list(
@@ -712,11 +723,23 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device]) -> Any:
                 )
             )
         )
+    if value.__class__.__name__ == "EncoderDecoderCache":
+        return make_encoder_decoder_cache(
+            to_any(value.self_attention_cache, to_value),
+            to_any(value.cross_attention_cache, to_value),
+        )
     if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:
         args, spec = torch.utils._pytree.tree_flatten(value)
         new_args = to_any(args, to_value)
         return torch.utils._pytree.tree_unflatten(new_args, spec)
 
+    if hasattr(value, "to"):
+        return value.to(to_value)
+
+    assert "Cache" not in value.__class__.__name__, (
+        f"Class {value.__class__.__name__!r} should be registered "
+        f"to be able to change the type in every tensor it contains."
+    )
     assert not isinstance(value, Iterable), f"Unsupported type {type(value)}"
     return value
 

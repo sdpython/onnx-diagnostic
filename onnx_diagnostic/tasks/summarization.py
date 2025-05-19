@@ -3,7 +3,7 @@ import torch
 from ..helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 from ..helpers.config_helper import update_config, check_hasattr, _pick
 
-__TASK__ = "text2text-generation"
+__TASK__ = "summarization"
 
 
 def reduce_model_config(config: Any) -> Dict[str, Any]:
@@ -26,7 +26,6 @@ def get_inputs(
     num_hidden_layers: int,
     head_dim_encoder: int,
     head_dim_decoder: int,
-    encoder_dim: int,
     batch_size: int = 2,
     sequence_length: int = 30,
     sequence_length2: int = 3,
@@ -34,7 +33,7 @@ def get_inputs(
     **kwargs,  # unused
 ):
     """
-    Generates input for task ``text2text-generation``.
+    Generates input for task ``summarization``.
 
     :param model: model to get the missing information
     :param config: configuration used to generate the model
@@ -44,7 +43,6 @@ def get_inputs(
     :param num_key_value_heads_decoder: number of heads for the decoder
     :param dummy_max_token_id: dummy max token id
     :param batch_size: batch size
-    :param encoder_dim: last dimension of encoder_last_hidden_state
     :param sequence_length: sequence length
     :param sequence_length2: new sequence length
     :return: dictionary
@@ -140,9 +138,6 @@ def get_inputs(
                 ]
             ),
         ),
-        # one these is selected based on the forward method signature
-        # encoder_last_hidden_state=torch.randn(batch_size, sequence_length2, encoder_dim),
-        # encoder_outputs=torch.randn(batch_size, sequence_length2, encoder_dim),
     )
     res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
@@ -155,7 +150,6 @@ def get_inputs(
             num_hidden_layers=num_hidden_layers,
             head_dim_encoder=head_dim_encoder,
             head_dim_decoder=head_dim_decoder,
-            encoder_dim=encoder_dim,
             batch_size=batch_size + 1,
             sequence_length=sequence_length + 1,
             sequence_length2=sequence_length2 + 1,
@@ -193,8 +187,12 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
         batch_size=2,
         sequence_length=30,
         sequence_length2=3,
-        head_dim_encoder=16 if config is None else _pick(config, "d_kv", "encoder_ffn_dim"),
-        head_dim_decoder=16 if config is None else _pick(config, "d_kv", "decoder_ffn_dim"),
+        head_dim_encoder=(
+            16 if config is None else int(_pick(config, "encoder_ffn_dim") ** 0.5)
+        ),
+        head_dim_decoder=(
+            16 if config is None else int(_pick(config, "decoder_ffn_dim") ** 0.5)
+        ),
         dummy_max_token_id=31999 if config is None else config.vocab_size - 1,
         num_hidden_layers=(
             8 if config is None else _pick(config, "num_hidden_layers", "num_layers")
@@ -219,6 +217,5 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 "num_heads",
             )
         ),
-        encoder_dim=512 if config is None else _pick(config, "n_positions", "d_model"),
     )
     return kwargs, get_inputs

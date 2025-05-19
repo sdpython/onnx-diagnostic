@@ -1,10 +1,12 @@
 import inspect
+import os
 from typing import Any, Dict, Optional, Tuple
 import torch
 import transformers
 from ...helpers.config_helper import update_config
 from ...tasks import reduce_model_config, random_input_kwargs
 from .hub_api import task_from_arch, task_from_id, get_pretrained_config
+from .hub_data import code_needing_rewriting
 
 
 def get_untrained_model_with_inputs(
@@ -39,7 +41,8 @@ def get_untrained_model_with_inputs(
     :param add_second_input: provides a second inputs to check a model
         supports different shapes
     :param subfolder: subfolder to use for this model id
-    :return: dictionary with a model, inputs, dynamic shapes, and the configuration
+    :return: dictionary with a model, inputs, dynamic shapes, and the configuration,
+        some necessary rewriting as well
 
     Example:
 
@@ -132,6 +135,11 @@ def get_untrained_model_with_inputs(
     kwargs, fct = random_input_kwargs(config, task)
     if verbose:
         print(f"[get_untrained_model_with_inputs] use fct={fct}")
+        if os.environ.get("PRINT_CONFIG") in (1, "1"):
+            import pprint
+
+            print(f"-- input kwargs for task {task!r}")
+            pprint.pprint(kwargs)
     if inputs_kwargs:
         kwargs.update(inputs_kwargs)
 
@@ -164,6 +172,10 @@ def get_untrained_model_with_inputs(
         if k.startswith(("inputs", "dynamic_shapes")) and isinstance(v, dict):
             update[k] = filter_out_unexpected_inputs(model, v, verbose=verbose)
     res.update(update)
+
+    rewrite = code_needing_rewriting(model.__class__.__name__)
+    if rewrite:
+        res["rewrite"] = rewrite
     return res
 
 

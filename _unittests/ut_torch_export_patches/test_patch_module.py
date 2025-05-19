@@ -153,6 +153,30 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
+    def test_check_syntax_assign_noelse(self):
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+
+                def branch_cond_then_1(x):
+                    x = torch.abs(x) + 1
+                    return x
+
+                def branch_cond_else_1(x):
+                    return x.clone()
+
+                x = torch.cond(x.sum() > 0, branch_cond_then_1, branch_cond_else_1, [x])
+                return x + y
+
+        x, y = torch.rand((3, 4)), torch.rand((3, 4))
+        expected, expected_ = Model()(x, y), Model()(-x, y)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
+        self.assertIn("cond", [str(getattr(n, "target", "?")) for n in ep.graph.nodes])
+        self.assertEqualAny(expected, ep.module()(x, y))
+        self.assertEqualAny(expected_, ep.module()(-x, y))
+
     def test_rewrite_test_in_forward_assign_noelse(self):
 
         class Model(torch.nn.Module):

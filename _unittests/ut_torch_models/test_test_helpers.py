@@ -15,6 +15,7 @@ from onnx_diagnostic.torch_models.test_helper import (
     validate_model,
     filter_inputs,
     run_ort_fusion,
+    empty,
 )
 from onnx_diagnostic.tasks import supported_tasks
 
@@ -31,6 +32,9 @@ class TestTestHelper(ExtTestCase):
             self.assertIn("inputs", data)
             self.assertIn("dynamic_shapes", data)
             copy.deepcopy(data["inputs"])
+
+    def test_empty(self):
+        self.assertFalse(empty("float16"))
 
     @hide_stdout()
     def test_validate_model(self):

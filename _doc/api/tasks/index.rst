@@ -43,6 +43,7 @@ Or:
     mixture_of_expert
     object_detection
     sentence_similarity
+    summarization
     text_classification
     text_generation
     text2text_generation
