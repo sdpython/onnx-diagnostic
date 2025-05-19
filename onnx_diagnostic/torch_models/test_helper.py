@@ -23,7 +23,7 @@ from .hghub import get_untrained_model_with_inputs
 def empty(value: Any) -> bool:
     """Tells if the value is empty."""
     if isinstance(value, (str, list, dict, tuple, set)):
-        return bool(value)
+        return not bool(value)
     if value is None:
         return True
     return False
