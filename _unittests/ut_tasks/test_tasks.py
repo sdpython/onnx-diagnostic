@@ -123,8 +123,22 @@ class TestTasks(ExtTestCase):
             )
 
     @hide_stdout()
-    def test_feature_extraction(self):
+    def test_feature_extraction_bart_base(self):
         mid = "facebook/bart-base"
+        data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
+        self.assertEqual(data["task"], "feature-extraction")
+        self.assertIn((data["size"], data["n_weights"]), [(557681664, 139420416)])
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        model(**inputs)
+        model(**data["inputs2"])
+        with torch_export_patches(patch_transformers=True, verbose=10):
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
+
+    @hide_stdout()
+    def test_feature_extraction_tiny_bart(self):
+        mid = "hf-tiny-model-private/tiny-random-PLBartForConditionalGeneration"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "feature-extraction")
         self.assertIn((data["size"], data["n_weights"]), [(557681664, 139420416)])

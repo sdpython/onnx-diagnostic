@@ -3850,3 +3850,40 @@ def _ccached_hustvl_yolos_tiny():
             "use_mid_position_embeddings": false,
         }
     )
+
+
+def _ccached_facebook_bart_base():
+    "hf-tiny-model-private/tiny-random-PLBartForConditionalGeneration"
+    return transformers.BartConfig(
+        **{
+            "activation_dropout": 0.0,
+            "activation_function": "gelu",
+            "architectures": ["PLBartForConditionalGeneration"],
+            "attention_dropout": 0.1,
+            "bos_token_id": 0,
+            "classifier_dropout": 0.0,
+            "d_model": 16,
+            "decoder_attention_heads": 4,
+            "decoder_ffn_dim": 4,
+            "decoder_layerdrop": 0.0,
+            "decoder_layers": 2,
+            "dropout": 0.1,
+            "encoder_attention_heads": 4,
+            "encoder_ffn_dim": 4,
+            "encoder_layerdrop": 0.0,
+            "encoder_layers": 2,
+            "eos_token_id": 2,
+            "forced_eos_token_id": 2,
+            "init_std": 0.02,
+            "is_encoder_decoder": true,
+            "max_position_embeddings": 100,
+            "model_type": "plbart",
+            "num_hidden_layers": 2,
+            "pad_token_id": 1,
+            "scale_embedding": true,
+            "torch_dtype": "float32",
+            "transformers_version": "4.52.0.dev0",
+            "use_cache": true,
+            "vocab_size": 50005,
+        }
+    )
