@@ -177,16 +177,21 @@ class RewriteControlFlow(ast.NodeTransformer):
             else_ret = else_exprs[0]
             then_exprs = [n for n in node.body if not isinstance(n, ast.Return)]
             else_exprs = [n for n in node.orelse if not isinstance(n, ast.Return)]
-            assert type(then_ret.value) is type(else_ret.value), (
-                f"Inconsistencies return then value={then_ret.value}, "
-                f"else value={else_ret.value}"
+            is_tuple_or_list = (
+                isinstance(then_ret, (ast.Tuple, ast.List)),
+                isinstance(else_ret, (ast.Tuple, ast.List)),
             )
-            if isinstance(then_ret.value, (ast.Tuple, ast.list)):
-                assert len(then_ret.value.elts) == len(else_ret.value.elts), (
+            assert len(set(is_tuple_or_list)) == 1, (
+                f"is_tuple_or_list={is_tuple_or_list}, inconsistencies return "
+                f"then value={then_ret}, "
+                f"else value={else_ret}"
+            )
+            if is_tuple_or_list[0]:
+                assert len(then_ret.elts) == len(else_ret.elts), (
                     f"Unexpected number of elements on both branches, "
-                    f"then:{then_ret.value.elts}, else:{else_ret.value.elts}"
+                    f"then:{then_ret.elts}, else:{else_ret.elts}"
                 )
-                n_returned_values = len(then_ret.value.elts)
+                n_returned_values = len(then_ret.elts)
             else:
                 n_returned_values = 0
         else:

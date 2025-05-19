@@ -693,9 +693,13 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
     """Applies torch.to if applicable. Goes recursively."""
     if isinstance(value, (torch.nn.Module, torch.Tensor)):
         if (
-            isinstance(to_value, torch.dtype)
-            or to_value in {"float16", "bfloat16", "float32", "float64"}
-        ) and value.dtype in {torch.int32, torch.int64, torch.int8, torch.int16}:
+            (
+                isinstance(to_value, torch.dtype)
+                or to_value in {"float16", "bfloat16", "float32", "float64"}
+            )
+            and hasattr(value, "dtype")
+            and value.dtype in {torch.int32, torch.int64, torch.int8, torch.int16}
+        ):
             # int vector should not be changed.
             return value
         return value.to(to_value)

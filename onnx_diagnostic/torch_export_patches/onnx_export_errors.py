@@ -188,9 +188,9 @@ def torch_export_patches(
     if rewrite:
         from .patch_module import torch_export_rewrite
 
-        with torch_export_rewrite(  # type: ignore[var-annotated]
+        with torch_export_rewrite(
             rewrite=rewrite, dump_rewriting=dump_rewriting, verbose=verbose
-        ), torch_export_patches(
+        ), torch_export_patches(  # type: ignore[var-annotated]
             patch_sympy=patch_sympy,
             patch_torch=patch_torch,
             patch_transformers=patch_transformers,
