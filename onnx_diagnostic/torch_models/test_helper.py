@@ -380,7 +380,7 @@ def validate_model(
     summary["model_class"] = data["model"].__class__.__name__
     summary["model_module"] = str(data["model"].__class__.__module__)
     if summary["model_module"] in sys.modules:
-        summary["model_file"] = str(sys.modules[summary["model_module"]].__file__)
+        summary["model_file"] = str(sys.modules[summary["model_module"]].__file__)  # type: ignore[index]
     summary["model_config_class"] = data["configuration"].__class__.__name__
     summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
     summary["model_id"] = model_id
