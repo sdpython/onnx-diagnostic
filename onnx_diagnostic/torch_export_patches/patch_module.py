@@ -151,6 +151,12 @@ class RewriteControlFlow(ast.NodeTransformer):
                     vars.append(n.id)
         return sorted(set(vars))
 
+    def _clone(self, name):
+        assert isinstance(name, ast.Name), f"Unexpected type {type(name)} for name"
+        return ast.Call(
+            func=ast.Attribute(value=name, attr="clone", ctx=ast.Load()), args=[], keywords=[]
+        )
+
     def _rewrite_if(
         self, node, then_exprs, else_exprs, tgt_mapping=None, known_local_variables=None
     ):
@@ -192,10 +198,14 @@ class RewriteControlFlow(ast.NodeTransformer):
                 then_rets.append(then_e or ast.Name(else_e.id, ctx=ast.Load()))
                 else_rets.append(else_e or ast.Name(then_e.id, ctx=ast.Load()))
             then_ret = (
-                then_rets[0] if len(then_rets) == 1 else ast.Tuple(then_rets, ctx=ast.Load())
+                self._clone(then_rets[0])
+                if len(then_rets) == 1
+                else ast.Tuple([self._clone(r) for r in then_rets], ctx=ast.Load())
             )
             else_ret = (
-                else_rets[0] if len(else_rets) == 1 else ast.Tuple(else_rets, ctx=ast.Load())
+                self._clone(else_rets[0])
+                if len(else_rets) == 1
+                else ast.Tuple([self._clone(r) for r in else_rets], ctx=ast.Load())
             )
 
         # build local funcs
