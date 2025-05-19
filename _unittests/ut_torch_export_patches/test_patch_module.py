@@ -476,6 +476,7 @@ class TestPatchModule(ExtTestCase):
             vars,
         )
 
+    @requires_torch("2.8")
     def test_rewrite_loop(self):
 
         class Model(torch.nn.Module):
