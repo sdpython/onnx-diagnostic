@@ -140,8 +140,8 @@ class TestTasks(ExtTestCase):
     def test_feature_extraction_tiny_bart(self):
         mid = "hf-tiny-model-private/tiny-random-PLBartForConditionalGeneration"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
-        self.assertEqual(data["task"], "feature-extraction")
-        self.assertIn((data["size"], data["n_weights"]), [(557681664, 139420416)])
+        self.assertEqual(data["task"], "text2text-generation")
+        self.assertIn((data["size"], data["n_weights"]), [(3243392, 810848)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         model(**data["inputs2"])
