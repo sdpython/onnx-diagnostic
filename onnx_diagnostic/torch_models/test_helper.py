@@ -1,6 +1,7 @@
 import datetime
 import inspect
 import os
+import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import time
 import onnx
@@ -375,8 +376,11 @@ def validate_model(
         summary[f"model_{k.replace('_','')}"] = data[k]
     summary["model_inputs_opionts"] = str(input_options or "")
     summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
-    summary["model_shapes"] = string_type(str(data["dynamic_shapes"]))
+    summary["model_shapes"] = string_type(data["dynamic_shapes"])
     summary["model_class"] = data["model"].__class__.__name__
+    summary["model_module"] = data["model"].__class__.__module__
+    if summary["model_module"] in sys.modules:
+        summary["model_file"] = sys.modules[summary["model_module"]].__file__
     summary["model_config_class"] = data["configuration"].__class__.__name__
     summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
     summary["model_id"] = model_id
