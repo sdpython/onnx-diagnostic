@@ -691,7 +691,10 @@ def dummy_llm(
 
 def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
     """Applies torch.to if applicable. Goes recursively."""
-    if isinstance(value, (torch.nn.Module, torch.Tensor)):
+    if isinstance(value, (torch.nn.Module, torch.Tensor)) and value.__class__.__name__ not in {
+        "DynamicCache",
+        "EncoderDecoderCache",
+    }:
         if (
             (
                 isinstance(to_value, torch.dtype)
@@ -699,7 +702,6 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
             )
             and hasattr(value, "dtype")
             and value.dtype in {torch.int32, torch.int64, torch.int8, torch.int16}
-            and value.__class__.__name__ not in {"DynamicCache", "EncoderDecoderCache"}
         ):
             # int vector should not be changed.
             return value
@@ -712,8 +714,6 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
         return {to_any(t, to_value) for t in value}
     if isinstance(value, dict):
         return {k: to_any(t, to_value) for k, t in value.items()}
-    if hasattr(value, "to"):
-        return value.to(to_value)
     if value.__class__.__name__ == "DynamicCache":
         return make_dynamic_cache(
             list(
@@ -732,6 +732,9 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
         args, spec = torch.utils._pytree.tree_flatten(value)
         new_args = to_any(args, to_value)
         return torch.utils._pytree.tree_unflatten(new_args, spec)
+
+    if hasattr(value, "to"):
+        return value.to(to_value)
 
     assert "Cache" not in value.__class__.__name__, (
         f"Class {value.__class__.__name__!r} should be registered "
