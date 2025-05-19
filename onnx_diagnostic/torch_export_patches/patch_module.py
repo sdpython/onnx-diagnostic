@@ -177,6 +177,18 @@ class RewriteControlFlow(ast.NodeTransformer):
             else_ret = else_exprs[0]
             then_exprs = [n for n in node.body if not isinstance(n, ast.Return)]
             else_exprs = [n for n in node.orelse if not isinstance(n, ast.Return)]
+            assert type(then_ret.value) is type(else_ret.value), (
+                f"Inconsistencies return then value={then_ret.value}, "
+                f"else value={else_ret.value}"
+            )
+            if isinstance(then_ret.value, (ast.Tuple, ast.list)):
+                assert len(then_ret.value.elts) == len(else_ret.value.elts), (
+                    f"Unexpected number of elements on both branches, "
+                    f"then:{then_ret.value.elts}, else:{else_ret.value.elts}"
+                )
+                n_returned_values = len(then_ret.value.elts)
+            else:
+                n_returned_values = 0
         else:
             self._check(
                 tgt_mapping,
@@ -207,6 +219,7 @@ class RewriteControlFlow(ast.NodeTransformer):
                 if len(else_rets) == 1
                 else ast.Tuple([self._clone(r) for r in else_rets], ctx=ast.Load())
             )
+            n_returned_values = len(then_rets) if len(then_rets) > 1 else 0
 
         # build local funcs
         then_def = ast.FunctionDef(
@@ -258,7 +271,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             ],
             keywords=[],
         )
-        return then_def, else_def, call, drop
+        return then_def, else_def, call, drop, n_returned_values
 
     def _filter_target(self, node, tgt_mapping):
         """
@@ -330,7 +343,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             # the targets we need to export
             tgt, tgt_mapping = self._make_targets(node, then_assigns, else_assigns)
 
-            then_def, else_def, call, dropped = self._rewrite_if(
+            then_def, else_def, call, dropped, n_returned_values = self._rewrite_if(
                 node,
                 then_assigns,
                 else_assigns,
@@ -338,9 +351,24 @@ class RewriteControlFlow(ast.NodeTransformer):
                 known_local_variables=known_local_variables,
             )
             if dropped and isinstance(tgt, ast.Tuple):
-                tgt = ast.Tuple(
-                    tuple(t for t in tgt.elts if t.id not in dropped), ctx=ast.Store()
+                tgt_elts = tuple(t for t in tgt.elts if t.id not in dropped)
+            elif isinstance(tgt, ast.Tuple):
+                tgt_elts = tuple(t for t in tgt.elts if t.id not in dropped)
+            else:
+                tgt_elts = [tgt]
+
+            if n_returned_values == 0:
+                assert len(tgt_elts) == 1, (
+                    f"Inconsistencies between n_returned_values={n_returned_values}, "
+                    f"dropped={dropped}, tgt.elts={tgt.elts}, tgt_elts={tgt_elts}"
                 )
+                tgt = tgt_elts[0]
+            else:
+                assert n_returned_values == len(tgt_elts), (
+                    f"Inconsistencies between n_returned_values={n_returned_values}, "
+                    f"dropped={dropped}, tgt.elts={tgt.elts}, tgt_elts={tgt_elts}"
+                )
+                tgt = ast.Tuple(tgt_elts, ctx=ast.Store())
 
             added = {tgt.id} if isinstance(tgt, ast.Name) else set(t.id for t in tgt.elts)
             assign = ast.Assign(targets=[tgt], value=call)
@@ -364,7 +392,7 @@ class RewriteControlFlow(ast.NodeTransformer):
         )
         then_expr = then_ret.value
         else_expr = else_ret.value
-        then_def, else_def, call, dropped = self._rewrite_if(
+        then_def, else_def, call, dropped, n_returned_values = self._rewrite_if(
             node, [then_expr], [else_expr], known_local_variables=known_local_variables
         )
         ret = ast.Return(call)
@@ -809,7 +837,9 @@ def transform_method(
 
 @contextlib.contextmanager
 def torch_export_rewrite(
-    rewrite: Optional[List[Union[Tuple[type, str], Callable]]] = None, verbose: int = 0
+    rewrite: Optional[List[Union[Tuple[type, str], Callable]]] = None,
+    dump_rewriting: Optional[str] = None,
+    verbose: int = 0,
 ):
     """
     Automatically rewrite the methods given in `rewrite` to export
@@ -818,6 +848,7 @@ def torch_export_rewrite(
     :param rewrite: methods of functions to rewrite, if not empty, the function may try
         to discover them, a method is defined by its class (a type) and its name
         if the class is local, by itself otherwise
+    :param dump_rewriting: dumps rewriting information in file beginning with that prefix
     :param verbose: verbosity, up to 10, 10 shows the rewritten code,
         ``verbose=1`` shows the rewritten function,
         ``verbose=2`` shows the rewritten code as well
@@ -890,6 +921,7 @@ def torch_export_rewrite(
                         f"__globals__={sorted(me.__globals__)}"
                     )
                     mod = sys.modules[module]
+                cls_name = module
                 cls = mod
                 name = name
                 to_rewrite = me
@@ -916,7 +948,19 @@ def torch_export_rewrite(
         if verbose:
             print(f"[torch_export_rewrite] rewrites {kind} {cls.__name__}.{name}")
         keep[cls, name] = to_rewrite
+        if dump_rewriting:
+            filename = f"{dump_rewriting}.{kind}.{cls_name}.{name}.original.py"
+            if verbose:
+                print(f"[torch_export_rewrite] dump original code in {filename!r}")
+            with open(filename, "w") as f:
+                f.write(inspect.getsource(to_rewrite))
         rewr = transform_method(to_rewrite, verbose=max(verbose - 1, 0))
+        if dump_rewriting:
+            filename = f"{dump_rewriting}.{kind}.{cls_name}.{name}.rewritten.py"
+            if verbose:
+                print(f"[torch_export_rewrite] dump rewritten code in {filename!r}")
+            with open(filename, "w") as f:
+                f.write(rewr.code)
         setattr(cls, name, rewr.func)
 
     try:

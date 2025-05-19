@@ -103,6 +103,7 @@ def torch_export_patches(
     patch: bool = True,
     custom_patches: Optional[List[type["torch.nn.Module"]]] = None,  # noqa: F821
     rewrite: Optional[List[Callable]] = None,
+    dump_rewriting: Optional[str] = None,
 ) -> Callable:
     """
     Tries to bypass some situations :func:`torch.export.export` does not support.
@@ -130,6 +131,7 @@ def torch_export_patches(
         this is done by function :func:`transform_method
         <onnx_diagnostic.torch_export_patches.patch_module.transform_method>`,
         its documentation provides possible values
+    :param dump_rewriting: dumps rewriting information in file beginning with that prefix
     :param verbose: to show which patches is applied
 
     The list of available patches.
@@ -186,7 +188,9 @@ def torch_export_patches(
     if rewrite:
         from .patch_module import torch_export_rewrite
 
-        with torch_export_rewrite(rewrite=rewrite, verbose=verbose), torch_export_patches(  # type: ignore[var-annotated]
+        with torch_export_rewrite(  # type: ignore[var-annotated]
+            rewrite=rewrite, dump_rewriting=dump_rewriting, verbose=verbose
+        ), torch_export_patches(
             patch_sympy=patch_sympy,
             patch_torch=patch_torch,
             patch_transformers=patch_transformers,

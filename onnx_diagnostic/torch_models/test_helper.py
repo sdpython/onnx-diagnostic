@@ -222,6 +222,7 @@ def validate_model(
     optimization: Optional[str] = None,
     quiet: bool = False,
     patch: bool = False,
+    rewrite: bool = False,
     stop_if_static: int = 1,
     dump_folder: Optional[str] = None,
     drop_inputs: Optional[List[str]] = None,
@@ -250,6 +251,8 @@ def validate_model(
     :param quiet: if quiet, catches exception if any issue
     :param patch: applies patches (``patch_transformers=True``) before exporting,
         see :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
+    :param rewrite: applies known rewriting (``patch_transformers=True``) before exporting,
+        see :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
     :param stop_if_static: stops if a dynamic dimension becomes static,
         see :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
     :param dump_folder: dumps everything in a subfolder of this one
@@ -270,6 +273,9 @@ def validate_model(
 
     * ``PRINT_CONFIG``: prints the model configuration
     """
+    assert (
+        not rewrite or patch
+    ), f"rewrite={rewrite}, patch={patch}, patch must be True to enable rewriting"
     summary = version_summary()
     summary.update(
         dict(
@@ -281,6 +287,7 @@ def validate_model(
             version_optimization=optimization or "",
             version_quiet=str(quiet),
             version_patch=str(patch),
+            version_rewrite=str(rewrite),
             version_dump_folder=dump_folder or "",
             version_drop_inputs=str(list(drop_inputs or "")),
             version_ortfusiontype=ortfusiontype or "",
@@ -336,6 +343,13 @@ def validate_model(
     )
     data["input_options"] = iop
     data["model_options"] = mop
+    if "rewrite" in data:
+        if rewrite:
+            summary["model_rewrite"] = str(data["rewrite"])
+            if verbose:
+                print(f"[validate_model] model_rewrite={summary['model_rewrite']}")
+        else:
+            del data["rewrite"]
     if os.environ.get("PRINT_CONFIG", "0") in (1, "1"):
         print("[validate_model] -- PRINT CONFIG")
         print("-- type(config)", type(data["configuration"]))
@@ -446,6 +460,8 @@ def validate_model(
                 patch_transformers=True,
                 stop_if_static=stop_if_static,
                 verbose=max(0, verbose - 1),
+                rewrite=data.get("rewrite", None),
+                dump_rewriting=(os.path.join(dump_folder, "rewrite") if dump_folder else None),
             ) as modificator:
                 data["inputs_export"] = modificator(data["inputs"])  # type: ignore
 

@@ -309,11 +309,16 @@ def get_parser_validate() -> ArgumentParser:
         help="catches exception, report them in the summary",
     )
     parser.add_argument(
-        "-p",
         "--patch",
         default=True,
         action=BooleanOptionalAction,
         help="applies patches before exporting",
+    )
+    parser.add_argument(
+        "--rewrite",
+        default=True,
+        action=BooleanOptionalAction,
+        help="applies rewrite before exporting",
     )
     parser.add_argument(
         "--stop-if-static",
@@ -411,6 +416,7 @@ def _cmd_validate(argv: List[Any]):
             dtype=args.dtype,
             device=args.device,
             patch=args.patch,
+            rewrite=args.rewrite,
             stop_if_static=args.stop_if_static,
             optimization=args.opt,
             exporter=args.export,
