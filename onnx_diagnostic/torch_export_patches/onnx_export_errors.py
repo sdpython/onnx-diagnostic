@@ -186,7 +186,7 @@ def torch_export_patches(
     if rewrite:
         from .patch_module import torch_export_rewrite
 
-        with torch_export_rewrite(rewrite=rewrite, verbose=verbose), torch_export_patches(
+        with torch_export_rewrite(rewrite=rewrite, verbose=verbose), torch_export_patches(  # type: ignore[var-annotated]
             patch_sympy=patch_sympy,
             patch_torch=patch_torch,
             patch_transformers=patch_transformers,
@@ -195,9 +195,9 @@ def torch_export_patches(
             verbose=verbose,
             patch=patch,
             custom_patches=custom_patches,
-        ):
+        ) as f:
             try:
-                yield
+                yield f
             finally:
                 pass
     elif not patch:
