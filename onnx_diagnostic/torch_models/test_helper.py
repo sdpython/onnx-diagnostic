@@ -379,7 +379,9 @@ def validate_model(
     summary["model_shapes"] = string_type(data["dynamic_shapes"])
     summary["model_class"] = data["model"].__class__.__name__
     summary["model_module"] = data["model"].__class__.__module__
-    if summary["model_module"] in sys.modules:
+    if summary["model_module"] in sys.modules and isinstance(
+        sys.modules[summary["model_module"]].__file__, str
+    ):
         summary["model_file"] = sys.modules[summary["model_module"]].__file__
     summary["model_config_class"] = data["configuration"].__class__.__name__
     summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
