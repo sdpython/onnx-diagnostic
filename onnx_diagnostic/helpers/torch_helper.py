@@ -699,6 +699,7 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
             )
             and hasattr(value, "dtype")
             and value.dtype in {torch.int32, torch.int64, torch.int8, torch.int16}
+            and value.__class__.__name__ not in {"DynamicCache", "EncoderDecoderCache"}
         ):
             # int vector should not be changed.
             return value
