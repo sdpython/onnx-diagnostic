@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 from scipy.spatial.distance import cdist
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, has_torch
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, has_torch, requires_torch
 from onnx_diagnostic.torch_export_patches import torch_export_patches, torch_export_rewrite
 from onnx_diagnostic.torch_export_patches.patch_module import (
     transform_method,
