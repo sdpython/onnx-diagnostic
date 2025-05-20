@@ -30,11 +30,12 @@ def code_needing_rewriting(cls_name: str) -> Optional[List[Any]]:
     .. runpython::
         :showcode:
 
+        import pprint
         from onnx_diagnostic.torch_export_patches.patch_module_helper import (
             code_needing_rewriting,
         )
 
-        print(code_needing_rewriting("BartForConditionalGeneration"))
+        pprint.pprint(code_needing_rewriting("BartForConditionalGeneration"))
     """
     if cls_name in {
         "BartEncoderLayer",
