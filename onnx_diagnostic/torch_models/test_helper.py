@@ -970,7 +970,7 @@ def call_torch_export_onnx(
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
-    available = {"", "ir", "os_ort"}
+    available = {None, "", "ir", "os_ort"}
     assert (
         optimization in available
     ), f"unexpected value for optimization={optimization}, available={available}"

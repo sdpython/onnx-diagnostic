@@ -727,6 +727,8 @@ def transform_method(
     """
     Returns a new function based on `func` where every test (if)
     is replaced by a call to :func:`torch.cond`.
+    Some known rewriting are part of the default patches
+    (see :ref:`l-control-flow-rewriting`).
 
     A test must return the same things if it returns something
     or assign something. It cannot return in one branch and assign
@@ -888,7 +890,7 @@ def torch_export_rewrite(
         to discover them, a method is defined by its class (a type) and its name
         if the class is local, by itself otherwise, it can also be a model,
         in that case, the function calls :func:`code_needing_rewriting
-        <onnx_dynamic.torch_export_patches.patch_module_helper.code_needing_rewriting>`
+        <onnx_diagnostic.torch_export_patches.patch_module_helper.code_needing_rewriting>`
         to retrieve the necessary rewriting
     :param dump_rewriting: dumps rewriting into that folder, if it does not exists,
         it creates it.

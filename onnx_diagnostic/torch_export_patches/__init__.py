@@ -16,6 +16,6 @@ def register_flattening_functions(verbose: int = 0):
     This is needed whenever a model must be exported through
     :func:`torch.export.export`.
     """
-    from .onnx_export_serialization import _register_cache_serialization
+    from .onnx_export_serialization import register_cache_serialization
 
-    return _register_cache_serialization(verbose=verbose)
+    return register_cache_serialization(verbose=verbose)

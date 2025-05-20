@@ -1,8 +1,8 @@
 import contextlib
 from typing import Any, Callable, Dict, List, Optional
 from .onnx_export_serialization import (
-    _register_cache_serialization,
-    _unregister_cache_serialization,
+    register_cache_serialization,
+    unregister_cache_serialization,
 )
 from .patches import patch_transformers as patch_transformers_list
 
@@ -85,11 +85,11 @@ def register_additional_serialization_functions(
 ) -> Callable:
     """The necessary modifications to run the fx Graph."""
     fct_callable = replacement_before_exporting if patch_transformers else (lambda x: x)
-    done = _register_cache_serialization(verbose=verbose)
+    done = register_cache_serialization(verbose=verbose)
     try:
         yield fct_callable
     finally:
-        _unregister_cache_serialization(done, verbose=verbose)
+        unregister_cache_serialization(done, verbose=verbose)
 
 
 @contextlib.contextmanager
@@ -107,6 +107,7 @@ def torch_export_patches(
 ) -> Callable:
     """
     Tries to bypass some situations :func:`torch.export.export` does not support.
+    See also :ref:`l-patches-explained`.
 
     :param patch_sympy: fix missing method ``name`` for IntegerConstant
     :param patch_torch: patches :epkg:`torch` with supported implementation
@@ -206,11 +207,11 @@ def torch_export_patches(
                 pass
     elif not patch:
         fct_callable = lambda x: x  # noqa: E731
-        done = _register_cache_serialization(verbose=verbose)
+        done = register_cache_serialization(verbose=verbose)
         try:
             yield fct_callable
         finally:
-            _unregister_cache_serialization(done, verbose=verbose)
+            unregister_cache_serialization(done, verbose=verbose)
     else:
         import torch
         import torch._export.non_strict_utils  # produce_guards_and_solve_constraints
@@ -226,7 +227,7 @@ def torch_export_patches(
         # caches
         ########
 
-        cache_done = _register_cache_serialization(verbose=verbose)
+        cache_done = register_cache_serialization(verbose=verbose)
 
         #############
         # patch sympy
@@ -439,7 +440,7 @@ def torch_export_patches(
             # caches
             ########
 
-            _unregister_cache_serialization(cache_done, verbose=verbose)
+            unregister_cache_serialization(cache_done, verbose=verbose)
 
 
 def replacement_before_exporting(args: Any) -> Any:
