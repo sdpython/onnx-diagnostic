@@ -1179,7 +1179,6 @@ def call_torch_export_custom(
     )
     if opset:
         kws["target_opset"] = opset
-    assert opset
 
     epo, opt_stats = _quiet_or_not_quiet(
         quiet,

@@ -1,7 +1,7 @@
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_errors
-from onnx_diagnostic.torch_models.hghub.hub_data import code_needing_rewriting
+from onnx_diagnostic.torch_export_patches.patch_module_helper import code_needing_rewriting
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
@@ -22,9 +22,7 @@ class TestHuggingFaceHubModelRewrite(ExtTestCase):
         print(self.string_type(inputs))
         print(self.string_type(ds))
         with torch_export_patches(
-            patch_transformers=True,
-            rewrite=code_needing_rewriting("BartForConditionalGeneration"),
-            dump_rewriting=dump_folder,
+            patch_transformers=True, rewrite=model, dump_rewriting=dump_folder
         ):
             model(**inputs)
             torch.export.export(model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds))

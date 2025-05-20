@@ -6,6 +6,7 @@ import types
 import textwrap
 import sys
 from typing import Callable, Dict, List, Set, Optional, Tuple, Union
+from .patch_module_helper import code_needing_rewriting
 
 NODE_TYPES = tuple(
     getattr(ast, k)
@@ -871,7 +872,9 @@ def transform_method(
 
 @contextlib.contextmanager
 def torch_export_rewrite(
-    rewrite: Optional[List[Union[Tuple[type, str], Callable]]] = None,
+    rewrite: Optional[
+        Union["torch.nn.Module", List[Union[Tuple[type, str], Callable]]]  # noqa: F821
+    ] = None,
     dump_rewriting: Optional[str] = None,
     verbose: int = 0,
 ):
@@ -881,7 +884,10 @@ def torch_export_rewrite(
 
     :param rewrite: methods of functions to rewrite, if not empty, the function may try
         to discover them, a method is defined by its class (a type) and its name
-        if the class is local, by itself otherwise
+        if the class is local, by itself otherwise, it can also be a model,
+        in that case, the function calls :func:`code_needing_rewriting
+        <onnx_dynamic.torch_export_patches.patch_module.helper.code_needing_rewriting>`
+        to retrieve the necessary rewriting
     :param dump_rewriting: dumps rewriting information in file beginning with that prefix
     :param verbose: verbosity, up to 10, 10 shows the rewritten code,
         ``verbose=1`` shows the rewritten function,
@@ -933,6 +939,10 @@ def torch_export_rewrite(
         with torch_export_rewrite(rewrite=[outside]):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
     """
+    if hasattr(rewrite, "forward"):
+        # It is a torch.nn.Module.
+        # Let's retrieve the known rewriting for this model class.
+        rewrite = code_needing_rewriting(rewrite.__class__.__name__)
     assert rewrite, "rewrite is empty, automated discovery is not implemented yet"
     keep = {}
     for me in rewrite:

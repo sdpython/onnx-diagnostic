@@ -6,7 +6,12 @@ import transformers
 from ...helpers.config_helper import update_config
 from ...tasks import reduce_model_config, random_input_kwargs
 from .hub_api import task_from_arch, task_from_id, get_pretrained_config
-from .hub_data import code_needing_rewriting
+
+
+def _code_needing_rewriting(model: Any) -> Any:
+    from onnx_diagnostic.torch_export_patches.patch_module_helper import code_needing_rewriting
+
+    return code_needing_rewriting(model)
 
 
 def get_untrained_model_with_inputs(
@@ -173,7 +178,7 @@ def get_untrained_model_with_inputs(
             update[k] = filter_out_unexpected_inputs(model, v, verbose=verbose)
     res.update(update)
 
-    rewrite = code_needing_rewriting(model.__class__.__name__)
+    rewrite = _code_needing_rewriting(model.__class__.__name__)
     if rewrite:
         res["rewrite"] = rewrite
     return res
