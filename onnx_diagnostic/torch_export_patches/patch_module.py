@@ -1,7 +1,9 @@
 import ast
 import copy
 import contextlib
+import difflib
 import inspect
+import os
 import types
 import textwrap
 import sys
@@ -886,9 +888,10 @@ def torch_export_rewrite(
         to discover them, a method is defined by its class (a type) and its name
         if the class is local, by itself otherwise, it can also be a model,
         in that case, the function calls :func:`code_needing_rewriting
-        <onnx_dynamic.torch_export_patches.patch_module.helper.code_needing_rewriting>`
+        <onnx_dynamic.torch_export_patches.patch_module_helper.code_needing_rewriting>`
         to retrieve the necessary rewriting
-    :param dump_rewriting: dumps rewriting information in file beginning with that prefix
+    :param dump_rewriting: dumps rewriting into that folder, if it does not exists,
+        it creates it.
     :param verbose: verbosity, up to 10, 10 shows the rewritten code,
         ``verbose=1`` shows the rewritten function,
         ``verbose=2`` shows the rewritten code as well
@@ -1008,19 +1011,24 @@ def torch_export_rewrite(
             print(f"[torch_export_rewrite] rewrites {kind} {cls.__name__}.{name}")
         keep[cls, name] = to_rewrite
         if dump_rewriting:
-            filename = f"{dump_rewriting}.{kind}.{cls_name}.{name}.original.py"
+            if not os.path.exists(dump_rewriting):
+                os.makedirs(dump_rewriting)
+            filename1 = os.path.join(dump_rewriting, f"{kind}.{cls_name}.{name}.original.py")
             if verbose:
-                print(f"[torch_export_rewrite] dump original code in {filename!r}")
-            with open(filename, "w") as f:
-                code = inspect.getsource(to_rewrite)
+                print(f"[torch_export_rewrite] dump original code in {filename1!r}")
+            with open(filename1, "w") as f:
+                code = _clean_code(inspect.getsource(to_rewrite))
                 f.write(code)
         rewr = transform_method(to_rewrite, verbose=max(verbose - 1, 0), **kws)
         if dump_rewriting:
-            filename = f"{dump_rewriting}.{kind}.{cls_name}.{name}.rewritten.py"
+            filename2 = os.path.join(dump_rewriting, f"{kind}.{cls_name}.{name}.rewritten.py")
             if verbose:
-                print(f"[torch_export_rewrite] dump rewritten code in {filename!r}")
-            with open(filename, "w") as f:
-                f.write(rewr.code)
+                print(f"[torch_export_rewrite] dump rewritten code in {filename2!r}")
+            with open(filename2, "w") as f:
+                rcode = _clean_code(rewr.code)
+                f.write(rcode)
+            diff = os.path.join(dump_rewriting, f"{kind}.{cls_name}.{name}.diff")
+            make_diff(code, rcode, diff)
         setattr(cls, name, rewr.func)
 
     try:
@@ -1030,3 +1038,35 @@ def torch_export_rewrite(
             if verbose:
                 print(f"[torch_export_rewrite] restored {kind} {cls.__name__}.{name}")
             setattr(cls, name, me)
+
+
+def _clean_code(code: str) -> str:
+    try:
+        import black
+    except ImportError:
+        return code
+    return black.format_str(code, mode=black.FileMode(line_length=98))
+
+
+def make_diff(code1: str, code2: str, output: Optional[str] = None) -> str:
+    """
+    Creates a diff between two codes.
+
+    :param code1: first code
+    :param code2: second code
+    :param output: if not empty, stores the output in this file
+    :return: diff
+    """
+    text = "\n".join(
+        difflib.unified_diff(
+            code1.strip().splitlines(),
+            code2.strip().splitlines(),
+            fromfile="original",
+            tofile="rewritten",
+            lineterm="",
+        )
+    )
+    if output:
+        with open(output, "w") as f:
+            f.write(text)
+    return text

@@ -1,6 +1,11 @@
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_errors
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    hide_stdout,
+    ignore_errors,
+    requires_torch,
+)
 from onnx_diagnostic.torch_export_patches.patch_module_helper import code_needing_rewriting
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -14,7 +19,8 @@ class TestHuggingFaceHubModelRewrite(ExtTestCase):
 
     @hide_stdout()
     @ignore_errors(OSError)
-    def test_export_rewritin_bart(self):
+    @requires_torch("2.8")
+    def test_export_rewriting_bart(self):
         mid = "hf-tiny-model-private/tiny-random-PLBartForConditionalGeneration"
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
