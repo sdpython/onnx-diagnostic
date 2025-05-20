@@ -46,7 +46,7 @@ Implemented in :mod:`onnx_diagnostic.torch_export_patches.patches.patch_torch` a
 ``with torch_export_patches(patch_sympy=True, patch_torch=True, catch_constraints=True, stop_if_static=1...)``.
 
 It fixes some issues found while exporting model. Some of them might not be needed anymore.
-It improves shape broadcasting or inserts an exception everytime a dynamic dimension
+It improves shape broadcasting or inserts an exception every time a dynamic dimension
 becomes static (``stop_if_static=1``).
 
 transformers rewriting
