@@ -100,9 +100,9 @@ class RewriteControlFlow(ast.NodeTransformer):
         prefix: str = "branch_cond",
         skip_objects: Optional[Dict[str, object]] = None,
         args_names: Optional[Set[str]] = None,
-        filter_node: Optional[Callable["ast.Node", bool]] = None,
-        pre_rewriter: Optional[Callable["ast.Node", "ast.Node"]] = None,
-        post_rewriter: Optional[Callable["ast.Node", "ast.Node"]] = None,
+        filter_node: Optional[Callable[["ast.Node"], bool]] = None,
+        pre_rewriter: Optional[Callable[["ast.Node"], "ast.Node"]] = None,
+        post_rewriter: Optional[Callable[["ast.Node"], "ast.Node"]] = None,
     ):
         self.counter_test = 0
         self.counter_loop = 0
@@ -717,9 +717,9 @@ def transform_method(
     func: Callable,
     prefix: str = "branch_cond",
     verbose: int = 0,
-    filter_node: Optional[Callable["ast.Node", bool]] = None,
-    pre_rewriter: Optional[Callable["ast.Node", "ast.Node"]] = None,
-    post_rewriter: Optional[Callable["ast.Node", "ast.Node"]] = None,
+    filter_node: Optional[Callable[["ast.Node"], bool]] = None,
+    pre_rewriter: Optional[Callable[["ast.Node"], "ast.Node"]] = None,
+    post_rewriter: Optional[Callable[["ast.Node"], "ast.Node"]] = None,
 ) -> RewrittenMethod:
     """
     Returns a new function based on `func` where every test (if)
@@ -941,7 +941,7 @@ def torch_export_rewrite(
             cls, name = me
             to_rewrite = getattr(cls, name)
             kind = "method"
-            kws = {}
+            kws = {}  # type: ignore[var-annotated]
         else:
             if isinstance(me, dict):
                 assert "function" in me and (
