@@ -125,6 +125,7 @@ nitpick_ignore = [
     ("py:class", "torch.utils._pytree.Context"),
     ("py:class", "torch.utils._pytree.KeyEntry"),
     ("py:class", "torch.utils._pytree.TreeSpec"),
+    ("py:class", "transformers.BartForConditionalGeneration"),
     ("py:class", "transformers.LlamaConfig"),
     ("py:class", "transformers.cache_utils.Cache"),
     ("py:class", "transformers.cache_utils.DynamicCache"),
@@ -132,12 +133,14 @@ nitpick_ignore = [
     ("py:class", "transformers.cache_utils.MambaCache"),
     ("py:class", "transformers.cache_utils.SlidingWindowCache"),
     ("py:class", "transformers.configuration_utils.PretrainedConfig"),
+    ("py:class", "transformers.modeling_outputs.BaseModelOutput"),
     ("py:func", "torch.export._draft_export.draft_export"),
     ("py:func", "torch._export.tools.report_exportability"),
     ("py:func", "torch.utils._pytree.register_pytree_node"),
     ("py:meth", "huggingface_hub.HfApi.list_models"),
     ("py:meth", "transformers.AutoConfig.from_pretrained"),
     ("py:meth", "transformers.GenerationMixin.generate"),
+    ("py:meth", "transformers.models.bart.modeling_bart.BartEncoderLayer.forward"),
     ("py:meth", "unittests.TestCase.subTest"),
 ]
 

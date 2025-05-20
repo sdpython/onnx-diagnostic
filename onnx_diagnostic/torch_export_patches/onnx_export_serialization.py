@@ -17,7 +17,7 @@ from ..helpers import string_type
 PATCH_OF_PATCHES: Set[Any] = set()
 
 
-def _register_class_serialization(
+def register_class_serialization(
     cls,
     f_flatten: Callable,
     f_unflatten: Callable,
@@ -25,11 +25,23 @@ def _register_class_serialization(
     f_check: Optional[Callable] = None,
     verbose: int = 0,
 ) -> bool:
+    """
+    Registers a class.
+    It can be undone with :func:`unregister`.
+
+    :param cls: class to register
+    :param f_flatten: see ``torch.utils._pytree.register_pytree_node``
+    :param f_unflatten: see ``torch.utils._pytree.register_pytree_node``
+    :param f_flatten_with_keys: see ``torch.utils._pytree.register_pytree_node``
+    :param f_check: called to check the registration was successful
+    :param verbose: verbosity
+    :return: registered or not
+    """
     if cls is not None and cls in torch.utils._pytree.SUPPORTED_NODES:
         return False
 
     if verbose:
-        print(f"[_register_cache_serialization] register {cls}")
+        print(f"[register_cache_serialization] register {cls}")
     torch.utils._pytree.register_pytree_node(
         cls,
         f_flatten,
@@ -40,7 +52,7 @@ def _register_class_serialization(
     if pv.Version(torch.__version__) < pv.Version("2.7"):
         if verbose:
             print(
-                f"[_register_cache_serialization] "
+                f"[register_cache_serialization] "
                 f"register {cls} for torch=={torch.__version__}"
             )
         torch.fx._pytree.register_pytree_flatten_spec(cls, lambda x, _: f_flatten(x)[0])
@@ -58,7 +70,11 @@ def _register_class_serialization(
     return True
 
 
-def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
+def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
+    """
+    Registers many classes with :func:`register_class_serialization`.
+    Returns information needed to undo the registration.
+    """
     # DynamicCache serialization is different in transformers and does not
     # play way with torch.export.export.
     # see test test_export_dynamic_cache_cat with NOBYPASS=1
@@ -78,8 +94,8 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
                 f"[_fix_registration] DynamicCache is unregistered and "
                 f"registered first for transformers=={transformers.__version__}"
             )
-        _unregister(DynamicCache, verbose=verbose)
-        _register_class_serialization(
+        unregister(DynamicCache, verbose=verbose)
+        register_class_serialization(
             DynamicCache,
             flatten_dynamic_cache,
             unflatten_dynamic_cache,
@@ -103,8 +119,8 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
                 f"[_fix_registration] BaseModelOutput is unregistered and "
                 f"registered first for transformers=={transformers.__version__}"
             )
-        _unregister(BaseModelOutput, verbose=verbose)
-        _register_class_serialization(
+        unregister(BaseModelOutput, verbose=verbose)
+        register_class_serialization(
             BaseModelOutput,
             flatten_base_model_output,
             unflatten_base_model_output,
@@ -118,7 +134,7 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
         PATCH_OF_PATCHES.add(BaseModelOutput)
 
     return dict(
-        DynamicCache=_register_class_serialization(
+        DynamicCache=register_class_serialization(
             DynamicCache,
             flatten_dynamic_cache,
             unflatten_dynamic_cache,
@@ -126,28 +142,28 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
             # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
             verbose=verbose,
         ),
-        MambaCache=_register_class_serialization(
+        MambaCache=register_class_serialization(
             MambaCache,
             flatten_mamba_cache,
             unflatten_mamba_cache,
             flatten_with_keys_mamba_cache,
             verbose=verbose,
         ),
-        EncoderDecoderCache=_register_class_serialization(
+        EncoderDecoderCache=register_class_serialization(
             EncoderDecoderCache,
             flatten_encoder_decoder_cache,
             unflatten_encoder_decoder_cache,
             flatten_with_keys_encoder_decoder_cache,
             verbose=verbose,
         ),
-        BaseModelOutput=_register_class_serialization(
+        BaseModelOutput=register_class_serialization(
             BaseModelOutput,
             flatten_base_model_output,
             unflatten_base_model_output,
             flatten_with_keys_base_model_output,
             verbose=verbose,
         ),
-        SlidingWindowCache=_register_class_serialization(
+        SlidingWindowCache=register_class_serialization(
             SlidingWindowCache,
             flatten_sliding_window_cache,
             unflatten_sliding_window_cache,
@@ -157,7 +173,8 @@ def _register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     )
 
 
-def _unregister(cls: type, verbose: int = 0):
+def unregister(cls: type, verbose: int = 0):
+    """Undo the registration."""
     # torch.utils._pytree._deregister_pytree_flatten_spec(cls)
     if cls in torch.fx._pytree.SUPPORTED_NODES:
         del torch.fx._pytree.SUPPORTED_NODES[cls]
@@ -181,13 +198,14 @@ def _unregister(cls: type, verbose: int = 0):
         f"{pprint.pformat(list(torch.utils._pytree.SUPPORTED_NODES))}"
     )
     if verbose:
-        print(f"[_unregister_cache_serialization] unregistered {cls.__name__}")
+        print(f"[unregister_cache_serialization] unregistered {cls.__name__}")
 
 
-def _unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
+def unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
+    """Undo all registrations."""
     for cls in [MambaCache, DynamicCache, EncoderDecoderCache, BaseModelOutput]:
         if undo.get(cls.__name__, False):
-            _unregister(cls, verbose)
+            unregister(cls, verbose)
 
 
 ############

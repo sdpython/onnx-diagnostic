@@ -1,11 +1,14 @@
 import ast
 import copy
 import contextlib
+import difflib
 import inspect
+import os
 import types
 import textwrap
 import sys
 from typing import Callable, Dict, List, Set, Optional, Tuple, Union
+from .patch_module_helper import code_needing_rewriting
 
 NODE_TYPES = tuple(
     getattr(ast, k)
@@ -89,6 +92,10 @@ class RewriteControlFlow(ast.NodeTransformer):
     :param skip_objects: to skip variable names if included in that list
         such as modules
     :param args_names: defines the local variables
+    :param filter_nodes: a function which is used to decide which node
+        to rewrite, True by default
+    :param pre_rewriter: a rewriter applied before the automated rewriting
+    :param post_rewriter: a rewriter applied after the automated rewriting
     """
 
     def __init__(
@@ -96,6 +103,9 @@ class RewriteControlFlow(ast.NodeTransformer):
         prefix: str = "branch_cond",
         skip_objects: Optional[Dict[str, object]] = None,
         args_names: Optional[Set[str]] = None,
+        filter_node: Optional[Callable[["ast.Node"], bool]] = None,
+        pre_rewriter: Optional[Callable[["ast.Node"], "ast.Node"]] = None,
+        post_rewriter: Optional[Callable[["ast.Node"], "ast.Node"]] = None,
     ):
         self.counter_test = 0
         self.counter_loop = 0
@@ -104,6 +114,9 @@ class RewriteControlFlow(ast.NodeTransformer):
         self.skip_objects = skip_objects or {}
         self.args_names = args_names or set()
         self.local_variables = self.args_names.copy()
+        self.filter_node = filter_node or (lambda _node: True)
+        self.pre_rewriter = pre_rewriter or (lambda node: node)
+        self.post_rewriter = post_rewriter or (lambda node: node)
 
     def generic_visit(self, node):
         return super().generic_visit(node)
@@ -320,6 +333,11 @@ class RewriteControlFlow(ast.NodeTransformer):
         return tgt, tgt_mapping
 
     def visit_If(self, node):
+        if not self.filter_node(node):
+            return [node]
+
+        node = self.pre_rewriter(node)
+
         # First recurse into subnodes
         known_local_variables = self.local_variables.copy()
         node = self.generic_visit(node)
@@ -380,7 +398,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             ast.copy_location(assign, node)
             ast.fix_missing_locations(assign)
             self.local_variables = known_local_variables | added
-            return [then_def, else_def, assign]
+            return [self.post_rewriter(n) for n in [then_def, else_def, assign]]
 
         # Case 2: return in both branches, we assume both branches return the same results.
         then_ret = node.body[-1]
@@ -403,7 +421,7 @@ class RewriteControlFlow(ast.NodeTransformer):
         ret = ast.Return(call)
         ast.copy_location(ret, node)
         ast.fix_missing_locations(ret)
-        return [then_def, else_def, ret]
+        return [self.post_rewriter(n) for n in [then_def, else_def, ret]]
 
     def _find_loop_vars(self, node):
         assert isinstance(node, ast.For), f"Unexpected type {type(node)} for node"
@@ -462,6 +480,11 @@ class RewriteControlFlow(ast.NodeTransformer):
         )
 
     def visit_For(self, node):
+        if not self.filter_node(node):
+            return [node]
+
+        node = self.pre_rewriter(node)
+
         # For nested loops.
         self.generic_visit(node)
         # look for variables, loop, inputs and outputs of the body
@@ -622,7 +645,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             ctx=ast.Store(),
         )
         assign = ast.Assign(targets=[target], value=call)
-        return [func_def, assign]
+        return [self.post_rewriter(func_def), self.post_rewriter(assign)]
 
 
 class RewrittenMethod:
@@ -697,10 +720,15 @@ def transform_method(
     func: Callable,
     prefix: str = "branch_cond",
     verbose: int = 0,
+    filter_node: Optional[Callable[["ast.Node"], bool]] = None,
+    pre_rewriter: Optional[Callable[["ast.Node"], "ast.Node"]] = None,
+    post_rewriter: Optional[Callable[["ast.Node"], "ast.Node"]] = None,
 ) -> RewrittenMethod:
     """
     Returns a new function based on `func` where every test (if)
     is replaced by a call to :func:`torch.cond`.
+    Some known rewriting are part of the default patches
+    (see :ref:`l-control-flow-rewriting`).
 
     A test must return the same things if it returns something
     or assign something. It cannot return in one branch and assign
@@ -717,6 +745,9 @@ def transform_method(
     :param func: method or function to rewrite
     :param prefix: prefix used to create the functions for the branches
     :param verbose: verbosity
+    :param filter_node: a function which tells which node to rewrite
+    :param pre_rewriter: a rewriter applied before the automated rewriting
+    :param post_rewriter: a rewriter applied after the automated rewriting
     :return: rewritten method
 
     An example with **return**:
@@ -801,6 +832,9 @@ def transform_method(
         prefix=prefix,
         skip_objects=modules,
         args_names=set(sig.parameters),
+        filter_node=filter_node,
+        pre_rewriter=pre_rewriter,
+        post_rewriter=post_rewriter,
     )
     normalize_assignment_in_test(tree)
     inplace_add_parent(tree)
@@ -842,7 +876,9 @@ def transform_method(
 
 @contextlib.contextmanager
 def torch_export_rewrite(
-    rewrite: Optional[List[Union[Tuple[type, str], Callable]]] = None,
+    rewrite: Optional[
+        Union["torch.nn.Module", List[Union[Tuple[type, str], Callable]]]  # noqa: F821
+    ] = None,
     dump_rewriting: Optional[str] = None,
     verbose: int = 0,
 ):
@@ -852,8 +888,12 @@ def torch_export_rewrite(
 
     :param rewrite: methods of functions to rewrite, if not empty, the function may try
         to discover them, a method is defined by its class (a type) and its name
-        if the class is local, by itself otherwise
-    :param dump_rewriting: dumps rewriting information in file beginning with that prefix
+        if the class is local, by itself otherwise, it can also be a model,
+        in that case, the function calls :func:`code_needing_rewriting
+        <onnx_diagnostic.torch_export_patches.patch_module_helper.code_needing_rewriting>`
+        to retrieve the necessary rewriting
+    :param dump_rewriting: dumps rewriting into that folder, if it does not exists,
+        it creates it.
     :param verbose: verbosity, up to 10, 10 shows the rewritten code,
         ``verbose=1`` shows the rewritten function,
         ``verbose=2`` shows the rewritten code as well
@@ -904,6 +944,10 @@ def torch_export_rewrite(
         with torch_export_rewrite(rewrite=[outside]):
             ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
     """
+    if hasattr(rewrite, "forward"):
+        # It is a torch.nn.Module.
+        # Let's retrieve the known rewriting for this model class.
+        rewrite = code_needing_rewriting(rewrite.__class__.__name__)
     assert rewrite, "rewrite is empty, automated discovery is not implemented yet"
     keep = {}
     for me in rewrite:
@@ -912,7 +956,22 @@ def torch_export_rewrite(
             cls, name = me
             to_rewrite = getattr(cls, name)
             kind = "method"
+            kws = {}  # type: ignore[var-annotated]
         else:
+            if isinstance(me, dict):
+                assert "function" in me and (
+                    "filter_node" in me or "pre_rewriter" in me or "post_rewriter" in me
+                ), (
+                    f"If the rewriting code is defined as a dictionary, key "
+                    f"'function' must be defined, other arguments must be understood by "
+                    f"{transform_method.__name__}, "
+                    f"the given value is {me!r}."
+                )
+                kws = me
+                me = me["function"]
+                del kws["function"]
+            else:
+                kws = {}
             name = me.__qualname__
             spl = name.split(".")
             if len(spl) == 1:
@@ -954,18 +1013,24 @@ def torch_export_rewrite(
             print(f"[torch_export_rewrite] rewrites {kind} {cls.__name__}.{name}")
         keep[cls, name] = to_rewrite
         if dump_rewriting:
-            filename = f"{dump_rewriting}.{kind}.{cls_name}.{name}.original.py"
+            if not os.path.exists(dump_rewriting):
+                os.makedirs(dump_rewriting)
+            filename1 = os.path.join(dump_rewriting, f"{kind}.{cls_name}.{name}.original.py")
             if verbose:
-                print(f"[torch_export_rewrite] dump original code in {filename!r}")
-            with open(filename, "w") as f:
-                f.write(inspect.getsource(to_rewrite))
-        rewr = transform_method(to_rewrite, verbose=max(verbose - 1, 0))
+                print(f"[torch_export_rewrite] dump original code in {filename1!r}")
+            with open(filename1, "w") as f:
+                code = _clean_code(inspect.getsource(to_rewrite))
+                f.write(code)
+        rewr = transform_method(to_rewrite, verbose=max(verbose - 1, 0), **kws)
         if dump_rewriting:
-            filename = f"{dump_rewriting}.{kind}.{cls_name}.{name}.rewritten.py"
+            filename2 = os.path.join(dump_rewriting, f"{kind}.{cls_name}.{name}.rewritten.py")
             if verbose:
-                print(f"[torch_export_rewrite] dump rewritten code in {filename!r}")
-            with open(filename, "w") as f:
-                f.write(rewr.code)
+                print(f"[torch_export_rewrite] dump rewritten code in {filename2!r}")
+            with open(filename2, "w") as f:
+                rcode = _clean_code(rewr.code)
+                f.write(rcode)
+            diff = os.path.join(dump_rewriting, f"{kind}.{cls_name}.{name}.diff")
+            make_diff(code, rcode, diff)
         setattr(cls, name, rewr.func)
 
     try:
@@ -975,3 +1040,35 @@ def torch_export_rewrite(
             if verbose:
                 print(f"[torch_export_rewrite] restored {kind} {cls.__name__}.{name}")
             setattr(cls, name, me)
+
+
+def _clean_code(code: str) -> str:
+    try:
+        import black
+    except ImportError:
+        return code
+    return black.format_str(code, mode=black.FileMode(line_length=98))
+
+
+def make_diff(code1: str, code2: str, output: Optional[str] = None) -> str:
+    """
+    Creates a diff between two codes.
+
+    :param code1: first code
+    :param code2: second code
+    :param output: if not empty, stores the output in this file
+    :return: diff
+    """
+    text = "\n".join(
+        difflib.unified_diff(
+            code1.strip().splitlines(),
+            code2.strip().splitlines(),
+            fromfile="original",
+            tofile="rewritten",
+            lineterm="",
+        )
+    )
+    if output:
+        with open(output, "w") as f:
+            f.write(text)
+    return text

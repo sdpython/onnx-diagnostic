@@ -5,11 +5,13 @@ onnx_diagnostic.torch_export_patches
     :maxdepth: 1
     :caption: submodules
 
+    onnx_export_errors
+    onnx_export_serialization
     patches/index
     patch_expressions
     patch_inputs
     patch_module
-
+    patch_module_helper
 
 .. automodule:: onnx_diagnostic.torch_export_patches
     :members:

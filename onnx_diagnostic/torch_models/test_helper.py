@@ -230,6 +230,7 @@ def validate_model(
     input_options: Optional[Dict[str, Any]] = None,
     model_options: Optional[Dict[str, Any]] = None,
     subfolder: Optional[str] = None,
+    opset: Optional[int] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -265,6 +266,7 @@ def validate_model(
     :param model_options: additional options when creating the model such as
         ``num_hidden_layers`` or ``attn_implementation``
     :param subfolder: version or subfolders to uses when retrieving a model id
+    :param opset: onnx opset to use for the conversion
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -295,6 +297,8 @@ def validate_model(
             version_exporter=exporter or "",
         )
     )
+    if opset:
+        summary["version_opset"] = opset
 
     folder_name = None
     if dump_folder:
@@ -343,6 +347,8 @@ def validate_model(
     )
     data["input_options"] = iop
     data["model_options"] = mop
+    if opset:
+        data["model_opset"] = opset
     if "rewrite" in data:
         if rewrite:
             summary["model_rewrite"] = str(data["rewrite"])
@@ -964,7 +970,7 @@ def call_torch_export_onnx(
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
-    available = {"", "ir", "os_ort"}
+    available = {None, "", "ir", "os_ort"}
     assert (
         optimization in available
     ), f"unexpected value for optimization={optimization}, available={available}"
@@ -992,6 +998,9 @@ def call_torch_export_onnx(
     summary["export_dynamo"] = dynamo
     summary["export_args"] = string_type(args, with_shape=True)
     summary["export_kwargs"] = string_type(kwargs, with_shape=True)
+    opset = data.get("model_opset", None)
+    if opset:
+        summary["export_opset"] = opset
 
     if dynamo:
         export_export_kwargs = dict(dynamo=True, dynamic_shapes=ds)
@@ -1012,6 +1021,8 @@ def call_torch_export_onnx(
             print("[call_torch_export_onnx] dynamo=False so...")
             print(f"[call_torch_export_onnx] args={string_type(args, with_shape=True)}")
             print(f"[call_torch_export_onnx] kwargs={string_type(kwargs, with_shape=True)}")
+    if opset:
+        export_export_kwargs["opset_version"] = opset
     if verbose:
         print(
             f"[call_torch_export_onnx] export_export_kwargs="
@@ -1123,6 +1134,9 @@ def call_torch_export_custom(
     strict = "-strict" in exporter
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
+    opset = data.get("model_opset", None)
+    if opset:
+        summary["export_opset"] = opset
     if verbose:
         print(
             f"[call_torch_export_custom] exporter={exporter!r}, "
@@ -1163,6 +1177,8 @@ def call_torch_export_custom(
         return_optimize_report=True,
         verbose=max(verbose - 2, 0),
     )
+    if opset:
+        kws["target_opset"] = opset
 
     epo, opt_stats = _quiet_or_not_quiet(
         quiet,

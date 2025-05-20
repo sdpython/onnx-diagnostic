@@ -35,6 +35,7 @@ It also implements tools to investigate, validate exported models (ExportedProgr
     :maxdepth: 1
     :caption: Contents
 
+    patches
     api/index
     cmds/index
     auto_examples/index
