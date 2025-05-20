@@ -1,3 +1,4 @@
+import ast
 import io
 import functools
 import textwrap
@@ -214,10 +215,31 @@ def code_needing_rewriting(cls_name: str) -> Optional[List[Any]]:
 
         print(code_needing_rewriting("BartForConditionalGeneration"))
     """
-    if cls_name in {"BartForConditionalGeneration", "BartEncoderLayer"}:
+    if cls_name in {
+        "BartEncoderLayer",
+        "BartForConditionalGeneration",
+        "PLBartEncoderLayer",
+        "PLBartForConditionalGeneration",
+    }:
         import transformers
+        from ...torch_export_patches.patch_module_helper import ast_or_into_bitor
 
-        return [transformers.models.bart.modeling_bart.BartEncoderLayer.forward]
+        bd = dict(
+            filter_node=(
+                lambda node: isinstance(node, ast.If) and not isinstance(node.test, ast.Name)
+            ),
+            pre_rewriter=ast_or_into_bitor,
+        )
+
+        def _add(f):
+            g = bd.copy()
+            g["function"] = f
+            return g
+
+        return [
+            _add(transformers.models.bart.modeling_bart.BartEncoderLayer.forward),
+            _add(transformers.models.plbart.modeling_plbart.PLBartEncoderLayer.forward),
+        ]
     return None
 
 

@@ -344,6 +344,12 @@ def get_parser_validate() -> ArgumentParser:
         "with comma separated values",
     )
     parser.add_argument(
+        "--opset",
+        type=int,
+        default=18,
+        help="onnx opset to use, 18 by default",
+    )
+    parser.add_argument(
         "--subfolder",
         help="subfolder where to find the model and the configuration",
     )
@@ -426,6 +432,7 @@ def _cmd_validate(argv: List[Any]):
             input_options=args.iop,
             model_options=args.mop,
             subfolder=args.subfolder,
+            opset=args.opset,
         )
         print("")
         print("-- summary --")

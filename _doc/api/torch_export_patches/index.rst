@@ -9,7 +9,7 @@ onnx_diagnostic.torch_export_patches
     patch_expressions
     patch_inputs
     patch_module
-
+    patch_module_helper
 
 .. automodule:: onnx_diagnostic.torch_export_patches
     :members:

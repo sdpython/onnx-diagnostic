@@ -13,6 +13,7 @@ from onnx_diagnostic.torch_export_patches.patch_module import (
     ShapeFinder,
     RewriteControlFlow,
 )
+from onnx_diagnostic.torch_export_patches.patch_module_helper import ast_or_into_bitor
 
 
 class _ModelForATest(torch.nn.Module):
@@ -396,15 +397,25 @@ class TestPatchModule(ExtTestCase):
     def test_rewrite_test_in_PLBartEncoderLayer(self):
         from transformers.models.plbart.modeling_plbart import PLBartEncoderLayer
 
-        rewritten = transform_method(PLBartEncoderLayer.forward, verbose=self.verbose)
+        def filter_node(node) -> bool:
+            return isinstance(node, ast.If) and not isinstance(node.test, ast.Name)
+
+        rewritten = transform_method(
+            PLBartEncoderLayer.forward,
+            verbose=self.verbose,
+            filter_node=filter_node,
+            pre_rewriter=ast_or_into_bitor,
+        )
         self.assertIn(
             (
                 "torch.cond(hidden_states.dtype == torch.float16 and "
-                "(torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any()), "
+                "torch.isinf(hidden_states).any()"
+                " | torch.isnan(hidden_states).any(), "
                 "branch_cond_then_1, branch_cond_else_1, [hidden_states])"
             ),
             rewritten.code,
         )
+        self.assertNotIn("torch.cond(output_attentions", rewritten.code)
 
     @hide_stdout()
     def test_torch_export_patch_method_tuple(self):

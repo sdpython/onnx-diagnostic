@@ -89,6 +89,10 @@ class RewriteControlFlow(ast.NodeTransformer):
     :param skip_objects: to skip variable names if included in that list
         such as modules
     :param args_names: defines the local variables
+    :param filter_nodes: a function which is used to decide which node
+        to rewrite, True by default
+    :param pre_rewriter: a rewriter applied before the automated rewriting
+    :param post_rewriter: a rewriter applied after the automated rewriting
     """
 
     def __init__(
@@ -96,6 +100,9 @@ class RewriteControlFlow(ast.NodeTransformer):
         prefix: str = "branch_cond",
         skip_objects: Optional[Dict[str, object]] = None,
         args_names: Optional[Set[str]] = None,
+        filter_node: Optional[Callable["ast.Node", bool]] = None,
+        pre_rewriter: Optional[Callable["ast.Node", "ast.Node"]] = None,
+        post_rewriter: Optional[Callable["ast.Node", "ast.Node"]] = None,
     ):
         self.counter_test = 0
         self.counter_loop = 0
@@ -104,6 +111,9 @@ class RewriteControlFlow(ast.NodeTransformer):
         self.skip_objects = skip_objects or {}
         self.args_names = args_names or set()
         self.local_variables = self.args_names.copy()
+        self.filter_node = filter_node or (lambda _node: True)
+        self.pre_rewriter = pre_rewriter or (lambda node: node)
+        self.post_rewriter = post_rewriter or (lambda node: node)
 
     def generic_visit(self, node):
         return super().generic_visit(node)
@@ -320,6 +330,11 @@ class RewriteControlFlow(ast.NodeTransformer):
         return tgt, tgt_mapping
 
     def visit_If(self, node):
+        if not self.filter_node(node):
+            return [node]
+
+        node = self.pre_rewriter(node)
+
         # First recurse into subnodes
         known_local_variables = self.local_variables.copy()
         node = self.generic_visit(node)
@@ -380,7 +395,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             ast.copy_location(assign, node)
             ast.fix_missing_locations(assign)
             self.local_variables = known_local_variables | added
-            return [then_def, else_def, assign]
+            return [self.post_rewriter(n) for n in [then_def, else_def, assign]]
 
         # Case 2: return in both branches, we assume both branches return the same results.
         then_ret = node.body[-1]
@@ -403,7 +418,7 @@ class RewriteControlFlow(ast.NodeTransformer):
         ret = ast.Return(call)
         ast.copy_location(ret, node)
         ast.fix_missing_locations(ret)
-        return [then_def, else_def, ret]
+        return [self.post_rewriter(n) for n in [then_def, else_def, ret]]
 
     def _find_loop_vars(self, node):
         assert isinstance(node, ast.For), f"Unexpected type {type(node)} for node"
@@ -462,6 +477,11 @@ class RewriteControlFlow(ast.NodeTransformer):
         )
 
     def visit_For(self, node):
+        if not self.filter_node(node):
+            return [node]
+
+        node = self.pre_rewriter(node)
+
         # For nested loops.
         self.generic_visit(node)
         # look for variables, loop, inputs and outputs of the body
@@ -622,7 +642,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             ctx=ast.Store(),
         )
         assign = ast.Assign(targets=[target], value=call)
-        return [func_def, assign]
+        return [self.post_rewriter(func_def), self.post_rewriter(assign)]
 
 
 class RewrittenMethod:
@@ -697,6 +717,9 @@ def transform_method(
     func: Callable,
     prefix: str = "branch_cond",
     verbose: int = 0,
+    filter_node: Optional[Callable["ast.Node", bool]] = None,
+    pre_rewriter: Optional[Callable["ast.Node", "ast.Node"]] = None,
+    post_rewriter: Optional[Callable["ast.Node", "ast.Node"]] = None,
 ) -> RewrittenMethod:
     """
     Returns a new function based on `func` where every test (if)
@@ -717,6 +740,9 @@ def transform_method(
     :param func: method or function to rewrite
     :param prefix: prefix used to create the functions for the branches
     :param verbose: verbosity
+    :param filter_node: a function which tells which node to rewrite
+    :param pre_rewriter: a rewriter applied before the automated rewriting
+    :param post_rewriter: a rewriter applied after the automated rewriting
     :return: rewritten method
 
     An example with **return**:
@@ -801,6 +827,9 @@ def transform_method(
         prefix=prefix,
         skip_objects=modules,
         args_names=set(sig.parameters),
+        filter_node=filter_node,
+        pre_rewriter=pre_rewriter,
+        post_rewriter=post_rewriter,
     )
     normalize_assignment_in_test(tree)
     inplace_add_parent(tree)
@@ -912,7 +941,22 @@ def torch_export_rewrite(
             cls, name = me
             to_rewrite = getattr(cls, name)
             kind = "method"
+            kws = {}
         else:
+            if isinstance(me, dict):
+                assert "function" in me and (
+                    "filter_node" in me or "pre_rewriter" in me or "post_rewriter" in me
+                ), (
+                    f"If the rewriting code is defined as a dictionary, key "
+                    f"'function' must be defined, other arguments must be understood by "
+                    f"{transform_method.__name__}, "
+                    f"the given value is {me!r}."
+                )
+                kws = me
+                me = me["function"]
+                del kws["function"]
+            else:
+                kws = {}
             name = me.__qualname__
             spl = name.split(".")
             if len(spl) == 1:
@@ -958,8 +1002,9 @@ def torch_export_rewrite(
             if verbose:
                 print(f"[torch_export_rewrite] dump original code in {filename!r}")
             with open(filename, "w") as f:
-                f.write(inspect.getsource(to_rewrite))
-        rewr = transform_method(to_rewrite, verbose=max(verbose - 1, 0))
+                code = inspect.getsource(to_rewrite)
+                f.write(code)
+        rewr = transform_method(to_rewrite, verbose=max(verbose - 1, 0), **kws)
         if dump_rewriting:
             filename = f"{dump_rewriting}.{kind}.{cls_name}.{name}.rewritten.py"
             if verbose:
