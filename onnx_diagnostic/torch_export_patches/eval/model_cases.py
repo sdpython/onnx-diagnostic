@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 DIM = torch.export.Dim
+DYN = torch.export.Dim.DYNAMIC
 
 
 class AtenRollRelu(torch.nn.Module):
@@ -364,6 +365,28 @@ class ControlFlowCondNonZero(torch.nn.Module):
     )
 
 
+class ControlFlowCondIdentity_153832(torch.nn.Module):
+    """`#153832 <https://github.com/pytorch/pytorch/issues/153832>`_"""
+
+    def forward(self, x, y):
+
+        def branch_cond_then_1(x):
+            x = torch.abs(x) + 1
+            return x
+
+        def branch_cond_else_1(x):
+            return x  # fails but succeeds with x.clone()
+
+        x = torch.cond(x.sum() > 0, branch_cond_then_1, branch_cond_else_1, [x])
+        return x + y
+
+    _inputs = [
+        (torch.rand((3, 4)), torch.rand((3, 4))),
+        (torch.rand((4, 5)), torch.rand((4, 5))),
+    ]
+    _dynamic = {"x": {0: DYN, 1: DYN}, "y": {0: DYN, 1: DYN}}
+
+
 class ControlFlowScan(torch.nn.Module):
 
     @staticmethod
@@ -490,6 +513,73 @@ class ControlFlowScanCDistXY(torch.nn.Module):
         "x": {0: DIM("x_rows"), 1: DIM("dim")},
         "y": {0: DIM("y_rows"), 1: DIM("dim")},
     }
+
+
+class ControlFlowScanInplace_153705(torch.nn.Module):
+    """`#153705 <https://github.com/pytorch/pytorch/issues/153705>`_"""
+
+    def forward(self, x, y):
+        def loop_body_1(z, iv, x, y):
+            z = z.clone()
+            i = iv.item()
+            z[i, :] = ((x[i, :] - y) ** 2).sum(dim=-1)
+            return [z, iv]
+
+        z = torch.empty((x.shape[0], y.shape[0]))
+        r = torch.ops.higher_order.scan(
+            loop_body_1, [z], [torch.arange(x.shape[0], dtype=torch.int64)], [x, y]
+        )
+        return r[0]
+
+    _inputs = [
+        (torch.rand((3, 4)), torch.rand((5, 4))),
+        (torch.rand((4, 5)), torch.rand((6, 5))),
+    ]
+    _dynamic = {"x": {0: DYN, 1: DYN}, "y": {0: DYN, 1: DYN}}
+
+
+class ControlFlowScanDecomposition_151564(torch.nn.Module):
+    """`#151564 <https://github.com/pytorch/pytorch/issues/151564>`_"""
+
+    @classmethod
+    def dummy_loop(cls, padded: torch.Tensor, pos: torch.Tensor):
+        copy = torch.zeros(padded.shape)
+        for i in range(pos.shape[0]):
+            p = pos[i]
+            copy[i, :p] = padded[i, :p]
+        return copy
+
+    @classmethod
+    def dummy_loop_with_scan(cls, padded: torch.Tensor, pos: torch.Tensor):
+        def pad_row(padded, p):
+            row = torch.zeros((padded.shape[0],))
+            torch._check(p.item() > 0)
+            torch._check(p.item() < padded.shape[0])
+            # this check is not always true, we add it anyway to make this dimension >= 2
+            # and avoid raising an exception about dynamic dimension in {0, 1}
+            if torch.compiler.is_exporting():
+                torch._check(p.item() > 1)
+            row[: p.item()] = padded[: p.item()]
+            return (row,)
+
+        return torch.ops.higher_order.scan(
+            pad_row,
+            [],
+            [padded, pos],
+            [],
+        )
+
+    @classmethod
+    def select_when_exporting(cls, f, f_scan):
+        return f_scan if torch.compiler.is_exporting() else f
+
+    def forward(self, images, position):
+        return self.select_when_exporting(self.dummy_loop, self.dummy_loop_with_scan)(
+            images, position
+        )
+
+    _inputs = [(torch.randn((5, 6)), torch.arange(5, dtype=torch.int64) + 1)]
+    _dynamic = {"images": {0: DYN, 1: DYN}, "position": {0: DYN}}
 
 
 class SignatureInt1(torch.nn.Module):
