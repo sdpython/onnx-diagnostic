@@ -15,7 +15,7 @@ def discover():
         :showcode:
 
         import pprint
-        from onnx_diagnostic.torch_export_patch.eval import discover
+        from onnx_diagnostic.torch_export_patches.eval import discover
 
         pprint.pprint(discover())
     """

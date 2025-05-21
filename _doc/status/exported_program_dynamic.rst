@@ -15,7 +15,8 @@ to the original model.
     import inspect
     import textwrap
     import pandas
-    from onnx_diagnostic.torch_export_patch.eval import discover, run_exporter
+    from onnx_diagnostic.helpers import string_type
+    from onnx_diagnostic.torch_export_patches.eval import discover, run_exporter
     from onnx_diagnostic.ext_test_case import unit_test_going
 
     cases = discover()
