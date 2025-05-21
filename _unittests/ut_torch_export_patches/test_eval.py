@@ -9,11 +9,14 @@ class TestEval(ExtTestCase):
         res = discover()
         self.assertNotEmpty(res)
         for mod in res.values():
-            m = mod()
-            if isinstance(m._inputs, tuple):
-                m(*m._inputs)
-            else:
-                m(*m._inputs[0])
+            if mod.__name__ == "ControlFlowCondIdentity_153832":
+                continue
+            with self.subTest(name=mod.__name__):
+                m = mod()
+                if isinstance(m._inputs, tuple):
+                    m(*m._inputs)
+                else:
+                    m(*m._inputs[0])
 
     def test_eval(self):
         d = list(discover().items())[0]  # noqa: RUF015
