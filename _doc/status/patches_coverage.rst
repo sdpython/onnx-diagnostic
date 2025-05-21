@@ -17,7 +17,7 @@ The following code shows the list of serialized classes in transformers.
 Patched Classes
 ===============
 
-The following script shows the list of method patched
+The following script shows the list of methods patched
 for transformers.
 
 .. runpython::
@@ -29,11 +29,11 @@ for transformers.
         if name.startswith("patched_"):
             print(f"{cls._PATCHED_CLASS_.__name__}: {', '.join(cls._PATCHES_)}")
 
-Half Automated Rewrites
-=======================
+Half Automated Rewrites for Control Flows
+=========================================
 
-The following script shows the list of method patched
-for transformers.
+The following script shows the list of methods automatically rewritten
+due to control flows.
 
 .. runpython::
     :showcode:
