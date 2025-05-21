@@ -14,7 +14,7 @@ class TestTinyLlm(ExtTestCase):
         model(**inputs)
 
     @ignore_warnings(UserWarning)
-    @requires_transformers("4.52")
+    @requires_transformers("4.53")
     def test_export_tiny_llm_1(self):
         data = get_tiny_llm()
         model, inputs = data["model"], data["inputs"]

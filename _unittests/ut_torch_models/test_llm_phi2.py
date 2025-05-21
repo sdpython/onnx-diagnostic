@@ -13,7 +13,7 @@ class TestLlmPhi(ExtTestCase):
         model(**inputs)
 
     @ignore_warnings(UserWarning)
-    @requires_transformers("4.52")
+    @requires_transformers("4.53")
     def test_export_phi2_1(self):
         data = get_phi2(num_hidden_layers=2)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]

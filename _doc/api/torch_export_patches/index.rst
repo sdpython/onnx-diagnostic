@@ -5,6 +5,7 @@ onnx_diagnostic.torch_export_patches
     :maxdepth: 1
     :caption: submodules
 
+    eval/index
     onnx_export_errors
     onnx_export_serialization
     patches/index
