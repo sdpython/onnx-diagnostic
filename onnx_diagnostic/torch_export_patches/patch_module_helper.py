@@ -19,6 +19,28 @@ def ast_or_into_bitor(node: "ast.Node") -> "ast.Node":
     return new_node
 
 
+def _rewrite_bart_encoder_layer():
+    "BartEncoderLayer, PLBartEncoderLayer"
+    import transformers
+
+    bd = dict(
+        filter_node=(
+            lambda node: isinstance(node, ast.If) and not isinstance(node.test, ast.Name)
+        ),
+        pre_rewriter=ast_or_into_bitor,
+    )
+
+    def _add(f):
+        g = bd.copy()
+        g["function"] = f
+        return g
+
+    return [
+        _add(transformers.models.bart.modeling_bart.BartEncoderLayer.forward),
+        _add(transformers.models.plbart.modeling_plbart.PLBartEncoderLayer.forward),
+    ]
+
+
 def code_needing_rewriting(cls_name: str) -> Optional[List[Any]]:
     """
     Returns a known list of methods or functions to rewrite because of control flow
@@ -43,22 +65,5 @@ def code_needing_rewriting(cls_name: str) -> Optional[List[Any]]:
         "PLBartEncoderLayer",
         "PLBartForConditionalGeneration",
     }:
-        import transformers
-
-        bd = dict(
-            filter_node=(
-                lambda node: isinstance(node, ast.If) and not isinstance(node.test, ast.Name)
-            ),
-            pre_rewriter=ast_or_into_bitor,
-        )
-
-        def _add(f):
-            g = bd.copy()
-            g["function"] = f
-            return g
-
-        return [
-            _add(transformers.models.bart.modeling_bart.BartEncoderLayer.forward),
-            _add(transformers.models.plbart.modeling_plbart.PLBartEncoderLayer.forward),
-        ]
+        return _rewrite_bart_encoder_layer()
     return None

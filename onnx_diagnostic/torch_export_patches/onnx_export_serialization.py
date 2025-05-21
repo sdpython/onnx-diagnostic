@@ -1,5 +1,5 @@
 import pprint
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import packaging.version as pv
 import optree
 import torch
@@ -133,6 +133,11 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
         # To avoid doing it multiple times.
         PATCH_OF_PATCHES.add(BaseModelOutput)
 
+    return serialization_functions(verbose=verbose)
+
+
+def serialization_functions(verbose: int = 0) -> Dict[str, Union[Callable, int]]:
+    """Returns the list of serialization functions."""
     return dict(
         DynamicCache=register_class_serialization(
             DynamicCache,

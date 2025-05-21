@@ -36,6 +36,7 @@ It also implements tools to investigate, validate exported models (ExportedProgr
     :caption: Contents
 
     patches
+    status/index
     api/index
     cmds/index
     auto_examples/index
@@ -195,14 +196,18 @@ See :meth:`onnx_diagnostic.export.ModelInputs.guess_dynamic_shapes`.
 
     >>> (({0: 'dim_0I0', 1: 'dim_0I1'}, {1: 'dim_1I1'}), {})
 
-use_dyn_for_str
+use_dyn_not_str
 +++++++++++++++
 
+See :meth:`onnx_diagnostic.torch_export_patches.patch_inputs.use_dyn_not_str`.
 
+The function replaces dynamic dimensions defined as strings by
+``torch.export.Dim.DYNAMIC``.
 
 Older versions
 ++++++++++++++
 
+* `0.5.1 <../v0.5.1/index.html>`_
 * `0.5.0 <../v0.5.0/index.html>`_
 * `0.4.4 <../v0.4.4/index.html>`_
 * `0.4.3 <../v0.4.3/index.html>`_
