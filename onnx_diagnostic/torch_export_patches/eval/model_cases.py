@@ -775,7 +775,7 @@ class CreateFromShape(torch.nn.Module):
 
 class CreateFromShapeThroughFunction(torch.nn.Module):
     @staticmethod
-    def add_one(dim: int) -> int:
+    def add_one(dim):
         return dim + 1
 
     def forward(self, x):

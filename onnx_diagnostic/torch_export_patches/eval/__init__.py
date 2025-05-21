@@ -70,7 +70,7 @@ def evaluation(
 
     if isinstance(cases, (list, tuple)):
         all_cases = discover()
-        new_cases = []
+        new_cases = []  # type: ignore[var-annotated]
         for c in cases:
             if "*" in c or "?" in c:
                 # regex
@@ -552,8 +552,8 @@ def run_exporter(
         dict(
             success=1 if disc["abs"] < 0.1 else 0,
             model_cls=model.__class__,
-            exported=mod,
-            onnx=onx,
+            exported=mod,  # type: ignore[dict-item]
+            onnx=onx,  # type: ignore[dict-item]
         )
     )
     if disc["abs"] >= 0.1:
