@@ -134,7 +134,7 @@ def string_type(
 
     The element types for a tensor are displayed as integer to shorten the message.
     The semantic is defined by :class:`onnx.TensorProto` and can be obtained
-    by :func:`onnx_dtype_name`.
+    by :func:`onnx_diagnostic.helpers.onnx_helper.onnx_dtype_name`.
 
     .. runpython::
         :showcode:
