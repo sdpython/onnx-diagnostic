@@ -1,4 +1,4 @@
-from typing import List, Optional, Sequence, Set, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
 import onnx
 
 
@@ -72,7 +72,7 @@ class GraphRendering:
         # initialization
         min_row = min(order)
         n_rows = max(order) + 1
-        names = {}
+        names: Dict[str, int] = {}
 
         positions = [(min_row, i) for i in range(len(order))]
         for row in range(min_row, n_rows):
@@ -228,9 +228,12 @@ class GraphRendering:
         .. runpython::
             :showcode:
 
+            import textwrap
             import onnx
             import onnx.helper as oh
             from onnx_diagnostic.helpers.graph_helper import GraphRendering
+
+            TFLOAT = onnx.TensorProto.FLOAT
 
             proto = oh.make_model(
                 oh.make_graph(
@@ -251,7 +254,7 @@ class GraphRendering:
                 ir_version=9,
             )
             graph = GraphRendering(proto)
-            text = textwrap.dedent(graph.text_rendering()).strip("\n")
+            text = textwrap.dedent(graph.text_rendering()).strip("\\n")
             print(text)
         """
         nodes = self.nodes
