@@ -84,6 +84,9 @@ class GraphRendering:
             mix.sort()
             for c, (_m, i) in enumerate(mix):
                 positions[indices[i]] = (row, c)
+                n = nodes[indices[i]]
+                for o in n.output:
+                    names[o] = c
 
         return positions
 
@@ -189,8 +192,9 @@ class GraphRendering:
         assert mode == "square", f"mode={mode!r} not supported"
         assert p1[0] < p2[0], f"Unexpected edge p1={p1}, p2={p2}"
         assert p1[0] + 2 <= p2[0] - 2, f"Unexpected edge p1={p1}, p2={p2}"
-        assert 0 <= p1[0] < len(grid) - 3, f"p1={p1}, gird:{len(grid)},{len(grid[0])}"
-        assert 2 <= p2[0] < len(grid) - 1, f"p2={p2}, gird:{len(grid)},{len(grid[0])}"
+        # removes this when the algorithm is ready
+        assert 0 <= p1[0] < len(grid) - 3, f"p1={p1}, grid:{len(grid)},{len(grid[0])}"
+        assert 2 <= p2[0] < len(grid) - 1, f"p2={p2}, grid:{len(grid)},{len(grid[0])}"
         assert (
             0 <= p1[1] < min(len(g) for g in grid)
         ), f"p1={p1}, sizes={[len(g) for g in grid]}"
