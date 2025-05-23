@@ -64,7 +64,7 @@ class TestPatchPatchTorch(ExtTestCase):
 
     def test_vmap_transformers_scenario(self):
         def padding_mask_function(padding_mask: torch.Tensor) -> Callable:
-            def inner_mask(batch_idx: int, head_idx: int, q_idx: int, kv_idx: int) -> bool:
+            def inner_mask(batch_idx, head_idx, q_idx, kv_idx):
                 return padding_mask[batch_idx, kv_idx]
 
             return inner_mask
@@ -99,9 +99,9 @@ class TestPatchPatchTorch(ExtTestCase):
                 mask_function = patched_vmap(mask_function, in_dims=dims, out_dims=0)
             return mask_function
 
-        padding_mask = torch.ones((1, 33)).to(torch.bool)
-        batch_arange = torch.tensor([0], dtype=torch.int64)
-        head_arange = torch.tensor([0], dtype=torch.int64)
+        padding_mask = torch.ones((2, 33)).to(torch.bool)
+        batch_arange = torch.tensor([0, 1], dtype=torch.int64)
+        head_arange = torch.tensor([0, 1], dtype=torch.int64)
         cache_position = torch.tensor([30, 31, 32], dtype=torch.int64)
         kv_arange = torch.arange(33, dtype=torch.int64)
         mask_function = and_masks(causal_mask_function, padding_mask_function(padding_mask))
@@ -114,6 +114,25 @@ class TestPatchPatchTorch(ExtTestCase):
                 batch_arange, head_arange, cache_position, kv_arange
             )
         self.assertEqualArray(causal_mask, causal_mask2)
+
+        class Model(torch.nn.Module):
+            def forward(self, batch_arange, head_arange, cache_position, kv_arange):
+                with TransformGetItemToIndex():
+                    causal_mask2 = _vmap_for_bhqkv2(mask_function)(
+                        batch_arange, head_arange, cache_position, kv_arange
+                    )
+                return causal_mask2
+
+        inputs = batch_arange, head_arange, cache_position, kv_arange
+        got = Model()(*inputs)
+        self.assertEqualArray(causal_mask, got)
+
+        DYN = torch.export.Dim.DYNAMIC
+        ds1 = {0: DYN}
+        ds2 = {0: DYN, 1: DYN}
+        ds = (ds2, ds1, ds1, ds1)
+        ep = torch.export.export(Model(), inputs, dynamic_shapes=ds)
+        self.assertEqualArray(causal_mask, ep.moule(*inputs))
 
 
 if __name__ == "__main__":

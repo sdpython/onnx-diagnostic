@@ -375,6 +375,9 @@ class patched_ShapeEnv:
 def patched_vmap(func, in_dims=0, out_dims=0):
     """
     Python implementation of :func:`torch.vmap`.
+    The implementation raises an issue when it is being exported with
+    :func:`torch.export.export` when the function is called with
+    non tensors arugments and the batch size is dynamic.
     """
     from ...helpers import string_type
 
@@ -389,7 +392,10 @@ def patched_vmap(func, in_dims=0, out_dims=0):
             if not isinstance(in_dims, (list, tuple))
             else list(in_dims)
         )
-        assert len(in_dims_) == len(args)
+        assert len(in_dims_) == len(args), (
+            f"Mismtch between in_dims={in_dims_} and "
+            f"args={string_type(args, with_shape=True)}"
+        )
 
         batch_size = None
         batched_args = []
@@ -407,20 +413,51 @@ def patched_vmap(func, in_dims=0, out_dims=0):
             arg = arg.movedim(in_dim, 0)
             batched_args.append(arg)
 
-        results = []
-        for i in range(batch_size):
-            input_slice = [
-                (arg[i] if isinstance(arg, torch.Tensor) and in_dim is not None else arg)
+        if all(isinstance(a, torch.Tensor) for a in args) and isinstance(
+            batch_size, torch.SymInt
+        ):
+            batched_tensors = [
+                (
+                    arg
+                    if (isinstance(arg, torch.Tensor) and in_dim is not None)
+                    else arg.unsqueeze(0).expand((batch_size, *arg.shape))
+                )
                 for arg, in_dim in zip(batched_args, in_dims_)
             ]
-            result = func(*input_slice)
-            results.append(result)
-
-        if isinstance(results[0], torch.Tensor):
-            stacked = torch.stack(results)
+            results = torch.ops.higher_order.scan(func, [], batched_tensors, [])
+            stacked = results[0]
             if out_dims != 0:
                 return stacked.movedim(0, out_dims)
             return stacked
-        return results
+
+        else:
+            torch._check(
+                not isinstance(batch_size, torch.SymInt),
+                lambda: (
+                    f"patched_vmap supports dynamic batch_size only if all argument "
+                    f"are tensors but types are {[type(a) for a in args]}"
+                ),
+            )
+            batched_tensors = [
+                (
+                    (None, arg)
+                    if (isinstance(arg, torch.Tensor) and in_dim is not None)
+                    else (arg, arg)
+                )
+                for arg, in_dim in zip(batched_args, in_dims_)
+            ]
+
+            results = []
+            for i in range(batch_size):
+                input_slice = [v if v is not None else arg[i] for v, arg in batched_tensors]
+                result = func(*input_slice)
+                results.append(result)
+
+            if isinstance(results[0], torch.Tensor):
+                stacked = torch.stack(results)
+                if out_dims != 0:
+                    return stacked.movedim(0, out_dims)
+                return stacked
+            return results
 
     return wrapped

@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from ..patch_helper import py_vmap
+from ..patches.patch_torch import patched_vmap
 
 DIM = torch.export.Dim
 DYN = torch.export.Dim.DYNAMIC
@@ -890,7 +890,7 @@ class Vmap(torch.nn.Module):
 class VmapPython(torch.nn.Module):
     def forward(self, x, y):
         f = lambda x, y: x * y + 1  # noqa: E731
-        return py_vmap(f)(x, y)
+        return patched_vmap(f)(x, y)
 
     _inputs = [(torch.tensor([1.0, 2.0, 3.0]), torch.tensor([0.1, 0.2, 0.3]))]
     _dynamic = {"x": {0: DYN}, "y": {0: DYN}}
