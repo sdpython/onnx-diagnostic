@@ -334,6 +334,8 @@ def torch_export_patches(
         ####################
 
         if patch_transformers:
+            import transformers.masking_utils
+
             if verbose:
                 import transformers
 
@@ -343,6 +345,16 @@ def torch_export_patches(
                 )
             revert_patches_info = patch_module_or_classes(
                 patch_transformers_list, verbose=verbose
+            )
+
+        if hasattr(transformers.masking_utils, "_vmap_for_bhqkv"):
+            if verbose:
+                print(
+                    "[torch_export_patches] patches transformers.masking_utils._vmap_for_bhqkv"
+                )
+            f_transformers__vmap_for_bhqkv = transformers.masking_utils._vmap_for_bhqkv
+            transformers.masking_utils._vmap_for_bhqkv = (
+                patch_transformers_list.patched__vmap_for_bhqkv
             )
 
         if custom_patches:
@@ -442,6 +454,14 @@ def torch_export_patches(
                 unpatch_module_or_classes(
                     patch_transformers_list, revert_patches_info, verbose=verbose
                 )
+
+                if hasattr(transformers.masking_utils, "_vmap_for_bhqkv"):
+                    if verbose:
+                        print(
+                            "[torch_export_patches] unpatch "
+                            "transformers.masking_utils._vmap_for_bhqkv"
+                        )
+                    transformers.masking_utils._vmap_for_bhqkv = f_transformers__vmap_for_bhqkv
 
             ########
             # caches
