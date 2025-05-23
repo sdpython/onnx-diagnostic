@@ -31,6 +31,7 @@ class TestPatchPatchTorch(ExtTestCase):
         ep = torch.export.export(Model(), (x, y), ({0: DYN}, {1: DYN}))
         self.assertEqualArray(Model()(x, y), ep.module()(x, y))
 
+    @requires_torch("2.8")
     def test_export_patched_vmap(self):
         class Model(torch.nn.Module):
             def forward(self, x, y):
