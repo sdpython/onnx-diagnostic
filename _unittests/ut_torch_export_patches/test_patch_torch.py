@@ -139,6 +139,7 @@ class TestPatchPatchTorch(ExtTestCase):
             ep = torch.export.export(Model(), inputs, dynamic_shapes=ds)
             self.assertEqualArray(causal_mask, ep.moule(*inputs))
 
+    @requires_torch("2.8")
     def test_vmap_transformers_scenario_novmap(self):
         def padding_mask_function(padding_mask: torch.Tensor) -> Callable:
             def inner_mask(batch_idx, head_idx, q_idx, kv_idx):
