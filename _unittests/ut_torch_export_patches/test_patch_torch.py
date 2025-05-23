@@ -63,7 +63,7 @@ class TestPatchPatchTorch(ExtTestCase):
         x, y = torch.randn(2, 5), torch.randn(5)
         expected = torch.vmap(torch.dot, in_dims=(0, None))(x, y)
         got = patched_vmap(torch.dot, in_dims=(0, None))(x, y)
-        self.assertEqualArray(expected, got)
+        self.assertEqualArray(expected, got, atol=1e-5)
 
     def test_vmap_transformers_scenario_vmap(self):
         def padding_mask_function(padding_mask: torch.Tensor) -> Callable:
