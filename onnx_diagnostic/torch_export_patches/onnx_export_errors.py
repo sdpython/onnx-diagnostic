@@ -107,7 +107,7 @@ def torch_export_patches(
 ) -> Callable:
     """
     Tries to bypass some situations :func:`torch.export.export` does not support.
-    See also :ref:`l-patches-explained`.
+    See also :ref:`l-patches-explained` and :ref:`l-patch-coverage`.
 
     :param patch_sympy: fix missing method ``name`` for IntegerConstant
     :param patch_torch: patches :epkg:`torch` with supported implementation
@@ -140,6 +140,7 @@ def torch_export_patches(
     * ``torch.jit.isinstance``
     * ``torch._dynamo.mark_static_address``
     * ``torch._subclasses.fake_impls.infer_size``
+    * ``torch.vmap``
     * fix missing method ``name`` for ``sympy.S.IntegerConstant``
     * ``AttentionMaskConverter._make_causal_mask``
     * Serialization of ``MambaCache`` (in :epkg:`transformers`)
@@ -251,6 +252,7 @@ def torch_export_patches(
         if patch_torch:
             from .patches.patch_torch import (
                 patched_infer_size,
+                patched_vmap,
                 patched__broadcast_shapes,
                 _catch_produce_guards_and_solve_constraints,
                 patch__check_input_constraints_for_graph,
@@ -260,6 +262,10 @@ def torch_export_patches(
                 print(f"[torch_export_patches] torch.__version__={torch.__version__!r}")
                 print(f"[torch_export_patches] stop_if_static={stop_if_static!r}")
                 print("[torch_export_patches] patch pytorch")
+
+            # torch.vmap
+            f_vmap = torch.vmap
+            torch.vmap = patched_vmap
 
             # torch.jit.isinstance
             f_jit_isinstance = torch.jit.isinstance
@@ -381,6 +387,7 @@ def torch_export_patches(
 
             if patch_torch:
                 # this should disappear when torch.jit is removed
+                torch.vmap = f_vmap
                 torch.jit.isinstance = f_jit_isinstance
                 torch._dynamo.mark_static_address = f_mark_static_address
                 # tracked by https://github.com/pytorch/pytorch/issues/143495

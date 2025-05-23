@@ -10,7 +10,6 @@ onnx_diagnostic.torch_export_patches
     onnx_export_serialization
     patches/index
     patch_expressions
-    patch_helper
     patch_inputs
     patch_module
     patch_module_helper
