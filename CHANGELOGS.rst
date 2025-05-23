@@ -1,8 +1,11 @@
 Change Logs
 ===========
 
-0.5.1
+0.6.0
 +++++
+
+* :pr:`108`: first version of an algorithm rendering small onnx graph in ascii,
+  patch for ``torch.vmap``
 
 0.5.0
 +++++

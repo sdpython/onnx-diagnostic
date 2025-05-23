@@ -6,6 +6,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.torch_models.llms import get_phi2
 from onnx_diagnostic.helpers import string_type
+from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
     patched_DynamicCache,
@@ -61,7 +62,8 @@ class TestTinyLlmBypassed(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with torch_export_patches(patch_transformers=True) as modificator:
+        model(**torch_deepcopy(inputs))
+        with torch_export_patches(patch_transformers=True, stop_if_static=1) as modificator:
             inputs = modificator(inputs)
             ep = torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
             assert ep

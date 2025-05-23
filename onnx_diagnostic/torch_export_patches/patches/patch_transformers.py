@@ -1,12 +1,40 @@
 import inspect
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.cache_utils import StaticCache, Cache, DynamicCache
 from ...ext_test_case import has_transformers
 from ...helpers.torch_helper import is_torchdynamo_exporting
+
+
+def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) -> Callable:
+    """Patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""
+    from ...helpers import string_type
+
+    dimensions: List[Tuple[Optional[int], ...]] = [
+        (None, None, None, 0),
+        (None, None, 0, None),
+    ]
+    if bh_indices:
+        dimensions.extend([(None, 0, None, None), (0, None, None, None)])
+    dimensions = [tuple(1 if d is None else -1 for d in shape) for shape in dimensions]
+    dimensions = tuple(reversed(dimensions))
+    indices = tuple(shape.index(-1) for shape in dimensions)
+
+    def vector_mask_function(
+        *args, mask_function=mask_function, dimensions=dimensions, indices=indices
+    ):
+        assert len(args) == len(
+            dimensions
+        ), f"Mismatch between args={string_type(args)} and dimensions={dimensions}"
+        new_args = [a.reshape(shape) for a, shape in zip(args, dimensions)]
+        max_shape = tuple(args[i].shape[0] for i in indices)
+        expanded_args = [a.expand(max_shape) for a in new_args]
+        return mask_function(*expanded_args)
+
+    return vector_mask_function
 
 
 def _patch_make_causal_mask(

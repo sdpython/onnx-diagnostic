@@ -1,3 +1,5 @@
+.. _l-patch-coverage:
+
 =======================
 Coverage of the Patches
 =======================

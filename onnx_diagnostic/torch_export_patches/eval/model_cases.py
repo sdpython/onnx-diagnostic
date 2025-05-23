@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from ..patches.patch_torch import patched_vmap
 
 DIM = torch.export.Dim
 DYN = torch.export.Dim.DYNAMIC
@@ -875,3 +876,21 @@ class CreateFromShapeThroughFunction(torch.nn.Module):
 
     _inputs = [(torch.rand((4, 4)),), (torch.rand((5, 5)),)]
     _dynamic = {"x": {0: DIM("dx"), 1: DIM("dy")}}
+
+
+class Vmap(torch.nn.Module):
+    def forward(self, x, y):
+        f = lambda x, y: x * y + 1  # noqa: E731
+        return torch.vmap(f)(x, y)
+
+    _inputs = [(torch.tensor([1.0, 2.0, 3.0]), torch.tensor([0.1, 0.2, 0.3]))]
+    _dynamic = {"x": {0: DYN}, "y": {0: DYN}}
+
+
+class VmapPython(torch.nn.Module):
+    def forward(self, x, y):
+        f = lambda x, y: x * y + 1  # noqa: E731
+        return patched_vmap(f)(x, y)
+
+    _inputs = [(torch.tensor([1.0, 2.0, 3.0]), torch.tensor([0.1, 0.2, 0.3]))]
+    _dynamic = {"x": {0: DYN}, "y": {0: DYN}}

@@ -107,7 +107,7 @@ def torch_export_patches(
 ) -> Callable:
     """
     Tries to bypass some situations :func:`torch.export.export` does not support.
-    See also :ref:`l-patches-explained`.
+    See also :ref:`l-patches-explained` and :ref:`l-patch-coverage`.
 
     :param patch_sympy: fix missing method ``name`` for IntegerConstant
     :param patch_torch: patches :epkg:`torch` with supported implementation
@@ -140,6 +140,7 @@ def torch_export_patches(
     * ``torch.jit.isinstance``
     * ``torch._dynamo.mark_static_address``
     * ``torch._subclasses.fake_impls.infer_size``
+    * ``torch.vmap``
     * fix missing method ``name`` for ``sympy.S.IntegerConstant``
     * ``AttentionMaskConverter._make_causal_mask``
     * Serialization of ``MambaCache`` (in :epkg:`transformers`)
@@ -251,6 +252,7 @@ def torch_export_patches(
         if patch_torch:
             from .patches.patch_torch import (
                 patched_infer_size,
+                patched_vmap,
                 patched__broadcast_shapes,
                 _catch_produce_guards_and_solve_constraints,
                 patch__check_input_constraints_for_graph,
@@ -260,6 +262,10 @@ def torch_export_patches(
                 print(f"[torch_export_patches] torch.__version__={torch.__version__!r}")
                 print(f"[torch_export_patches] stop_if_static={stop_if_static!r}")
                 print("[torch_export_patches] patch pytorch")
+
+            # torch.vmap
+            f_vmap = torch.vmap
+            torch.vmap = patched_vmap
 
             # torch.jit.isinstance
             f_jit_isinstance = torch.jit.isinstance
@@ -328,6 +334,11 @@ def torch_export_patches(
         ####################
 
         if patch_transformers:
+            try:
+                import transformers.masking_utils as masking_utils
+            except ImportError:
+                masking_utils = None
+
             if verbose:
                 import transformers
 
@@ -338,6 +349,15 @@ def torch_export_patches(
             revert_patches_info = patch_module_or_classes(
                 patch_transformers_list, verbose=verbose
             )
+
+            if masking_utils and hasattr(masking_utils, "_vmap_for_bhqkv"):
+                if verbose:
+                    print(
+                        "[torch_export_patches] patches "
+                        "transformers.masking_utils._vmap_for_bhqkv"
+                    )
+                f_transformers__vmap_for_bhqkv = masking_utils._vmap_for_bhqkv
+                masking_utils._vmap_for_bhqkv = patch_transformers_list.patched__vmap_for_bhqkv
 
         if custom_patches:
             if verbose:
@@ -381,6 +401,7 @@ def torch_export_patches(
 
             if patch_torch:
                 # this should disappear when torch.jit is removed
+                torch.vmap = f_vmap
                 torch.jit.isinstance = f_jit_isinstance
                 torch._dynamo.mark_static_address = f_mark_static_address
                 # tracked by https://github.com/pytorch/pytorch/issues/143495
@@ -430,11 +451,23 @@ def torch_export_patches(
             ##############
 
             if patch_transformers:
+                try:
+                    import transformers.masking_utils as masking_utils
+                except ImportError:
+                    masking_utils = None
                 if verbose:
                     print("[torch_export_patches] unpatch transformers")
                 unpatch_module_or_classes(
                     patch_transformers_list, revert_patches_info, verbose=verbose
                 )
+
+                if masking_utils and hasattr(masking_utils, "_vmap_for_bhqkv"):
+                    if verbose:
+                        print(
+                            "[torch_export_patches] unpatch "
+                            "transformers.masking_utils._vmap_for_bhqkv"
+                        )
+                    masking_utils._vmap_for_bhqkv = f_transformers__vmap_for_bhqkv
 
             ########
             # caches

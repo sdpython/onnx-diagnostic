@@ -112,6 +112,30 @@ def string_type(
     :param verbose: verbosity (to show the path it followed to get that print)
     :return: str
 
+    The function displays something like the following for a tensor.
+
+    .. code-block:: text
+
+        T7s2x7[0.5:6:A3.56]
+        ^^^+-^^----+------^
+        || |       |
+        || |       +-- information about the content of a tensor or array
+        || |           [min,max:A<average>]
+        || |
+        || +-- a shape
+        ||
+        |+-- integer following the code defined by onnx.TensorProto,
+        |    7 is onnx.TensorProto.INT64 (see onnx_dtype_name)
+        |
+        +-- A,T,F
+            A is an array from numpy
+            T is a Tensor from pytorch
+            F is a FakeTensor from pytorch
+
+    The element types for a tensor are displayed as integer to shorten the message.
+    The semantic is defined by :class:`onnx.TensorProto` and can be obtained
+    by :func:`onnx_diagnostic.helpers.onnx_helper.onnx_dtype_name`.
+
     .. runpython::
         :showcode:
 
