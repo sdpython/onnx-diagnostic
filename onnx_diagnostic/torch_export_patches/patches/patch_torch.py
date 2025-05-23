@@ -377,7 +377,7 @@ def patched_vmap(func, in_dims=0, out_dims=0):
     Python implementation of :func:`torch.vmap`.
     The implementation raises an issue when it is being exported with
     :func:`torch.export.export` when the function is called with
-    non tensors arugments and the batch size is dynamic.
+    non tensors arguments and the batch size is dynamic.
     """
     from ...helpers import string_type
 

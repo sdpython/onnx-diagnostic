@@ -13,7 +13,7 @@ def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) ->
     """Patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""
     from ...helpers import string_type
 
-    dimensions = [(None, None, None, 0), (None, None, 0, None)]
+    dimensions: List[Optional[int]] = [(None, None, None, 0), (None, None, 0, None)]
     if bh_indices:
         dimensions.extend([(None, 0, None, None), (0, None, None, None)])
     dimensions = [tuple(1 if d is None else -1 for d in shape) for shape in dimensions]
