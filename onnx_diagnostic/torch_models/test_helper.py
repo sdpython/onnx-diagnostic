@@ -1126,7 +1126,7 @@ def call_torch_export_model_builder(
     ), f"unexpected value for optimization={optimization}, none is available"
     precision = data.get("model_dtype", "fp32")
     provider = data.get("model_device", "cpu")
-    summary = {}
+    summary: Dict[str, Any] = {}
 
     epo = _quiet_or_not_quiet(
         quiet,
