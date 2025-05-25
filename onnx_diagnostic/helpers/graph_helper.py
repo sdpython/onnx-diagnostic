@@ -290,9 +290,9 @@ class GraphRendering:
             *self.nodes,
             *[oh.make_node(i, [i], ["END"]) for i in self.output_names],
         ]
-        existing = set(self.start_names) - set(self.input_names)
-        existing |= {"BEGIN"}
-        existing = sorted(existing)
+        exist = set(self.start_names) - set(self.input_names)
+        exist |= {"BEGIN"}
+        existing = sorted(exist)
         order = self.computation_order(nodes, existing)
         positions = self.graph_positions(nodes, order, existing)
         text_pos = self.text_positions(nodes, positions)
