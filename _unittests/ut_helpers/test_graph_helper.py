@@ -126,21 +126,31 @@ class TestGraphHelper(ExtTestCase):
         )
         graph = GraphRendering(proto)
         text = textwrap.dedent(graph.text_rendering(prefix="|")).strip("\n")
+        print()
+        print(text)
         expected = textwrap.dedent(
             """
             |
             |
             |
             |
-            |   Add             Neg
-            |    |               |
-            |    +-------+-------+
-            |            |
-            |           Mul
-            |            |
-            |            +-------+
-            |                    |
-            |                   Mul
+            |   X            Y
+            |   |            |
+            |   +------+-----+-----------+
+            |          |                 |
+            |         Add               Neg
+            |          |                 |
+            |          +-----+-----------+
+            |                |
+            |               Mul
+            |                |
+            |                +-----------+
+            |                            |
+            |                           Mul
+            |                            |
+            |                            +----------------------+
+            |                                                   |
+            |                                                   Z
             |
             |
             """

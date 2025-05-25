@@ -28,14 +28,15 @@ class TestTinyLlmOnnx(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        ep = torch.onnx.export(
-            model,
-            (),
-            kwargs=inputs,
-            dynamic_shapes=data["dynamic_shapes"],
-            dynamo=True,
-            optimize=True,
-        )
+        with torch_export_patches(patch_transformers=True):
+            ep = torch.onnx.export(
+                model,
+                (),
+                kwargs=inputs,
+                dynamic_shapes=data["dynamic_shapes"],
+                dynamo=True,
+                optimize=True,
+            )
         # There are some discrepancies with torch==2.6
         if not has_torch("2.7"):
             raise unittest.SkipTest("discrepancies observed with torch<2.7")
