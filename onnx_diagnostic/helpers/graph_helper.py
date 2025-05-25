@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
 import onnx
+import onnx.helper as oh
 
 
 class GraphRendering:
@@ -146,6 +147,34 @@ class GraphRendering:
         )
         return [*input_names, *init_names]
 
+    @property
+    def input_names(self) -> List[str]:
+        "Returns the list of input names."
+        return (
+            self.proto.input
+            if isinstance(self.proto, onnx.FunctionProto)
+            else [
+                i.name
+                for i in (
+                    self.proto if isinstance(self.proto, onnx.GraphProto) else self.proto.graph
+                ).input
+            ]
+        )
+
+    @property
+    def output_names(self) -> List[str]:
+        "Returns the list of output names."
+        return (
+            self.proto.output
+            if isinstance(self.proto, onnx.FunctionProto)
+            else [
+                i.name
+                for i in (
+                    self.proto if isinstance(self.proto, onnx.GraphProto) else self.proto.graph
+                ).output
+            ]
+        )
+
     @classmethod
     def build_node_edges(cls, nodes: Sequence[onnx.NodeProto]) -> Set[Tuple[int, int]]:
         """Builds the list of edges between nodes."""
@@ -210,7 +239,7 @@ class GraphRendering:
         else:
             middle = (p1[1] + p2[1]) // 2
             a, b = (p1[1] + 1, middle - 1) if p1[1] < middle else (middle + 1, p1[1] - 1)
-            grid[p1[0] + 2][a : b + 1] = ["-" * (b - a + 1)]
+            grid[p1[0] + 2][a : b + 1] = ["-"] * (b - a + 1)
             a, b = (p1[1] + 1, middle - 1) if p1[1] < middle else (middle + 1, p1[1] - 1)
             grid[p1[0] + 2][a : b + 1] = ["-"] * (b - a + 1)
 
@@ -223,7 +252,6 @@ class GraphRendering:
     def text_rendering(self, prefix="") -> str:
         """
         Renders a model in text.
-        It only renders nodes.
 
         .. runpython::
             :showcode:
@@ -257,8 +285,14 @@ class GraphRendering:
             text = textwrap.dedent(graph.text_rendering()).strip("\\n")
             print(text)
         """
-        nodes = self.nodes
-        existing = self.start_names
+        nodes = [
+            *[oh.make_node(i, ["BEGIN"], [i]) for i in self.input_names],
+            *self.nodes,
+            *[oh.make_node(i, [i], ["END"]) for i in self.output_names],
+        ]
+        existing = set(self.start_names) - set(self.input_names)
+        existing |= {"BEGIN"}
+        existing = sorted(existing)
         order = self.computation_order(nodes, existing)
         positions = self.graph_positions(nodes, order, existing)
         text_pos = self.text_positions(nodes, positions)
@@ -269,8 +303,10 @@ class GraphRendering:
 
         for n1, n2 in edges:
             self.text_edge(grid, text_pos[n1], text_pos[n2])
+            assert len(set(len(g) for g in grid)) == 1, f"lengths={[len(g) for g in grid]}"
         for node, pos in zip(nodes, text_pos):
             self.text_grid(grid, pos, node.op_type)
+            assert len(set(len(g) for g in grid)) == 1, f"lengths={[len(g) for g in grid]}"
 
         return "\n".join(
             f"{prefix}{line.rstrip()}" for line in ["".join(line) for line in grid]
