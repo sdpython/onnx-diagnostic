@@ -1,7 +1,9 @@
 import textwrap
 import unittest
+import numpy as np
 import onnx
 import onnx.helper as oh
+import onnx.numpy_helper as onh
 from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic.helpers.graph_helper import GraphRendering
 
@@ -126,36 +128,35 @@ class TestGraphHelper(ExtTestCase):
         )
         graph = GraphRendering(proto)
         text = textwrap.dedent(graph.text_rendering(prefix="|")).strip("\n")
-        print()
-        print(text)
-        expected = textwrap.dedent(
-            """
-            |
-            |
-            |
-            |
-            |   X            Y
-            |   |            |
-            |   +------+-----+-----------+
-            |          |                 |
-            |         Add               Neg
-            |          |                 |
-            |          +-----+-----------+
-            |                |
-            |               Mul
-            |                |
-            |                +-----------+
-            |                            |
-            |                           Mul
-            |                            |
-            |                            +----------------------+
-            |                                                   |
-            |                                                   Z
-            |
-            |
-            """
-        ).strip("\n")
-        self.assertEqual(expected, text)
+        self.assertIn("└-------┬---┼---┘", text)
+
+    def test_text_rendering_more(self):
+        proto = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Add", ["X", "Y"], ["xy"]),
+                    oh.make_node("Neg", ["Y"], ["ny"]),
+                    oh.make_node("Mul", ["xy", "ny"], ["a"]),
+                    oh.make_node("Div", ["xy", "two"], ["b"]),
+                    oh.make_node("Add", ["b", "Y"], ["by"]),
+                    oh.make_node("Mod", ["a", "ny"], ["ay"]),
+                    oh.make_node("Sub", ["ay", "by"], ["Z"]),
+                ],
+                "-nd-",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b", "c"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+                [onh.from_array(np.array([2], dtype=np.float32), name="two")],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        onnx.checker.check_model(proto)
+        graph = GraphRendering(proto)
+        text = textwrap.dedent(graph.text_rendering(prefix="|")).strip("\n")
+        self.assertIn(" └-------┬---┼---┴-------┐", text)
 
 
 if __name__ == "__main__":

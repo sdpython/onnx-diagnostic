@@ -14,11 +14,13 @@ class TestCommandLines(ExtTestCase):
         )
 
     def test_parser_print(self):
-        st = StringIO()
-        with redirect_stdout(st):
-            main(["print", "raw", self.dummy_path])
-        text = st.getvalue()
-        self.assertIn("Add", text)
+        for fmt in ["raw", "text", "pretty", "printer"]:
+            with self.subTest(format=fmt):
+                st = StringIO()
+                with redirect_stdout(st):
+                    main(["print", fmt, self.dummy_path])
+                text = st.getvalue()
+                self.assertIn("Add", text)
 
     def test_parser_stats(self):
         output = self.get_dump_file("test_parser_stats.xlsx")

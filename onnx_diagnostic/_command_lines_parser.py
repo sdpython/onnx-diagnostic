@@ -126,9 +126,23 @@ def get_parser_print() -> ArgumentParser:
         """
         ),
         epilog="To show a model.",
+        formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument(
-        "fmt", choices=["pretty", "raw"], help="Format to use.", default="pretty"
+        "fmt",
+        choices=["pretty", "raw", "text", "printer"],
+        default="pretty",
+        help=textwrap.dedent(
+            """
+            Prints out a model on the standard output.
+            raw     - just prints the model with print(...)
+            printer - onnx.printer.to_text(...)
+            pretty  - an improved rendering
+            text    - uses GraphRendering
+            """.strip(
+                "\n"
+            )
+        ),
     )
     parser.add_argument("input", type=str, help="onnx model to load")
     return parser
@@ -144,6 +158,12 @@ def _cmd_print(argv: List[Any]):
         from .helpers.onnx_helper import pretty_onnx
 
         print(pretty_onnx(onx))
+    elif args.fmt == "printer":
+        print(onnx.printer.to_text(onx))
+    elif args.fmt == "text":
+        from .helpers.graph_helper import GraphRendering
+
+        print(GraphRendering(onx).text_rendering())
     else:
         raise ValueError(f"Unexpected value fmt={args.fmt!r}")
 
