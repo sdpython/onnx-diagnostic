@@ -1,3 +1,4 @@
+import pprint
 from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
 import onnx
 import onnx.helper as oh
@@ -45,8 +46,12 @@ class GraphRendering:
                 f"Missing input in node {i_node} type={node.op_type}: "
                 f"{[i for i in node.input if i not in number]}"
             )
-            mx = max(number[i] for i in node.input) + 1
-            results[i_node] = mx
+            if node.input:
+                mx = max(number[i] for i in node.input) + 1
+                results[i_node] = mx
+            else:
+                # A constant
+                mx = max(number.values()) if number else 0
             for i in node.output:
                 number[i] = mx
         return results
@@ -80,7 +85,7 @@ class GraphRendering:
             indices = [i for i, o in enumerate(order) if o == row]
             assert indices, f"indices cannot be empty for row={row}, order={order}"
             ns = [nodes[i] for i in indices]
-            mx = [max(names.get(i, 0) for i in n.input) for n in ns]
+            mx = [(max(names.get(i, 0) for i in n.input) if n.input else 0) for n in ns]
             mix = [(m, i) for i, m in enumerate(mx)]
             mix.sort()
             for c, (_m, i) in enumerate(mix):
@@ -108,14 +113,18 @@ class GraphRendering:
         for i, (_row, col) in enumerate(new_positions):
             size = len(nodes[i].op_type) + 5
             column_size[col] = max(column_size[col], size)
+            assert column_size[col] < 200, (
+                f"column_size[{col}]={column_size[col]}, this is quite big, i={i}, "
+                f"nodes[i].op_type={nodes[i].op_type}"
+            )
 
         # cumulated
         sort = sorted(column_size.items())
         cumul = dict(sort[:1])
         results = {sort[0][0]: sort[0][1] // 2}
         for col, size in sort[1:]:
-            c = sum(cumul.values())
-            cumul[col] = c
+            c = max(cumul.values())
+            cumul[col] = c + size
             results[col] = c + size // 2
         return [(row, results[col]) for row, col in new_positions]
 
@@ -190,6 +199,49 @@ class GraphRendering:
                     edges.add(edge)
         return edges
 
+    ADD_RULES = {
+        ("┴", "┘"): "┴",
+        ("┴", "└"): "┴",
+        ("┬", "┐"): "┬",
+        ("┬", "┌"): "┬",
+        ("-", "└"): "┴",
+        ("-", "|"): "┼",
+        ("-", "┐"): "┬",
+        ("┐", "-"): "┬",
+        ("┘", "-"): "┴",
+        ("┴", "-"): "┴",
+        ("-", "┘"): "┴",
+        ("┌", "-"): "┬",
+        ("┬", "-"): "┬",
+        ("-", "┌"): "┬",
+        ("|", "-"): "┼",
+        ("└", "-"): "┴",
+        ("|", "└"): "├",
+        ("|", "┘"): "┤",
+        ("┐", "|"): "┤",
+        ("┬", "|"): "┼",
+        ("|", "┐"): "┤",
+        ("|", "┌"): "├",
+        ("├", "-"): "┼",
+        ("└", "|"): "├",
+        ("┤", "┐"): "┤",
+        ("┤", "|"): "┤",
+        ("├", "|"): "├",
+        ("┴", "┌"): "┼",
+        ("┐", "┌"): "┬",
+        ("┌", "┐"): "┬",
+        ("┌", "|"): "┼",
+        ("┴", "┐"): "┼",
+        ("┐", "└"): "┼",
+        ("┬", "┘"): "┼",
+        ("├", "└"): "├",
+        ("┤", "┌"): "┼",
+        ("┘", "|"): "┤",
+        ("┴", "|"): "┼",
+        ("┤", "-"): "┼",
+        ("┘", "└"): "┴",
+    }
+
     @classmethod
     def text_grid(cls, grid: List[List[str]], position: Tuple[int, int], text: str):
         """
@@ -230,24 +282,44 @@ class GraphRendering:
         assert (
             0 <= p2[1] < min(len(g) for g in grid)
         ), f"p2={p2}, sizes={[len(g) for g in grid]}"
-        grid[p1[0] + 1][p1[1]] = "|"
-        grid[p1[0] + 2][p1[1]] = "+"
+
+        def add(s1, s2):
+            assert s2 != " ", f"s1={s1!r}, s2={s2!r}"
+            if s1 == " " or s1 == s2:
+                return s2
+            if s1 == "┼" or s2 == "┼":
+                return "┼"
+            if (s1, s2) in cls.ADD_RULES:
+                return cls.ADD_RULES[s1, s2]
+            raise NotImplementedError(f"Unable to add: ({s1!r},{s2!r}): '',")
+
+        def place(grid, x, y, symbol):
+            grid[x][y] = add(grid[x][y], symbol)
+
+        place(grid, p1[0] + 1, p1[1], "|")
+        place(grid, p1[0] + 2, p1[1], "└" if p1[1] < p2[1] else "┘")
 
         if p1[0] + 2 == p2[0] - 2:
             a, b = (p1[1] + 1, p2[1] - 1) if p1[1] < p2[1] else (p2[1] + 1, p1[1] - 1)
-            grid[p1[0] + 2][a : b + 1] = ["-"] * (b - a + 1)
+            for i in range(a, b + 1):
+                place(grid, p1[0] + 2, i, "-")
         else:
             middle = (p1[1] + p2[1]) // 2
             a, b = (p1[1] + 1, middle - 1) if p1[1] < middle else (middle + 1, p1[1] - 1)
-            grid[p1[0] + 2][a : b + 1] = ["-"] * (b - a + 1)
+            for i in range(a, b + 1):
+                place(grid, p1[0] + 2, i, "-")
             a, b = (p1[1] + 1, middle - 1) if p1[1] < middle else (middle + 1, p1[1] - 1)
-            grid[p1[0] + 2][a : b + 1] = ["-"] * (b - a + 1)
+            for i in range(a, b + 1):
+                place(grid, p1[0] + 2, i, "-")
 
-            grid[p1[0] + 2][middle] = "+"
-            grid[p2[0] - 2][middle] = "+"
+            place(grid, p1[0] + 2, middle, "┐" if p1[1] < p2[1] else "┌")
+            place(grid, p2[0] - 2, middle, "└" if p1[1] < p2[1] else "┘")
 
-        grid[p2[0] - 2][p2[1]] = "+"
-        grid[p2[0] - 1][p2[1]] = "|"
+            for i in range(p1[0] + 2 + 1, p2[0] - 2):
+                place(grid, i, middle, "|")
+
+        place(grid, p2[0] - 2, p2[1], "┐" if p1[1] < p2[1] else "┌")
+        place(grid, p2[0] - 1, p2[1], "|")
 
     def text_rendering(self, prefix="") -> str:
         """
@@ -298,6 +370,7 @@ class GraphRendering:
         text_pos = self.text_positions(nodes, positions)
         edges = self.build_node_edges(nodes)
         max_len = max(col for _, col in text_pos) + max(len(n.op_type) for n in nodes)
+        assert max_len < 1e6, f"max_len={max_len}, text_pos=\n{pprint.pformat(text_pos)}"
         max_row = max(row for row, _ in text_pos) + 2
         grid = [[" " for i in range(max_len + 1)] for _ in range(max_row + 1)]
 
