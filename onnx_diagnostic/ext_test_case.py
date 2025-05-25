@@ -776,6 +776,13 @@ class ExtTestCase(unittest.TestCase):
             os.mkdir(folder)
         return os.path.join(folder, name)
 
+    def get_dump_folder(self, folder: str) -> str:
+        """Returns a folder."""
+        folder = os.path.join("dump_test", folder)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        return folder
+
     def dump_onnx(
         self,
         name: str,
@@ -812,6 +819,11 @@ class ExtTestCase(unittest.TestCase):
         raise AssertionError(
             msg or f"Unable to find the list of strings {tofind!r} in\n--\n{text}"
         )
+
+    def assertHasAttr(self, obj: Any, name: str):
+        assert hasattr(
+            obj, name
+        ), f"Unable to find attribute {name!r} in object type {type(obj)}"
 
     def assertSetContained(self, set1, set2):
         "Checks that ``set1`` is contained in ``set2``."

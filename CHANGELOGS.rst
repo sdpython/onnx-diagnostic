@@ -4,8 +4,9 @@ Change Logs
 0.6.0
 +++++
 
-* :pr:`108`: first version of an algorithm rendering small onnx graph in ascii,
-  patch for ``torch.vmap``
+* :pr:`111`: support ModelBuilder with command line validatz
+* :pr:`108`, :pr:`109`, :pr:`110`: first version of an algorithm rendering
+  small onnx graph in ascii, patch for ``torch.vmap``
 
 0.5.0
 +++++

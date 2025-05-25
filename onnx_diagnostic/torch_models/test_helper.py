@@ -347,6 +347,10 @@ def validate_model(
     )
     data["input_options"] = iop
     data["model_options"] = mop
+    if dtype:
+        data["model_dtype"] = dtype if isinstance(dtype, str) else str(dtype)
+    if device:
+        data["model_device"] = str(device)
     if opset:
         data["model_opset"] = opset
     if "rewrite" in data:
@@ -702,6 +706,16 @@ def call_exporter(
             verbose=verbose,
             optimization=optimization,
             dump_folder=dump_folder,
+        )
+        return summary, data
+    if exporter == "modelbuilder":
+        # torch export
+        summary, data = call_torch_export_model_builder(
+            exporter=exporter,
+            data=data,
+            quiet=quiet,
+            verbose=verbose,
+            optimization=optimization,
         )
         return summary, data
     raise NotImplementedError(
@@ -1082,6 +1096,56 @@ def call_torch_export_onnx(
         if verbose:
             print("[call_torch_export_onnx] done (optimization)")
 
+    return summary, data
+
+
+def call_torch_export_model_builder(
+    data: Dict[str, Any],
+    exporter: str,
+    quiet: bool = False,
+    verbose: int = 0,
+    optimization: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Exports a model into onnx with :epkg:`ModelBuilder`.
+
+    :param data: dictionary with all the necessary inputs, the dictionary must
+        contains keys ``model`` and ``inputs_export``
+    :param exporter: exporter to call
+    :param quiet: catch exception or not
+    :param verbose: verbosity
+    :param optimization: optimization to do
+    :return: two dictionaries, one with some metrics,
+        another one with whatever the function produces
+    """
+    from ..helpers.model_builder_helper import create_model
+
+    assert optimization in (
+        None,
+        "",
+    ), f"unexpected value for optimization={optimization}, none is available"
+    precision = data.get("model_dtype", "fp32")
+    provider = data.get("model_device", "cpu")
+    summary = {}
+
+    epo = _quiet_or_not_quiet(
+        quiet,
+        "export_model_builder",
+        summary,
+        data,
+        (
+            lambda c=data["configuration"], p=precision, pr=provider: (
+                create_model(c, precision=p, execution_provider=pr)
+            )
+        ),
+    )
+    if "ERR_export_model_builder" in summary:
+        return summary, data
+
+    assert epo is not None, "no onnx export was found"
+    if verbose:
+        print("[call_torch_export_model_builder] done (export)")
+    data["onnx_model_builder"] = epo
     return summary, data
 
 
