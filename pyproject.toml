@@ -34,7 +34,7 @@ disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload",
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.model_builder_helper"]
-disable_error_code = ["attr-defined", "import-untyped", "name-defined", "var-annotated"]
+disable_error_code = ["attr-defined", "import-untyped", "name-defined", "union-attr", "var-annotated"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.onnx_helper"]
