@@ -845,6 +845,7 @@ class TestDynamicShapes(ExtTestCase):
             as_string,
         )
 
+    @requires_transformers("4.51")
     def test_unbatch_inputs(self):
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM")
         cpl = CoupleInputsDynamicShapes(

@@ -181,6 +181,9 @@ def save_model_builder(self, out_dir: Optional[str] = "", verbose: int = 0) -> M
         location = os.path.basename(data_path)
         if os.path.exists(location):
             os.remove(location)
+        if verbose:
+            print(f"[save_model_builder] out_path={out_path!r}")
+            print(f"[save_model_builder] location={location!r}")
         save_model(
             model,
             out_path,

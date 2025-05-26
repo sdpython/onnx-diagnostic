@@ -356,7 +356,7 @@ def validate_model(
                 print(f"[validate_model] set batch=1 for data[{k!r}]")
                 print(f"[validate_model] batch=1 === {string_type(data[k], with_shape=True)}")
             cpl = CoupleInputsDynamicShapes(
-                None, data[k], dynamic_shapes=data["dynamic_shapes"]
+                tuple(), data[k], dynamic_shapes=data["dynamic_shapes"]
             )
             data[k] = cpl.change_dynamic_dimensions(
                 desired_values=dict(batch=1), only_desired=True
