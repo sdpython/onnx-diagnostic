@@ -9,6 +9,13 @@ implements four kinds of patches to make it easier to export a model, usually
 coming from :epkg:`transformers`.
 All patches takes place in :mod:`onnx_diagnostic.torch_export_patches`.
 
+.. toctree::
+
+    status/index
+
+Four Kinds of Patches
+=====================
+
 .. code-block:: python
 
     with torch_export_patches(...) as f:

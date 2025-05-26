@@ -14,6 +14,7 @@ A model with a test
 
 import torch
 from onnx_diagnostic import doc
+from onnx_diagnostic.torch_export_patches import torch_export_rewrite
 
 
 # %%
@@ -24,7 +25,8 @@ class ForwardWithControlFlowTest(torch.nn.Module):
     def forward(self, x):
         if x.sum():
             return x * 2
-        return -x
+        else:
+            return -x
 
 
 class ModelWithControlFlow(torch.nn.Module):
@@ -86,7 +88,28 @@ for name, mod in model.named_modules():
 ep = torch.export.export(model, (x,))
 print(ep.graph)
 
+# %%
+# Automated Rewrite of the Control Flow
+# +++++++++++++++++++++++++++++++++++++
+#
+# Functions :func:`torch_export_rewrite
+# <onnx_diagnostic.torch_export_patches.torch_export_rewrite>`
+# or :func:`torch_export_patches <onnx_diagnostic.torch_export_patches.torch_export_patches>`
+# can automatically rewrite a method of a class or a function,
+# the method to rewrite is specified parameter ``rewrite``.
+# It is experimental. The function contains options to
+# rewrite one test but not another one already supported by the exporter.
+# It may give a first version of the rewritten code if only a manual
+# rewriting can make the model exportable.
+
+with torch_export_rewrite(rewrite=[ForwardWithControlFlowTest.forward], verbose=2) as f:
+    ep = torch.export.export(model, (x,))
+
+# %%
+# This gives:
+
+print(ep.graph)
 
 # %%
 
-doc.plot_legend("If -> torch.cond", "torch.export.export", "tomato")
+doc.plot_legend("If -> torch.cond", "torch.export.export", "yellowgreen")

@@ -23,7 +23,6 @@ class AtenRollPos(torch.nn.Module):
 
 
 class InplaceAdd(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
         self.bias = torch.ones((1, 4), dtype=torch.float32)
@@ -37,7 +36,6 @@ class InplaceAdd(torch.nn.Module):
 
 
 class InplaceAdd2(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
         self.bias = torch.ones((1, 4), dtype=torch.float32)
@@ -51,7 +49,6 @@ class InplaceAdd2(torch.nn.Module):
 
 
 class InplaceAdd_Mul(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
         self.bias = torch.ones((1, 4), dtype=torch.float32)
@@ -65,7 +62,6 @@ class InplaceAdd_Mul(torch.nn.Module):
 
 
 class InplaceCloneAdd_(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
         self.bias = torch.ones((1, 4), dtype=torch.float32)
@@ -80,7 +76,6 @@ class InplaceCloneAdd_(torch.nn.Module):
 
 
 class InplaceSetItemSquare(torch.nn.Module):
-
     def forward(self, x):
         x[:2, :3] = 1
         return x
@@ -90,7 +85,6 @@ class InplaceSetItemSquare(torch.nn.Module):
 
 
 class InplaceSetItemSquareAdd(torch.nn.Module):
-
     def forward(self, x):
         x[:2, :3] = 1
         return x + 2
@@ -100,7 +94,6 @@ class InplaceSetItemSquareAdd(torch.nn.Module):
 
 
 class InplaceSetItemSquareAdd2(torch.nn.Module):
-
     def forward(self, x):
         x[:2, :3] = 1
         return x + 2, x + 3
@@ -110,7 +103,6 @@ class InplaceSetItemSquareAdd2(torch.nn.Module):
 
 
 class InplaceSetItemEllipsis_1(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
         self.params = torch.zeros((1, 8192, 4), dtype=torch.float32)
@@ -124,11 +116,10 @@ class InplaceSetItemEllipsis_1(torch.nn.Module):
         (torch.from_numpy(np.array([0, 3, 2, 1])).to(torch.int64)),
         (torch.arange(4 * 8192) + 10).reshape((-1, 4)).to(torch.float32),
     )
-    _dynamic = {"x": {0: DIM("batch")}}
+    _dynamic = {"index": {0: DIM("batch")}, "update": {0: DIM("batch"), 1: DYN}}
 
 
 class InplaceSetItemEllipsis_2(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
         self.params = torch.zeros((1, 8192, 6), dtype=torch.float32)
@@ -142,7 +133,7 @@ class InplaceSetItemEllipsis_2(torch.nn.Module):
         torch.from_numpy(np.array([0, 3, 2, 5])).to(torch.int64),
         (torch.arange(4 * 8192) + 10).reshape((-1, 4)).to(torch.float32),
     )
-    _dynamic = {"x": {0: DIM("batch")}}
+    _dynamic = {"index": {0: DIM("batch")}, "update": {0: DIM("batch"), 1: DYN}}
 
 
 class InplaceSetItemMask(torch.nn.Module):
@@ -152,11 +143,10 @@ class InplaceSetItemMask(torch.nn.Module):
         return x
 
     _inputs = [(torch.randn((2, 3, 3)),), (torch.randn((3, 3, 3)),)]
-    _dynamic = {"x": {0: DIM("batch")}}
+    _dynamic = {"index": {0: DIM("batch")}, "update": {0: DIM("batch"), 1: DYN}}
 
 
 class AtenInterpolate(torch.nn.Module):
-
     def forward(self, x):
         y = torch.nn.functional.interpolate(
             x,
@@ -171,7 +161,6 @@ class AtenInterpolate(torch.nn.Module):
 
 
 class AtenNonZero(torch.nn.Module):
-
     def forward(self, x):
         y = torch.nonzero(x)
         return y
@@ -181,7 +170,6 @@ class AtenNonZero(torch.nn.Module):
 
 
 class AtenNonZeroTuple(torch.nn.Module):
-
     def forward(self, x):
         y = torch.nonzero(x, as_tuple=True)
         return y[0], y[1]
@@ -191,7 +179,6 @@ class AtenNonZeroTuple(torch.nn.Module):
 
 
 class AtenAsStrided(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
 
@@ -288,7 +275,6 @@ class ControlFlowCondConstant(torch.nn.Module):
 
 
 class ControlFlowCondNestedModule(torch.nn.Module):
-
     class Submodule(torch.nn.Module):
         def __init__(self):
             super().__init__()
@@ -389,7 +375,6 @@ class ControlFlowCondIdentity_153832(torch.nn.Module):
 
 
 class ControlFlowScan(torch.nn.Module):
-
     @staticmethod
     def add(carry: torch.Tensor, y: torch.Tensor):
         next_carry = carry + y
@@ -486,7 +471,6 @@ class ControlFlowScanCDist2(torch.nn.Module):
 
 
 class ControlFlowScanCDistXY(torch.nn.Module):
-
     @staticmethod
     def dist(y: torch.Tensor, scanned_x: torch.Tensor):
         sub = y - scanned_x.reshape((1, -1))
@@ -790,7 +774,6 @@ class SignatureShapeAsIndex(torch.nn.Module):
 
 
 class TypeBFloat16(torch.nn.Module):
-
     def forward(self, x):
         xb = x.to(torch.bfloat16)
         return (xb + xb).to(torch.float32)
@@ -825,7 +808,6 @@ class CropLastDimensionWithTensorShape(torch.nn.Module):
 
 
 class CropLastDimensionWithTensorContent(torch.nn.Module):
-
     def forward(self, x, shape):
         return x[..., : shape[0]]
 
@@ -833,11 +815,10 @@ class CropLastDimensionWithTensorContent(torch.nn.Module):
         (torch.rand(3, 4, 4).to(torch.float32), torch.tensor([2], dtype=torch.int64)),
         (torch.rand(6, 4, 4).to(torch.float32), torch.tensor([3], dtype=torch.int64)),
     ]
-    _dynamic = {"x": {0: DIM("batch")}}
+    _dynamic = {"x": {0: DIM("batch")}, "shape": {}}
 
 
 class SignatureListFixedWithNone(torch.nn.Module):
-
     def forward(self, lx):
         x = lx[0]
         if lx[1] is not None:

@@ -1,5 +1,5 @@
 """
-.. _l-plot-sxport-with-auto:
+.. _l-plot-export-with-dynamic:
 
 Use DYNAMIC or AUTO when exporting if dynamic shapes has constraints
 ====================================================================
@@ -93,4 +93,4 @@ print(ep)
 
 # %%
 
-doc.plot_legend("torch.export.Dim\nor DYNAMIC\nor AUTO", "torch.export.export", "tomato")
+doc.plot_legend("torch.export.Dim\nor DYNAMIC\nor AUTO", "torch.export.export", "green")
