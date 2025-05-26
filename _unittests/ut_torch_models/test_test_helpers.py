@@ -9,6 +9,7 @@ from onnx_diagnostic.ext_test_case import (
     requires_torch,
     requires_experimental,
     requires_onnxscript,
+    requires_transformers,
 )
 from onnx_diagnostic.torch_models.test_helper import (
     get_inputs_for_task,
@@ -187,6 +188,7 @@ class TestTestHelper(ExtTestCase):
     @requires_torch("2.7")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
+    @requires_transformers("4.51")
     def test_validate_model_modelbuilder(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
