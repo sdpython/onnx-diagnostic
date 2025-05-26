@@ -43,7 +43,11 @@ to the original model.
         print()
         print("::")
         print()
-        print(textwrap.indent(textwrap.dedent(inspect.getsource(cls_model.forward)), "    "))
+        src = inspect.getsource(cls_model.forward)
+        if src:
+            print(textwrap.indent(textwrap.dedent(src), "    "))
+        else:
+            print("    # code is missing")
         print()
         for exporter in (
             "export-strict",
@@ -74,7 +78,11 @@ to the original model.
                 print()
                 print("::")
                 print()
-                print(textwrap.indent(str(res["error"]), "    "))
+                err = str(res["error"])
+                if err:
+                    print(textwrap.indent(err, "    "))
+                else:
+                    print("    # no error found for the failure")
                 print()
                 obs.append(dict(case=case_ref, error="FAIL", exporter=expo))
 

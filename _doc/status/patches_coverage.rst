@@ -28,7 +28,7 @@ for transformers.
     import onnx_diagnostic.torch_export_patches.patches.patch_transformers as p
 
     for name, cls in p.__dict__.items():
-        if name.startswith("patched_"):
+        if name.startswith("patched_") and hasattr(cls, "_PATCHES_"):
             print(f"{cls._PATCHED_CLASS_.__name__}: {', '.join(cls._PATCHES_)}")
 
 Half Automated Rewrites for Control Flows

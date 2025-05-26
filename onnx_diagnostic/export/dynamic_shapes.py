@@ -379,8 +379,9 @@ class CoupleInputsDynamicShapes:
         return torch.utils._pytree.tree_unflatten(res, spec)
 
     class ChangeDimensionProcessor:
-        def __init__(self, desired_values):
+        def __init__(self, desired_values, only_desired):
             self.mapping = desired_values or {}
+            self.only_desired = only_desired
 
         def _build_new_shape(
             self, shape: Tuple[int, ...], ds: Dict[int, Any]
@@ -397,14 +398,16 @@ class CoupleInputsDynamicShapes:
                             torch.export.dynamic_shapes._Dim,
                         ),
                     ):
-                        d = str(ds[i])
+                        d = ds[i].__name__
                     elif not isinstance(ds[i], int):
                         raise NotImplementedError(f"Unable to handle type {ds[i]} in {ds}")
                     if d in self.mapping:
                         new_dim = self.mapping[d]
-                    else:
+                    elif not self.only_desired:
                         new_dim = shape[i] + 1
                         self.mapping[d] = new_dim
+                    else:
+                        new_dim = shape[i]
                     new_shape[i] = new_dim
             return tuple(new_shape)
 
@@ -447,7 +450,10 @@ class CoupleInputsDynamicShapes:
             return self._build_new_tensor(inputs, new_shape)
 
     def change_dynamic_dimensions(
-        self, desired_values: Optional[Dict[str, int]] = None, args_kwargs: bool = False
+        self,
+        desired_values: Optional[Dict[str, int]] = None,
+        args_kwargs: bool = False,
+        only_desired: bool = False,
     ):
         """
         A model exported with dynamic shapes is not necessarily dynamic
@@ -460,6 +466,8 @@ class CoupleInputsDynamicShapes:
 
         :param desired_values: to fixed named dimension to have the desired value
         :param args_kwargs: return both args, kwargs even if empty
+        :param only_desired: if True, only change the dimension specified in
+            ``desired_values``
         :return: new inputs
 
         Example:
@@ -483,7 +491,8 @@ class CoupleInputsDynamicShapes:
             print("-after:", string_type(new_kwargs, with_shape=True))
         """
         return self._generic_walker(
-            self.ChangeDimensionProcessor(desired_values), args_kwargs=args_kwargs
+            self.ChangeDimensionProcessor(desired_values, only_desired=only_desired),
+            args_kwargs=args_kwargs,
         )
 
 

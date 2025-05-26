@@ -14,6 +14,7 @@ onnx_diagnostic.helpers
     helper
     memory_peak
     mini_onnx_builder
+    model_builder_helper
     onnx_helper
     ort_session
     rt_helper

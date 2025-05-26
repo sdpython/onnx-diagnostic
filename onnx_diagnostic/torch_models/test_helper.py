@@ -345,8 +345,32 @@ def validate_model(
             )
         ),
     )
+
+    if exporter == "modelbuilder":
+        # Models used with ModelBuilder do not like batch size > 1.
+        # Let's change that.
+        for k in ["inputs", "inputs2"]:
+            if k not in data:
+                continue
+            if verbose:
+                print(f"[validate_model] set batch=1 for data[{k!r}]")
+                print(f"[validate_model] batch=1 === {string_type(data[k], with_shape=True)}")
+            cpl = CoupleInputsDynamicShapes(
+                tuple(), data[k], dynamic_shapes=data["dynamic_shapes"]
+            )
+            data[k] = cpl.change_dynamic_dimensions(
+                desired_values=dict(batch=1), only_desired=True
+            )
+            if verbose:
+                print(f"[validate_model] batch=1 --> {string_type(data[k], with_shape=True)}")
+
     data["input_options"] = iop
     data["model_options"] = mop
+    data["model_dump_folder"] = dump_folder
+    if dtype:
+        data["model_dtype"] = dtype if isinstance(dtype, str) else str(dtype)
+    if device:
+        data["model_device"] = str(device)
     if opset:
         data["model_opset"] = opset
     if "rewrite" in data:
@@ -555,6 +579,16 @@ def validate_model(
             begin = time.perf_counter()
             if isinstance(epo, onnx.model_container.ModelContainer):
                 epo.save(onnx_filename, all_tensors_to_one_file=True)
+            elif isinstance(epo, onnx.ModelProto):
+                if os.path.exists(f"{onnx_filename}.data"):
+                    os.remove(f"{onnx_filename}.data")
+                onnx.save(
+                    epo,
+                    onnx_filename,
+                    save_as_external_data=True,
+                    all_tensors_to_one_file=True,
+                    location=f"{os.path.split(onnx_filename)[-1]}.data",
+                )
             else:
                 epo.save(onnx_filename, external_data=True)
             duration = time.perf_counter() - begin
@@ -572,7 +606,8 @@ def validate_model(
             print("[validate_model] done (dump)")
 
     if not exporter or (
-        not exporter.startswith(("onnx-", "custom-")) and exporter != "custom"
+        not exporter.startswith(("onnx-", "custom-"))
+        and exporter not in ("custom", "modelbuilder")
     ):
         if verbose:
             print("[validate_model] -- done (final)")
@@ -702,6 +737,16 @@ def call_exporter(
             verbose=verbose,
             optimization=optimization,
             dump_folder=dump_folder,
+        )
+        return summary, data
+    if exporter == "modelbuilder":
+        # torch export
+        summary, data = call_torch_export_model_builder(
+            exporter=exporter,
+            data=data,
+            quiet=quiet,
+            verbose=verbose,
+            optimization=optimization,
         )
         return summary, data
     raise NotImplementedError(
@@ -871,6 +916,8 @@ def validate_onnx_model(
     if input_data_key in data:
         source = data[input_data_key]
         if not os.path.exists(source):
+            if verbose:
+                print(f"[validate_onnx_model] missing {source!r}")
             summary[_mk("ERR_onnx_missing")] = f"FileNotFoundError({source!r})"
             return summary, data
         summary[input_data_key] = source
@@ -911,12 +958,7 @@ def validate_onnx_model(
     if verbose:
         print("[validate_onnx_model] -- make_feeds...")
         print(f"[validate_onnx_model] inputs={string_type(data['inputs'], with_shape=True)}")
-    feeds = make_feeds(
-        [i.name for i in sess.get_inputs()],
-        data["inputs"],
-        use_numpy=True,
-        check_flatten=False,
-    )
+    feeds = make_feeds(sess, data["inputs"], use_numpy=True, check_flatten=False)
     if verbose:
         print(f"[validate_onnx_model] ort inputs={string_type(feeds, with_shape=True)}")
     summary[_mk("onnx_ort_inputs")] = string_type(feeds, with_shape=True)
@@ -1082,6 +1124,67 @@ def call_torch_export_onnx(
         if verbose:
             print("[call_torch_export_onnx] done (optimization)")
 
+    return summary, data
+
+
+def call_torch_export_model_builder(
+    data: Dict[str, Any],
+    exporter: str,
+    quiet: bool = False,
+    verbose: int = 0,
+    optimization: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Exports a model into onnx with :epkg:`ModelBuilder`.
+
+    :param data: dictionary with all the necessary inputs, the dictionary must
+        contains keys ``model`` and ``inputs_export``
+    :param exporter: exporter to call
+    :param quiet: catch exception or not
+    :param verbose: verbosity
+    :param optimization: optimization to do
+    :return: two dictionaries, one with some metrics,
+        another one with whatever the function produces
+    """
+    from ..helpers.model_builder_helper import create_model_builder, save_model_builder
+
+    assert optimization in (
+        None,
+        "",
+    ), f"unexpected value for optimization={optimization}, none is available"
+    precision = data.get("model_dtype", "fp32")
+    provider = data.get("model_device", "cpu")
+    dump_folder = data.get("model_dump_folder", "")
+    assert dump_folder, "dump_folder cannot be empty with ModelBuilder"
+    cache_dir = os.path.join(dump_folder, "cache_mb")
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+    summary: Dict[str, Any] = {}
+
+    epo = _quiet_or_not_quiet(
+        quiet,
+        "export_model_builder",
+        summary,
+        data,
+        (
+            lambda m=data["model"], c=data[
+                "configuration"
+            ], p=precision, pr=provider, cd=cache_dir: (
+                save_model_builder(
+                    create_model_builder(
+                        c, m, precision=p, execution_provider=pr, cache_dir=cd
+                    )
+                )
+            )
+        ),
+    )
+    if "ERR_export_model_builder" in summary:
+        return summary, data
+
+    assert epo is not None, "no onnx export was found"
+    if verbose:
+        print("[call_torch_export_model_builder] done (export)")
+    data["onnx_program"] = epo
     return summary, data
 
 
