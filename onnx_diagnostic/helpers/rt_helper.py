@@ -99,9 +99,10 @@ def make_feeds(
             new_flat.append(flat[pos])
             pos += 1
         assert len(new_flat) == len(names), (
-            f"Unable to align expected input {names} with the given input"
+            f"Unable to align expected input {names} with the given input, "
+            f"type(proto)={type(proto)}"
             f"\n-- inputs: {string_type(inputs, with_shape=True)}"
-            f"\n-- model: {string_type(proto.graph.input)}"
+            f"\n-- typed_names: {typed_names}"
         )
         flat = new_flat
 
