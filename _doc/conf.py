@@ -211,6 +211,7 @@ epkg_dictionary = {
     "huggingface_hub": "https://github.com/huggingface/huggingface_hub",
     "Linux": "https://www.linux.org/",
     "ml_dtypes": "https://github.com/jax-ml/ml_dtypes",
+    "ModelBuilder": "https://onnxruntime.ai/docs/genai/howto/build-model.html",
     "monai": "https://monai.io/",
     "numpy": "https://numpy.org/",
     "onnx": "https://onnx.ai/onnx/",

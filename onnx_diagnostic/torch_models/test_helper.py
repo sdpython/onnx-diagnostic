@@ -345,6 +345,25 @@ def validate_model(
             )
         ),
     )
+
+    if exporter == "modelbuilder":
+        # Models used with ModelBuilder do not like batch size > 1.
+        # Let's change that.
+        for k in ["inputs", "inputs2"]:
+            if k not in data:
+                continue
+            if verbose:
+                print(f"[validate_model] set batch=1 for data[{k!r}]")
+                print(f"[validate_model] batch=1 === {string_type(data[k], with_shape=True)}")
+            cpl = CoupleInputsDynamicShapes(
+                None, data[k], dynamic_shapes=data["dynamic_shapes"]
+            )
+            data[k] = cpl.change_dynamic_dimensions(
+                desired_values=dict(batch=1), only_desired=True
+            )
+            if verbose:
+                print(f"[validate_model] batch=1 --> {string_type(data[k], with_shape=True)}")
+
     data["input_options"] = iop
     data["model_options"] = mop
     data["model_dump_folder"] = dump_folder

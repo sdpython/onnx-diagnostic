@@ -184,6 +184,24 @@ class TestTestHelper(ExtTestCase):
         ni, nd = filter_inputs(inputs, dynamic_shapes=ds, drop_names=["a"], model=["a", "b"])
         self.assertEqual((ni, nd), (((None,), {"b": 4}), {"b": 30}))
 
+    @requires_torch("2.7")
+    @hide_stdout()
+    @ignore_warnings(FutureWarning)
+    def test_validate_model_modelbuilder(self):
+        mid = "arnir0/Tiny-LLM"
+        summary, data = validate_model(
+            mid,
+            do_run=True,
+            verbose=10,
+            exporter="modelbuilder",
+            dump_folder="dump_test_validate_model_onnx_dynamo",
+        )
+        self.assertIsInstance(summary, dict)
+        self.assertIsInstance(data, dict)
+        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
+        onnx_filename = data["onnx_filename"]
+        self.assertExists(onnx_filename)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

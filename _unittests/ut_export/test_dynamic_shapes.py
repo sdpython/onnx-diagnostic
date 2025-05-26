@@ -6,6 +6,7 @@ from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.export import ModelInputs, CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 
 
 class TestDynamicShapes(ExtTestCase):
@@ -512,7 +513,6 @@ class TestDynamicShapes(ExtTestCase):
         mi = ModelInputs(Model(), inputs)
         self.assertIn("DynamicCache", string_type(mi.inputs, with_shape=True))
         ds = mi.guess_dynamic_shapes(auto="dim")
-        print(ds)
         self.assertEqual(
             ds,
             (
@@ -843,6 +843,22 @@ class TestDynamicShapes(ExtTestCase):
                 ]
             },
             as_string,
+        )
+
+    def test_unbatch_inputs(self):
+        data = get_untrained_model_with_inputs("arnir0/Tiny-LLM")
+        cpl = CoupleInputsDynamicShapes(
+            None, data["inputs"], dynamic_shapes=data["dynamic_shapes"]
+        )
+        new_dims = cpl.change_dynamic_dimensions(
+            desired_values=dict(batch=1), only_desired=True
+        )
+        s = self.string_type(new_dims, with_shape=True)
+        self.assertEqual(
+            "dict(input_ids:T7s1x3,attention_mask:T7s1x33,position_ids:T7s1x3,"
+            "past_key_values:DynamicCache("
+            "key_cache=#1[T1s1x1x30x96], value_cache=#1[T1s1x1x30x96]))",
+            s,
         )
 
 
