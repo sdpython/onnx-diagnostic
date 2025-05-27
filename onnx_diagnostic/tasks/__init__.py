@@ -41,7 +41,17 @@ def reduce_model_config(config: Any, task: str) -> Dict[str, Any]:
     """Reduces a model size."""
     tasks = {mod.__TASK__: mod.reduce_model_config for mod in __TASKS__}
     assert task in tasks, f"Task {task!r} not found in {sorted(tasks)}"
-    return tasks[task](config)
+    res = tasks[task](config)
+    if "head_dim" in res:
+        head_size = (
+            config.head_dim
+            if hasattr(config, "head_dim") and config.head_dim
+            else config.hidden_size // config.num_attention_heads
+        )
+        assert (
+            head_size % 16 == 0
+        ), f"head_size should be a multiple of 16, res={res}, config=\n{config}"
+    return res
 
 
 def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callable]:

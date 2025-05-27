@@ -237,18 +237,24 @@ def create_model_builder(
         "OlmoForCausalLM": builder.OLMoModel,
         "PhiForCausalLM": builder.PhiModel,
         "Phi3ForCausalLM": (
-            lambda config, *_: (
-                builder.Phi3MiniModel
-                if config.max_position_embeddings == config.original_max_position_embeddings
-                else builder.Phi3MiniLongRoPEModel
+            lambda config, *args: (
+                (
+                    builder.Phi3MiniModel
+                    if config.max_position_embeddings
+                    == config.original_max_position_embeddings
+                    else builder.Phi3MiniLongRoPEModel
+                )(config, *args)
             )
         ),
         "PhiMoEForCausalLM": builder.Phi3MoELongRoPEModel,
         "Phi3SmallForCausalLM": (
-            lambda config, *_: (
-                builder.Phi3SmallModel
-                if config.max_position_embeddings == config.original_max_position_embeddings
-                else builder.Phi3SmallLongRoPEModel
+            lambda config, *args: (
+                (
+                    builder.Phi3SmallModel
+                    if config.max_position_embeddings
+                    == config.original_max_position_embeddings
+                    else builder.Phi3SmallLongRoPEModel
+                )(config, *args)
             )
         ),
         "Phi3VForCausalLM": builder.Phi3VModel,
@@ -317,7 +323,17 @@ def create_model_builder(
         )
 
     cls = arch_map[config.architectures[0]]
+
+    # ModelBuilder does not like None values for some parameters.
+    remove = set()
+    for c in ["head_dim"]:
+        if hasattr(config, c) and getattr(config, c) is None:
+            remove.add(c)
+    for c in remove:
+        delattr(config, c)
+
     onnx_model = cls(config, io_dtype, precision, execution_provider, cache_dir, extra_options)
+
     if post:
         post(onnx_model)
     _make_model(onnx_model, model, verbose=verbose)
