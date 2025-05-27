@@ -36,7 +36,6 @@ It also implements tools to investigate, validate exported models (ExportedProgr
     :caption: Contents
 
     patches
-    status/index
     api/index
     cmds/index
     auto_examples/index
@@ -75,7 +74,7 @@ Enlightening Examples
 **Torch Export**
 
 * :ref:`l-plot-export-cond`
-* :ref:`l-plot-sxport-with-auto`
+* :ref:`l-plot-export-with-dynamic`
 * :ref:`l-plot-export-with-dynamic-shape`
 * :ref:`l-plot-export-locale-issue`
 * :ref:`l-plot-tiny-llm-export`

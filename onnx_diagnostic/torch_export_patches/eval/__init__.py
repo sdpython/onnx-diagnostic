@@ -185,9 +185,17 @@ def _make_exporter_export(
 
     if exporter == "export-strict":
         try:
-            exported = torch.export.export(
-                model, inputs, dynamic_shapes=dynamic_shapes, strict=True
-            )
+            if verbose >= 2:
+                exported = torch.export.export(
+                    model, inputs, dynamic_shapes=dynamic_shapes, strict=True
+                )
+            else:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+                    io.StringIO()
+                ):
+                    exported = torch.export.export(
+                        model, inputs, dynamic_shapes=dynamic_shapes, strict=True
+                    )
         except Exception as e:
             if not quiet:
                 raise
@@ -198,17 +206,33 @@ def _make_exporter_export(
         return exported.module()
     if exporter in ("export-strict-dec", "export-strict-decall"):
         try:
-            exported = torch.export.export(
-                model, inputs, dynamic_shapes=dynamic_shapes, strict=True
-            )
-            if verbose >= 9:
-                print("-- graph before decomposition")
-                print(exported.graph)
-            exported = (
-                exported.run_decompositions()
-                if "decall" in exporter
-                else exported.run_decompositions({})
-            )
+            if verbose >= 2:
+                exported = torch.export.export(
+                    model, inputs, dynamic_shapes=dynamic_shapes, strict=True
+                )
+                if verbose >= 9:
+                    print("-- graph before decomposition")
+                    print(exported.graph)
+                exported = (
+                    exported.run_decompositions()
+                    if "decall" in exporter
+                    else exported.run_decompositions({})
+                )
+            else:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+                    io.StringIO()
+                ):
+                    exported = torch.export.export(
+                        model, inputs, dynamic_shapes=dynamic_shapes, strict=True
+                    )
+                    if verbose >= 9:
+                        print("-- graph before decomposition")
+                        print(exported.graph)
+                    exported = (
+                        exported.run_decompositions()
+                        if "decall" in exporter
+                        else exported.run_decompositions({})
+                    )
         except Exception as e:
             if not quiet:
                 raise
@@ -219,9 +243,17 @@ def _make_exporter_export(
         return exported.module()
     if exporter == "export-nostrict":
         try:
-            exported = torch.export.export(
-                model, inputs, dynamic_shapes=dynamic_shapes, strict=False
-            )
+            if verbose >= 2:
+                exported = torch.export.export(
+                    model, inputs, dynamic_shapes=dynamic_shapes, strict=False
+                )
+            else:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+                    io.StringIO()
+                ):
+                    exported = torch.export.export(
+                        model, inputs, dynamic_shapes=dynamic_shapes, strict=False
+                    )
         except Exception as e:
             if not quiet:
                 raise
@@ -232,17 +264,33 @@ def _make_exporter_export(
         return exported.module()
     if exporter in ("export-nostrict-dec", "export-nostrict-decall"):
         try:
-            exported = torch.export.export(
-                model, inputs, dynamic_shapes=dynamic_shapes, strict=False
-            )
-            if verbose >= 9:
-                print("-- graph before decomposition")
-                print(exported.graph)
-            exported = (
-                exported.run_decompositions()
-                if "decall" in exporter
-                else exported.run_decompositions({})
-            )
+            if verbose >= 2:
+                exported = torch.export.export(
+                    model, inputs, dynamic_shapes=dynamic_shapes, strict=False
+                )
+                if verbose >= 9:
+                    print("-- graph before decomposition")
+                    print(exported.graph)
+                exported = (
+                    exported.run_decompositions()
+                    if "decall" in exporter
+                    else exported.run_decompositions({})
+                )
+            else:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+                    io.StringIO()
+                ):
+                    exported = torch.export.export(
+                        model, inputs, dynamic_shapes=dynamic_shapes, strict=False
+                    )
+                    if verbose >= 9:
+                        print("-- graph before decomposition")
+                        print(exported.graph)
+                    exported = (
+                        exported.run_decompositions()
+                        if "decall" in exporter
+                        else exported.run_decompositions({})
+                    )
         except Exception as e:
             if not quiet:
                 raise
@@ -255,8 +303,15 @@ def _make_exporter_export(
         from experimental_experiment.torch_interpreter.tracing import CustomTracer
 
         try:
-            graph = CustomTracer().trace(model)
-            mod = torch.fx.GraphModule(model, graph)
+            if verbose >= 2:
+                graph = CustomTracer().trace(model)
+                mod = torch.fx.GraphModule(model, graph)
+            else:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+                    io.StringIO()
+                ):
+                    graph = CustomTracer().trace(model)
+                    mod = torch.fx.GraphModule(model, graph)
         except Exception as e:
             if not quiet:
                 raise
@@ -289,13 +344,25 @@ def _make_exporter_onnx(
         if "-dec" in exporter:
             opts["decomposition_table"] = "all" if "-decall" in exporter else "default"
         try:
-            onx, builder = to_onnx(
-                model,
-                inputs,
-                dynamic_shapes=dynamic_shapes,
-                export_options=ExportOptions(**opts),
-                return_builder=True,
-            )
+            if verbose >= 2:
+                onx, builder = to_onnx(
+                    model,
+                    inputs,
+                    dynamic_shapes=dynamic_shapes,
+                    export_options=ExportOptions(**opts),
+                    return_builder=True,
+                )
+            else:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+                    io.StringIO()
+                ):
+                    onx, builder = to_onnx(
+                        model,
+                        inputs,
+                        dynamic_shapes=dynamic_shapes,
+                        export_options=ExportOptions(**opts),
+                        return_builder=True,
+                    )
         except Exception as e:
             if not quiet:
                 raise RuntimeError(
@@ -306,6 +373,7 @@ def _make_exporter_onnx(
                 ) from e
             return dict(error=str(e), success=0, error_step="export")
         return onx, builder
+
     if exporter == "dynamo":
         import torch
 
@@ -338,6 +406,7 @@ def _make_exporter_onnx(
                 ) from e
             return dict(error=str(e), success=0, error_step="export")
         return onx, None
+
     if exporter == "dynamo-ir":
         import torch
 

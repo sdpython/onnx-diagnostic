@@ -29,6 +29,7 @@ to the original model.
     for name, cls_model in sorted_cases:
         print(f"* :ref:`{name} <led-model-case-export-{name}>`")
     print()
+    print()
 
     obs = []
     for name, cls_model in sorted(cases.items()):
@@ -41,13 +42,14 @@ to the original model.
         print("forward")
         print("+++++++")
         print()
-        print("::")
+        print(".. code-block:: python")
         print()
         src = inspect.getsource(cls_model.forward)
         if src:
             print(textwrap.indent(textwrap.dedent(src), "    "))
         else:
             print("    # code is missing")
+        print()
         print()
         for exporter in (
             "export-strict",
@@ -67,22 +69,25 @@ to the original model.
             if "dynamic_shapes" in res:
                 print(f"* **shapes:** ``{string_type(res['dynamic_shapes'])}``")
             print()
+            print()
             if "exported" in res:
-                print("::")
+                print(".. code-block:: text")
                 print()
                 print(textwrap.indent(str(res["exported"].graph), "    "))
+                print()
                 print()
                 obs.append(dict(case=case_ref, error="", exporter=expo))
             else:
                 print("**FAILED**")
                 print()
-                print("::")
+                print(".. code-block:: text")
                 print()
                 err = str(res["error"])
                 if err:
                     print(textwrap.indent(err, "    "))
                 else:
                     print("    # no error found for the failure")
+                print()
                 print()
                 obs.append(dict(case=case_ref, error="FAIL", exporter=expo))
 

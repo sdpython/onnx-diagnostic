@@ -43,6 +43,7 @@ temp_dump_models/*
 dump_dort_bench/*
 test_zoo_*/
 temp_llama_model_*/*
+test_example_transform_method_*.py
 test_*.txt
 _cache/*
 .coverage
