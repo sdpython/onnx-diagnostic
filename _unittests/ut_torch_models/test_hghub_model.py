@@ -83,7 +83,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         model, inputs = data["model"], data["inputs"]
         model(**inputs)
         # different expected value for different version of transformers
-        self.assertIn((data["size"], data["n_weights"]), [(410532864, 102633216)])
+        self.assertIn((data["size"], data["n_weights"]), [(547377152, 136844288)])
 
     @hide_stdout()
     @ignore_errors(OSError)
