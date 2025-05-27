@@ -4,7 +4,7 @@ Change Logs
 0.6.1
 +++++
 
-* :pr:`112`: fixes a couple of issues with ModelBuilder
+* :pr:`113`: fixes a couple of issues with ModelBuilder
 
 0.6.0
 +++++
