@@ -206,6 +206,7 @@ The function replaces dynamic dimensions defined as strings by
 Older versions
 ++++++++++++++
 
+* `0.6.1 <../v0.6.1/index.html>`_
 * `0.6.0 <../v0.6.0/index.html>`_
 * `0.5.0 <../v0.5.0/index.html>`_
 * `0.4.4 <../v0.4.4/index.html>`_

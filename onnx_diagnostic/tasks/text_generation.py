@@ -27,7 +27,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
         kwargs = dict(
             num_hidden_layers=min(config.num_hidden_layers, 2),
             intermediate_size=256 if config is None else min(512, config.intermediate_size),
-            hidden_size=256 if config is None else min(256, config.hidden_size),
+            hidden_size=512 if config is None else min(512, config.hidden_size),
             cls_cache="MambaCache",
             state_size=8 if config is None else getattr(config, "state_size", None),
             conv_kernel=4 if config is None else getattr(config, "conv_kernel", None),
@@ -44,8 +44,8 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
                 else config.num_attention_heads
             ),
             hidden_size=(
-                min(config.hidden_size, 3072 // 4)
-                if config.hidden_size % 4 == 0
+                min(config.hidden_size, 4096 // 4)
+                if config.hidden_size % 64 == 0
                 else config.hidden_size
             ),
         )
