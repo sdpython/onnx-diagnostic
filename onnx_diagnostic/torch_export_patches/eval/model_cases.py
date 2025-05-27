@@ -143,7 +143,7 @@ class InplaceSetItemMask(torch.nn.Module):
         return x
 
     _inputs = [(torch.randn((2, 3, 3)),), (torch.randn((3, 3, 3)),)]
-    _dynamic = {"index": {0: DIM("batch")}, "update": {0: DIM("batch"), 1: DYN}}
+    _dynamic = {"x": {0: DIM("batch")}}
 
 
 class AtenInterpolate(torch.nn.Module):
@@ -353,7 +353,9 @@ class ControlFlowCondNonZero(torch.nn.Module):
 
 
 class ControlFlowCondIdentity_153832(torch.nn.Module):
-    """`#153832 <https://github.com/pytorch/pytorch/issues/153832>`_"""
+    """
+    `#153832 <https://github.com/pytorch/pytorch/issues/153832>`_
+    """
 
     def forward(self, x, y):
 
@@ -501,7 +503,9 @@ class ControlFlowScanCDistXY(torch.nn.Module):
 
 
 class ControlFlowScanInplace_153705(torch.nn.Module):
-    """`#153705 <https://github.com/pytorch/pytorch/issues/153705>`_"""
+    """
+    `#153705 <https://github.com/pytorch/pytorch/issues/153705>`_
+    """
 
     def forward(self, x, y):
         def loop_body_1(z, iv, x, y):
@@ -524,7 +528,9 @@ class ControlFlowScanInplace_153705(torch.nn.Module):
 
 
 class ControlFlowScanDecomposition_151564(torch.nn.Module):
-    """`#151564 <https://github.com/pytorch/pytorch/issues/151564>`_"""
+    """
+    `#151564 <https://github.com/pytorch/pytorch/issues/151564>`_
+    """
 
     @classmethod
     def dummy_loop(cls, padded: torch.Tensor, pos: torch.Tensor):
