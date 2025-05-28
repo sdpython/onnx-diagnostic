@@ -160,7 +160,7 @@ def rewritings_transformers_clamp_float16(cls_name) -> List[type]:
 
 def code_needing_rewriting(cls_name: str) -> Optional[List[Any]]:
     """
-    Returns a known list of classes mapped to a knwon rewritings
+    Returns a known list of classes mapped to a known rewritings
     because of control flow. See :func:`registered_transformers_rewritings`.
 
     :param cls_name: name of the class
