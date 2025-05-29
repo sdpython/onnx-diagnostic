@@ -209,6 +209,19 @@ def _quiet_or_not_quiet(
     return res
 
 
+def shrink_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Shrinks the configuration before it gets added to the information to log."""
+    new_cfg = {}
+    for k, v in cfg.items():
+
+        new_cfg[k] = (
+            v
+            if (not isinstance(v, (list, tuple, set, dict)) or len(v) < 50)
+            else (v.__class__("...") if isinstance(v, (list, tuple)) else "...")
+        )
+    return new_cfg
+
+
 def validate_model(
     model_id: str,
     task: Optional[str] = None,
@@ -436,7 +449,9 @@ def validate_model(
     if summary["model_module"] in sys.modules:
         summary["model_file"] = str(sys.modules[summary["model_module"]].__file__)  # type: ignore[index]
     summary["model_config_class"] = data["configuration"].__class__.__name__
-    summary["model_config"] = str(data["configuration"].to_dict()).replace(" ", "")
+    summary["model_config"] = str(shrink_config(data["configuration"].to_dict())).replace(
+        " ", ""
+    )
     summary["model_id"] = model_id
 
     if verbose:
