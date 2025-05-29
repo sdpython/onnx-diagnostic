@@ -1306,11 +1306,11 @@ def max_diff(
         rdiff = diff / (exp_cpu.abs() + 1e-3)
         if diff.numel() > 0:
             abs_diff, rel_diff, sum_diff, n_diff, nan_diff = (
-                float(diff.max()),
-                float(rdiff.max()),
-                float(diff.sum()),
+                float(diff.max().detach()),
+                float(rdiff.max().detach()),
+                float(diff.sum().detach()),
                 float(diff.numel()),
-                float(ndiff.sum()),
+                float(ndiff.sum().detach()),
             )
             argm = tuple(map(int, torch.unravel_index(diff.argmax(), diff.shape)))
         elif got_cpu.numel() == exp_cpu.numel():

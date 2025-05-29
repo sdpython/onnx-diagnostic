@@ -4,6 +4,7 @@ Change Logs
 0.6.1
 +++++
 
+* :pr:`114`: extends the list of known rewritings
 * :pr:`113`: fixes a couple of issues with ModelBuilder
 
 0.6.0
