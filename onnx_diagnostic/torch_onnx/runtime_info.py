@@ -82,7 +82,7 @@ def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
 
 def first_used_last_used(proto: onnx.ModelProto) -> Dict[str, RuntimeValue]:
     """
-    Builds first used, last used informations for every result
+    Builds first used, last used information for every result
     in the model.
 
     :param proto: model
