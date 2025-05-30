@@ -52,7 +52,7 @@ class TorchEvaluator:
     ):
         self.providers = providers
         self.constants: Dict[str, torch.Tensor] = {}
-        self.kernels: List[Optional[torch_ops.OpRun]] = []
+        self.kernels: List[torch_ops.OpRun] = []
         self.CPU = torch.tensor([0]).to("cpu").device
         if "CUDAExecutionProvider" in providers:
             self.CUDA = torch.tensor([0]).to("cuda").device
@@ -117,7 +117,7 @@ class TorchEvaluator:
 
     def _build_kernels(self, nodes: Sequence[onnx.NodeProto]):
         kernels = get_kernels()
-        self.kernels: List[torch_ops.OpRun] = []
+        self.kernels.clear()
         for node in nodes:
             if node.op_type == "Constant" and node.domain == "":
                 # Treated as a constant.
