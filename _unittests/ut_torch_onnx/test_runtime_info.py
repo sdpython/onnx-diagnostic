@@ -5,7 +5,12 @@ import onnx.helper as oh
 import onnx.numpy_helper as onh
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.torch_onnx.runtime_info import RuntimeValue, first_used_last_used
+from onnx_diagnostic.torch_onnx.runtime_info import (
+    first_used_last_used,
+    RuntimeValue,
+    RuntimeValueKind,
+    RuntimeDevice,
+)
 
 
 class TestRuntimeInfo(ExtTestCase):
@@ -13,6 +18,14 @@ class TestRuntimeInfo(ExtTestCase):
         rt = RuntimeValue("e", is_shape=True, value=torch.Tensor([0]))
         r = repr(rt)
         self.assertEqual("RuntimeValue(name=e, is_shape=True, value=T1s1)", r)
+
+    def test_runtime_kind(self):
+        h = RuntimeValueKind.INPUT
+        self.assertEqual(h.to_str(), "INPUT")
+
+    def test_runtime_device(self):
+        h = RuntimeDevice.CPU
+        self.assertEqual(h.to_str(), "CPU")
 
     def test_runtime_values(self):
         def _mkv_(name):

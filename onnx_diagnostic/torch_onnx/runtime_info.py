@@ -6,10 +6,33 @@ from ..helpers import string_type
 
 
 class RuntimeValueKind(enum.IntEnum):
+    "Kind of resuts."
+
     INITIALIZER = 1
     INPUT = 2
     OUTPUT = 4
     RESULT = 12
+
+    def to_str(self) -> str:
+        for k, v in self.__class__.__dict__.items():
+            if v == int(self):
+                return k
+        raise RuntimeError(f"Unable to display {self!r}")
+
+
+class RuntimeDevice(enum.IntEnum):
+    "Device definition"
+
+    UNKNOWN = 0
+    NEW = 1
+    CPU = 2
+    CUDA = 4
+
+    def to_str(self) -> str:
+        for k, v in self.__class__.__dict__.items():
+            if v == int(self):
+                return k
+        raise RuntimeError(f"Unable to display {self!r}")
 
 
 class RuntimeValue:
@@ -26,6 +49,7 @@ class RuntimeValue:
         created: Optional[int] = None,
         is_shape: Optional[bool] = None,
         kind: Optional[RuntimeValueKind] = None,
+        device: Optional[RuntimeDevice] = None,
     ):
         self.name = name
         self.dtype = dtype
@@ -36,6 +60,7 @@ class RuntimeValue:
         self.created = created
         self.is_shape = is_shape
         self.kind = kind
+        self.device = device
 
     def __repr__(self) -> str:
         "usual"
@@ -49,13 +74,17 @@ class RuntimeValue:
             "is_shape",
             "kind",
             "created",
+            "device",
         ]:
             v = getattr(self, att)
             if v is not None:
                 ad[att] = v
         if self.value is not None:
             ad["value"] = string_type(self.value, with_shape=True)
-        msg = ", ".join(f"{name}={t}" for name, t in ad.items())
+        msg = ", ".join(
+            f"{name}={t.to_str()}" if hasattr(t, "to_str") else f"{name}={t}"
+            for name, t in ad.items()
+        )
         return f"{self.__class__.__name__}({msg})"
 
 
