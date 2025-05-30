@@ -537,7 +537,7 @@ def validate_model(
 
                     disc = max_diff(data["expected"], expected)
                     for k, v in disc.items():
-                        summary[f"disc_patched_{k}"] = v
+                        summary[f"disc_patched_{k}"] = str(v)
                     if verbose:
                         print("[validate_model] done (patched run)")
                         print(f"[validate_model] patched discrepancies={string_diff(disc)}")
@@ -1066,7 +1066,7 @@ def call_torch_export_onnx(
             dynamo=False,
             dynamic_axes={
                 k: v
-                for k, v in CoupleInputsDynamicShapes(args, kwargs, ds)
+                for k, v in CoupleInputsDynamicShapes(args, kwargs, ds)  # type: ignore[arg-type]
                 .replace_by_string()
                 .items()
                 if isinstance(v, dict)
