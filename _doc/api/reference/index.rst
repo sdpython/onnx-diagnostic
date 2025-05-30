@@ -14,6 +14,7 @@ onnx_diagnostic.reference
     evaluator
     quantized_tensor
     ort_evaluator
+    torch_evaluator
 
 ExtendedReferenceEvaluator
 ++++++++++++++++++++++++++
@@ -25,6 +26,12 @@ OnnxruntimeEvaluator
 ++++++++++++++++++++
 
 .. autoclass:: onnx_diagnostic.reference.OnnxruntimeEvaluator
+    :members:
+
+TorchEvaluator
+++++++++++++++
+
+.. autoclass:: onnx_diagnostic.reference.TorchEvaluator
     :members:
 
 Other functions
