@@ -10,6 +10,7 @@ from onnx_diagnostic.reference.torch_evaluator import get_kernels
 
 
 TFLOAT = onnx.TensorProto.FLOAT
+TINT64 = onnx.TensorProto.INT64
 
 
 class TestTorchEvaluator(ExtTestCase):
@@ -71,6 +72,31 @@ class TestTorchEvaluator(ExtTestCase):
                 self.assertNotEmpty(v.value)
             else:
                 self.assertEmpty(v.value)
+
+    def test_slice_squeeze(self):
+        X = oh.make_tensor_value_info("X", TFLOAT, [None, None])
+        starts = oh.make_tensor_value_info("starts", TINT64, [None])
+        ends = oh.make_tensor_value_info("ends", TINT64, [None])
+        axes = oh.make_tensor_value_info("axes", TINT64, [None])
+        Y = oh.make_tensor_value_info("Y", TINT64, [None])
+        nodes = [
+            oh.make_node("Slice", ["X", "starts", "ends", "axes"], ["T"]),
+            oh.make_node("Squeeze", ["T", "axes"], ["Y"]),
+        ]
+        graph = oh.make_graph(nodes, "g", [X, starts, ends, axes], [Y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        feeds = {
+            "X": torch.tensor([[0]], dtype=torch.int64),
+            "starts": torch.tensor([0], dtype=torch.int64),
+            "ends": torch.tensor([1], dtype=torch.int64),
+            "axes": torch.tensor([0], dtype=torch.int64),
+        }
+        expected = ExtendedReferenceEvaluator(model).run(
+            None, {k: v.numpy() for k, v in feeds.items()}
+        )
+        rt = TorchEvaluator(model)
+        got = rt.run(None, feeds)
+        self.assertEqualAny(expected, [g.detach().numpy() for g in got])
 
 
 if __name__ == "__main__":

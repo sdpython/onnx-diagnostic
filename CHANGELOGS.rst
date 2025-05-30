@@ -4,7 +4,7 @@ Change Logs
 0.6.1
 +++++
 
-* :pr:`115`, :pr:`116`: first steps for TorchEvaluator
+* :pr:`115`, :pr:`116`, :pr:`117`: first steps for TorchEvaluator
 * :pr:`114`: extends the list of known rewritings
 * :pr:`113`: fixes a couple of issues with ModelBuilder
 
