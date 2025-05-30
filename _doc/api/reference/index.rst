@@ -6,6 +6,7 @@ onnx_diagnostic.reference
     :caption: submodules
 
     ops/index
+    torch_ops/index
 
 .. toctree::
     :maxdepth: 1

@@ -1,5 +1,5 @@
 import enum
-from typing import Any, Dict, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import onnx
 import torch
 from ..helpers import string_type
@@ -8,10 +8,10 @@ from ..helpers import string_type
 class RuntimeValueKind(enum.IntEnum):
     "Kind of result."
 
-    INITIALIZER = 1
-    INPUT = 2
-    OUTPUT = 4
-    RESULT = 12
+    RESULT = 1
+    INITIALIZER = 3
+    INPUT = 5
+    OUTPUT = 9
 
     def to_str(self) -> str:
         for k, v in self.__class__.__dict__.items():
@@ -87,6 +87,37 @@ class RuntimeValue:
         )
         return f"{self.__class__.__name__}({msg})"
 
+    @property
+    def has_value(self) -> bool:
+        "Tells if value is specified."
+        return self.value is not None
+
+    def set_value(self, value: torch.Tensor):
+        """Sets the value."""
+        assert value is not None, "Use clean_value to set a value to None"
+        self.value = value
+        if self.dtype:
+            assert (
+                self.dtype == value.dtype
+            ), f"Unexpected dtype={value.dtype}, previous dtype was {self.dtype}"
+        else:
+            self.dtype = value.dtype
+        self.shape = tuple(map(int, value.shape))
+
+    def clean_value(self):
+        """Sets value to None."""
+        self.value = None
+
+    @property
+    def is_output(self) -> bool:
+        "Tells if it is an output."
+        return (self.kind & RuntimeValueKind.OUTPUT) == RuntimeValueKind.OUTPUT
+
+    @property
+    def is_initializer(self) -> bool:
+        "Tells if it is an initializer."
+        return (self.kind & RuntimeValueKind.INITIALIZER) == RuntimeValueKind.INITIALIZER
+
 
 def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     """
@@ -109,12 +140,41 @@ def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     return hidden
 
 
-def first_used_last_used(proto: onnx.ModelProto) -> Dict[str, RuntimeValue]:
+def set_is_shape(node: onnx.NodeProto, values: Dict[str, RuntimeValue]) -> List[str]:
+    """
+    Sets attribute ``is_shape`` for outputs of a node.
+
+    :param node: node to process
+    :param values: stored results, values in this dictionary are updated
+    :return: list of modified results
+    """
+    if not node.input:
+        # Constant
+        return []
+    if node.op_type in ("Shape", "Size") and node.domain == "":
+        values[node.output[0]].is_shape = True
+        return [node.output[0]]
+    is_shapes = [values[i].is_shape for i in node.input]
+    if any(is_shapes):
+        if is_shapes[0] and len(node.output) == 1:
+            values[node.output[0]].is_shape = True
+            return [node.output[0]]
+    else:
+        for o in node.output:
+            values[o].is_shape = False
+        return list(node.output)
+    return []
+
+
+def first_used_last_used(
+    proto: onnx.ModelProto, constant_as_initializer: bool = False
+) -> Dict[str, RuntimeValue]:
     """
     Builds first used, last used information for every result
     in the model.
 
     :param proto: model
+    :param constant_as_initializer: outputs of node Constant is tagged as INITIALIZER
     :return: dictionary of RuntimeValue
     """
     values = {}
@@ -139,8 +199,19 @@ def first_used_last_used(proto: onnx.ModelProto) -> Dict[str, RuntimeValue]:
                     if values[n].first_used is None:
                         values[n].first_used = it
                     values[n].last_used = it
+        is_constant = node.op_type == "Constant" and node.domain == ""
         for o in node.output:
-            values[o] = RuntimeValue(o, created=it, kind=RuntimeValueKind.RESULT)
+            values[o] = RuntimeValue(
+                o,
+                created=it,
+                kind=(
+                    RuntimeValueKind.INITIALIZER
+                    if is_constant and constant_as_initializer
+                    else RuntimeValueKind.RESULT
+                ),
+            )
+        set_is_shape(node, values)
+
     for out in proto.graph.output:
         values[out.name].kind = RuntimeValueKind.OUTPUT
         values[out.name].last_used = len(proto.graph.node)
