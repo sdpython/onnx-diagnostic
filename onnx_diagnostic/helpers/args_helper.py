@@ -113,7 +113,7 @@ def get_parsed_args(
         )
 
     res = parser.parse_args(args=new_args)
-    update = {}
+    update: Dict[str, Union[int, float]] = {}
     for k, v in res.__dict__.items():
         try:
             vi = int(v)
