@@ -4,13 +4,14 @@ Change Logs
 0.6.1
 +++++
 
+* :pr:`115`, :pr:`116`: first steps for TorchEvaluator
 * :pr:`114`: extends the list of known rewritings
 * :pr:`113`: fixes a couple of issues with ModelBuilder
 
 0.6.0
 +++++
 
-* :pr:`111`: support ModelBuilder with command line validatz
+* :pr:`111`: support ModelBuilder with command line validate
 * :pr:`108`, :pr:`109`, :pr:`110`: first version of an algorithm rendering
   small onnx graph in ascii, patch for ``torch.vmap``
 

@@ -5,6 +5,7 @@ onnx_diagnostic.torch_onnx
     :maxdepth: 1
     :caption: submodules
 
+    runtime_info
     sbs
 
 .. automodule:: onnx_diagnostic.torch_onnx

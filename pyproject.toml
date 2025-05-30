@@ -112,6 +112,7 @@ select = [
 "onnx_diagnostic/export/__init__.py" = ["F401"]
 "onnx_diagnostic/helpers/__init__.py" = ["F401"]
 "onnx_diagnostic/reference/__init__.py" = ["F401"]
+"onnx_diagnostic/reference/torch_ops/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_models/hghub/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_models/hghub/hub_data_cached_configs.py" = ["PIE804"]
 "onnx_diagnostic/torch_export_patches/__init__.py" = ["F401"]

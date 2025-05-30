@@ -6,6 +6,7 @@ onnx_diagnostic.reference
     :caption: submodules
 
     ops/index
+    torch_ops/index
 
 .. toctree::
     :maxdepth: 1
@@ -14,6 +15,7 @@ onnx_diagnostic.reference
     evaluator
     quantized_tensor
     ort_evaluator
+    torch_evaluator
 
 ExtendedReferenceEvaluator
 ++++++++++++++++++++++++++
@@ -25,6 +27,12 @@ OnnxruntimeEvaluator
 ++++++++++++++++++++
 
 .. autoclass:: onnx_diagnostic.reference.OnnxruntimeEvaluator
+    :members:
+
+TorchEvaluator
+++++++++++++++
+
+.. autoclass:: onnx_diagnostic.reference.TorchEvaluator
     :members:
 
 Other functions
