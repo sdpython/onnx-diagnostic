@@ -1,5 +1,6 @@
-from typing import Optional
+from typing import Optional, Union, Tuple
 import onnx
+import torch
 
 
 class OpRun:
@@ -26,6 +27,12 @@ class OpRun:
         if self.domain:
             return (
                 f"{self.op_type}[{self.domain}]({', '.join(self.input)}) "
-                f"-> {', '.join(self.outputs)}"
+                f"-> {', '.join(self.output)}"
             )
-        return f"{self.op_type}({', '.join(self.input)}) -> {', '.join(self.outputs)}"
+        return f"{self.op_type}({', '.join(self.input)}) -> {', '.join(self.output)}"
+
+    def run(self, *args) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
+        "Kernel implementation."
+        raise NotImplementedError(
+            f"Method run is not implemented for kernel {self.__class__.__name__!r}"
+        )

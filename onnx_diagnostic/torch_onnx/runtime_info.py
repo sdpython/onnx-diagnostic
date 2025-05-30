@@ -111,12 +111,12 @@ class RuntimeValue:
     @property
     def is_output(self) -> bool:
         "Tells if it is an output."
-        return (self.kind & RuntimeValueKind.OUTPUT) == RuntimeValueKind.OUTPUT
+        return self.kind == RuntimeValueKind.OUTPUT
 
     @property
     def is_initializer(self) -> bool:
         "Tells if it is an initializer."
-        return (self.kind & RuntimeValueKind.INITIALIZER) == RuntimeValueKind.INITIALIZER
+        return self.kind == RuntimeValueKind.INITIALIZER
 
 
 def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:

@@ -52,7 +52,7 @@ class TorchEvaluator:
     ):
         self.providers = providers
         self.constants: Dict[str, torch.Tensor] = {}
-        self.kernels: List[torch_ops.OpRun] = []
+        self.kernels: List[Optional[torch_ops.OpRun]] = []
         self.CPU = torch.tensor([0]).to("cpu").device
         if "CUDAExecutionProvider" in providers:
             self.CUDA = torch.tensor([0]).to("cuda").device
@@ -89,11 +89,15 @@ class TorchEvaluator:
             raise TypeError(f"Unexpected type {type(proto)} for proto")
 
         self.runtime_info = first_used_last_used(proto, constant_as_initializer=True)
-        self.last_used = [[] for _ in self.kernels]
+        self.last_used: List[List[str]] = [[] for _ in self.kernels]
         for name, info in self.runtime_info.items():
             assert isinstance(info.last_used, int), f"Missing field last_used in {info!r}"
             if not info.is_output and not info.is_initializer:
                 self.last_used[info.last_used].append(name)
+
+    @property
+    def on_cuda(self) -> bool:
+        return self.default_device == self.CUDA
 
     def _build_initializers(self, inits: Sequence[Union[onnx.NodeProto, onnx.TensorProto]]):
         for init in inits:
