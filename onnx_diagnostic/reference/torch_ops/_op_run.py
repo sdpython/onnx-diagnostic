@@ -1,6 +1,5 @@
 from typing import Optional, Union, Tuple
 import onnx
-import torch
 
 
 class OpRunValue:
@@ -13,7 +12,7 @@ class OpRunValue:
 
     __slots__ = ("cached", "is_constant", "tensor")
 
-    def __init__(self, tensor: torch.Tensor, is_constant: bool = False):
+    def __init__(self, tensor, is_constant: bool = False):
         self.tensor = tensor
         self.is_constant = is_constant
         self.cached = None
