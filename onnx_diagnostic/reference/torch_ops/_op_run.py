@@ -73,3 +73,23 @@ class OpRun:
         raise NotImplementedError(
             f"Method run is not implemented for kernel {self.__class__.__name__!r}"
         )
+
+    def _find_attribute(self, node: onnx.NodeProto, name: str):
+        for att in node.attribute:
+            if att.name == name:
+                return att
+        return None
+
+    def get_attribute_int(
+        self, node: onnx.NodeProto, name: str, default_value: Optional[int] = None
+    ) -> Optional[int]:
+        """
+        Returns an attribute as an int.
+
+        :param node: NodeProto
+        :param name: name
+        :param default_value: default_value
+        :return: value
+        """
+        att = self._find_attribute(node, name)
+        return default_value if att is None else int(att.i)

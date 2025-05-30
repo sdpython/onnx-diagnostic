@@ -22,7 +22,7 @@ class TestTorchEvaluator(ExtTestCase):
         kernel = ker[key]
         self.assertEqual("Add_1", kernel.__name__)
 
-    def test_binary_ops(self):
+    def test_op_binary(self):
         model = oh.make_model(
             oh.make_graph(
                 [
@@ -73,7 +73,7 @@ class TestTorchEvaluator(ExtTestCase):
             else:
                 self.assertEmpty(v.value)
 
-    def test_slice_squeeze(self):
+    def test_op_slice_squeeze(self):
         X = oh.make_tensor_value_info("X", TFLOAT, [None, None])
         starts = oh.make_tensor_value_info("starts", TINT64, [None])
         ends = oh.make_tensor_value_info("ends", TINT64, [None])
@@ -91,6 +91,33 @@ class TestTorchEvaluator(ExtTestCase):
             "ends": torch.tensor([1], dtype=torch.int64),
             "axes": torch.tensor([0], dtype=torch.int64),
         }
+        expected = ExtendedReferenceEvaluator(model).run(
+            None, {k: v.numpy() for k, v in feeds.items()}
+        )
+        rt = TorchEvaluator(model)
+        got = rt.run(None, feeds)
+        self.assertEqualAny(expected, [g.detach().numpy() for g in got])
+
+    def test_op_shape(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Shape", ["X"], ["shape1"]),
+                    oh.make_node("Shape", ["X"], ["shape2"], end=-1),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [
+                    oh.make_tensor_value_info("shape1", TINT64, ["c"]),
+                    oh.make_tensor_value_info("shape2", TINT64, ["d"]),
+                ],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        feeds = dict(X=torch.rand((4, 5), dtype=torch.float32))
+
         expected = ExtendedReferenceEvaluator(model).run(
             None, {k: v.numpy() for k, v in feeds.items()}
         )
