@@ -7,12 +7,19 @@ onnx_diagnostic.reference.torch_ops
     :maxdepth: 1
     :caption: modules
 
+    access_ops
     binary_ops
 
 OpRun
 +++++
 
 .. autoclass:: onnx_diagnostic.reference.torch_ops.OpRun
+    :members:
+
+OpRunValue
+++++++++++
+
+.. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunValue
     :members:
 
 Other functions

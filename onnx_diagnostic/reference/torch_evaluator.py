@@ -125,7 +125,7 @@ class TorchEvaluator:
                 continue
             opset = self.opsets[node.domain]
             key = node.domain, node.op_type, opset
-            while key not in kernels:
+            while key not in kernels and opset > 0:
                 opset -= 1
                 key = node.domain, node.op_type, opset
             assert (
@@ -150,12 +150,20 @@ class TorchEvaluator:
         for k, v in self.constants.items():
             r = self.runtime_info[k]
             if not r.has_value:
-                r.set_value(v.to(self.CUDA) if r.is_shape and self.on_cuda else v)
+                r.set_value(
+                    torch_ops.OpRunValue(
+                        v.to(self.CUDA) if r.is_shape and self.on_cuda else v, True
+                    )
+                )
 
         # inputs
         for k, v in feeds.items():
             r = self.runtime_info[k]
-            r.set_value(v.to(self.CUDA) if r.is_shape and self.on_cuda else v)
+            r.set_value(
+                torch_ops.OpRunValue(
+                    v.to(self.CUDA) if r.is_shape and self.on_cuda else v, False
+                )
+            )
 
         # node execution
         for it, kernel in enumerate(self.kernels):
@@ -174,7 +182,7 @@ class TorchEvaluator:
                 self.runtime_info[name].clean_value()
 
         # outputs
-        res = [self.runtime_info[o].value for o in outputs]
+        res = [self.runtime_info[o].value.tensor for o in outputs]
 
         # clean previous execution
         for k in feeds:
