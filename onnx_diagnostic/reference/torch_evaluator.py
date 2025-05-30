@@ -52,7 +52,7 @@ class TorchEvaluator:
     ):
         self.providers = providers
         self.constants: Dict[str, torch.Tensor] = {}
-        self.kernels: List[torch_ops.OpRun] = []
+        self.kernels: List[Optional[torch_ops.OpRun]] = []
         self.CPU = torch.tensor([0]).to("cpu").device
         if "CUDAExecutionProvider" in providers:
             self.CUDA = torch.tensor([0]).to("cuda").device
