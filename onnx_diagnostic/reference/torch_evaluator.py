@@ -135,7 +135,7 @@ class TorchEvaluator:
 
     def run(
         self, outputs: Optional[List[str]], feeds: Dict[str, torch.Tensor]
-    ) -> List[torch.Tensor]:
+    ) -> List[Optional[torch.Tensor]]:
         """
         Runs the ONNX model.
 
@@ -182,7 +182,7 @@ class TorchEvaluator:
                 self.runtime_info[name].clean_value()
 
         # outputs
-        res = [self.runtime_info[o].value.tensor for o in outputs]
+        res = [self.runtime_info[o].value.tensor for o in outputs]  # type: ignore[assignment, union-attr]
 
         # clean previous execution
         for k in feeds:
@@ -190,4 +190,4 @@ class TorchEvaluator:
         for o in outputs:
             self.runtime_info[o].clean_value()
 
-        return res
+        return res  # type: ignore[return-value]
