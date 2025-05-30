@@ -6,7 +6,7 @@ from ..helpers import string_type
 
 
 class RuntimeValueKind(enum.IntEnum):
-    "Kind of resuts."
+    "Kind of result."
 
     INITIALIZER = 1
     INPUT = 2

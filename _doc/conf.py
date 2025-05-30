@@ -119,7 +119,7 @@ nitpick_ignore = [
     ("py:class", "Model"),
     ("py:class", "Module"),
     ("py:class", "np.ndarray"),
-    ("py:class", "onnxscript.ir.Tuple"),
+    ("py:class", "onnx_ir.Tuple"),
     ("py:class", "pipeline.Pipeline"),
     ("py:class", "torch.fx.passes.operator_support.OperatorSupport"),
     ("py:class", "torch.fx.proxy.TracerBase"),
