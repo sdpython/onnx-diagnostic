@@ -43,7 +43,7 @@ class RuntimeValue:
         name: str,
         dtype: Optional[Any] = None,
         shape: Optional[Tuple[Union[str, int], ...]] = None,
-        value: Optional[torch.Tensor] = None,
+        value: Optional[Any] = None,
         first_used: Optional[int] = None,
         last_used: Optional[int] = None,
         created: Optional[int] = None,
