@@ -6,6 +6,8 @@ from . import OpRun, OpRunValue
 
 
 class Cast_6(OpRun):
+    "Cast"
+
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
         to = self.get_attribute_int(node, "to", 0)
@@ -17,6 +19,8 @@ class Cast_6(OpRun):
 
 
 class Concat_1(OpRun):
+    "Concat"
+
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
         axis = self.get_attribute_int(node, "axis", 0)
@@ -28,6 +32,8 @@ class Concat_1(OpRun):
 
 
 class Transpose_1(OpRun):
+    "Transpose"
+
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
         self.perm = self.get_attribute_ints(node, "perm", None)

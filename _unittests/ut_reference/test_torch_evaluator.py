@@ -240,6 +240,26 @@ class TestTorchEvaluator(ExtTestCase):
             torch.rand((4, 5, 2, 7), dtype=torch.float32),
         )
 
+    def test_op_gather(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Gather", ["X", "Y"], ["Z"], axis=1)],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c", "d"]),
+                    oh.make_tensor_value_info("Y", TINT64, ["f"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "d"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand((5, 4, 3, 2), dtype=torch.float32),
+            torch.tensor([0, 1, 3], dtype=torch.int64),
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

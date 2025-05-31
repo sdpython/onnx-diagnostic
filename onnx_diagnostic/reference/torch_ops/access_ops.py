@@ -1,5 +1,24 @@
 from typing import Optional
+import onnx
+import torch
 from . import OpRun, OpRunValue
+
+
+class Gather_1(OpRun):
+    "Gather"
+
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
+        super().__init__(node, version)
+        axis = self.get_attribute_int(node, "axis", 0)
+        assert isinstance(axis, int), f"Unexpected value for attribute axis={axis!r}"
+        self.axis = axis
+
+    def run(self, x, indices):
+        if indices.tensor.numel() == 0:
+            return torch.empty((0,), dtype=x.tensor.dtype, device=x.tensor.device)
+        ind = [slice(0, s) for s in x.shape]
+        ind[self.axis] = indices.tensor
+        return OpRunValue(x.tensor[*ind])
 
 
 class Slice_13(OpRun):
