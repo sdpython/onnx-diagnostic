@@ -1,5 +1,4 @@
 import unittest
-from typing import Optional
 import numpy as np
 import onnx
 import onnx.helper as oh
@@ -23,7 +22,7 @@ class TestTorchEvaluator(ExtTestCase):
         kernel = ker[key]
         self.assertEqual("Add_1", kernel.__name__)
 
-    def _finalize_test(self, model, *args, atol: Optional[float] = None):
+    def _finalize_test(self, model, *args, atol: float = 0):
         onnx.checker.check_model(model)
         feeds = dict(zip([i.name for i in model.graph.input], args))
 
@@ -178,7 +177,29 @@ class TestTorchEvaluator(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 18)],
         )
         self._finalize_test(
-            model, torch.rand((4, 5, 6, 7), dtype=torch.float32), torch.tensor([7, 4, 6, 5])
+            model,
+            torch.rand((4, 5, 6, 7), dtype=torch.float32),
+            torch.tensor([7, 4, 6, 5], dtype=torch.int64),
+        )
+
+    def test_op_reshape_zero(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Reshape", ["X", "shape"], ["Y"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c", "d"]),
+                    oh.make_tensor_value_info("shape", TINT64, ["f"]),
+                ],
+                [oh.make_tensor_value_info("Y", TFLOAT, ["d", "a", "c", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand((4, 5, 6, 7), dtype=torch.float32),
+            torch.tensor([7, 4, 0, 5], dtype=torch.int64),
         )
 
     def test_op_matmul(self):

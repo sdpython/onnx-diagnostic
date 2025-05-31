@@ -4,10 +4,21 @@ import torch
 from . import OpRun, OpRunValue
 
 
-class Reshape_5(OpRun):
+class Reshape_14(OpRun):
     "Reshape"
 
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
+        super().__init__(node, version)
+        self.allowzero = self.get_attribute_int(node, "allowzero", 0)
+
     def run(self, data: OpRunValue, shape: OpRunValue) -> OpRunValue:
+        ishape = shape.as_tuple_int
+        if not self.allowzero and 0 in ishape:
+            xshape = data.tensor.shape
+            new_shape = []
+            for i, s in enumerate(ishape):
+                new_shape.append(xshape[i] if s == 0 else s)
+            return OpRunValue(data.tensor.reshape(new_shape))
         return OpRunValue(data.tensor.reshape(shape.as_tuple_int))
 
 
