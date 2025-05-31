@@ -1,4 +1,5 @@
 import unittest
+from typing import Optional
 import numpy as np
 import onnx
 import onnx.helper as oh
@@ -22,7 +23,7 @@ class TestTorchEvaluator(ExtTestCase):
         kernel = ker[key]
         self.assertEqual("Add_1", kernel.__name__)
 
-    def _finalize_test(self, model, *args):
+    def _finalize_test(self, model, *args, atol: Optional[float] = None):
         onnx.checker.check_model(model)
         feeds = dict(zip([i.name for i in model.graph.input], args))
 
@@ -31,7 +32,7 @@ class TestTorchEvaluator(ExtTestCase):
         )
         rt = TorchEvaluator(model)
         got = rt.run(None, feeds)
-        self.assertEqualAny(expected, [g.detach().numpy() for g in got])
+        self.assertEqualAny(expected, [g.detach().numpy() for g in got], atol=atol)
 
     def test_op_binary(self):
         model = oh.make_model(
@@ -258,6 +259,21 @@ class TestTorchEvaluator(ExtTestCase):
             model,
             torch.rand((5, 4, 3, 2), dtype=torch.float32),
             torch.tensor([0, 1, 3], dtype=torch.int64),
+        )
+
+    def test_op_softmax(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Softmax", ["X"], ["Z"], axis=0)],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model, torch.abs(torch.rand(3, 4, 5, dtype=torch.float32)), atol=1e-6
         )
 
 
