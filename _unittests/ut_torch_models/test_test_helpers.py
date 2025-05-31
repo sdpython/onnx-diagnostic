@@ -69,7 +69,7 @@ class TestTestHelper(ExtTestCase):
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
 
-    @requires_torch("2.7")
+    @requires_torch("2.8.99")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     def test_validate_model_onnx_dynamo_ir(self):
