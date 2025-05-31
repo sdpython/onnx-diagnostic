@@ -907,11 +907,13 @@ class ExtTestCase(unittest.TestCase):
         except AssertionError as e:
             expected_max = numpy.abs(expected).max()
             expected_value = numpy.abs(value).max()
+            te = expected.astype(int) if expected.dtype == numpy.bool_ else expected
+            tv = value.astype(int) if value.dtype == numpy.bool_ else value
             rows = [
                 f"{msg}\n{e}" if msg else str(e),
                 f"expected max value={expected_max}",
                 f"expected computed value={expected_value}\n",
-                f"ratio={expected / value}\ndiff={expected - value}",
+                f"ratio={te / tv}\ndiff={te - tv}",
             ]
             raise AssertionError("\n".join(rows))  # noqa: B904
 

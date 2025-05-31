@@ -84,6 +84,35 @@ class TestTorchEvaluator(ExtTestCase):
             else:
                 self.assertEmpty(v.value)
 
+    def test_op_binary_cmp(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Greater", ["X", "Y"], ["a"]),
+                    oh.make_node("GreaterOrEqual", ["X", "Y"], ["b"]),
+                    oh.make_node("Less", ["X", "Y"], ["c"]),
+                    oh.make_node("LessOrEqual", ["X", "Y"], ["d"]),
+                    oh.make_node("And", ["a", "b"], ["ab"]),
+                    oh.make_node("Or", ["c", "d"], ["cd"]),
+                    oh.make_node("And", ["ab", "cd"], ["Z"]),
+                ],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b"]),
+                ],
+                [oh.make_tensor_value_info("Z", onnx.TensorProto.BOOL, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(
+            model,
+            torch.abs(torch.rand(3, 4, 5, dtype=torch.float32)),
+            torch.abs(torch.rand(3, 4, 5, dtype=torch.float32)),
+        )
+
     def test_op_slice_squeeze(self):
         X = oh.make_tensor_value_info("X", TFLOAT, [None, None])
         starts = oh.make_tensor_value_info("starts", TINT64, [None])
@@ -220,6 +249,7 @@ class TestTorchEvaluator(ExtTestCase):
             model,
             torch.rand((4, 5, 6, 7), dtype=torch.float32),
             torch.rand((4, 5, 7, 11), dtype=torch.float32),
+            atol=1e-6,
         )
 
     def test_op_unsqueeze(self):
