@@ -18,7 +18,7 @@ class Gather_1(OpRun):
             return torch.empty((0,), dtype=x.tensor.dtype, device=x.tensor.device)
         ind = [slice(0, s) for s in x.shape]
         ind[self.axis] = indices.tensor
-        return OpRunValue(x.tensor[*ind])
+        return OpRunValue(x.tensor[tuple(ind)])
 
 
 class Slice_13(OpRun):

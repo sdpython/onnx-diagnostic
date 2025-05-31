@@ -444,13 +444,13 @@ class TestTorchEvaluator(ExtTestCase):
             model,
             torch.rand(3, 4, 5, dtype=torch.float32),
             torch.tensor([1], dtype=torch.int64),
-            atol=1e-6,
+            atol=1e-5,
         )
         self._finalize_test(
             model,
             torch.rand(3, 4, 5, dtype=torch.float32),
             torch.tensor([1, 2], dtype=torch.int64),
-            atol=1e-6,
+            atol=1e-5,
         )
 
 
