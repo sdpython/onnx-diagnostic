@@ -95,7 +95,7 @@ class OpRun:
         return default_value if att is None else int(att.i)
 
     def get_attribute_ints(
-        self, node: onnx.NodeProto, name: str, default_value: Optional[int] = None
+        self, node: onnx.NodeProto, name: str, default_value: Optional[Tuple[int, ...]] = None
     ) -> Optional[Tuple[int, ...]]:
         """
         Returns an attribute as an int.

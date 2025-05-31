@@ -20,3 +20,10 @@ class Softmax_13(OpRun):
         return OpRunValue(
             torch.nn.functional.softmax(data.tensor, dim=self.axis, dtype=self.stash_type)
         )
+
+
+class Tanh_6(OpRun):
+    "Tanh"
+
+    def run(self, data: OpRunValue) -> OpRunValue:
+        return OpRunValue(torch.nn.functional.tanh(data.tensor))
