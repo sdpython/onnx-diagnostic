@@ -22,6 +22,17 @@ class TestTorchEvaluator(ExtTestCase):
         kernel = ker[key]
         self.assertEqual("Add_1", kernel.__name__)
 
+    def _finalize_test(self, model, *args):
+        onnx.checker.check_model(model)
+        feeds = dict(zip([i.name for i in model.graph.input], args))
+
+        expected = ExtendedReferenceEvaluator(model).run(
+            None, {k: v.numpy() for k, v in feeds.items()}
+        )
+        rt = TorchEvaluator(model)
+        got = rt.run(None, feeds)
+        self.assertEqualAny(expected, [g.detach().numpy() for g in got])
+
     def test_op_binary(self):
         model = oh.make_model(
             oh.make_graph(
@@ -124,6 +135,50 @@ class TestTorchEvaluator(ExtTestCase):
         rt = TorchEvaluator(model)
         got = rt.run(None, feeds)
         self.assertEqualAny(expected, [g.detach().numpy() for g in got])
+
+    def test_op_cast(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Cast", ["X"], ["Y"], to=TINT64)],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [oh.make_tensor_value_info("Y", TINT64, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(model, (torch.rand((4, 5, 6, 7), dtype=torch.float32),))
+
+    def test_op_transpose(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Transpose", ["X"], ["Y"], perm=[3, 0, 2, 1])],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c", "d"])],
+                [oh.make_tensor_value_info("Y", TFLOAT, ["d", "a", "c", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(model, torch.rand((4, 5, 6, 7), dtype=torch.float32))
+
+    def test_op_reshape(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Reshape", ["X", "shape"], ["Y"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c", "d"]),
+                    oh.make_tensor_value_info("shape", TINT64, ["f"]),
+                ],
+                [oh.make_tensor_value_info("Y", TFLOAT, ["d", "a", "c", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model, torch.rand((4, 5, 6, 7), dtype=torch.float32), torch.tensor([7, 4, 6, 5])
+        )
 
 
 if __name__ == "__main__":

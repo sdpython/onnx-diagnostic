@@ -4,6 +4,13 @@ import torch
 from . import OpRun, OpRunValue
 
 
+class Reshape_5(OpRun):
+    "Reshape"
+
+    def run(self, data: OpRunValue, shape: OpRunValue) -> OpRunValue:
+        return OpRunValue(data.tensor.reshape(shape.as_tuple_int))
+
+
 class Shape_15(OpRun):
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
