@@ -88,13 +88,16 @@ class TestTorchEvaluator(ExtTestCase):
         model = oh.make_model(
             oh.make_graph(
                 [
-                    oh.make_node("Greater", ["X", "Y"], ["a"]),
+                    oh.make_node("Neg", ["X"], ["nx"]),
+                    oh.make_node("Reciprocal", ["nx"], ["rnx"]),
+                    oh.make_node("Greater", ["X", "rnx"], ["a"]),
                     oh.make_node("GreaterOrEqual", ["X", "Y"], ["b"]),
                     oh.make_node("Less", ["X", "Y"], ["c"]),
                     oh.make_node("LessOrEqual", ["X", "Y"], ["d"]),
                     oh.make_node("And", ["a", "b"], ["ab"]),
                     oh.make_node("Or", ["c", "d"], ["cd"]),
-                    oh.make_node("And", ["ab", "cd"], ["Z"]),
+                    oh.make_node("Not", ["cd"], ["ncd"]),
+                    oh.make_node("And", ["ab", "ncd"], ["Z"]),
                 ],
                 "dummy",
                 [
