@@ -28,3 +28,13 @@ class Squeeze_13(OpRun):
 
     def run(self, data: OpRunValue, axes: OpRunValue) -> OpRunValue:
         return OpRunValue(data.tensor.squeeze(axes.as_tuple_int))
+
+
+class Unsqueeze_13(OpRun):
+    "Unsqueeze"
+
+    def run(self, data: OpRunValue, axes: OpRunValue) -> OpRunValue:
+        t = data.tensor
+        for i in axes.as_tuple_int:
+            t = t.unsqueeze(i)
+        return OpRunValue(t)

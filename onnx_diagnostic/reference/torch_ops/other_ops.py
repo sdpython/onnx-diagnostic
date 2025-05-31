@@ -8,7 +8,9 @@ from . import OpRun, OpRunValue
 class Cast_6(OpRun):
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
-        self.to = onnx_dtype_to_torch_dtype(self.get_attribute_int(node, "to", 0))
+        to = self.get_attribute_int(node, "to", 0)
+        assert isinstance(to, int), f"Unexpected value for attribute to={to!r}"
+        self.to = onnx_dtype_to_torch_dtype(to)
 
     def run(self, data: OpRunValue) -> OpRunValue:
         return OpRunValue(data.tensor.to(self.to))

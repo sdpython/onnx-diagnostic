@@ -147,7 +147,7 @@ class TestTorchEvaluator(ExtTestCase):
             ir_version=9,
             opset_imports=[oh.make_opsetid("", 18)],
         )
-        self._finalize_test(model, (torch.rand((4, 5, 6, 7), dtype=torch.float32),))
+        self._finalize_test(model, torch.rand((4, 5, 6, 7), dtype=torch.float32))
 
     def test_op_transpose(self):
         model = oh.make_model(
@@ -178,6 +178,46 @@ class TestTorchEvaluator(ExtTestCase):
         )
         self._finalize_test(
             model, torch.rand((4, 5, 6, 7), dtype=torch.float32), torch.tensor([7, 4, 6, 5])
+        )
+
+    def test_op_matmul(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("MatMul", ["X", "Y"], ["Z"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c", "d"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b", "d", "f"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c", "f"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand((4, 5, 6, 7), dtype=torch.float32),
+            torch.rand((4, 5, 7, 11), dtype=torch.float32),
+        )
+
+    def test_op_unsqueeze(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Unsqueeze", ["X", "axes"], ["Z"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", 1, "d"]),
+                    oh.make_tensor_value_info("axes", TINT64, ["s"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "d"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand((4, 5, 1, 7), dtype=torch.float32),
+            torch.tensor([2], dtype=torch.int64),
         )
 
 

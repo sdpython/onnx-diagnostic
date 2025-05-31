@@ -8,18 +8,25 @@ class Add_1(OpRun):
         return OpRunValue(x.tensor + y.tensor)
 
 
-class Mul_1(OpRun):
-    """Mul"""
-
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
-        return OpRunValue(x.tensor * y.tensor)
-
-
 class Div_1(OpRun):
     """Div"""
 
     def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor / y.tensor)
+
+
+class MatMul_1(OpRun):
+    """MatMul"""
+
+    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+        return OpRunValue(x.tensor @ y.tensor)
+
+
+class Mul_1(OpRun):
+    """Mul"""
+
+    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+        return OpRunValue(x.tensor * y.tensor)
 
 
 class Sub_1(OpRun):
