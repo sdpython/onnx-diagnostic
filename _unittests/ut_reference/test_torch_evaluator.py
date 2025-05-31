@@ -220,6 +220,26 @@ class TestTorchEvaluator(ExtTestCase):
             torch.tensor([2], dtype=torch.int64),
         )
 
+    def test_op_concat(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Concat", ["X", "Y"], ["Z"], axis=2)],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", 1, "d"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b", 1, "d"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "d"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand((4, 5, 1, 7), dtype=torch.float32),
+            torch.rand((4, 5, 2, 7), dtype=torch.float32),
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
