@@ -26,6 +26,34 @@ class ReduceOp(OpRun):
         self.stash_type = None if stash_type is None else onnx_dtype_to_torch_dtype(stash_type)
 
 
+class ReduceMax_18(ReduceOp):
+    """ReduceMax"""
+
+    def run(self, x: OpRunValue, axes: OpRunValue) -> OpRunValue:
+        assert self.stash_type is None, f"Not implemented with stash_type={self.stash_type}"
+        taxes = axes.as_tuple_int
+        if len(taxes) == 1:
+            t = x.tensor.max(taxes[0], keepdim=self.keepdims)
+            return OpRunValue(t.values)
+        t = x.tensor
+        for a in reversed(taxes):
+            t = t.max(a, keepdim=self.keepdims).values
+        return OpRunValue(t)
+
+
+class ReduceMean_18(ReduceOp):
+    """ReduceMean"""
+
+    def run(self, x: OpRunValue, axes: OpRunValue) -> OpRunValue:
+        assert self.stash_type is None, f"Not implemented with stash_type={self.stash_type}"
+        taxes = axes.as_tuple_int
+        if len(taxes) == 1:
+            t = x.tensor.mean(taxes[0], keepdim=self.keepdims)
+            return OpRunValue(t)
+        t = x.tensor.mean(taxes, keepdim=self.keepdims)
+        return OpRunValue(t)
+
+
 class ReduceMin_18(ReduceOp):
     """ReduceMin"""
 
@@ -38,4 +66,17 @@ class ReduceMin_18(ReduceOp):
         t = x.tensor
         for a in reversed(taxes):
             t = t.min(a, keepdim=self.keepdims).values
+        return OpRunValue(t)
+
+
+class ReduceSum_18(ReduceOp):
+    """ReduceSum"""
+
+    def run(self, x: OpRunValue, axes: OpRunValue) -> OpRunValue:
+        assert self.stash_type is None, f"Not implemented with stash_type={self.stash_type}"
+        taxes = axes.as_tuple_int
+        if len(taxes) == 1:
+            t = x.tensor.sum(taxes[0], keepdim=self.keepdims)
+            return OpRunValue(t)
+        t = x.tensor.sum(taxes, keepdim=self.keepdims)
         return OpRunValue(t)
