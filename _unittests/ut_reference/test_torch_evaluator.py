@@ -345,6 +345,33 @@ class TestTorchEvaluator(ExtTestCase):
             model, torch.abs(torch.rand(3, 4, 5, dtype=torch.float32)), atol=1e-6
         )
 
+    def test_op_reduce_min(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("ReduceMin", ["X", "axes"], ["Z"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"]),
+                    oh.make_tensor_value_info("axes", TINT64, ["f"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            torch.tensor([1], dtype=torch.int64),
+            atol=1e-6,
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            torch.tensor([1, 2], dtype=torch.int64),
+            atol=1e-6,
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
