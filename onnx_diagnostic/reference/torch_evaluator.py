@@ -60,6 +60,8 @@ class TorchOnnxEvaluator:
         else:
             self.default_device = self.CPU
 
+        if isinstance(proto, str):
+            proto = onnx.load(proto)
         if isinstance(proto, onnx.ModelProto):
             assert opsets is None, "proto is a model, opsets must be None in that case"
             assert not proto.graph.sparse_initializer, "sparse_initializer not support yet"
