@@ -40,3 +40,10 @@ class Transpose_1(OpRun):
 
     def run(self, data: OpRunValue) -> OpRunValue:
         return OpRunValue(torch.permute(data.tensor, self.perm))
+
+
+class Where_9(OpRun):
+    "Where"
+
+    def run(self, cond: OpRunValue, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+        return OpRunValue(torch.where(cond.tensor, x.tensor, y.tensor))
