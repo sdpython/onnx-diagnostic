@@ -172,16 +172,23 @@ class TorchEvaluator:
                 inputs = [(self.runtime_info[i].value if i else None) for i in kernel.input]
                 res = kernel.run(*inputs)
                 if isinstance(res, tuple):
+                    # outputs
+                    assert all(isinstance(o, torch_ops.OpRunValue) for o in res), (
+                        f"Unexpected output type {[type(o) for o in res]} "
+                        f"for kernel {type(kernel)}."
+                    )
                     for name, t in zip(kernel.output, res):
                         self.runtime_info[name].set_value(t)
                 else:
+                    assert isinstance(
+                        res, torch_ops.OpRunValue
+                    ), f"Unexpected output type {type(res)} for kernel {type(kernel)}."
                     self.runtime_info[kernel.output[0]].set_value(res)
 
             # free intermediate results
             for name in self.last_used[it]:
                 self.runtime_info[name].clean_value()
 
-        # outputs
         res = [self.runtime_info[o].value.tensor for o in outputs]  # type: ignore[assignment, union-attr]
 
         # clean previous execution
