@@ -13,7 +13,7 @@ class LayerNormalization_17(OpRun):
         self.axis = self.get_attribute_int(node, "axis", -1)
         self.epsilon = self.get_attribute_float(node, "epsilon", 1e-5)
         self.stash_type = onnx_dtype_to_torch_dtype(
-            self.get_attribute_int(node, "stash_type", onnx.TensorProto.FLOAT)
+            self.get_attribute_int(node, "stash_type", onnx.TensorProto.FLOAT)  # type: ignore[arg-type]
         )
         self.compute_std = len(node.output) > 1
 
