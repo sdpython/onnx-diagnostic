@@ -29,10 +29,10 @@ OnnxruntimeEvaluator
 .. autoclass:: onnx_diagnostic.reference.OnnxruntimeEvaluator
     :members:
 
-TorchEvaluator
-++++++++++++++
+TorchOnnxEvaluator
+++++++++++++++++++
 
-.. autoclass:: onnx_diagnostic.reference.TorchEvaluator
+.. autoclass:: onnx_diagnostic.reference.TorchOnnxEvaluator
     :members:
 
 Other functions

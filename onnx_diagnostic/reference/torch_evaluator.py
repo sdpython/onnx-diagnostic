@@ -19,7 +19,7 @@ def get_kernels() -> Dict[Tuple[str, str, int], type[torch_ops.OpRun]]:
     return res
 
 
-class TorchEvaluator:
+class TorchOnnxEvaluator:
     """
     Torch evaluator for onnx models.
     The model does not stores the original proto it evaluates to avoid

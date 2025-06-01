@@ -5,7 +5,7 @@ import onnx.helper as oh
 import onnx.numpy_helper as onh
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.reference import ExtendedReferenceEvaluator, TorchEvaluator
+from onnx_diagnostic.reference import ExtendedReferenceEvaluator, TorchOnnxEvaluator
 from onnx_diagnostic.reference.torch_evaluator import get_kernels
 
 
@@ -13,7 +13,7 @@ TFLOAT = onnx.TensorProto.FLOAT
 TINT64 = onnx.TensorProto.INT64
 
 
-class TestTorchEvaluator(ExtTestCase):
+class TestTorchOnnxEvaluator(ExtTestCase):
     def test_kernels(self):
         ker = get_kernels()
         self.assertIsInstance(ker, dict)
@@ -36,7 +36,7 @@ class TestTorchEvaluator(ExtTestCase):
             expected = sess.run(None, feeds_numpy)
         else:
             expected = ExtendedReferenceEvaluator(model).run(None, feeds_numpy)
-        rt = TorchEvaluator(model)
+        rt = TorchOnnxEvaluator(model)
         got = rt.run(None, feeds)
         self.assertEqualAny(expected, [g.detach().numpy() for g in got], atol=atol)
 
@@ -68,7 +68,7 @@ class TestTorchEvaluator(ExtTestCase):
         )
         onnx.checker.check_model(model)
 
-        rt = TorchEvaluator(model)
+        rt = TorchOnnxEvaluator(model)
         self.assertEqual(5, len(rt.kernels))
         self.assertEqual(2, len(rt.constants))
 
@@ -144,7 +144,7 @@ class TestTorchEvaluator(ExtTestCase):
         expected = ExtendedReferenceEvaluator(model).run(
             None, {k: v.numpy() for k, v in feeds.items()}
         )
-        rt = TorchEvaluator(model)
+        rt = TorchOnnxEvaluator(model)
         got = rt.run(None, feeds)
         self.assertEqualAny(expected, [g.detach().numpy() for g in got])
 
@@ -171,7 +171,7 @@ class TestTorchEvaluator(ExtTestCase):
         expected = ExtendedReferenceEvaluator(model).run(
             None, {k: v.numpy() for k, v in feeds.items()}
         )
-        rt = TorchEvaluator(model)
+        rt = TorchOnnxEvaluator(model)
         got = rt.run(None, feeds)
         self.assertEqualAny(expected, [g.detach().numpy() for g in got])
 
