@@ -22,17 +22,17 @@ class LayerNormalization_17(OpRun):
         xt = x.tensor.to(self.stash_type)
         res = torch.nn.functional.layer_norm(
             xt,
-            xt.shape[: self.axis],
+            xt.shape[self.axis :],
             weight=scale.tensor,
             bias=None if bias is None else bias.tensor,
             eps=self.epsilon,
         )
         if not self.compute_std:
-            return res.to(original_dtype)
+            return OpRunValue(res.to(original_dtype))
         axes = tuple(range(len(xt.shape)))[self.axis :]
         mean, var = torch.var(xt, dim=axes, keepdim=False)
         x_inv_std_dev = torch.reciprocal(torch.sqrt(var + self.epsilon))
-        return res.to(original_dtype), mean, x_inv_std_dev
+        return OpRunValue(res.to(original_dtype)), OpRunValue(mean), OpRunValue(x_inv_std_dev)
 
 
 class Softmax_13(OpRun):

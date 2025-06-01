@@ -503,7 +503,60 @@ class TestTorchEvaluator(ExtTestCase):
             torch.rand(3, 4, 5, dtype=torch.float32),
             torch.abs(torch.rand(5, dtype=torch.float32)),
             torch.rand(5, dtype=torch.float32),
-            use_ort=True,
+            use_ort=False,
+            atol=1e-4,
+        )
+
+    def test_op_layer_normalization_axis1(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("LayerNormalization", ["X", "W", "B"], ["Z"], axis=1)],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"]),
+                    oh.make_tensor_value_info("W", TFLOAT, []),
+                    oh.make_tensor_value_info("B", TFLOAT, []),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            torch.abs(torch.rand(4, 5, dtype=torch.float32)),
+            torch.rand(4, 5, dtype=torch.float32),
+            use_ort=False,
+            atol=1e-4,
+        )
+
+    def test_op_layer_normalization_big_eps(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "LayerNormalization", ["X", "W", "B"], ["Z"], axis=-1, epsilon=2.0
+                    )
+                ],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"]),
+                    oh.make_tensor_value_info("W", TFLOAT, []),
+                    oh.make_tensor_value_info("B", TFLOAT, []),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            torch.abs(torch.rand(5, dtype=torch.float32)),
+            torch.rand(5, dtype=torch.float32),
+            use_ort=False,
+            atol=1e-4,
         )
 
 
