@@ -16,7 +16,7 @@ class OpRunValue:
     def __init__(self, tensor, is_constant: bool = False):
         self.tensor = tensor
         self.is_constant = is_constant
-        self.cached = None
+        self.cached: Optional[Tuple[int, ...]] = None
 
     def __repr__(self) -> str:
         "usual"
@@ -28,13 +28,13 @@ class OpRunValue:
         return f"{self.__class__.__name__}({string_type(self.tensor, with_shape=True)})"
 
     @property
-    def shape(self) -> "Shape":  # noqa: F821
-        "shape"
+    def shape(self):
+        "shape (torch shape)"
         return self.tensor.shape
 
     @property
-    def dtype(self) -> "torch.dtype":  # noqa: F821
-        "dtype"
+    def dtype(self):
+        "dtype (torch dtype)"
         return self.tensor.dtype
 
     def _tensor_as_tuple_int(self) -> Tuple[int, ...]:

@@ -960,7 +960,6 @@ def validate_onnx_model(
             f"{providers}..., flavour={flavour!r}"
         )
 
-    assert runtime == "torch", f"runtime={runtime!r}"
     cls_runtime = (
         (
             lambda model, providers: onnxruntime.InferenceSession(

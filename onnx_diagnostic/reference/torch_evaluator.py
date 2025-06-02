@@ -137,8 +137,10 @@ class TorchOnnxEvaluator:
             self.kernels.append(kernels[key](node, opset))
 
     def run(
-        self, outputs: Optional[List[str]], feeds: Dict[str, Union[torch.Tensor, np.ndarray]]
-    ) -> List[Optional[torch.Tensor]]:
+        self,
+        outputs: Optional[List[str]],
+        feeds: Union[Dict[str, torch.Tensor], Dict[str, np.ndarray]],
+    ) -> Union[List[Optional[torch.Tensor]], List[Optional[np.ndarray]]]:
         """
         Runs the ONNX model.
 
@@ -204,5 +206,5 @@ class TorchOnnxEvaluator:
             self.runtime_info[o].clean_value()
 
         if use_numpy:
-            return [r.detach().cpu().numpy() for r in res]
+            return [None if r is None else r.detach().cpu().numpy() for r in res]
         return res  # type: ignore[return-value]
