@@ -67,11 +67,11 @@ def known_transformers_rewritings_clamp_float16() -> Dict[str, str]:
         :showcode:
 
         import pprint
-        from onnx_diagnostic.torch_export_patches.patch_model_helper import (
-            known_transformers_rewritings,
+        from onnx_diagnostic.torch_export_patches.patch_module_helper import (
+            known_transformers_rewritings_clamp_float16,
         )
 
-        pprint.pprint(known_transformers_rewritings())
+        pprint.pprint(known_transformers_rewritings_clamp_float16())
     """
     _alias = {
         "AutoformerEncoder": "AutoformerEncoderLayer",
@@ -130,13 +130,13 @@ def rewritings_transformers_clamp_float16(cls_name) -> List[type]:
         :showcode:
 
         import pprint
-        from onnx_diagnostic.torch_export_patches.patch_model_helper import (
+        from onnx_diagnostic.torch_export_patches.patch_module_helper import (
             _rewrite_forward_clamp_float16,
         )
 
-        pprint.pprint(_rewrite_forward_clamp_float16()
+        pprint.pprint(_rewrite_forward_clamp_float16())
 
-    Function :func:`known_transformers_rewritings` collects
+    Function `_rewrite_forward_clamp_float16` collects
     all model classes using those layers.
     """
     _known = _rewrite_forward_clamp_float16()
@@ -161,7 +161,7 @@ def rewritings_transformers_clamp_float16(cls_name) -> List[type]:
 def code_needing_rewriting(cls_name: str) -> Optional[List[Any]]:
     """
     Returns a known list of classes mapped to a known rewritings
-    because of control flow. See :func:`registered_transformers_rewritings`.
+    because of control flow. See :func:`known_transformers_rewritings_clamp_float16`.
 
     :param cls_name: name of the class
     :return: a list of rewriting
