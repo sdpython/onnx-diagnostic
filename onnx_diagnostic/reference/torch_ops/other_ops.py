@@ -42,6 +42,20 @@ class Transpose_1(OpRun):
         return OpRunValue(torch.permute(data.tensor, self.perm))
 
 
+class Trilu_14(OpRun):
+    "Trilu"
+
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
+        super().__init__(node, version)
+        self.upper = self.get_attribute_int(node, "upper", 1)
+
+    def run(self, data: OpRunValue, k: Optional[OpRunValue] = None) -> OpRunValue:
+        diagonal = 0 if k is None else k.tensor.item()
+        if self.upper:
+            return OpRunValue(torch.triu(data.tensor, diagonal=diagonal))
+        return OpRunValue(torch.tril(data.tensor, diagonal=diagonal))
+
+
 class Where_9(OpRun):
     "Where"
 

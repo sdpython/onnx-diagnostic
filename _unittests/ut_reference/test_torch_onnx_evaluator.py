@@ -4,7 +4,7 @@ import onnx
 import onnx.helper as oh
 import onnx.numpy_helper as onh
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
 from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, TorchOnnxEvaluator
 from onnx_diagnostic.reference.torch_evaluator import get_kernels
@@ -800,6 +800,56 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         )
         onnx.checker.check_model(model)
         self._finalize_test(model, torch.tensor([4, 5], dtype=torch.int64))
+
+    def test_op_trilu(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Trilu", ["X"], ["Z"])],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(model, torch.rand((4, 4), dtype=torch.float32))
+
+    def test_op_trilu_1(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Trilu", ["X"], ["Z"], upper=0)],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(model, torch.rand((4, 4), dtype=torch.float32))
+
+    @ignore_warnings(DeprecationWarning)
+    def test_op_trilu_k(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Trilu", ["X", "k"], ["Z"], upper=1)],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b"]),
+                    oh.make_tensor_value_info("k", TINT64, []),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(
+            model,
+            torch.rand((6, 6), dtype=torch.float32),
+            torch.tensor([2], dtype=torch.int64),
+        )
 
 
 if __name__ == "__main__":

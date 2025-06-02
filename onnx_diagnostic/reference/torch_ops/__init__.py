@@ -16,7 +16,7 @@ from .binary_ops import (
 )
 from .generator_ops import Range_11
 from .nn_ops import LayerNormalization_17, Softmax_13, Tanh_6
-from .other_ops import Cast_6, Concat_1, Transpose_1, Where_9
+from .other_ops import Cast_6, Concat_1, Transpose_1, Trilu_14, Where_9
 from .reduce_ops import ReduceMax_18, ReduceMean_18, ReduceMin_18, ReduceSum_18
 from .shape_ops import (
     ConstantOfShape_9,

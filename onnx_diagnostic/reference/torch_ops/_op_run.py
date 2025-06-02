@@ -61,7 +61,7 @@ class OpRun:
     @classmethod
     def device_dependent(cls) -> bool:
         """
-        Returns True if the kernel needs a device to be efficiently initiliazed.
+        Returns True if the kernel needs a device to be efficiently initialized.
         """
         return False
 

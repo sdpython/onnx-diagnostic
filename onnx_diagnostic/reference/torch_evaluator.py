@@ -152,7 +152,7 @@ class TorchOnnxEvaluator:
             ), f"Missing kernel for node type {node.op_type!r} from domain {node.domain!r}"
             cls = kernels[key]
             if cls.device_dependent():
-                kernel = cls(node, opset, self.default_device)
+                kernel = cls(node, opset, self.default_device)  # type: ignore[call-arg]
             else:
                 kernel = cls(node, opset)
             self.kernels.append(kernel)
