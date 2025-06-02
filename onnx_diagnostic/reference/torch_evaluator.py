@@ -4,7 +4,7 @@ import numpy as np
 import onnx
 import torch
 from ..helpers.torch_helper import to_tensor
-from ..torch_onnx.runtime_info import first_used_last_used
+from ..torch_onnx.runtime_info import first_used_last_used, RuntimeValue
 from . import torch_ops
 
 
@@ -99,9 +99,9 @@ class TorchOnnxEvaluator:
             assert opsets, "opsets must be specified if proto is a graph"
             assert not proto.sparse_initializer, "sparse_initializer not support yet"
             self.opsets = opsets
-            self._build_initializers(proto)
+            self._build_initializers(proto.initializer)
             self._build_initializers(proto.node)
-            self._build_kernels(proto.nodes)
+            self._build_kernels(proto.node)
             self.input_names = [i.name for i in proto.input]
             self.output_names = [i.name for i in proto.output]
         elif isinstance(proto, onnx.FunctionProto):
@@ -138,6 +138,10 @@ class TorchOnnxEvaluator:
                 for att in init.attribute:
                     if att.name == "value":
                         value = to_tensor(att.t).to(self.default_device)
+                    elif att.name == "value_floats":
+                        value = torch.tensor(list(att.floats), dtype=torch.float32).to(
+                            self.default_device
+                        )
                 assert value is not None, f"No attribute value in node {init}"
                 self.constants[init.output[0]] = value
 
@@ -167,10 +171,9 @@ class TorchOnnxEvaluator:
                 f"local functions={sorted(self.functions)}"
             )
             cls = kernels[key]
-            if cls.device_dependent():
-                kernel2: torch_ops.OpRun = cls(node, opset, self.default_device)  # type: ignore[call-arg]
-            else:
-                kernel2 = cls(node, opset)  # type: ignore[assignment]
+            ags = [self.default_device] if cls.device_dependent() else []
+            kws = dict(parent=self) if cls.has_subgraphs() else {}
+            kernel2 = cls(node, opset, *ags, **kws)
             self.kernels.append(kernel2)
 
     def run(
@@ -215,7 +218,10 @@ class TorchOnnxEvaluator:
             if kernel is not None:
                 # kernel execution
                 inputs = [(self.runtime_info[i].value if i else None) for i in kernel.input]
-                res = kernel.run(*inputs)
+                if kernel.has_subgraphs():
+                    res = kernel.run(*inputs, context=self.runtime_info)
+                else:
+                    res = kernel.run(*inputs)
                 if isinstance(res, tuple):
                     # outputs
                     assert all(isinstance(o, torch_ops.OpRunValue) for o in res), (
@@ -250,12 +256,15 @@ class TorchOnnxEvaluator:
         return fres
 
     def run_with_values(
-        self, *args: Optional[torch_ops.OpRunValue]
+        self,
+        *args: Optional[torch_ops.OpRunValue],
+        context: Optional[Dict[str, RuntimeValue]] = None,
     ) -> Union[torch_ops.OpRunValue, Tuple[torch_ops.OpRunValue, ...]]:
         """
         Runs the ONNX model.
 
         :param args: inputs
+        :param context: local context for the execution of subgraphs
         :return: output OpRunValue
         """
         assert all(
@@ -282,7 +291,18 @@ class TorchOnnxEvaluator:
         for it, kernel in enumerate(self.kernels):
             if kernel is not None:
                 # kernel execution
-                inputs = [(self.runtime_info[i].value if i else None) for i in kernel.input]
+                inputs = [
+                    (
+                        (
+                            self.runtime_info[i].value
+                            if i in self.runtime_info
+                            else context[i].value
+                        )
+                        if i
+                        else None
+                    )
+                    for i in kernel.input
+                ]
                 res = kernel.run(*inputs)
                 if isinstance(res, tuple):
                     # outputs

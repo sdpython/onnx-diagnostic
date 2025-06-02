@@ -4,6 +4,7 @@ Change Logs
 0.6.1
 +++++
 
+* :pr:`123`: add subgraphs to TorchOnnxEvaluator
 * :pr:`122`: add local functions to TorchOnnxEvaluator
 * :pr:`120`: enables TorchOnnxEvaluator in command line ``python -m onnx_diagnostic validate ...``
 * :pr:`115`, :pr:`116`, :pr:`117`, :pr:`118`, :pr:`119`:

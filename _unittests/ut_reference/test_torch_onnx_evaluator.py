@@ -906,7 +906,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         model = oh.make_model(
             oh.make_graph(
                 [
-                    oh.make_node("ReduceSum", ["X"], ["Xred"]),
+                    oh.make_node("ReduceSum", ["X"], ["Xred"], keepdims=0),
                     oh.make_node("Add", ["X", "two"], ["X0"]),
                     oh.make_node("Add", ["X0", "zero"], ["X00"]),
                     oh.make_node("CastLike", ["one", "Xred"], ["one_c"]),

@@ -65,6 +65,11 @@ class OpRun:
         """
         return False
 
+    @classmethod
+    def has_subgraphs(cls) -> bool:
+        """Returns True if the kernel has subgraphs."""
+        return False
+
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         assert isinstance(
             node, onnx.NodeProto

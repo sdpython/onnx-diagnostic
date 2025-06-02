@@ -15,6 +15,7 @@ from .binary_ops import (
     Pow_12,
     Sub_1,
 )
+from .control_flow import If_1
 from .generator_ops import Range_11
 from .nn_ops import LayerNormalization_17, Softmax_13, Tanh_6
 from .other_ops import Cast_6, CastLike_15, Concat_1, Transpose_1, Trilu_14, Where_9

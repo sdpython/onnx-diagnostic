@@ -140,21 +140,26 @@ def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     return hidden
 
 
-def set_is_shape(node: onnx.NodeProto, values: Dict[str, RuntimeValue]) -> List[str]:
+def set_is_shape(
+    node: onnx.NodeProto, values: Dict[str, RuntimeValue], drop: Optional[Set[str]] = None
+) -> List[str]:
     """
     Sets attribute ``is_shape`` for outputs of a node.
 
     :param node: node to process
     :param values: stored results, values in this dictionary are updated
+    :param drop: variables not to consider because the come from the graph
+        holding this subgraph
     :return: list of modified results
     """
     if not node.input:
         # Constant
         return []
+    drop = drop or set()
     if node.op_type in ("Shape", "Size") and node.domain == "":
         values[node.output[0]].is_shape = True
         return [node.output[0]]
-    is_shapes = [values[i].is_shape for i in node.input]
+    is_shapes = [values[i].is_shape for i in node.input if i not in drop]
     if any(is_shapes):
         if is_shapes[0] and len(node.output) == 1:
             values[node.output[0]].is_shape = True
@@ -185,18 +190,21 @@ def first_used_last_used(
         _input = proto.graph.input
         output = proto.graph.output
         _node = proto.graph.node
+        allow_unknown = False
     elif isinstance(proto, onnx.GraphProto):
         initializer = proto.initializer
         sparse_initializer = proto.sparse_initializer
         _input = proto.input
         output = proto.output
         _node = proto.node
+        allow_unknown = True
     else:
         initializer = []
         sparse_initializer = []
         _input = proto.input
         output = proto.output
         _node = proto.node
+        allow_unknown = False
 
     for init in initializer:
         values[init.name] = RuntimeValue(
@@ -209,8 +217,14 @@ def first_used_last_used(
     for inp in _input:
         n = inp if isinstance(inp, str) else inp.name
         values[n] = RuntimeValue(n, created=-1, kind=RuntimeValueKind.INPUT)
+    drop = set()
     for it, node in enumerate(_node):
         for i in node.input:
+            if i not in values:
+                assert allow_unknown, f"Input {i!r} is unknown."
+                # This input comes from a context and the model is a GraphProto
+                drop.add(i)
+                continue
             if values[i].first_used is None:
                 values[i].first_used = it
             values[i].last_used = it
@@ -231,7 +245,7 @@ def first_used_last_used(
                     else RuntimeValueKind.RESULT
                 ),
             )
-        set_is_shape(node, values)
+        set_is_shape(node, values, drop=drop)
 
     for out in output:
         n = out if isinstance(out, str) else out.name
