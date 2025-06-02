@@ -4,6 +4,7 @@ from .binary_ops import (
     And_1,
     Add_1,
     Div_1,
+    Equal_1,
     Greater_1,
     GreaterOrEqual_1,
     Less_1,
