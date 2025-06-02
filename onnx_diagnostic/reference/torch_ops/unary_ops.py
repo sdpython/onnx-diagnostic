@@ -2,6 +2,13 @@ import torch
 from . import OpRun, OpRunValue
 
 
+class Abs_1(OpRun):
+    """Abs"""
+
+    def run(self, x: OpRunValue) -> OpRunValue:
+        return OpRunValue(torch.abs(x.tensor))
+
+
 class Cos_1(OpRun):
     """Cos"""
 

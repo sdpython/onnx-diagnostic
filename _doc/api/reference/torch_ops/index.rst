@@ -22,6 +22,12 @@ OpRunValue
 .. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunValue
     :members:
 
+OpRunFunction
++++++++++++++
+
+.. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunFunction
+    :members:
+
 Other functions
 +++++++++++++++
 

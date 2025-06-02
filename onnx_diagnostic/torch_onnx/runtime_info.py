@@ -167,28 +167,49 @@ def set_is_shape(node: onnx.NodeProto, values: Dict[str, RuntimeValue]) -> List[
 
 
 def first_used_last_used(
-    proto: onnx.ModelProto, constant_as_initializer: bool = False
+    proto: Union[onnx.FunctionProto, onnx.GraphProto, onnx.ModelProto],
+    constant_as_initializer: bool = False,
 ) -> Dict[str, RuntimeValue]:
     """
     Builds first used, last used information for every result
     in the model.
 
-    :param proto: model
+    :param proto: model, graph or function
     :param constant_as_initializer: outputs of node Constant is tagged as INITIALIZER
     :return: dictionary of RuntimeValue
     """
     values = {}
-    for init in proto.graph.initializer:
+    if isinstance(proto, onnx.ModelProto):
+        initializer = proto.graph.initializer
+        sparse_initializer = proto.graph.sparse_initializer
+        _input = proto.graph.input
+        output = proto.graph.output
+        _node = proto.graph.node
+    elif isinstance(proto, onnx.GraphProto):
+        initializer = proto.initializer
+        sparse_initializer = proto.sparse_initializer
+        _input = proto.input
+        output = proto.output
+        _node = proto.node
+    else:
+        initializer = []
+        sparse_initializer = []
+        _input = proto.input
+        output = proto.output
+        _node = proto.node
+
+    for init in initializer:
         values[init.name] = RuntimeValue(
             init.name, kind=RuntimeValueKind.INITIALIZER, created=-1
         )
-    for init in proto.graph.sparse_initializer:
+    for init in sparse_initializer:
         values[init.name] = RuntimeValue(
             init.name, created=-1, kind=RuntimeValueKind.INITIALIZER
         )
-    for inp in proto.graph.input:
-        values[inp.name] = RuntimeValue(inp.name, created=-1, kind=RuntimeValueKind.INPUT)
-    for it, node in enumerate(proto.graph.node):
+    for inp in _input:
+        n = inp if isinstance(inp, str) else inp.name
+        values[n] = RuntimeValue(n, created=-1, kind=RuntimeValueKind.INPUT)
+    for it, node in enumerate(_node):
         for i in node.input:
             if values[i].first_used is None:
                 values[i].first_used = it
@@ -212,7 +233,8 @@ def first_used_last_used(
             )
         set_is_shape(node, values)
 
-    for out in proto.graph.output:
-        values[out.name].kind = RuntimeValueKind.OUTPUT
-        values[out.name].last_used = len(proto.graph.node)
+    for out in output:
+        n = out if isinstance(out, str) else out.name
+        values[n].kind = RuntimeValueKind.OUTPUT
+        values[n].last_used = len(_node)
     return values

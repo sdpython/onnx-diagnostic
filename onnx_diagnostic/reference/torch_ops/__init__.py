@@ -1,4 +1,4 @@
-from ._op_run import OpRun, OpRunValue
+from ._op_run import OpRun, OpRunFunction, OpRunValue
 from .access_ops import Gather_1, Slice_13
 from .binary_ops import (
     And_1,
@@ -29,6 +29,7 @@ from .shape_ops import (
     Unsqueeze_13,
 )
 from .unary_ops import (
+    Abs_1,
     Cos_1,
     Exp_1,
     Log_1,
