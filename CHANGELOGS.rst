@@ -4,6 +4,7 @@ Change Logs
 0.6.1
 +++++
 
+* :pr:`120`: enables TorchOnnxEvaluator in command line ``python -m onnx_diagnostic validate ...``
 * :pr:`115`, :pr:`116`, :pr:`117`, :pr:`118`, :pr:`119`:
   first steps for TorchOnnxEvaluator
 * :pr:`114`: extends the list of known rewritings

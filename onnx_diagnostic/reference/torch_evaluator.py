@@ -58,7 +58,7 @@ class TorchOnnxEvaluator:
 
     The class is not multithreaded. `runtime_info` gets updated
     by the the class. The list of available kernels is returned by function
-    :func:`get_kernels`.
+    :func:`onnx_diagnostic.reference.torch_evaluator.get_kernels`.
     """
 
     def __init__(
