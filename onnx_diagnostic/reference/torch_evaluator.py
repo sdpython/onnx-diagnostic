@@ -43,6 +43,7 @@ class TorchOnnxEvaluator:
     :param proto: a proto
     :param providers: where to run the model
     :param opsets: needed if proto is a graph
+    :param functions: known local functions
 
     The class holds the following attributes:
 
@@ -66,10 +67,12 @@ class TorchOnnxEvaluator:
         proto: Union[onnx.FunctionProto, onnx.GraphProto, onnx.ModelProto],
         providers: Tuple[str, ...] = ("CPUExecutionProvider",),
         opsets: Optional[Dict[str, int]] = None,
+        local_functions: Optional[Dict[Tuple[str, str], "TorchOnnxEvaluator"]] = None,
     ):
         self.providers = providers
         self.constants: Dict[str, torch.Tensor] = {}
         self.kernels: List[Optional[torch_ops.OpRun]] = []
+        self.functions = local_functions.copy() if local_functions else {}
         self.CPU = torch.tensor([0]).to("cpu").device
         if "CUDAExecutionProvider" in providers:
             self.CUDA = torch.tensor([0]).to("cuda").device
@@ -83,6 +86,10 @@ class TorchOnnxEvaluator:
             assert opsets is None, "proto is a model, opsets must be None in that case"
             assert not proto.graph.sparse_initializer, "sparse_initializer not support yet"
             self.opsets = {d.domain: d.version for d in proto.opset_import}
+            for f in proto.functions:
+                self.functions[f.domain, f.name] = TorchOnnxEvaluator(
+                    f, providers=providers, local_functions=self.functions
+                )
             self._build_initializers(proto.graph.initializer)
             self._build_initializers(proto.graph.node)
             self._build_kernels(proto.graph.node)
@@ -138,24 +145,33 @@ class TorchOnnxEvaluator:
         kernels = get_kernels()
         self.kernels.clear()
         for node in nodes:
+            if (node.domain, node.op_type) in self.functions:
+                kernel = torch_ops.OpRunFunction(
+                    self.functions[node.domain, node.op_type], node, self.opsets[node.domain]
+                )
+                self.kernels.append(kernel)
+                continue
+
             if node.op_type == "Constant" and node.domain == "":
                 # Treated as a constant.
                 self.kernels.append(None)
                 continue
+
             opset = self.opsets[node.domain]
             key = node.domain, node.op_type, opset
             while key not in kernels and opset > 0:
                 opset -= 1
                 key = node.domain, node.op_type, opset
-            assert (
-                key in kernels
-            ), f"Missing kernel for node type {node.op_type!r} from domain {node.domain!r}"
+            assert key in kernels, (
+                f"Missing kernel for node type {node.op_type!r} from domain {node.domain!r}, "
+                f"local functions={sorted(self.functions)}"
+            )
             cls = kernels[key]
             if cls.device_dependent():
-                kernel = cls(node, opset, self.default_device)  # type: ignore[call-arg]
+                kernel2: torch_ops.OpRun = cls(node, opset, self.default_device)  # type: ignore[call-arg]
             else:
-                kernel = cls(node, opset)
-            self.kernels.append(kernel)
+                kernel2 = cls(node, opset)  # type: ignore[assignment]
+            self.kernels.append(kernel2)
 
     def run(
         self,
@@ -165,7 +181,7 @@ class TorchOnnxEvaluator:
         """
         Runs the ONNX model.
 
-        :param outputs: outputs required:
+        :param outputs: outputs required
         :param feeds: inputs
         :return: output tensors.
         """
@@ -218,7 +234,10 @@ class TorchOnnxEvaluator:
             for name in self.last_used[it]:
                 self.runtime_info[name].clean_value()
 
-        res = [self.runtime_info[o].value.tensor for o in outputs]  # type: ignore[assignment, union-attr]
+        assert all(
+            self.runtime_info[o].value is not None for o in outputs
+        ), "Not implemented yet when one output is None."
+        fres = [self.runtime_info[o].value.tensor for o in outputs]  # type: ignore[union-attr]
 
         # clean previous execution
         for k in feeds:
@@ -227,5 +246,71 @@ class TorchOnnxEvaluator:
             self.runtime_info[o].clean_value()
 
         if use_numpy:
-            return [None if a is None else a.detach().cpu().numpy() for a in res]  # type: ignore[union-attr]
-        return res  # type: ignore[return-value]
+            return [None if a is None else a.detach().cpu().numpy() for a in fres]
+        return fres
+
+    def run_with_values(
+        self, *args: Optional[torch_ops.OpRunValue]
+    ) -> Union[torch_ops.OpRunValue, Tuple[torch_ops.OpRunValue, ...]]:
+        """
+        Runs the ONNX model.
+
+        :param args: inputs
+        :return: output OpRunValue
+        """
+        assert all(
+            isinstance(a, torch_ops.OpRunValue) for a in args
+        ), f"Unexpected type in args: {[type(a) for a in args]}"
+        outputs = self.output_names
+
+        # sets constants
+        for k, v in self.constants.items():
+            r = self.runtime_info[k]
+            if not r.has_value:
+                r.set_value(
+                    torch_ops.OpRunValue(
+                        v.to(self.CUDA) if r.is_shape and self.on_cuda else v, True
+                    )
+                )
+
+        # inputs
+        for k, v in zip(self.input_names, args):
+            r = self.runtime_info[k]
+            r.set_value(torch_ops.OpRunValue(None if v is None else v.tensor))
+
+        # node execution
+        for it, kernel in enumerate(self.kernels):
+            if kernel is not None:
+                # kernel execution
+                inputs = [(self.runtime_info[i].value if i else None) for i in kernel.input]
+                res = kernel.run(*inputs)
+                if isinstance(res, tuple):
+                    # outputs
+                    assert all(isinstance(o, torch_ops.OpRunValue) for o in res), (
+                        f"Unexpected output type {[type(o) for o in res]} "
+                        f"for kernel {type(kernel)}."
+                    )
+                    for name, t in zip(kernel.output, res):
+                        self.runtime_info[name].set_value(t)
+                else:
+                    assert isinstance(
+                        res, torch_ops.OpRunValue
+                    ), f"Unexpected output type {type(res)} for kernel {type(kernel)}."
+                    self.runtime_info[kernel.output[0]].set_value(res)
+
+            # free intermediate results
+            for name in self.last_used[it]:
+                self.runtime_info[name].clean_value()
+
+        assert all(
+            self.runtime_info[o].value is not None for o in outputs
+        ), "Not implemented yet when one output is None."
+        res2 = [torch_ops.OpRunValue(self.runtime_info[o].value.tensor) for o in outputs]  # type: ignore[assignment, union-attr]
+
+        # clean previous execution
+        for k in self.input_names:
+            self.runtime_info[k].clean_value()
+        for o in self.output_names:
+            self.runtime_info[o].clean_value()
+
+        return res2[0] if len(res2) == 1 else tuple(res2)  # type: ignore[index, return-value, arg-type]

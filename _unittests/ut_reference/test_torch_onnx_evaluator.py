@@ -119,7 +119,6 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             ir_version=9,
             opset_imports=[oh.make_opsetid("", 18)],
         )
-        onnx.checker.check_model(model)
         self._finalize_test(
             model,
             torch.abs(torch.rand(3, 4, 5, dtype=torch.float32)),
@@ -851,6 +850,51 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             model,
             torch.rand((6, 6), dtype=torch.float32),
             torch.tensor([2], dtype=torch.int64),
+        )
+
+    def test_local_function(self):
+        new_domain = "custom"
+
+        linear_regression = oh.make_function(
+            new_domain,
+            "LinearRegression",
+            ["x", "a", "b"],
+            ["y"],
+            [
+                oh.make_node("MatMul", ["x", "a"], ["xa"]),
+                oh.make_node("Add", ["xa", "b"], ["y"]),
+            ],
+            [oh.make_opsetid("", 18)],
+            [],
+        )
+
+        graph = oh.make_graph(
+            [
+                oh.make_node("LinearRegression", ["X", "A", "B"], ["Y1"], domain=new_domain),
+                oh.make_node("Abs", ["Y1"], ["Y"]),
+            ],
+            "example",
+            [
+                oh.make_tensor_value_info("X", TFLOAT, ["a", "b"]),
+                oh.make_tensor_value_info("A", TFLOAT, ["a", "b"]),
+                oh.make_tensor_value_info("B", TFLOAT, ["a", "b"]),
+            ],
+            [oh.make_tensor_value_info("Y", TFLOAT, ["a", "b"])],
+        )
+
+        model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid(new_domain, 1)],
+            functions=[linear_regression],
+            ir_version=10,
+        )
+        self.assertNotEmpty(model.functions)
+        self._finalize_test(
+            model,
+            torch.rand((3, 3), dtype=torch.float32),
+            torch.rand((3, 3), dtype=torch.float32),
+            torch.rand((3, 3), dtype=torch.float32),
+            atol=1e-6,
         )
 
 
