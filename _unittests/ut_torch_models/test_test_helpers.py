@@ -174,7 +174,7 @@ class TestTestHelper(ExtTestCase):
             mid,
             do_run=True,
             verbose=10,
-            exporter="custom",
+            exporter="custom-inline",
             dump_folder="dump_test_validate_model_custom_torch",
             patch=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,

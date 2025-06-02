@@ -1260,6 +1260,13 @@ def call_torch_export_custom(
         "custom-nostrict",
         "custom-nostrict-default",
         "custom-nostrict-all",
+        "custom-inline",
+        "custom-strict-inline",
+        "custom-strict-default-inline",
+        "custom-strict-all-inline",
+        "custom-nostrict-inline",
+        "custom-nostrict-default-inline",
+        "custom-nostrict-all-inline",
     }
     assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
@@ -1300,6 +1307,10 @@ def call_torch_export_custom(
         ),
         save_ep=(os.path.join(dump_folder, f"{exporter}.ep") if dump_folder else None),
     )
+    inline = "-inline" in exporter
+    if inline:
+        export_options.aten_as_function = set()
+
     options = OptimizationOptions(patterns=optimization) if optimization else None
     model = data["model"]
     kws = dict(
@@ -1310,6 +1321,7 @@ def call_torch_export_custom(
         large_model=True,
         return_optimize_report=True,
         verbose=max(verbose - 2, 0),
+        inline=inline,
     )
     if opset:
         kws["target_opset"] = opset

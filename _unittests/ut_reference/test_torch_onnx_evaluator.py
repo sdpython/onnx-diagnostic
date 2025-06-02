@@ -722,6 +722,20 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         onnx.checker.check_model(model)
         self._finalize_test(model, torch.abs(torch.rand(3, 4, dtype=torch.float32)), atol=1e-6)
 
+    def test_op_sigmoid_op(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Sigmoid", ["X"], ["Z"])],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(model, torch.abs(torch.rand(3, 4, dtype=torch.float32)), atol=1e-6)
+
     def test_op_split_op(self):
         model = oh.make_model(
             oh.make_graph(

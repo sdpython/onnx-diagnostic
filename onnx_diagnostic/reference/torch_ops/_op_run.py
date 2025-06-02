@@ -1,5 +1,6 @@
 from typing import Optional, Union, Tuple
 import onnx
+from ...helpers import string_type
 
 
 class OpRunValue:
@@ -17,13 +18,22 @@ class OpRunValue:
         self.is_constant = is_constant
         self.cached = None
 
+    def __repr__(self) -> str:
+        "usual"
+        if self.is_constant:
+            return (
+                f"{self.__class__.__name__}"
+                f"({string_type(self.tensor, with_shape=True)}, is_constant=True)"
+            )
+        return f"{self.__class__.__name__}({string_type(self.tensor, with_shape=True)})"
+
     @property
-    def shape(self):
+    def shape(self) -> "Shape":  # noqa: F821
         "shape"
         return self.tensor.shape
 
     @property
-    def dtype(self):
+    def dtype(self) -> "torch.dtype":  # noqa: F821
         "dtype"
         return self.tensor.dtype
 
@@ -31,10 +41,10 @@ class OpRunValue:
         return tuple(map(int, self.tensor))
 
     @property
-    def as_tuple_int(self):
+    def as_tuple_int(self) -> Tuple[int, ...]:
         "value as int"
         if self.is_constant:
-            if self.cached is not None:
+            if self.cached is None:
                 self.cached = self._tensor_as_tuple_int()
             return self.cached
         return self._tensor_as_tuple_int()

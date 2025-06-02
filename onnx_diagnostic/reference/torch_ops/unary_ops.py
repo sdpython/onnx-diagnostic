@@ -1,3 +1,4 @@
+import torch
 from . import OpRun, OpRunValue
 
 
@@ -41,6 +42,13 @@ class Reciprocal_1(OpRun):
 
     def run(self, x: OpRunValue) -> OpRunValue:
         return OpRunValue(1 / x.tensor)
+
+
+class Sigmoid_6(OpRun):
+    """Sqrt"""
+
+    def run(self, x: OpRunValue) -> OpRunValue:
+        return OpRunValue(torch.sigmoid(x.tensor))
 
 
 class Sin_1(OpRun):

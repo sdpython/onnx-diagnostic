@@ -1,5 +1,6 @@
 import functools
 from typing import Dict, List, Optional, Sequence, Tuple, Union
+import numpy as np
 import onnx
 import torch
 from ..helpers.torch_helper import to_tensor
@@ -136,7 +137,7 @@ class TorchOnnxEvaluator:
             self.kernels.append(kernels[key](node, opset))
 
     def run(
-        self, outputs: Optional[List[str]], feeds: Dict[str, torch.Tensor]
+        self, outputs: Optional[List[str]], feeds: Dict[str, Union[torch.Tensor, np.ndarray]]
     ) -> List[Optional[torch.Tensor]]:
         """
         Runs the ONNX model.
@@ -145,6 +146,9 @@ class TorchOnnxEvaluator:
         :param feeds: inputs
         :return: output tensors.
         """
+        use_numpy = any(isinstance(t, np.ndarray) for t in feeds.values())
+        if use_numpy:
+            feeds = {k: torch.from_numpy(v) for k, v in feeds.items()}
         if outputs is None:
             outputs = self.output_names
 
@@ -199,4 +203,6 @@ class TorchOnnxEvaluator:
         for o in outputs:
             self.runtime_info[o].clean_value()
 
+        if use_numpy:
+            return [r.detach().cpu().numpy() for r in res]
         return res  # type: ignore[return-value]

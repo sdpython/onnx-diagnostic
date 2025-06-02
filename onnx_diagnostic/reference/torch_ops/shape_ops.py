@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 import onnx
 import torch
 from . import OpRun, OpRunValue
@@ -21,6 +21,7 @@ class Reshape_14(OpRun):
 
     def run(self, data: OpRunValue, shape: OpRunValue) -> OpRunValue:
         ishape = shape.as_tuple_int
+        assert ishape is not None, f"Unexpected return for shape={shape!r}"
         if not self.allowzero and 0 in ishape:
             xshape = data.tensor.shape
             new_shape = []
@@ -48,11 +49,13 @@ class Split_18(OpRun):
         self.axis = self.get_attribute_int(node, "axis", 0)
         self.num_outputs = self.get_attribute_int(node, "num_outputs", None)
 
-    def run(self, data: OpRunValue, split: Optional[OpRunValue] = None) -> OpRunValue:
+    def run(
+        self, data: OpRunValue, split: Optional[OpRunValue] = None
+    ) -> Tuple[OpRunValue, ...]:
         if split is None:
             assert isinstance(
                 self.num_outputs, int
-            ), f"Incompatibilies: split is None and num_outputs={self.num_outputs}"
+            ), f"Incompatibilities: split is None and num_outputs={self.num_outputs}"
             size = data.tensor.shape[self.axis]
             split_size = (
                 size // self.num_outputs
@@ -68,7 +71,9 @@ class Split_18(OpRun):
 class Squeeze_13(OpRun):
     "Squeeze"
 
-    def run(self, data: OpRunValue, axes: OpRunValue) -> OpRunValue:
+    def run(self, data: OpRunValue, axes: Optional[OpRunValue] = None) -> OpRunValue:
+        if axes is None:
+            return OpRunValue(data.tensor.squeeze())
         return OpRunValue(data.tensor.squeeze(axes.as_tuple_int))
 
 

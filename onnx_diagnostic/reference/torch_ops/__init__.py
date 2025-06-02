@@ -19,4 +19,14 @@ from .nn_ops import LayerNormalization_17, Softmax_13, Tanh_6
 from .other_ops import Cast_6, Concat_1, Transpose_1, Where_9
 from .reduce_ops import ReduceMax_18, ReduceMean_18, ReduceMin_18, ReduceSum_18
 from .shape_ops import Expand_8, Reshape_14, Shape_15, Squeeze_13, Split_18, Unsqueeze_13
-from .unary_ops import Cos_1, Exp_1, Log_1, Neg_1, Not_1, Reciprocal_1, Sin_1, Sqrt_1
+from .unary_ops import (
+    Cos_1,
+    Exp_1,
+    Log_1,
+    Neg_1,
+    Not_1,
+    Reciprocal_1,
+    Sigmoid_6,
+    Sin_1,
+    Sqrt_1,
+)

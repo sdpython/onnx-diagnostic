@@ -55,7 +55,11 @@ def make_feeds(
     names = (
         [i.name for i in proto.graph.input]
         if isinstance(proto, onnx.ModelProto)
-        else ([i.name for i in proto.get_inputs()] if hasattr(proto, "get_inputs") else proto)
+        else (
+            [i.name for i in proto.get_inputs()]
+            if hasattr(proto, "get_inputs")
+            else (proto.input_names if hasattr(proto, "input_names") else proto)
+        )
     )
     assert (
         isinstance(names, list)
