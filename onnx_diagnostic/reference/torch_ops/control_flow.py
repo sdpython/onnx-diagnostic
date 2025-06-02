@@ -15,7 +15,7 @@ class OpRunControlFlow(OpRun):
         self,
         node: onnx.NodeProto,
         version: Optional[int] = None,
-        parent: Optional["TorchOnnxEvaluator"] = None,  # noqa: F821
+        parent: Optional["onnx_diagnostic.reference.TorchOnnxEvaluator"] = None,  # noqa: F821
     ):
         super().__init__(node, version)
         assert (
@@ -36,5 +36,5 @@ class If_1(OpRunControlFlow):
     "If"
 
     def run(self, cond, context: Optional[Dict[str, Any]] = None):
-        rt = self.then_branch if cond.tensor.item() else self.else_branch
+        rt = self.then_branch if cond.tensor.item() else self.else_branch  # type: ignore[attr-defined]
         return rt.run_with_values(context=context)

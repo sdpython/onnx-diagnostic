@@ -219,7 +219,7 @@ class TorchOnnxEvaluator:
                 # kernel execution
                 inputs = [(self.runtime_info[i].value if i else None) for i in kernel.input]
                 if kernel.has_subgraphs():
-                    res = kernel.run(*inputs, context=self.runtime_info)
+                    res = kernel.run(*inputs, context=self.runtime_info)  # type: ignore[call-arg]
                 else:
                     res = kernel.run(*inputs)
                 if isinstance(res, tuple):
@@ -271,6 +271,7 @@ class TorchOnnxEvaluator:
             isinstance(a, torch_ops.OpRunValue) for a in args
         ), f"Unexpected type in args: {[type(a) for a in args]}"
         outputs = self.output_names
+        context = context or {}
 
         # sets constants
         for k, v in self.constants.items():
