@@ -206,5 +206,5 @@ class TorchOnnxEvaluator:
             self.runtime_info[o].clean_value()
 
         if use_numpy:
-            return [None if r is None else r.detach().cpu().numpy() for r in res]
+            return [None if a is None else a.detach().cpu().numpy() for a in res]
         return res  # type: ignore[return-value]
