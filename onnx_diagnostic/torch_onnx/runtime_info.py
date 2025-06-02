@@ -114,6 +114,11 @@ class RuntimeValue:
         return self.kind == RuntimeValueKind.OUTPUT
 
     @property
+    def is_input(self) -> bool:
+        "Tells if it is an input."
+        return self.kind == RuntimeValueKind.INPUT
+
+    @property
     def is_initializer(self) -> bool:
         "Tells if it is an initializer."
         return self.kind == RuntimeValueKind.INITIALIZER

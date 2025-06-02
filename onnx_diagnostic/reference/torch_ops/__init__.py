@@ -33,6 +33,7 @@ from .unary_ops import (
     Abs_1,
     Cos_1,
     Exp_1,
+    Identity_1,
     Log_1,
     Neg_1,
     Not_1,
