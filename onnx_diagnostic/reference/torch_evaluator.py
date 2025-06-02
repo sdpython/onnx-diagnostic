@@ -168,7 +168,7 @@ class TorchOnnxEvaluator:
             )
             cls = kernels[key]
             if cls.device_dependent():
-                kernel = cls(node, opset, self.default_device)  # type: ignore[call-arg]
+                kernel: torch_ops.OpRun = cls(node, opset, self.default_device)  # type: ignore[call-arg]
             else:
                 kernel = cls(node, opset)
             self.kernels.append(kernel)
@@ -234,7 +234,7 @@ class TorchOnnxEvaluator:
             for name in self.last_used[it]:
                 self.runtime_info[name].clean_value()
 
-        res = [self.runtime_info[o].value.tensor for o in outputs]  # type: ignore[assignment, union-attr]
+        fres = [self.runtime_info[o].value.tensor for o in outputs]
 
         # clean previous execution
         for k in feeds:
@@ -243,8 +243,8 @@ class TorchOnnxEvaluator:
             self.runtime_info[o].clean_value()
 
         if use_numpy:
-            return [None if a is None else a.detach().cpu().numpy() for a in res]  # type: ignore[union-attr]
-        return res  # type: ignore[return-value]
+            return [None if a is None else a.detach().cpu().numpy() for a in fres]
+        return fres
 
     def run_with_values(
         self, *args: Optional[torch_ops.OpRunValue]
@@ -273,7 +273,7 @@ class TorchOnnxEvaluator:
         # inputs
         for k, v in zip(self.input_names, args):
             r = self.runtime_info[k]
-            r.set_value(torch_ops.OpRunValue(v.tensor))
+            r.set_value(torch_ops.OpRunValue(None if v is None else v.tensor))
 
         # node execution
         for it, kernel in enumerate(self.kernels):

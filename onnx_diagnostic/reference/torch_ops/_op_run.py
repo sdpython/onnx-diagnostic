@@ -90,7 +90,9 @@ class OpRun:
             )
         return f"{self.op_type}({', '.join(self.input)}) -> {', '.join(self.output)}"
 
-    def run(self, *args: OpRunValue) -> Union[OpRunValue, Tuple[OpRunValue, ...]]:
+    def run(
+        self, *args: Optional[OpRunValue]
+    ) -> Union[OpRunValue, Tuple[Optional[OpRunValue], ...]]:
         "Kernel implementation."
         raise NotImplementedError(
             f"Method run is not implemented for kernel {self.__class__.__name__!r}"
@@ -166,7 +168,7 @@ class OpRunFunction(OpRun):
 
     def __init__(
         self,
-        runtime: "TorchOnnxEvaluator",  # noqa: F821
+        runtime: "onnx_diagnostic.reference.TorchOnnxEvaluator",  # noqa: F821
         node: onnx.NodeProto,
         version: Optional[int] = None,
     ):
@@ -174,5 +176,7 @@ class OpRunFunction(OpRun):
         self.runtime = runtime
         self.input_names = runtime.input_names
 
-    def run(self, *args: OpRunValue) -> Union[OpRunValue, Tuple[OpRunValue, ...]]:
+    def run(
+        self, *args: Optional[OpRunValue]
+    ) -> Union[OpRunValue, Tuple[Optional[OpRunValue], ...]]:
         return self.runtime.run_with_values(*args)
