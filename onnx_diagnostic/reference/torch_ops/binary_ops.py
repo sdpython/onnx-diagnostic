@@ -1,3 +1,4 @@
+import torch
 from . import OpRun, OpRunValue
 
 
@@ -76,6 +77,13 @@ class Or_1(OpRun):
 
     def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor | y.tensor)
+
+
+class Pow_12(OpRun):
+    """Pow"""
+
+    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+        return OpRunValue(torch.pow(x.tensor, y.tensor))
 
 
 class Sub_1(OpRun):

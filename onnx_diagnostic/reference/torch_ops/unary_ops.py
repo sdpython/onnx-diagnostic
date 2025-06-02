@@ -1,6 +1,27 @@
 from . import OpRun, OpRunValue
 
 
+class Cos_1(OpRun):
+    """Cos"""
+
+    def run(self, x: OpRunValue) -> OpRunValue:
+        return OpRunValue(x.tensor.cos())
+
+
+class Exp_1(OpRun):
+    """Exp"""
+
+    def run(self, x: OpRunValue) -> OpRunValue:
+        return OpRunValue(x.tensor.exp())
+
+
+class Log_1(OpRun):
+    """Log"""
+
+    def run(self, x: OpRunValue) -> OpRunValue:
+        return OpRunValue(x.tensor.log())
+
+
 class Neg_1(OpRun):
     """Neg"""
 
@@ -20,3 +41,17 @@ class Reciprocal_1(OpRun):
 
     def run(self, x: OpRunValue) -> OpRunValue:
         return OpRunValue(1 / x.tensor)
+
+
+class Sin_1(OpRun):
+    """Sin"""
+
+    def run(self, x: OpRunValue) -> OpRunValue:
+        return OpRunValue(x.tensor.sin())
+
+
+class Sqrt_1(OpRun):
+    """Sqrt"""
+
+    def run(self, x: OpRunValue) -> OpRunValue:
+        return OpRunValue(x.tensor.sqrt())

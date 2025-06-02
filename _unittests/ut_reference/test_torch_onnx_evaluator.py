@@ -559,6 +559,212 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             atol=1e-4,
         )
 
+    def test_op_range_float(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Range", ["start", "limit", "delta"], ["Z"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("start", TFLOAT, []),
+                    oh.make_tensor_value_info("limit", TFLOAT, []),
+                    oh.make_tensor_value_info("delta", TFLOAT, []),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.tensor(2.1, dtype=torch.float32),
+            torch.tensor(5.1, dtype=torch.float32),
+            torch.tensor(1, dtype=torch.float32),
+        )
+
+    def test_op_range_int64(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Range", ["start", "limit", "delta"], ["Z"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("start", TINT64, []),
+                    oh.make_tensor_value_info("limit", TINT64, []),
+                    oh.make_tensor_value_info("delta", TINT64, []),
+                ],
+                [oh.make_tensor_value_info("Z", TINT64, ["a"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.tensor(2, dtype=torch.int64),
+            torch.tensor(5, dtype=torch.int64),
+            torch.tensor(1, dtype=torch.int64),
+        )
+
+    def test_op_range_int64_h2(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Range", ["start", "limit", "delta"], ["Z"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("start", TINT64, []),
+                    oh.make_tensor_value_info("limit", TINT64, []),
+                    oh.make_tensor_value_info("delta", TINT64, []),
+                ],
+                [oh.make_tensor_value_info("Z", TINT64, ["a"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.tensor(2, dtype=torch.int64),
+            torch.tensor(5, dtype=torch.int64),
+            torch.tensor(2, dtype=torch.int64),
+        )
+
+    def test_op_expand(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Expand", ["X", "shape"], ["Y"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c", "d"]),
+                    oh.make_tensor_value_info("shape", TINT64, ["f"]),
+                ],
+                [oh.make_tensor_value_info("Y", TFLOAT, ["aa", "ba", "ca", "da"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand((1, 5, 6, 7), dtype=torch.float32),
+            torch.tensor([4, 5, 1, 1], dtype=torch.int64),
+        )
+
+    def test_op_unary_op(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Cos", ["X"], ["nx"]),
+                    oh.make_node("Sin", ["nx"], ["t"]),
+                    oh.make_node("Exp", ["t"], ["u"]),
+                    oh.make_node("Log", ["u"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(model, torch.abs(torch.rand(3, 4, dtype=torch.float32)), atol=1e-6)
+
+    def test_op_pow_op(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Pow", ["X", "Y"], ["Z"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(
+            model,
+            torch.abs(torch.rand(3, 4, 5, dtype=torch.float32)),
+            torch.abs(torch.rand(3, 4, 5, dtype=torch.float32)),
+            atol=1e-7,
+        )
+
+    def test_op_pow_op_int(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Pow", ["X", "Y"], ["Z"])],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b"]),
+                    oh.make_tensor_value_info("Y", TINT64, ["a", "b"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            torch.tensor([2], dtype=torch.int64),
+            atol=1e-7,
+        )
+
+    def test_op_sqrt_op(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Sqrt", ["X"], ["Z"])],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(model, torch.abs(torch.rand(3, 4, dtype=torch.float32)), atol=1e-6)
+
+    def test_op_split_op(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Split", ["X"], ["Z1", "Z2"], axis=1, num_outputs=2)],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [
+                    oh.make_tensor_value_info("Z1", TFLOAT, ["a", "b1"]),
+                    oh.make_tensor_value_info("Z2", TFLOAT, ["a", "b2"]),
+                ],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(model, torch.rand(3, 5, dtype=torch.float32), use_ort=True)
+        self._finalize_test(model, torch.rand(3, 6, dtype=torch.float32), use_ort=True)
+
+    def test_op_split_op_sizes(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Split", ["X", "split"], ["Z1", "Z2"], axis=1)],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, ["a", "b"]),
+                    oh.make_tensor_value_info("split", TINT64, [2]),
+                ],
+                [
+                    oh.make_tensor_value_info("Z1", TFLOAT, ["a", "b1"]),
+                    oh.make_tensor_value_info("Z2", TFLOAT, ["a", "b2"]),
+                ],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(
+            model,
+            torch.rand(3, 5, dtype=torch.float32),
+            torch.tensor([2, 3], dtype=torch.int64),
+            use_ort=True,
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

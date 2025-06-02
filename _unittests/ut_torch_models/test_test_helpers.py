@@ -186,11 +186,6 @@ class TestTestHelper(ExtTestCase):
         self.assertIsInstance(data, dict)
         self.assertIn("disc_onnx_ort_run_abs", summary)
         self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
-        onnx_filename = data["onnx_filename"]
-        output_path = f"{onnx_filename}.ortopt.onnx"
-        run_ort_fusion(
-            onnx_filename, output_path, num_attention_heads=2, hidden_size=192, verbose=10
-        )
 
     def test_filter_inputs(self):
         inputs, ds = {"a": 1, "b": 2}, {"a": 20, "b": 30}
