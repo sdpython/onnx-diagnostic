@@ -49,6 +49,10 @@ module = ["onnx_diagnostic.reference.torch_ops.*"]
 disable_error_code = ["override"]
 
 [[tool.mypy.overrides]]
+module = ["onnx_diagnostic.reference.torch_ops._op_run"]
+disable_error_code = ["name-defined"]
+
+[[tool.mypy.overrides]]
 module = ["onnx_diagnostic.torch_export_patches.*"]
 disable_error_code = ["arg-type", "assignment", "attr-defined", "index", "misc", "name-defined", "operator", "return-value", "union-attr"]
 

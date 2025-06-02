@@ -168,10 +168,10 @@ class TorchOnnxEvaluator:
             )
             cls = kernels[key]
             if cls.device_dependent():
-                kernel: torch_ops.OpRun = cls(node, opset, self.default_device)  # type: ignore[call-arg]
+                kernel2: torch_ops.OpRun = cls(node, opset, self.default_device)  # type: ignore[call-arg]
             else:
-                kernel = cls(node, opset)
-            self.kernels.append(kernel)
+                kernel2 = cls(node, opset)  # type: ignore[assignment]
+            self.kernels.append(kernel2)
 
     def run(
         self,
@@ -234,6 +234,9 @@ class TorchOnnxEvaluator:
             for name in self.last_used[it]:
                 self.runtime_info[name].clean_value()
 
+        assert all(
+            self.runtime_info[o].value is not None for o in outputs
+        ), "Not implemented yet when one output is None."
         fres = [self.runtime_info[o].value.tensor for o in outputs]
 
         # clean previous execution
@@ -299,6 +302,9 @@ class TorchOnnxEvaluator:
             for name in self.last_used[it]:
                 self.runtime_info[name].clean_value()
 
+        assert all(
+            self.runtime_info[o].value is not None for o in outputs
+        ), "Not implemented yet when one output is None."
         res = [torch_ops.OpRunValue(self.runtime_info[o].value.tensor) for o in outputs]  # type: ignore[assignment, union-attr]
 
         # clean previous execution
