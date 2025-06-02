@@ -80,7 +80,11 @@ class RuntimeValue:
             if v is not None:
                 ad[att] = v
         if self.value is not None:
-            ad["value"] = string_type(self.value, with_shape=True)
+            ad["value"] = (
+                self.value.string_type()
+                if hasattr(self.value, "string_type")
+                else string_type(self.value, with_shape=True)
+            )
         msg = ", ".join(
             f"{name}={t.to_str()}" if hasattr(t, "to_str") else f"{name}={t}"
             for name, t in ad.items()
@@ -92,9 +96,32 @@ class RuntimeValue:
         "Tells if value is specified."
         return self.value is not None
 
+    def string_type(self) -> str:
+        "Returns a string describing the value."
+        rows = []
+        if self.shape is not None:
+            rows.append(f"shape={self.shape}")
+        if self.is_shape is not None:
+            rows.append(f"is_shape={self.is_shape}")
+        if self.device is not None:
+            rows.append(f"device={self.device}")
+        text = f", {', '.join(rows)}" if rows else ""
+        if self.value is None:
+            return (
+                f"RuntimeValue(name={self.name!r}{text}"
+                f", dtype={self.dtype}, kind={self.kind})"
+            )
+        return (
+            f"RuntimeValue(name={self.name!r}, "
+            f"kind={self.kind}{text}, value={self.value.string_type()})"
+        )
+
     def set_value(self, value: torch.Tensor):
         """Sets the value."""
         assert value is not None, "Use clean_value to set a value to None"
+        assert (
+            self.name != "position_ids" or value.get_device() >= 0
+        ), f"{value} - is_shape={self.is_shape}"
         self.value = value
         if self.dtype:
             assert (

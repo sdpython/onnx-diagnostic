@@ -28,6 +28,7 @@ class OpRunControlFlow(OpRun):
                     providers=parent.providers,
                     opsets=parent.opsets,
                     local_functions=parent.functions,
+                    verbose=parent.verbose,
                 )
                 setattr(self, att.name, rt)
 

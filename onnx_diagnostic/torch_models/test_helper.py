@@ -968,7 +968,11 @@ def validate_onnx_model(
             )
         )
         if runtime == "onnxruntime"
-        else (lambda model, providers: TorchOnnxEvaluator(model, providers=providers))
+        else (
+            lambda model, providers: TorchOnnxEvaluator(
+                model, providers=providers, verbose=max(verbose - 1, 0)
+            )
+        )
     )
     sess = _quiet_or_not_quiet(
         quiet,
