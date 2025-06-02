@@ -119,9 +119,6 @@ class RuntimeValue:
     def set_value(self, value: torch.Tensor):
         """Sets the value."""
         assert value is not None, "Use clean_value to set a value to None"
-        assert (
-            self.name != "position_ids" or value.get_device() >= 0
-        ), f"{value} - is_shape={self.is_shape}"
         self.value = value
         if self.dtype:
             assert (

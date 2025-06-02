@@ -64,6 +64,14 @@ class TorchOnnxEvaluator:
     :func:`onnx_diagnostic.reference.torch_evaluator.get_kernels`.
     """
 
+    class IO:
+        "IO"
+
+        def __init__(self, name: str, type: int, shape: Tuple[Union[str, int], ...]):
+            self.name = name
+            self.type = type
+            self.shape = shape
+
     def __init__(
         self,
         proto: Union[onnx.FunctionProto, onnx.GraphProto, onnx.ModelProto],
@@ -103,6 +111,26 @@ class TorchOnnxEvaluator:
             self._build_kernels(proto.graph.node)
             self.input_names = [i.name for i in proto.graph.input]
             self.output_names = [i.name for i in proto.graph.output]
+            self._io_input_names = [
+                self.IO(
+                    name=i.name,
+                    type=i.type.tensor_type.elem_type,
+                    shape=tuple(
+                        d.dim_param or d.dim_value for d in i.type.tensor_type.shape.dim
+                    ),
+                )
+                for i in proto.graph.input
+            ]
+            self._io_output_names = [
+                self.IO(
+                    name=i.name,
+                    type=i.type.tensor_type.elem_type,
+                    shape=tuple(
+                        d.dim_param or d.dim_value for d in i.type.tensor_type.shape.dim
+                    ),
+                )
+                for i in proto.graph.output
+            ]
         elif isinstance(proto, onnx.GraphProto):
             assert opsets, "opsets must be specified if proto is a graph"
             assert not proto.sparse_initializer, "sparse_initializer not support yet"
@@ -134,6 +162,16 @@ class TorchOnnxEvaluator:
                 self.last_used[0].append(name)
             elif not info.is_output and not info.is_initializer:
                 self.last_used[info.last_used].append(name)
+
+    def get_inputs(self):
+        "Same API than onnxruntime."
+        assert hasattr(self, "_io_input_names"), "Missing attribute '_io_input_names'."
+        return self._io_input_names
+
+    def get_outputs(self):
+        "Same API than onnxruntime."
+        assert hasattr(self, "_io_output_names"), "Missing attribute '_io_output_names'."
+        return self._io_output_names
 
     @property
     def on_cuda(self) -> bool:
