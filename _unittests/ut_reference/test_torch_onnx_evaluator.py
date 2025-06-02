@@ -5,6 +5,7 @@ import onnx.helper as oh
 import onnx.numpy_helper as onh
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, TorchOnnxEvaluator
 from onnx_diagnostic.reference.torch_evaluator import get_kernels
 
@@ -645,7 +646,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             torch.tensor([4, 5, 1, 1], dtype=torch.int64),
         )
 
-    def test_op_unary_op(self):
+    def test_op_unary(self):
         model = oh.make_model(
             oh.make_graph(
                 [
@@ -664,7 +665,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         onnx.checker.check_model(model)
         self._finalize_test(model, torch.abs(torch.rand(3, 4, dtype=torch.float32)), atol=1e-6)
 
-    def test_op_pow_op(self):
+    def test_op_pow(self):
         model = oh.make_model(
             oh.make_graph(
                 [oh.make_node("Pow", ["X", "Y"], ["Z"])],
@@ -708,7 +709,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             atol=1e-7,
         )
 
-    def test_op_sqrt_op(self):
+    def test_op_sqrt(self):
         model = oh.make_model(
             oh.make_graph(
                 [oh.make_node("Sqrt", ["X"], ["Z"])],
@@ -722,7 +723,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         onnx.checker.check_model(model)
         self._finalize_test(model, torch.abs(torch.rand(3, 4, dtype=torch.float32)), atol=1e-6)
 
-    def test_op_sigmoid_op(self):
+    def test_op_sigmoid(self):
         model = oh.make_model(
             oh.make_graph(
                 [oh.make_node("Sigmoid", ["X"], ["Z"])],
@@ -736,7 +737,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         onnx.checker.check_model(model)
         self._finalize_test(model, torch.abs(torch.rand(3, 4, dtype=torch.float32)), atol=1e-6)
 
-    def test_op_split_op(self):
+    def test_op_split(self):
         model = oh.make_model(
             oh.make_graph(
                 [oh.make_node("Split", ["X"], ["Z1", "Z2"], axis=1, num_outputs=2)],
@@ -778,6 +779,27 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             torch.tensor([2, 3], dtype=torch.int64),
             use_ort=True,
         )
+
+    def test_op_constant_of_shape(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "ConstantOfShape",
+                        ["shape"],
+                        ["Z"],
+                        value=from_array_extended(np.array([2], dtype=np.float16)),
+                    )
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("shape", TINT64, ["a"])],
+                [oh.make_tensor_value_info("Z", onnx.TensorProto.FLOAT16, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        onnx.checker.check_model(model)
+        self._finalize_test(model, torch.tensor([4, 5], dtype=torch.int64))
 
 
 if __name__ == "__main__":

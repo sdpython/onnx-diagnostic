@@ -1,6 +1,8 @@
 from typing import Optional, Union, Tuple
 import onnx
+import torch
 from ...helpers import string_type
+from ...helpers.torch_helper import to_tensor
 
 
 class OpRunValue:
@@ -56,7 +58,17 @@ class OpRun:
     It does not copy the proto.
     """
 
+    @classmethod
+    def device_dependent(cls) -> bool:
+        """
+        Returns True if the kernel needs a device to be efficiently initiliazed.
+        """
+        return False
+
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
+        assert isinstance(
+            node, onnx.NodeProto
+        ), f"node must be a NodeProto but node is {type(node)}"
         self.op_type = node.op_type
         self.domain = node.domain
         self.input = node.input
@@ -122,7 +134,7 @@ class OpRun:
         self, node: onnx.NodeProto, name: str, default_value: Optional[Tuple[int, ...]] = None
     ) -> Optional[Tuple[int, ...]]:
         """
-        Returns an attribute as an int.
+        Returns an attribute as a tuple of ints.
 
         :param node: NodeProto
         :param name: name
@@ -131,3 +143,17 @@ class OpRun:
         """
         att = self._find_attribute(node, name)
         return default_value if att is None else tuple(att.ints)
+
+    def get_attribute_tensor(self, node: onnx.NodeProto, name: str) -> Optional[torch.Tensor]:
+        """
+        Returns an attribute as a torch tensor.
+
+        :param node: NodeProto
+        :param name: name
+        :param default_value: default_value
+        :return: value
+        """
+        att = self._find_attribute(node, name)
+        if att is None:
+            return None
+        return to_tensor(att.t)

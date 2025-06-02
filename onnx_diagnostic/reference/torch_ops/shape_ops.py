@@ -4,6 +4,39 @@ import torch
 from . import OpRun, OpRunValue
 
 
+class ConstantOfShape_9(OpRun):
+    "ConstantOfShape"
+
+    @classmethod
+    def device_dependent(cls) -> bool:
+        """
+        Returns True if the kernel needs a device to be efficiently initiliazed.
+        """
+        return True
+
+    def __init__(
+        self,
+        node: onnx.NodeProto,
+        version: Optional[int] = None,
+        device: Optional[torch.device] = None,
+    ):
+        super().__init__(node, version)
+        value = self.get_attribute_tensor(node, "value")
+        if value is None:
+            value = torch.tensor([0], dtype=torch.float32)
+        self.dtype = value.dtype
+        self.device = device
+        self.value = value[0]
+
+    def run(self, shape: OpRunValue) -> OpRunValue:
+        # The device is unknown as shapes usually take place on CPU.
+        return OpRunValue(
+            torch.full(
+                shape.as_tuple_int, fill_value=self.value, dtype=self.dtype, device=self.device
+            )
+        )
+
+
 class Expand_8(OpRun):
     "Expand"
 

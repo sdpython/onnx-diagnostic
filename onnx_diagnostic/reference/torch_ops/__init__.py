@@ -18,7 +18,15 @@ from .generator_ops import Range_11
 from .nn_ops import LayerNormalization_17, Softmax_13, Tanh_6
 from .other_ops import Cast_6, Concat_1, Transpose_1, Where_9
 from .reduce_ops import ReduceMax_18, ReduceMean_18, ReduceMin_18, ReduceSum_18
-from .shape_ops import Expand_8, Reshape_14, Shape_15, Squeeze_13, Split_18, Unsqueeze_13
+from .shape_ops import (
+    ConstantOfShape_9,
+    Expand_8,
+    Reshape_14,
+    Shape_15,
+    Squeeze_13,
+    Split_18,
+    Unsqueeze_13,
+)
 from .unary_ops import (
     Cos_1,
     Exp_1,
