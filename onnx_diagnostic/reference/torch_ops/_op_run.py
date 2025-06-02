@@ -1,4 +1,4 @@
-from typing import Optional, Union, Tuple
+from typing import Any, Optional, Union, Tuple
 import onnx
 import torch
 from ...helpers import string_type
@@ -11,14 +11,35 @@ class OpRunValue:
 
     :param tensor: torch.Tensor
     :param is_constant: is it a constant
+    :param may_cpu: change the device the tensor is if
+        more appropriate
     """
 
     __slots__ = ("cached", "is_constant", "tensor")
 
-    def __init__(self, tensor, is_constant: bool = False):
-        self.tensor = tensor
+    def __init__(self, tensor, is_constant: bool = False, may_cpu: bool = False):
+        self.tensor = (
+            tensor.cpu()
+            if may_cpu
+            and len(tensor.shape) == 1
+            and tensor.numel() < 8
+            and tensor.dtype == torch.int64
+            and tensor.get_device() >= 0
+            else tensor
+        )
         self.is_constant = is_constant
         self.cached: Optional[Tuple[int, ...]] = None
+
+    def to(self, to: Any) -> "OpRunValue":
+        "Changes the device."
+        return OpRunValue(self.tensor.to(to))
+
+    def string_type(self) -> str:
+        "Returns information about the value as a string."
+        s = string_type(self.tensor, with_shape=True, with_min_max=True, with_device=True)
+        if self.is_constant:
+            return f"CST({s})"
+        return s
 
     def __repr__(self) -> str:
         "usual"
@@ -42,6 +63,19 @@ class OpRunValue:
     def _tensor_as_tuple_int(self) -> Tuple[int, ...]:
         return tuple(map(int, self.tensor))
 
+    def numel(self) -> int:
+        "Returns the number of elements."
+        return 0 if self.tensor is None else self.tensor.numel()
+
+    def get_device(self) -> int:
+        "Returns the device id."
+        return -1 if self.tensor is None else self.tensor.get_device()
+
+    @property
+    def device(self):
+        "Returns the device."
+        return -1 if self.tensor is None else self.tensor.device
+
     @property
     def as_tuple_int(self) -> Tuple[int, ...]:
         "value as int"
@@ -63,6 +97,11 @@ class OpRun:
         """
         Returns True if the kernel needs a device to be efficiently initialized.
         """
+        return False
+
+    @classmethod
+    def has_subgraphs(cls) -> bool:
+        """Returns True if the kernel has subgraphs."""
         return False
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):

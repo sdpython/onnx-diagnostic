@@ -4,7 +4,7 @@ import numpy as np
 import onnx
 import torch
 from ..helpers.torch_helper import to_tensor
-from ..torch_onnx.runtime_info import first_used_last_used
+from ..torch_onnx.runtime_info import first_used_last_used, RuntimeValue
 from . import torch_ops
 
 
@@ -44,6 +44,7 @@ class TorchOnnxEvaluator:
     :param providers: where to run the model
     :param opsets: needed if proto is a graph
     :param functions: known local functions
+    :param verbose: verbosity level
 
     The class holds the following attributes:
 
@@ -56,11 +57,20 @@ class TorchOnnxEvaluator:
     * `last_used`: contains the list of intermediate results,
        to remove after every node execution,
        this avoid the memory to grow too much
+    * `functions`: local functions
 
     The class is not multithreaded. `runtime_info` gets updated
     by the the class. The list of available kernels is returned by function
     :func:`onnx_diagnostic.reference.torch_evaluator.get_kernels`.
     """
+
+    class IO:
+        "IO"
+
+        def __init__(self, name: str, type: int, shape: Tuple[Union[str, int], ...]):
+            self.name = name
+            self.type = type
+            self.shape = shape
 
     def __init__(
         self,
@@ -68,17 +78,20 @@ class TorchOnnxEvaluator:
         providers: Tuple[str, ...] = ("CPUExecutionProvider",),
         opsets: Optional[Dict[str, int]] = None,
         local_functions: Optional[Dict[Tuple[str, str], "TorchOnnxEvaluator"]] = None,
+        verbose: int = 0,
     ):
         self.providers = providers
         self.constants: Dict[str, torch.Tensor] = {}
         self.kernels: List[Optional[torch_ops.OpRun]] = []
         self.functions = local_functions.copy() if local_functions else {}
         self.CPU = torch.tensor([0]).to("cpu").device
+        self.verbose = verbose
         if "CUDAExecutionProvider" in providers:
             self.CUDA = torch.tensor([0]).to("cuda").device
             self.default_device = self.CUDA
         else:
             self.default_device = self.CPU
+            self.CUDA = None
 
         if isinstance(proto, str):
             proto = onnx.load(proto)
@@ -87,21 +100,44 @@ class TorchOnnxEvaluator:
             assert not proto.graph.sparse_initializer, "sparse_initializer not support yet"
             self.opsets = {d.domain: d.version for d in proto.opset_import}
             for f in proto.functions:
-                self.functions[f.domain, f.name] = TorchOnnxEvaluator(
-                    f, providers=providers, local_functions=self.functions
+                self.functions[f.domain, f.name] = self.__class__(
+                    f,
+                    providers=providers,
+                    local_functions=self.functions,
+                    verbose=self.verbose,
                 )
             self._build_initializers(proto.graph.initializer)
             self._build_initializers(proto.graph.node)
             self._build_kernels(proto.graph.node)
             self.input_names = [i.name for i in proto.graph.input]
             self.output_names = [i.name for i in proto.graph.output]
+            self._io_input_names = [
+                self.IO(
+                    name=i.name,
+                    type=i.type.tensor_type.elem_type,
+                    shape=tuple(
+                        d.dim_param or d.dim_value for d in i.type.tensor_type.shape.dim
+                    ),
+                )
+                for i in proto.graph.input
+            ]
+            self._io_output_names = [
+                self.IO(
+                    name=i.name,
+                    type=i.type.tensor_type.elem_type,
+                    shape=tuple(
+                        d.dim_param or d.dim_value for d in i.type.tensor_type.shape.dim
+                    ),
+                )
+                for i in proto.graph.output
+            ]
         elif isinstance(proto, onnx.GraphProto):
             assert opsets, "opsets must be specified if proto is a graph"
             assert not proto.sparse_initializer, "sparse_initializer not support yet"
             self.opsets = opsets
-            self._build_initializers(proto)
+            self._build_initializers(proto.initializer)
             self._build_initializers(proto.node)
-            self._build_kernels(proto.nodes)
+            self._build_kernels(proto.node)
             self.input_names = [i.name for i in proto.input]
             self.output_names = [i.name for i in proto.output]
         elif isinstance(proto, onnx.FunctionProto):
@@ -117,12 +153,29 @@ class TorchOnnxEvaluator:
         self.runtime_info = first_used_last_used(proto, constant_as_initializer=True)
         self.last_used: List[List[str]] = [[] for _ in self.kernels]
         for name, info in self.runtime_info.items():
-            assert isinstance(info.last_used, int), f"Missing field last_used in {info!r}"
-            if not info.is_output and not info.is_initializer:
+            assert isinstance(info.last_used, int) or info.is_input, (
+                f"Missing field last_used in {info!r}, last_used={info.last_used!r}, "
+                f"This may mean the node is unused and it should be removed."
+            )
+            if info.last_used is None:
+                # Not used.
+                self.last_used[0].append(name)
+            elif not info.is_output and not info.is_initializer:
                 self.last_used[info.last_used].append(name)
+
+    def get_inputs(self):
+        "Same API than onnxruntime."
+        assert hasattr(self, "_io_input_names"), "Missing attribute '_io_input_names'."
+        return self._io_input_names
+
+    def get_outputs(self):
+        "Same API than onnxruntime."
+        assert hasattr(self, "_io_output_names"), "Missing attribute '_io_output_names'."
+        return self._io_output_names
 
     @property
     def on_cuda(self) -> bool:
+        "Tells if the default device is CUDA."
         return self.default_device == self.CUDA
 
     def _build_initializers(self, inits: Sequence[Union[onnx.NodeProto, onnx.TensorProto]]):
@@ -138,6 +191,10 @@ class TorchOnnxEvaluator:
                 for att in init.attribute:
                     if att.name == "value":
                         value = to_tensor(att.t).to(self.default_device)
+                    elif att.name == "value_floats":
+                        value = torch.tensor(list(att.floats), dtype=torch.float32).to(
+                            self.default_device
+                        )
                 assert value is not None, f"No attribute value in node {init}"
                 self.constants[init.output[0]] = value
 
@@ -167,10 +224,9 @@ class TorchOnnxEvaluator:
                 f"local functions={sorted(self.functions)}"
             )
             cls = kernels[key]
-            if cls.device_dependent():
-                kernel2: torch_ops.OpRun = cls(node, opset, self.default_device)  # type: ignore[call-arg]
-            else:
-                kernel2 = cls(node, opset)  # type: ignore[assignment]
+            ags = [self.default_device] if cls.device_dependent() else []
+            kws = dict(parent=self) if cls.has_subgraphs() else {}
+            kernel2 = cls(node, opset, *ags, **kws)
             self.kernels.append(kernel2)
 
     def run(
@@ -197,25 +253,42 @@ class TorchOnnxEvaluator:
             if not r.has_value:
                 r.set_value(
                     torch_ops.OpRunValue(
-                        v.to(self.CUDA) if r.is_shape and self.on_cuda else v, True
+                        v.to(self.CUDA) if not r.is_shape and self.on_cuda else v,
+                        is_constant=True,
+                        may_cpu=len(v.shape) == 1 and v.numel() < 8 and v.dtype == torch.int64,
                     )
                 )
+            if self.verbose:
+                print(f"+C {r.name}: {r.string_type()}")
 
         # inputs
         for k, v in feeds.items():
             r = self.runtime_info[k]
             r.set_value(
                 torch_ops.OpRunValue(
-                    v.to(self.CUDA) if r.is_shape and self.on_cuda else v, False
+                    v.to(self.CUDA) if not r.is_shape and self.on_cuda else v,
+                    is_constant=False,
+                    may_cpu=len(v.shape) == 1 and v.numel() < 8 and v.dtype == torch.int64,
                 )
             )
+            if self.verbose:
+                print(f"+I {r.name}: {r.string_type()}")
 
         # node execution
         for it, kernel in enumerate(self.kernels):
             if kernel is not None:
+                if self.verbose:
+                    print(
+                        f"{kernel.__class__.__name__}"
+                        f"({', '.join(kernel.input)}) -> "
+                        f"{', '.join(kernel.output)}"
+                    )
                 # kernel execution
                 inputs = [(self.runtime_info[i].value if i else None) for i in kernel.input]
-                res = kernel.run(*inputs)
+                if kernel.has_subgraphs():
+                    res = kernel.run(*inputs, context=self.runtime_info)  # type: ignore[call-arg]
+                else:
+                    res = kernel.run(*inputs)
                 if isinstance(res, tuple):
                     # outputs
                     assert all(isinstance(o, torch_ops.OpRunValue) for o in res), (
@@ -224,44 +297,64 @@ class TorchOnnxEvaluator:
                     )
                     for name, t in zip(kernel.output, res):
                         self.runtime_info[name].set_value(t)
+                    if self.verbose:
+                        for name in kernel.output:
+                            print(f"+R {name}: {self.runtime_info[name].string_type()}")
                 else:
                     assert isinstance(
                         res, torch_ops.OpRunValue
                     ), f"Unexpected output type {type(res)} for kernel {type(kernel)}."
                     self.runtime_info[kernel.output[0]].set_value(res)
+                    if self.verbose:
+                        print(
+                            f"+R {kernel.output[0]}: "
+                            f"{self.runtime_info[kernel.output[0]].string_type()}"
+                        )
 
             # free intermediate results
             for name in self.last_used[it]:
                 self.runtime_info[name].clean_value()
+                if self.verbose:
+                    print(f"- clean {name}")
 
         assert all(
             self.runtime_info[o].value is not None for o in outputs
         ), "Not implemented yet when one output is None."
         fres = [self.runtime_info[o].value.tensor for o in outputs]  # type: ignore[union-attr]
+        if self.verbose:
+            print(f"++ outputs {', '.join(outputs)}")
 
         # clean previous execution
         for k in feeds:
             self.runtime_info[k].clean_value()
+            if self.verbose:
+                print(f"- clean {k}")
         for o in outputs:
             self.runtime_info[o].clean_value()
+            if self.verbose:
+                print(f"- clean {o}")
 
         if use_numpy:
             return [None if a is None else a.detach().cpu().numpy() for a in fres]
         return fres
 
     def run_with_values(
-        self, *args: Optional[torch_ops.OpRunValue]
+        self,
+        *args: Optional[torch_ops.OpRunValue],
+        context: Optional[Dict[str, RuntimeValue]] = None,
     ) -> Union[torch_ops.OpRunValue, Tuple[torch_ops.OpRunValue, ...]]:
         """
         Runs the ONNX model.
 
         :param args: inputs
+        :param context: local context for the execution of subgraphs
         :return: output OpRunValue
         """
         assert all(
             isinstance(a, torch_ops.OpRunValue) for a in args
         ), f"Unexpected type in args: {[type(a) for a in args]}"
         outputs = self.output_names
+        context = context or {}
 
         # sets constants
         for k, v in self.constants.items():
@@ -269,7 +362,9 @@ class TorchOnnxEvaluator:
             if not r.has_value:
                 r.set_value(
                     torch_ops.OpRunValue(
-                        v.to(self.CUDA) if r.is_shape and self.on_cuda else v, True
+                        v.to(self.CUDA) if r.is_shape is False and self.on_cuda else v,
+                        is_constant=True,
+                        may_cpu=len(v.shape) == 1 and v.numel() < 8 and v.dtype == torch.int64,
                     )
                 )
 
@@ -282,7 +377,18 @@ class TorchOnnxEvaluator:
         for it, kernel in enumerate(self.kernels):
             if kernel is not None:
                 # kernel execution
-                inputs = [(self.runtime_info[i].value if i else None) for i in kernel.input]
+                inputs = [
+                    (
+                        (
+                            self.runtime_info[i].value
+                            if i in self.runtime_info
+                            else context[i].value
+                        )
+                        if i
+                        else None
+                    )
+                    for i in kernel.input
+                ]
                 res = kernel.run(*inputs)
                 if isinstance(res, tuple):
                     # outputs

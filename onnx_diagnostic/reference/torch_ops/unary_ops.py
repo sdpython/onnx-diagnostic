@@ -23,6 +23,13 @@ class Exp_1(OpRun):
         return OpRunValue(x.tensor.exp())
 
 
+class Identity_1(OpRun):
+    "Identity"
+
+    def run(self, x: OpRunValue) -> OpRunValue:
+        return OpRunValue(x.tensor)
+
+
 class Log_1(OpRun):
     """Log"""
 

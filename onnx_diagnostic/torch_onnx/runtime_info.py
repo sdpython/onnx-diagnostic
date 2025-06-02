@@ -80,7 +80,11 @@ class RuntimeValue:
             if v is not None:
                 ad[att] = v
         if self.value is not None:
-            ad["value"] = string_type(self.value, with_shape=True)
+            ad["value"] = (
+                self.value.string_type()
+                if hasattr(self.value, "string_type")
+                else string_type(self.value, with_shape=True)
+            )
         msg = ", ".join(
             f"{name}={t.to_str()}" if hasattr(t, "to_str") else f"{name}={t}"
             for name, t in ad.items()
@@ -91,6 +95,26 @@ class RuntimeValue:
     def has_value(self) -> bool:
         "Tells if value is specified."
         return self.value is not None
+
+    def string_type(self) -> str:
+        "Returns a string describing the value."
+        rows = []
+        if self.shape is not None:
+            rows.append(f"shape={self.shape}")
+        if self.is_shape is not None:
+            rows.append(f"is_shape={self.is_shape}")
+        if self.device is not None:
+            rows.append(f"device={self.device}")
+        text = f", {', '.join(rows)}" if rows else ""
+        if self.value is None:
+            return (
+                f"RuntimeValue(name={self.name!r}{text}"
+                f", dtype={self.dtype}, kind={self.kind})"
+            )
+        return (
+            f"RuntimeValue(name={self.name!r}, "
+            f"kind={self.kind}{text}, value={self.value.string_type()})"
+        )
 
     def set_value(self, value: torch.Tensor):
         """Sets the value."""
@@ -112,6 +136,11 @@ class RuntimeValue:
     def is_output(self) -> bool:
         "Tells if it is an output."
         return self.kind == RuntimeValueKind.OUTPUT
+
+    @property
+    def is_input(self) -> bool:
+        "Tells if it is an input."
+        return self.kind == RuntimeValueKind.INPUT
 
     @property
     def is_initializer(self) -> bool:
@@ -140,21 +169,26 @@ def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     return hidden
 
 
-def set_is_shape(node: onnx.NodeProto, values: Dict[str, RuntimeValue]) -> List[str]:
+def set_is_shape(
+    node: onnx.NodeProto, values: Dict[str, RuntimeValue], drop: Optional[Set[str]] = None
+) -> List[str]:
     """
     Sets attribute ``is_shape`` for outputs of a node.
 
     :param node: node to process
     :param values: stored results, values in this dictionary are updated
+    :param drop: variables not to consider because the come from the graph
+        holding this subgraph
     :return: list of modified results
     """
     if not node.input:
         # Constant
         return []
+    drop = drop or set()
     if node.op_type in ("Shape", "Size") and node.domain == "":
         values[node.output[0]].is_shape = True
         return [node.output[0]]
-    is_shapes = [values[i].is_shape for i in node.input]
+    is_shapes = [values[i].is_shape for i in node.input if i not in drop]
     if any(is_shapes):
         if is_shapes[0] and len(node.output) == 1:
             values[node.output[0]].is_shape = True
@@ -185,18 +219,21 @@ def first_used_last_used(
         _input = proto.graph.input
         output = proto.graph.output
         _node = proto.graph.node
+        allow_unknown = False
     elif isinstance(proto, onnx.GraphProto):
         initializer = proto.initializer
         sparse_initializer = proto.sparse_initializer
         _input = proto.input
         output = proto.output
         _node = proto.node
+        allow_unknown = True
     else:
         initializer = []
         sparse_initializer = []
         _input = proto.input
         output = proto.output
         _node = proto.node
+        allow_unknown = False
 
     for init in initializer:
         values[init.name] = RuntimeValue(
@@ -209,8 +246,14 @@ def first_used_last_used(
     for inp in _input:
         n = inp if isinstance(inp, str) else inp.name
         values[n] = RuntimeValue(n, created=-1, kind=RuntimeValueKind.INPUT)
+    drop = set()
     for it, node in enumerate(_node):
         for i in node.input:
+            if i not in values:
+                assert allow_unknown, f"Input {i!r} is unknown."
+                # This input comes from a context and the model is a GraphProto
+                drop.add(i)
+                continue
             if values[i].first_used is None:
                 values[i].first_used = it
             values[i].last_used = it
@@ -231,7 +274,7 @@ def first_used_last_used(
                     else RuntimeValueKind.RESULT
                 ),
             )
-        set_is_shape(node, values)
+        set_is_shape(node, values, drop=drop)
 
     for out in output:
         n = out if isinstance(out, str) else out.name

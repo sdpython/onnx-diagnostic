@@ -878,6 +878,8 @@ def to_tensor(tensor: onnx.TensorProto, base_dir: str = "") -> torch.Tensor:
 
     if tensor.HasField("raw_data"):
         raw_data = tensor.raw_data
+        if len(raw_data) == 0:
+            return torch.tensor([], dtype=torch_dtype).reshape(dims)
         if sys.byteorder == "big":
             # Convert endian from little to big
             raw_data = torch.frombuffer(raw_data, dtype=torch_dtype).byteswap().tobytes()
