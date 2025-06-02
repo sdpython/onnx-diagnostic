@@ -237,7 +237,7 @@ class TorchOnnxEvaluator:
         assert all(
             self.runtime_info[o].value is not None for o in outputs
         ), "Not implemented yet when one output is None."
-        fres = [self.runtime_info[o].value.tensor for o in outputs]
+        fres = [self.runtime_info[o].value.tensor for o in outputs]  # type: ignore[union-attr]
 
         # clean previous execution
         for k in feeds:
@@ -305,7 +305,7 @@ class TorchOnnxEvaluator:
         assert all(
             self.runtime_info[o].value is not None for o in outputs
         ), "Not implemented yet when one output is None."
-        res = [torch_ops.OpRunValue(self.runtime_info[o].value.tensor) for o in outputs]  # type: ignore[assignment, union-attr]
+        res2 = [torch_ops.OpRunValue(self.runtime_info[o].value.tensor) for o in outputs]  # type: ignore[assignment, union-attr]
 
         # clean previous execution
         for k in self.input_names:
@@ -313,4 +313,4 @@ class TorchOnnxEvaluator:
         for o in self.output_names:
             self.runtime_info[o].clean_value()
 
-        return res[0] if len(res) == 1 else tuple(res)
+        return res2[0] if len(res2) == 1 else tuple(res2)  # type: ignore[index, return-value, arg-type]
