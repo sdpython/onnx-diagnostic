@@ -13,9 +13,23 @@ class Cast_6(OpRun):
         to = self.get_attribute_int(node, "to", 0)
         assert isinstance(to, int), f"Unexpected value for attribute to={to!r}"
         self.to = onnx_dtype_to_torch_dtype(to)
+        self.saturate = self.get_attribute_int(node, "saturate", 1)
+        assert self.saturate == 1, f"saturate={self.saturate} not implemented for Cast"
 
     def run(self, data: OpRunValue) -> OpRunValue:
         return OpRunValue(data.tensor.to(self.to))
+
+
+class CastLike_15(OpRun):
+    "Cast"
+
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
+        super().__init__(node, version)
+        self.saturate = self.get_attribute_int(node, "saturate", 1)
+        assert self.saturate == 1, f"saturate={self.saturate} not implemented for CastLike"
+
+    def run(self, data: OpRunValue, like: OpRunValue) -> OpRunValue:
+        return OpRunValue(data.tensor.to(like.tensor.dtype))
 
 
 class Concat_1(OpRun):
