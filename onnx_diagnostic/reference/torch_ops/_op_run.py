@@ -1,4 +1,4 @@
-from typing import Optional, Union, Tuple
+from typing import Any, Optional, Union, Tuple
 import onnx
 import torch
 from ...helpers import string_type
@@ -30,8 +30,12 @@ class OpRunValue:
         self.is_constant = is_constant
         self.cached: Optional[Tuple[int, ...]] = None
 
+    def to(self, to: Any) -> "OpRunValue":
+        "Changes the device."
+        return OpRunValue(self.tensor.to(to))
+
     def string_type(self) -> str:
-        "Returns informations about the value as a string."
+        "Returns information about the value as a string."
         s = string_type(self.tensor, with_shape=True, with_min_max=True, with_device=True)
         if self.is_constant:
             return f"CST({s})"

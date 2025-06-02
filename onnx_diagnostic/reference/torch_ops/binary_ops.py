@@ -2,92 +2,107 @@ import torch
 from . import OpRun, OpRunValue
 
 
-class And_1(OpRun):
-    """And"""
+class OpRunBinary(OpRun):
+    "Binary Op"
 
     def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+        if x.get_device() != y.get_device():
+            if x.get_device() >= 0:
+                y = y.to(x.device)
+            else:
+                x = x.to(y.device)
+        return self._run(x, y)
+
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+        raise NotImplementedError(f"Operator {self.__class__.__name__!r} is not complete.")
+
+
+class And_1(OpRunBinary):
+    """And"""
+
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor & y.tensor)
 
 
-class Add_1(OpRun):
+class Add_1(OpRunBinary):
     """Add"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor + y.tensor)
 
 
-class Div_1(OpRun):
+class Div_1(OpRunBinary):
     """Div"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor / y.tensor)
 
 
-class Equal_1(OpRun):
+class Equal_1(OpRunBinary):
     """Equal"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor == y.tensor)
 
 
-class Greater_1(OpRun):
+class Greater_1(OpRunBinary):
     """Greater"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor > y.tensor)
 
 
-class GreaterOrEqual_1(OpRun):
+class GreaterOrEqual_1(OpRunBinary):
     """GreaterOrEqual"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor >= y.tensor)
 
 
-class Less_1(OpRun):
+class Less_1(OpRunBinary):
     """Less"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor < y.tensor)
 
 
-class LessOrEqual_1(OpRun):
+class LessOrEqual_1(OpRunBinary):
     """LessOrEqual"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor <= y.tensor)
 
 
-class MatMul_1(OpRun):
+class MatMul_1(OpRunBinary):
     """MatMul"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor @ y.tensor)
 
 
-class Mul_1(OpRun):
+class Mul_1(OpRunBinary):
     """Mul"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor * y.tensor)
 
 
-class Or_1(OpRun):
+class Or_1(OpRunBinary):
     """Or"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor | y.tensor)
 
 
-class Pow_12(OpRun):
+class Pow_12(OpRunBinary):
     """Pow"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(torch.pow(x.tensor, y.tensor))
 
 
-class Sub_1(OpRun):
+class Sub_1(OpRunBinary):
     """Sub"""
 
-    def run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
+    def _run(self, x: OpRunValue, y: OpRunValue) -> OpRunValue:
         return OpRunValue(x.tensor - y.tensor)

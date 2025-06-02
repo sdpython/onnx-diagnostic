@@ -72,7 +72,6 @@ class TorchOnnxEvaluator:
         local_functions: Optional[Dict[Tuple[str, str], "TorchOnnxEvaluator"]] = None,
         verbose: int = 0,
     ):
-        assert verbose
         self.providers = providers
         self.constants: Dict[str, torch.Tensor] = {}
         self.kernels: List[Optional[torch_ops.OpRun]] = []
@@ -84,6 +83,7 @@ class TorchOnnxEvaluator:
             self.default_device = self.CUDA
         else:
             self.default_device = self.CPU
+            self.CUDA = None
 
         if isinstance(proto, str):
             proto = onnx.load(proto)
@@ -137,6 +137,7 @@ class TorchOnnxEvaluator:
 
     @property
     def on_cuda(self) -> bool:
+        "Tells if the default device is CUDA."
         return self.default_device == self.CUDA
 
     def _build_initializers(self, inits: Sequence[Union[onnx.NodeProto, onnx.TensorProto]]):
