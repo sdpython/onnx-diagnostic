@@ -1,5 +1,6 @@
 import functools
 from typing import Dict, List, Optional, Sequence, Tuple, Union
+import numpy as np
 import onnx
 import torch
 from ..helpers.torch_helper import to_tensor
@@ -9,7 +10,22 @@ from . import torch_ops
 
 @functools.lru_cache
 def get_kernels() -> Dict[Tuple[str, str, int], type[torch_ops.OpRun]]:
-    """Retrieves all the available kernels."""
+    """
+    Retrieves all the available kernels class :class:`TorchOnnxEvaluator`
+    can use. The full list is the following.
+
+    .. runpython::
+        :showcode:
+
+        from onnx_diagnostic.reference.torch_evaluator import get_kernels
+
+        for k, v in sorted(get_kernels().items()):
+            domain, name, version = k
+            f = f"{name}({version})" if domain == "" else f"{name}[{domain}]({version})"
+            add = " " * max(25 - len(f), 0)
+            dd = " -- device dependent" if v.device_dependent() else ""
+            print(f"{f}{add} -- {v.__name__}{dd}")
+    """
     res = {}
     for _k, v in torch_ops.__dict__.items():
         if isinstance(v, type) and issubclass(v, torch_ops.OpRun) and "_" in v.__name__:
@@ -41,7 +57,8 @@ class TorchOnnxEvaluator:
        this avoid the memory to grow too much
 
     The class is not multithreaded. `runtime_info` gets updated
-    by the the class.
+    by the the class. The list of available kernels is returned by function
+    :func:`get_kernels`.
     """
 
     def __init__(
@@ -60,6 +77,8 @@ class TorchOnnxEvaluator:
         else:
             self.default_device = self.CPU
 
+        if isinstance(proto, str):
+            proto = onnx.load(proto)
         if isinstance(proto, onnx.ModelProto):
             assert opsets is None, "proto is a model, opsets must be None in that case"
             assert not proto.graph.sparse_initializer, "sparse_initializer not support yet"
@@ -131,11 +150,18 @@ class TorchOnnxEvaluator:
             assert (
                 key in kernels
             ), f"Missing kernel for node type {node.op_type!r} from domain {node.domain!r}"
-            self.kernels.append(kernels[key](node, opset))
+            cls = kernels[key]
+            if cls.device_dependent():
+                kernel = cls(node, opset, self.default_device)  # type: ignore[call-arg]
+            else:
+                kernel = cls(node, opset)
+            self.kernels.append(kernel)
 
     def run(
-        self, outputs: Optional[List[str]], feeds: Dict[str, torch.Tensor]
-    ) -> List[Optional[torch.Tensor]]:
+        self,
+        outputs: Optional[List[str]],
+        feeds: Union[Dict[str, torch.Tensor], Dict[str, np.ndarray]],
+    ) -> Union[List[Optional[torch.Tensor]], List[Optional[np.ndarray]]]:
         """
         Runs the ONNX model.
 
@@ -143,6 +169,9 @@ class TorchOnnxEvaluator:
         :param feeds: inputs
         :return: output tensors.
         """
+        use_numpy = any(isinstance(t, np.ndarray) for t in feeds.values())
+        if use_numpy:
+            feeds = {k: torch.from_numpy(v) for k, v in feeds.items()}
         if outputs is None:
             outputs = self.output_names
 
@@ -197,4 +226,6 @@ class TorchOnnxEvaluator:
         for o in outputs:
             self.runtime_info[o].clean_value()
 
+        if use_numpy:
+            return [None if a is None else a.detach().cpu().numpy() for a in res]  # type: ignore[union-attr]
         return res  # type: ignore[return-value]

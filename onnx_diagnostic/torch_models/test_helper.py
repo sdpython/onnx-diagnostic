@@ -17,6 +17,7 @@ from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 from ..tasks import random_input_kwargs
 from ..torch_export_patches import torch_export_patches
 from ..torch_export_patches.patch_inputs import use_dyn_not_str
+from ..reference import TorchOnnxEvaluator
 from .hghub import get_untrained_model_with_inputs
 
 
@@ -244,6 +245,7 @@ def validate_model(
     model_options: Optional[Dict[str, Any]] = None,
     subfolder: Optional[str] = None,
     opset: Optional[int] = None,
+    runtime: str = "onnxruntime",
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -280,6 +282,8 @@ def validate_model(
         ``num_hidden_layers`` or ``attn_implementation``
     :param subfolder: version or subfolders to uses when retrieving a model id
     :param opset: onnx opset to use for the conversion
+    :param runtime: onnx runtime to use to check about discrepancies,
+        only if `do_run` is true
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -308,6 +312,7 @@ def validate_model(
             version_ortfusiontype=ortfusiontype or "",
             version_stop_if_static=str(stop_if_static),
             version_exporter=exporter or "",
+            version_runtime=runtime,
         )
     )
     if opset:
@@ -633,7 +638,9 @@ def validate_model(
         return summary, data
 
     if do_run:
-        summary_valid, data = validate_onnx_model(data=data, quiet=quiet, verbose=verbose)
+        summary_valid, data = validate_onnx_model(
+            data=data, quiet=quiet, verbose=verbose, runtime=runtime
+        )
         summary.update(summary_valid)
 
     if ortfusiontype and "onnx_filename" in data:
@@ -686,7 +693,7 @@ def validate_model(
 
             if do_run:
                 summary_valid, data = validate_onnx_model(
-                    data=data, quiet=quiet, verbose=verbose, flavour=flavour
+                    data=data, quiet=quiet, verbose=verbose, flavour=flavour, runtime=runtime
                 )
                 summary.update(summary_valid)
 
@@ -898,6 +905,7 @@ def validate_onnx_model(
     quiet: bool = False,
     verbose: int = 0,
     flavour: Optional[str] = None,
+    runtime: str = "onnxruntime",
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Verifies that an onnx model produces the same
@@ -910,6 +918,7 @@ def validate_onnx_model(
     :param quiet: catch exception or not
     :param verbose: verbosity
     :param flavour: use a different version of the inputs
+    :param runtime: onnx runtime to use, onnxruntime or torch
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -951,16 +960,22 @@ def validate_onnx_model(
             f"{providers}..., flavour={flavour!r}"
         )
 
+    cls_runtime = (
+        (
+            lambda model, providers: onnxruntime.InferenceSession(
+                (model.SerializeToString() if isinstance(model, onnx.ModelProto) else model),
+                providers=providers,
+            )
+        )
+        if runtime == "onnxruntime"
+        else (lambda model, providers: TorchOnnxEvaluator(model, providers=providers))
+    )
     sess = _quiet_or_not_quiet(
         quiet,
         _mk("time_onnx_ort_create"),
         summary,
         data,
-        (
-            lambda source=source, providers=providers: onnxruntime.InferenceSession(
-                source, providers=providers
-            )
-        ),
+        (lambda source=source, providers=providers: cls_runtime(source, providers)),
     )
     if f"ERR_{_mk('time_onnx_ort_create')}" in summary:
         return summary, data
@@ -1244,6 +1259,13 @@ def call_torch_export_custom(
         "custom-nostrict",
         "custom-nostrict-default",
         "custom-nostrict-all",
+        "custom-inline",
+        "custom-strict-inline",
+        "custom-strict-default-inline",
+        "custom-strict-all-inline",
+        "custom-nostrict-inline",
+        "custom-nostrict-default-inline",
+        "custom-nostrict-all-inline",
     }
     assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
@@ -1284,6 +1306,10 @@ def call_torch_export_custom(
         ),
         save_ep=(os.path.join(dump_folder, f"{exporter}.ep") if dump_folder else None),
     )
+    inline = "-inline" in exporter
+    if inline:
+        export_options.aten_as_function = set()
+
     options = OptimizationOptions(patterns=optimization) if optimization else None
     model = data["model"]
     kws = dict(
@@ -1294,6 +1320,7 @@ def call_torch_export_custom(
         large_model=True,
         return_optimize_report=True,
         verbose=max(verbose - 2, 0),
+        inline=inline,
     )
     if opset:
         kws["target_opset"] = opset

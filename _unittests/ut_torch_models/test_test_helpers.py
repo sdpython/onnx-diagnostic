@@ -164,6 +164,29 @@ class TestTestHelper(ExtTestCase):
             onnx_filename, output_path, num_attention_heads=2, hidden_size=192, verbose=10
         )
 
+    @requires_torch("2.7")
+    @hide_stdout()
+    @ignore_warnings(FutureWarning)
+    @requires_experimental()
+    def test_validate_model_custom_torch(self):
+        mid = "arnir0/Tiny-LLM"
+        summary, data = validate_model(
+            mid,
+            do_run=True,
+            verbose=10,
+            exporter="custom-inline",
+            dump_folder="dump_test_validate_model_custom_torch",
+            patch=True,
+            stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
+            optimization="default",
+            quiet=False,
+            runtime="torch",
+        )
+        self.assertIsInstance(summary, dict)
+        self.assertIsInstance(data, dict)
+        self.assertIn("disc_onnx_ort_run_abs", summary)
+        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
+
     def test_filter_inputs(self):
         inputs, ds = {"a": 1, "b": 2}, {"a": 20, "b": 30}
         ni, nd = filter_inputs(inputs, dynamic_shapes=ds, drop_names=["a"])

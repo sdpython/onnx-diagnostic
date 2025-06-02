@@ -353,6 +353,12 @@ def get_parser_validate() -> ArgumentParser:
         help="validate the trained model (requires downloading)",
     )
     parser.add_argument(
+        "--runtime",
+        choices=["onnxruntime", "torch", "ref"],
+        default="onnxruntime",
+        help="onnx runtime to use, ",
+    )
+    parser.add_argument(
         "-o",
         "--dump-folder",
         help="if not empty, a folder is created to dumps statistics, "
@@ -453,6 +459,7 @@ def _cmd_validate(argv: List[Any]):
             model_options=args.mop,
             subfolder=args.subfolder,
             opset=args.opset,
+            runtime=args.runtime,
         )
         print("")
         print("-- summary --")
