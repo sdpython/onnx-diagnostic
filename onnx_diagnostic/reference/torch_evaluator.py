@@ -383,7 +383,9 @@ class TorchOnnxEvaluator:
         # inputs
         for k, v in zip(self.input_names, args):
             r = self.runtime_info[k]
-            r.set_value(torch_ops.OpRunValue(None if v is None else v.tensor))
+            r.set_value(
+                torch_ops.OpRunValue(None) if v is None else v.__class__(v.tensor_or_sequence)
+            )
 
         # node execution
         for it, kernel in enumerate(self.kernels):

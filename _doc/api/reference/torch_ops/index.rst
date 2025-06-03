@@ -9,6 +9,14 @@ onnx_diagnostic.reference.torch_ops
 
     access_ops
     binary_ops
+    control_flow_ops
+    generator_ops
+    nn_ops
+    other_ops
+    reduce_ops
+    sequence_ops
+    shape_ops
+    unary_ops
 
 OpRun
 +++++
@@ -20,6 +28,12 @@ OpRunValue
 ++++++++++
 
 .. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunValue
+    :members:
+
+OpRunValueSequence
+++++++++++++++++++
+
+.. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunValueSequence
     :members:
 
 OpRunFunction

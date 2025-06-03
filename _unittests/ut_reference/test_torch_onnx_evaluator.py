@@ -956,6 +956,119 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             torch.tensor([1], dtype=torch.float32),
         )
 
+    def test_loop(self):
+        x = np.array([1, 2, 3, 4, 5]).astype(np.float32)
+
+        model = oh.make_model(
+            graph=oh.make_graph(
+                name="loop_test",
+                inputs=[
+                    oh.make_tensor_value_info("trip_count", TINT64, ["a"]),
+                    oh.make_tensor_value_info("cond", onnx.TensorProto.BOOL, [1]),
+                ],
+                outputs=[oh.make_tensor_value_info("res", TFLOAT, [])],
+                nodes=[
+                    oh.make_node("SequenceEmpty", [], ["seq_empty"], dtype=TFLOAT),
+                    oh.make_node(
+                        "Loop",
+                        inputs=["trip_count", "cond", "seq_empty"],
+                        outputs=["seq_res"],
+                        body=oh.make_graph(
+                            [
+                                oh.make_node(
+                                    "Identity", inputs=["cond_in"], outputs=["cond_out"]
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["x"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_x",
+                                        data_type=TFLOAT,
+                                        dims=x.shape,
+                                        vals=x.flatten().astype(float),
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["one"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_one",
+                                        data_type=TINT64,
+                                        dims=(),
+                                        vals=[1],
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["slice_start"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_zero",
+                                        data_type=TINT64,
+                                        dims=(1,),
+                                        vals=[0],
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Add", inputs=["iter_count", "one"], outputs=["end"]
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["axes"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_axes",
+                                        data_type=TINT64,
+                                        dims=(1,),
+                                        vals=[0],
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Unsqueeze", inputs=["end", "axes"], outputs=["slice_end"]
+                                ),
+                                oh.make_node(
+                                    "Slice",
+                                    inputs=["x", "slice_start", "slice_end"],
+                                    outputs=["slice_out"],
+                                ),
+                                oh.make_node(
+                                    "SequenceInsert",
+                                    inputs=["seq_in", "slice_out"],
+                                    outputs=["seq_out"],
+                                ),
+                            ],
+                            "loop_body",
+                            [
+                                oh.make_tensor_value_info("iter_count", TINT64, []),
+                                oh.make_tensor_value_info(
+                                    "cond_in", onnx.TensorProto.BOOL, []
+                                ),
+                                oh.make_tensor_sequence_value_info("seq_in", TFLOAT, None),
+                            ],
+                            [
+                                oh.make_tensor_value_info(
+                                    "cond_out", onnx.TensorProto.BOOL, []
+                                ),
+                                oh.make_tensor_sequence_value_info("seq_out", TFLOAT, None),
+                            ],
+                        ),
+                    ),
+                    oh.make_node(
+                        "ConcatFromSequence",
+                        inputs=["seq_res"],
+                        outputs=["res"],
+                        axis=0,
+                        new_axis=0,
+                    ),
+                ],
+            )
+        )
+        self._finalize_test(
+            model, torch.tensor(5, dtype=torch.int64), torch.tensor(1, dtype=torch.bool)
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
