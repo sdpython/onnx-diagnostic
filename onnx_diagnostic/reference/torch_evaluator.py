@@ -72,6 +72,17 @@ class TorchOnnxEvaluator:
             self.type = type
             self.shape = shape
 
+    @classmethod
+    def _on_cuda(cls, providers) -> int:
+        if not providers:
+            return -1
+        for p in providers:
+            if p == "CUDAExecutionProvider":
+                return 0
+            if isinstance(p, tuple) and p[0] == "CUDAExecutionProvider":
+                return p[1]["device_id"]
+        return -1
+
     def __init__(
         self,
         proto: Union[onnx.FunctionProto, onnx.GraphProto, onnx.ModelProto],
@@ -86,12 +97,13 @@ class TorchOnnxEvaluator:
         self.functions = local_functions.copy() if local_functions else {}
         self.CPU = torch.tensor([0]).to("cpu").device
         self.verbose = verbose
-        if "CUDAExecutionProvider" in providers:
-            self.CUDA = torch.tensor([0]).to("cuda").device
-            self.default_device = self.CUDA
-        else:
+        dev = self._on_cuda(providers)
+        if dev < 0:
             self.default_device = self.CPU
             self.CUDA = None
+        else:
+            self.CUDA = torch.tensor([0]).to(f"cuda:{dev}").device
+            self.default_device = self.CUDA
 
         if isinstance(proto, str):
             proto = onnx.load(proto)
