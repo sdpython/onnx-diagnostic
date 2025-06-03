@@ -9,7 +9,7 @@ onnx_diagnostic.reference.torch_ops
 
     access_ops
     binary_ops
-    control_flow_ops
+    controlflow_ops
     generator_ops
     nn_ops
     other_ops

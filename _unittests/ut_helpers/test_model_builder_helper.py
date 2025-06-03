@@ -2,6 +2,7 @@ import os
 import unittest
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
+    ignore_errors,
     requires_torch,
     requires_transformers,
     hide_stdout,
@@ -22,6 +23,7 @@ class TestModelBuilderHelper(ExtTestCase):
     # This is to limit impact on CI.
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
+    @ignore_errors(OSError)  # connectivity issues
     def test_download_model_builder(self):
         path = download_model_builder_to_cache()
         self.assertExists(path)
@@ -32,6 +34,7 @@ class TestModelBuilderHelper(ExtTestCase):
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
     @hide_stdout()
+    @ignore_errors(OSError)  # connectivity issues
     def test_model_builder_id(self):
         # clear&&python ~/.cache/onnx-diagnostic/builder.py
         # --model arnir0/Tiny-LLM -p fp16 -c dump_cache -e cpu -o dump_model
