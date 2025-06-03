@@ -49,8 +49,8 @@ module = ["onnx_diagnostic.reference.torch_ops.*"]
 disable_error_code = ["override"]
 
 [[tool.mypy.overrides]]
-module = ["onnx_diagnostic.reference.torch_ops.control_flow"]
-disable_error_code = ["name-defined"]
+module = ["onnx_diagnostic.reference.torch_ops.controlflow_ops"]
+disable_error_code = ["attr-defined", "name-defined"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.reference.torch_ops._op_run"]

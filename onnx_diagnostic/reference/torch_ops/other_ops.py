@@ -2,7 +2,7 @@ from typing import Optional
 import onnx
 import torch
 from ...helpers.torch_helper import onnx_dtype_to_torch_dtype
-from . import OpRun, OpRunValue
+from . import OpRun, OpRunTensor
 
 
 class Cast_6(OpRun):
@@ -16,8 +16,8 @@ class Cast_6(OpRun):
         self.saturate = self.get_attribute_int(node, "saturate", 1)
         assert self.saturate == 1, f"saturate={self.saturate} not implemented for Cast"
 
-    def run(self, data: OpRunValue) -> OpRunValue:
-        return OpRunValue(data.tensor.to(self.to))
+    def run(self, data: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(data.tensor.to(self.to))
 
 
 class CastLike_15(OpRun):
@@ -28,8 +28,8 @@ class CastLike_15(OpRun):
         self.saturate = self.get_attribute_int(node, "saturate", 1)
         assert self.saturate == 1, f"saturate={self.saturate} not implemented for CastLike"
 
-    def run(self, data: OpRunValue, like: OpRunValue) -> OpRunValue:
-        return OpRunValue(data.tensor.to(like.tensor.dtype))
+    def run(self, data: OpRunTensor, like: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(data.tensor.to(like.tensor.dtype))
 
 
 class Concat_1(OpRun):
@@ -41,8 +41,8 @@ class Concat_1(OpRun):
         assert isinstance(axis, int), f"Unexpected value for attribute axis={axis!r}"
         self.axis = axis
 
-    def run(self, *data: OpRunValue) -> OpRunValue:
-        return OpRunValue(torch.cat([t.tensor for t in data], axis=self.axis))
+    def run(self, *data: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(torch.cat([t.tensor for t in data], axis=self.axis))
 
 
 class Transpose_1(OpRun):
@@ -52,8 +52,8 @@ class Transpose_1(OpRun):
         super().__init__(node, version)
         self.perm = self.get_attribute_ints(node, "perm", None)
 
-    def run(self, data: OpRunValue) -> OpRunValue:
-        return OpRunValue(torch.permute(data.tensor, self.perm))
+    def run(self, data: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(torch.permute(data.tensor, self.perm))
 
 
 class Trilu_14(OpRun):
@@ -63,15 +63,15 @@ class Trilu_14(OpRun):
         super().__init__(node, version)
         self.upper = self.get_attribute_int(node, "upper", 1)
 
-    def run(self, data: OpRunValue, k: Optional[OpRunValue] = None) -> OpRunValue:
+    def run(self, data: OpRunTensor, k: Optional[OpRunTensor] = None) -> OpRunTensor:
         diagonal = 0 if k is None else k.tensor.item()
         if self.upper:
-            return OpRunValue(torch.triu(data.tensor, diagonal=diagonal))
-        return OpRunValue(torch.tril(data.tensor, diagonal=diagonal))
+            return OpRunTensor(torch.triu(data.tensor, diagonal=diagonal))
+        return OpRunTensor(torch.tril(data.tensor, diagonal=diagonal))
 
 
 class Where_9(OpRun):
     "Where"
 
-    def run(self, cond: OpRunValue, x: OpRunValue, y: OpRunValue) -> OpRunValue:
-        return OpRunValue(torch.where(cond.tensor, x.tensor, y.tensor))
+    def run(self, cond: OpRunTensor, x: OpRunTensor, y: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(torch.where(cond.tensor, x.tensor, y.tensor))

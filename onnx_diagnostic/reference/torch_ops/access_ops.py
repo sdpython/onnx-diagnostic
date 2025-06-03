@@ -1,7 +1,7 @@
 from typing import Optional
 import onnx
 import torch
-from . import OpRun, OpRunValue
+from . import OpRun, OpRunTensor
 
 
 class Gather_1(OpRun):
@@ -18,7 +18,7 @@ class Gather_1(OpRun):
             return torch.empty((0,), dtype=x.tensor.dtype, device=x.tensor.device)
         ind = [slice(0, s) for s in x.shape]
         ind[self.axis] = indices.tensor
-        return OpRunValue(x.tensor[tuple(ind)])
+        return OpRunTensor(x.tensor[tuple(ind)])
 
 
 class Slice_13(OpRun):
@@ -26,12 +26,12 @@ class Slice_13(OpRun):
 
     def run(
         self,
-        data: OpRunValue,
-        starts: OpRunValue,
-        ends: OpRunValue,
-        axes: Optional[OpRunValue] = None,
-        steps: Optional[OpRunValue] = None,
-    ) -> OpRunValue:
+        data: OpRunTensor,
+        starts: OpRunTensor,
+        ends: OpRunTensor,
+        axes: Optional[OpRunTensor] = None,
+        steps: Optional[OpRunTensor] = None,
+    ) -> OpRunTensor:
         if axes is None:
             if steps is None:
                 slices = [slice(s, e) for s, e in zip(starts.tensor, ends.tensor)]
@@ -48,4 +48,4 @@ class Slice_13(OpRun):
                 slices = [slice(0, a) for a in data.shape]
                 for s, e, a, d in zip(starts.tensor, ends.tensor, axes.tensor, steps.tensor):
                     slices[a] = slice(s, e, d)
-        return OpRunValue(data.tensor[tuple(slices)])
+        return OpRunTensor(data.tensor[tuple(slices)])

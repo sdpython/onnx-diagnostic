@@ -62,6 +62,88 @@ class TorchOnnxEvaluator:
     The class is not multithreaded. `runtime_info` gets updated
     by the the class. The list of available kernels is returned by function
     :func:`onnx_diagnostic.reference.torch_evaluator.get_kernels`.
+    Example:
+
+    .. runpython::
+        :showcode:
+
+        import onnx
+        import onnx.helper as oh
+        import torch
+        from onnx_diagnostic.helpers import string_type
+        from onnx_diagnostic.reference import TorchOnnxEvaluator
+
+        TFLOAT = onnx.TensorProto.FLOAT
+
+        proto = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Sigmoid", ["Y"], ["sy"]),
+                    oh.make_node("Mul", ["Y", "sy"], ["ysy"]),
+                    oh.make_node("Mul", ["X", "ysy"], ["final"]),
+                ],
+                "-nd-",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, [1, "b", "c"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b", "c"]),
+                ],
+                [oh.make_tensor_value_info("final", TFLOAT, ["a", "b", "c"])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+
+        sess = TorchOnnxEvaluator(proto)
+        feeds = dict(X=torch.rand((4, 5)), Y=torch.rand((4, 5)))
+        result = sess.run(None, feeds)
+        print(string_type(result, with_shape=True, with_min_max=True))
+
+    Adding ``verbose=1`` shows which kernels is executed:
+
+    .. runpython::
+        :showcode:
+
+        import onnx
+        import onnx.helper as oh
+        import torch
+        from onnx_diagnostic.helpers import string_type
+        from onnx_diagnostic.reference import TorchOnnxEvaluator
+
+        TFLOAT = onnx.TensorProto.FLOAT
+
+        proto = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Sigmoid", ["Y"], ["sy"]),
+                    oh.make_node("Mul", ["Y", "sy"], ["ysy"]),
+                    oh.make_node("Mul", ["X", "ysy"], ["final"]),
+                ],
+                "-nd-",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, [1, "b", "c"]),
+                    oh.make_tensor_value_info("Y", TFLOAT, ["a", "b", "c"]),
+                ],
+                [oh.make_tensor_value_info("final", TFLOAT, ["a", "b", "c"])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+
+        sess = TorchOnnxEvaluator(proto, verbose=1)
+        feeds = dict(X=torch.rand((4, 5)), Y=torch.rand((4, 5)))
+        result = sess.run(None, feeds)
+        print(string_type(result, with_shape=True, with_min_max=True))
+
+    It also shows when a result is not needed anymore. In that case,
+    it is deleted to free the memory it takes.
+    The runtime can also execute the kernel the onnx model on CUDA.
+    It follows the same logic as :class:`onnxruntime.InferenceSession`:
+    ``providers=["CUDAExecutionProvider"]``.
+    It is better in that case to move the input on CUDA. The class
+    tries to move every weight on CUDA but tries to keep any tensor
+    identified as a shape in CPU. Some bugs may remain as torch
+    raises an exception when devices are expected to be the same.
+    The runtime was validated with model :epkg:`arnir0/Tiny-LLM`.
     """
 
     class IO:
@@ -264,7 +346,7 @@ class TorchOnnxEvaluator:
             r = self.runtime_info[k]
             if not r.has_value:
                 r.set_value(
-                    torch_ops.OpRunValue(
+                    torch_ops.OpRunTensor(
                         v.to(self.CUDA) if not r.is_shape and self.on_cuda else v,
                         is_constant=True,
                         may_cpu=len(v.shape) == 1 and v.numel() < 8 and v.dtype == torch.int64,
@@ -277,7 +359,7 @@ class TorchOnnxEvaluator:
         for k, v in feeds.items():
             r = self.runtime_info[k]
             r.set_value(
-                torch_ops.OpRunValue(
+                torch_ops.OpRunTensor(
                     v.to(self.CUDA) if not r.is_shape and self.on_cuda else v,
                     is_constant=False,
                     may_cpu=len(v.shape) == 1 and v.numel() < 8 and v.dtype == torch.int64,
@@ -352,7 +434,7 @@ class TorchOnnxEvaluator:
 
     def run_with_values(
         self,
-        *args: Optional[torch_ops.OpRunValue],
+        *args: Optional[torch_ops.OpRunTensor],
         context: Optional[Dict[str, RuntimeValue]] = None,
     ) -> Union[torch_ops.OpRunValue, Tuple[torch_ops.OpRunValue, ...]]:
         """
@@ -360,7 +442,7 @@ class TorchOnnxEvaluator:
 
         :param args: inputs
         :param context: local context for the execution of subgraphs
-        :return: output OpRunValue
+        :return: output OpRunTensor
         """
         assert all(
             isinstance(a, torch_ops.OpRunValue) for a in args
@@ -373,7 +455,7 @@ class TorchOnnxEvaluator:
             r = self.runtime_info[k]
             if not r.has_value:
                 r.set_value(
-                    torch_ops.OpRunValue(
+                    torch_ops.OpRunTensor(
                         v.to(self.CUDA) if r.is_shape is False and self.on_cuda else v,
                         is_constant=True,
                         may_cpu=len(v.shape) == 1 and v.numel() < 8 and v.dtype == torch.int64,
@@ -383,7 +465,9 @@ class TorchOnnxEvaluator:
         # inputs
         for k, v in zip(self.input_names, args):
             r = self.runtime_info[k]
-            r.set_value(torch_ops.OpRunValue(None if v is None else v.tensor))
+            r.set_value(
+                torch_ops.OpRunTensor(None) if v is None else v.__class__(v.tensor_or_sequence)
+            )
 
         # node execution
         for it, kernel in enumerate(self.kernels):
@@ -404,7 +488,7 @@ class TorchOnnxEvaluator:
                 res = kernel.run(*inputs)
                 if isinstance(res, tuple):
                     # outputs
-                    assert all(isinstance(o, torch_ops.OpRunValue) for o in res), (
+                    assert all(isinstance(o, torch_ops.OpRunTensor) for o in res), (
                         f"Unexpected output type {[type(o) for o in res]} "
                         f"for kernel {type(kernel)}."
                     )
@@ -423,7 +507,7 @@ class TorchOnnxEvaluator:
         assert all(
             self.runtime_info[o].value is not None for o in outputs
         ), "Not implemented yet when one output is None."
-        res2 = [torch_ops.OpRunValue(self.runtime_info[o].value.tensor) for o in outputs]  # type: ignore[assignment, union-attr]
+        res2 = [self.runtime_info[o].value.copy() for o in outputs]  # type: ignore[assignment, union-attr]
 
         # clean previous execution
         for k in self.input_names:

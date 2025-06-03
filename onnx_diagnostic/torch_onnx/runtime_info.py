@@ -2,6 +2,7 @@ import enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import onnx
 import torch
+from ..api import TensorLike
 from ..helpers import string_type
 
 
@@ -116,17 +117,19 @@ class RuntimeValue:
             f"kind={self.kind}{text}, value={self.value.string_type()})"
         )
 
-    def set_value(self, value: torch.Tensor):
+    def set_value(self, value: Union[torch.Tensor, TensorLike]):
         """Sets the value."""
         assert value is not None, "Use clean_value to set a value to None"
         self.value = value
+        is_sequence = hasattr(value, "is_sequence") and value.is_sequence()
         if self.dtype:
-            assert (
-                self.dtype == value.dtype
-            ), f"Unexpected dtype={value.dtype}, previous dtype was {self.dtype}"
+            assert value is None or self.dtype == value.dtype, (
+                f"Unexpected dtype={value.dtype}, previous dtype was {self.dtype}, "
+                f"is_sequence={is_sequence}"
+            )
         else:
             self.dtype = value.dtype
-        self.shape = tuple(map(int, value.shape))
+        self.shape = None if is_sequence else tuple(map(int, value.shape))
 
     def clean_value(self):
         """Sets value to None."""
@@ -154,8 +157,11 @@ def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     used by a subgraph.
     """
     hidden = set()
-    memo = set(i.name for i in graph.initializer)
-    memo |= set(i.name for i in graph.sparse_initializer)
+    memo = (
+        set(i.name for i in graph.initializer)
+        | set(i.name for i in graph.sparse_initializer)
+        | set(i.name for i in graph.input)
+    )
     for node in graph.node:
         for i in node.input:
             if i not in memo:

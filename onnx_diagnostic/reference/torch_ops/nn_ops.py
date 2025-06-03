@@ -2,7 +2,7 @@ from typing import Optional
 import onnx
 import torch
 from ...helpers.torch_helper import onnx_dtype_to_torch_dtype
-from . import OpRun, OpRunValue
+from . import OpRun, OpRunTensor
 
 
 class LayerNormalization_17(OpRun):
@@ -28,11 +28,15 @@ class LayerNormalization_17(OpRun):
             eps=self.epsilon,
         )
         if not self.compute_std:
-            return OpRunValue(res.to(original_dtype))
+            return OpRunTensor(res.to(original_dtype))
         axes = tuple(range(len(xt.shape)))[self.axis :]
         mean, var = torch.var(xt, dim=axes, keepdim=False)
         x_inv_std_dev = torch.reciprocal(torch.sqrt(var + self.epsilon))
-        return OpRunValue(res.to(original_dtype)), OpRunValue(mean), OpRunValue(x_inv_std_dev)
+        return (
+            OpRunTensor(res.to(original_dtype)),
+            OpRunTensor(mean),
+            OpRunTensor(x_inv_std_dev),
+        )
 
 
 class Softmax_13(OpRun):
@@ -46,8 +50,8 @@ class Softmax_13(OpRun):
         stash_type = self.get_attribute_int(node, "stash_type", None)
         self.stash_type = None if stash_type is None else onnx_dtype_to_torch_dtype(stash_type)
 
-    def run(self, data: OpRunValue) -> OpRunValue:
-        return OpRunValue(
+    def run(self, data: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(
             torch.nn.functional.softmax(data.tensor, dim=self.axis, dtype=self.stash_type)
         )
 
@@ -55,5 +59,5 @@ class Softmax_13(OpRun):
 class Tanh_6(OpRun):
     "Tanh"
 
-    def run(self, data: OpRunValue) -> OpRunValue:
-        return OpRunValue(torch.nn.functional.tanh(data.tensor))
+    def run(self, data: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(torch.nn.functional.tanh(data.tensor))
