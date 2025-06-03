@@ -1,7 +1,7 @@
 from typing import Optional
 import onnx
 import torch
-from . import OpRun, OpRunValue
+from . import OpRun, OpRunTensor
 
 
 class Range_11(OpRun):
@@ -23,8 +23,8 @@ class Range_11(OpRun):
         super().__init__(node, version)
         self.device = device
 
-    def run(self, starts: OpRunValue, limit: OpRunValue, delta: OpRunValue) -> OpRunValue:
-        return OpRunValue(
+    def run(self, starts: OpRunTensor, limit: OpRunTensor, delta: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(
             torch.arange(
                 starts.tensor,
                 limit.tensor,

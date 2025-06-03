@@ -1,4 +1,4 @@
-from ._op_run import OpRun, OpRunFunction, OpRunValue, OpRunValueSequence
+from ._op_run import OpRun, OpRunFunction, OpRunSequence, OpRunTensor, OpRunValue
 from .access_ops import Gather_1, Slice_13
 from .binary_ops import (
     And_1,

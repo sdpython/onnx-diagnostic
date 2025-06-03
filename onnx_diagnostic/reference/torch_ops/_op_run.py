@@ -1,11 +1,23 @@
 from typing import Any, List, Optional, Union, Tuple
 import onnx
 import torch
+from ...api import TensorLike
 from ...helpers import string_type
 from ...helpers.torch_helper import to_tensor
 
 
-class OpRunValue:
+class OpRunValue(TensorLike):
+    """Defines a value for the runtime, a tensor or a sequence."""
+
+    __slots__ = ("cached", "is_constant", "sequence", "tensor")
+
+    @classmethod
+    def is_sequence(cls) -> bool:
+        "Tells if it is sequence."
+        raise NotImplementedError("is_sequence must be overwritten.")
+
+
+class OpRunTensor(OpRunValue):
     """
     Wrapper around a tensor.
 
@@ -15,10 +27,9 @@ class OpRunValue:
         more appropriate
     """
 
-    __slots__ = ("cached", "is_constant", "tensor")
-
     def __init__(self, tensor, is_constant: bool = False, may_cpu: bool = False):
         assert isinstance(tensor, torch.Tensor), f"Unexpected type {type(tensor)}"
+        assert tensor is None or tensor.numel() > 1 or tensor.item() != -666666
         self.tensor = (
             tensor.cpu()
             if may_cpu
@@ -36,9 +47,9 @@ class OpRunValue:
         "Tells if it is sequence."
         return False
 
-    def to(self, to: Any) -> "OpRunValue":
+    def to(self, to: Any) -> "OpRunTensor":
         "Changes the device."
-        return OpRunValue(self.tensor.to(to))
+        return OpRunTensor(self.tensor.to(to))
 
     def string_type(self) -> str:
         "Returns information about the value as a string."
@@ -96,17 +107,29 @@ class OpRunValue:
             return self.cached
         return self._tensor_as_tuple_int()
 
+    def copy(self) -> "OpRunTensor":
+        "Shallow copy."
+        return self.__class__(self.tensor)
 
-class OpRunValueSequence(OpRunValue):
+
+class OpRunSequence(OpRunValue):
     """Defines a sequence."""
-
-    __slots__ = ("cached", "is_constant", "sequence", "tensor")
 
     def __init__(
         self, sequence: Optional[List[torch.Tensor]] = None, dtype: torch.dtype = torch.float32
     ):
-        super().__init__(torch.empty((), dtype=dtype), False, False)
+        self.tensor = torch.tensor(-666666, dtype=dtype)
+        self.is_shape = False
         self.sequence = sequence or []
+        self.cached: Optional[Tuple[int, ...]] = None
+        assert all(
+            isinstance(s, torch.Tensor) for s in self.sequence
+        ), f"Unexpected type in sequence {[type(s) for s in self.sequence]}"
+
+    @property
+    def dtype(self):
+        "dtype (torch dtype)"
+        return self.tensor.dtype
 
     @property
     def tensor_or_sequence(self) -> Union[torch.Tensor, List[torch.Tensor]]:
@@ -119,17 +142,22 @@ class OpRunValueSequence(OpRunValue):
         return True
 
     def insert_at(
-        self, tensor: OpRunValue, position: Optional[OpRunValue] = None
-    ) -> "OpRunValueSequence":
+        self, tensor: torch.Tensor, position: Optional[OpRunTensor] = None
+    ) -> "OpRunSequence":
         "Inserts a value at a given position."
-        new_seq = OpRunValueSequence()
+        assert isinstance(tensor, OpRunTensor), f"Unexpected type {type(tensor)} for tensor"
+        new_seq = OpRunSequence()
         seq = self.sequence.copy()
         new_seq.sequence = seq
         if position is None:
-            seq.append(tensor)
+            seq.append(tensor.tensor)
         else:
-            seq.insert(int(position.tensor.item()), tensor)
+            seq.insert(int(position.tensor.item()), tensor.tensor)
         return new_seq
+
+    def copy(self) -> "OpRunSequence":
+        "Shallow copy."
+        return self.__class__(self.sequence, dtype=self.dtype)
 
 
 class OpRun:

@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional
 import onnx
 import torch
-from . import OpRun, OpRunValue
+from . import OpRun, OpRunTensor
 
 
 class OpRunControlFlow(OpRun):
@@ -86,13 +86,15 @@ class Loop_16(OpRunControlFlow):
             M is None or M.tensor is None or it < M.tensor.item()
         ):
             if len(body.input_names) > 0 and body.input_names[0] is not None:
-                inputs[body.input_names[0]] = OpRunValue(
+                inputs[body.input_names[0]] = OpRunTensor(
                     torch.tensor(it, dtype=None if M is None else M.dtype)
                 )
             if len(body.input_names) > 1 and body.input_names[1] is not None:
                 inputs[body.input_names[1]] = cond
-            outputs = self.body.run_with_values(
-                *[inputs[k] for k in self.body.input_names], context=context
+            outputs = list(
+                self.body.run_with_values(
+                    *[inputs[k] for k in self.body.input_names], context=context
+                )
             )
             if self.K > 0:
                 for k in range(self.K):
@@ -110,8 +112,7 @@ class Loop_16(OpRunControlFlow):
             outputs = [inputs[i] for i in body.input_names[2:]]
         else:
             outputs = outputs[1 : 1 + self.N]
-        outputs.extend([torch.cat(x, axis=0) for x in k_carried_away])
-        while len(outputs) < len(self.onnx_node.output):
-            outputs.append(torch.empty(shape=()))
-        res = tuple(outputs)
-        return self._check_and_fix_outputs(res)
+        outputs.extend([OpRunTensor(torch.cat(x, axis=0)) for x in k_carried_away])
+        while len(outputs) < len(self.body.output_names):
+            outputs.append(OpRunTensor(torch.empty(())))
+        return tuple(outputs)

@@ -1,7 +1,7 @@
 from typing import Optional, Tuple
 import onnx
 import torch
-from . import OpRun, OpRunValue
+from . import OpRun, OpRunTensor
 
 
 class ConstantOfShape_9(OpRun):
@@ -28,9 +28,9 @@ class ConstantOfShape_9(OpRun):
         self.device = device
         self.value = value[0]
 
-    def run(self, shape: OpRunValue) -> OpRunValue:
+    def run(self, shape: OpRunTensor) -> OpRunTensor:
         # The device is unknown as shapes usually take place on CPU.
-        return OpRunValue(
+        return OpRunTensor(
             torch.full(
                 shape.as_tuple_int, fill_value=self.value, dtype=self.dtype, device=self.device
             )
@@ -40,9 +40,9 @@ class ConstantOfShape_9(OpRun):
 class Expand_8(OpRun):
     "Expand"
 
-    def run(self, data: OpRunValue, shape: OpRunValue) -> OpRunValue:
+    def run(self, data: OpRunTensor, shape: OpRunTensor) -> OpRunTensor:
         ishape = tuple(-1 if i == 1 else i for i in shape.as_tuple_int)
-        return OpRunValue(data.tensor.expand(ishape))
+        return OpRunTensor(data.tensor.expand(ishape))
 
 
 class Reshape_14(OpRun):
@@ -52,7 +52,7 @@ class Reshape_14(OpRun):
         super().__init__(node, version)
         self.allowzero = self.get_attribute_int(node, "allowzero", 0)
 
-    def run(self, data: OpRunValue, shape: OpRunValue) -> OpRunValue:
+    def run(self, data: OpRunTensor, shape: OpRunTensor) -> OpRunTensor:
         ishape = shape.as_tuple_int
         assert ishape is not None, f"Unexpected return for shape={shape!r}"
         if not self.allowzero and 0 in ishape:
@@ -60,8 +60,8 @@ class Reshape_14(OpRun):
             new_shape = []
             for i, s in enumerate(ishape):
                 new_shape.append(xshape[i] if s == 0 else s)
-            return OpRunValue(data.tensor.reshape(new_shape))
-        return OpRunValue(data.tensor.reshape(ishape))
+            return OpRunTensor(data.tensor.reshape(new_shape))
+        return OpRunTensor(data.tensor.reshape(ishape))
 
 
 class Shape_15(OpRun):
@@ -70,10 +70,10 @@ class Shape_15(OpRun):
         self.start = self.get_attribute_int(node, "start", 0)
         self.end = self.get_attribute_int(node, "end", None)
 
-    def run(self, data: OpRunValue) -> OpRunValue:
+    def run(self, data: OpRunTensor) -> OpRunTensor:
         shape = data.shape
         sh = shape[self.start :] if self.end is None else shape[self.start : self.end]
-        return OpRunValue(torch.tensor(sh, dtype=torch.int64), is_constant=True)
+        return OpRunTensor(torch.tensor(sh, dtype=torch.int64), is_constant=True)
 
 
 class Split_18(OpRun):
@@ -83,8 +83,8 @@ class Split_18(OpRun):
         self.num_outputs = self.get_attribute_int(node, "num_outputs", None)
 
     def run(
-        self, data: OpRunValue, split: Optional[OpRunValue] = None
-    ) -> Tuple[OpRunValue, ...]:
+        self, data: OpRunTensor, split: Optional[OpRunTensor] = None
+    ) -> Tuple[OpRunTensor, ...]:
         if split is None:
             assert isinstance(
                 self.num_outputs, int
@@ -98,23 +98,23 @@ class Split_18(OpRun):
             spl = torch.split(data.tensor, split_size, dim=self.axis)
         else:
             spl = torch.split(data.tensor, split.as_tuple_int, dim=self.axis)
-        return tuple(OpRunValue(t) for t in spl)
+        return tuple(OpRunTensor(t) for t in spl)
 
 
 class Squeeze_13(OpRun):
     "Squeeze"
 
-    def run(self, data: OpRunValue, axes: Optional[OpRunValue] = None) -> OpRunValue:
+    def run(self, data: OpRunTensor, axes: Optional[OpRunTensor] = None) -> OpRunTensor:
         if axes is None:
-            return OpRunValue(data.tensor.squeeze())
-        return OpRunValue(data.tensor.squeeze(axes.as_tuple_int))
+            return OpRunTensor(data.tensor.squeeze())
+        return OpRunTensor(data.tensor.squeeze(axes.as_tuple_int))
 
 
 class Unsqueeze_13(OpRun):
     "Unsqueeze"
 
-    def run(self, data: OpRunValue, axes: OpRunValue) -> OpRunValue:
+    def run(self, data: OpRunTensor, axes: OpRunTensor) -> OpRunTensor:
         t = data.tensor
         for i in axes.as_tuple_int:
             t = t.unsqueeze(i)
-        return OpRunValue(t)
+        return OpRunTensor(t)

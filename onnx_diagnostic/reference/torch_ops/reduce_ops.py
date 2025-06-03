@@ -2,7 +2,7 @@ from typing import Optional
 import onnx
 import torch
 from ...helpers.torch_helper import onnx_dtype_to_torch_dtype
-from . import OpRun, OpRunValue
+from . import OpRun, OpRunTensor
 
 
 class ReduceOp(OpRun):
@@ -30,74 +30,74 @@ class ReduceOp(OpRun):
 class ReduceMax_18(ReduceOp):
     """ReduceMax"""
 
-    def run(self, x: OpRunValue, axes: Optional[OpRunValue] = None) -> OpRunValue:
+    def run(self, x: OpRunTensor, axes: Optional[OpRunTensor] = None) -> OpRunTensor:
         assert self.stash_type is None, f"Not implemented with stash_type={self.stash_type}"
         if axes is None:
             assert (
                 not self.keepdims
             ), f"axes is Empty, keepdims={self.keepdims} for {self.__class__.__name__}"
-            return OpRunValue(torch.max(x.tensor).values)
+            return OpRunTensor(torch.max(x.tensor).values)
         taxes = axes.as_tuple_int
         if len(taxes) == 1:
             t = x.tensor.max(taxes[0], keepdim=self.keepdims)
-            return OpRunValue(t.values)
+            return OpRunTensor(t.values)
         t = x.tensor
         for a in reversed(taxes):
             t = t.max(a, keepdim=self.keepdims).values
-        return OpRunValue(t)
+        return OpRunTensor(t)
 
 
 class ReduceMean_18(ReduceOp):
     """ReduceMean"""
 
-    def run(self, x: OpRunValue, axes: Optional[OpRunValue] = None) -> OpRunValue:
+    def run(self, x: OpRunTensor, axes: Optional[OpRunTensor] = None) -> OpRunTensor:
         assert self.stash_type is None, f"Not implemented with stash_type={self.stash_type}"
         if axes is None:
             assert (
                 not self.keepdims
             ), f"axes is Empty, keepdims={self.keepdims} for {self.__class__.__name__}"
-            return OpRunValue(torch.mean(x.tensor))
+            return OpRunTensor(torch.mean(x.tensor))
         taxes = axes.as_tuple_int
         if len(taxes) == 1:
             t = x.tensor.mean(taxes[0], keepdim=self.keepdims)
-            return OpRunValue(t)
+            return OpRunTensor(t)
         t = x.tensor.mean(taxes, keepdim=self.keepdims)
-        return OpRunValue(t)
+        return OpRunTensor(t)
 
 
 class ReduceMin_18(ReduceOp):
     """ReduceMin"""
 
-    def run(self, x: OpRunValue, axes: Optional[OpRunValue] = None) -> OpRunValue:
+    def run(self, x: OpRunTensor, axes: Optional[OpRunTensor] = None) -> OpRunTensor:
         assert self.stash_type is None, f"Not implemented with stash_type={self.stash_type}"
         if axes is None:
             assert (
                 not self.keepdims
             ), f"axes is Empty, keepdims={self.keepdims} for {self.__class__.__name__}"
-            return OpRunValue(torch.min(x.tensor).values)
+            return OpRunTensor(torch.min(x.tensor).values)
         taxes = axes.as_tuple_int
         if len(taxes) == 1:
             t = x.tensor.min(taxes[0], keepdim=self.keepdims)
-            return OpRunValue(t.values)
+            return OpRunTensor(t.values)
         t = x.tensor
         for a in reversed(taxes):
             t = t.min(a, keepdim=self.keepdims).values
-        return OpRunValue(t)
+        return OpRunTensor(t)
 
 
 class ReduceSum_18(ReduceOp):
     """ReduceSum"""
 
-    def run(self, x: OpRunValue, axes: Optional[OpRunValue] = None) -> OpRunValue:
+    def run(self, x: OpRunTensor, axes: Optional[OpRunTensor] = None) -> OpRunTensor:
         assert self.stash_type is None, f"Not implemented with stash_type={self.stash_type}"
         if axes is None:
             assert (
                 not self.keepdims
             ), f"axes is Empty, keepdims={self.keepdims} for {self.__class__.__name__}"
-            return OpRunValue(torch.sum(x.tensor))
+            return OpRunTensor(torch.sum(x.tensor))
         taxes = axes.as_tuple_int
         if len(taxes) == 1:
             t = x.tensor.sum(taxes[0], keepdim=self.keepdims)
-            return OpRunValue(t)
+            return OpRunTensor(t)
         t = x.tensor.sum(taxes, keepdim=self.keepdims)
-        return OpRunValue(t)
+        return OpRunTensor(t)

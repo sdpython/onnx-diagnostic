@@ -24,16 +24,22 @@ OpRun
 .. autoclass:: onnx_diagnostic.reference.torch_ops.OpRun
     :members:
 
+OpRunTensor
++++++++++++
+
+.. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunTensor
+    :members:
+
 OpRunValue
 ++++++++++
 
 .. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunValue
     :members:
 
-OpRunValueSequence
-++++++++++++++++++
+OpRunSequence
++++++++++++++
 
-.. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunValueSequence
+.. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunSequence
     :members:
 
 OpRunFunction

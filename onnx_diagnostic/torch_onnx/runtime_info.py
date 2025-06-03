@@ -2,6 +2,7 @@ import enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import onnx
 import torch
+from ..api import TensorLike
 from ..helpers import string_type
 
 
@@ -116,7 +117,7 @@ class RuntimeValue:
             f"kind={self.kind}{text}, value={self.value.string_type()})"
         )
 
-    def set_value(self, value: Union[torch.Tensor, "OpRunValue"]):  # noqa: F821
+    def set_value(self, value: Union[torch.Tensor, TensorLike]):
         """Sets the value."""
         assert value is not None, "Use clean_value to set a value to None"
         self.value = value
