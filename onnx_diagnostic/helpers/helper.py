@@ -698,7 +698,8 @@ def string_type(
                 print(f"[string_type] CONFIG:{type(obj)}")
             s = str(obj.to_diff_dict()).replace("\n", "").replace(" ", "")
             return f"{obj.__class__.__name__}(**{s})"
-
+    if obj.__class__.__name__ in {"TorchModelContainer", "InferenceSession"}:
+        return f"{obj.__class__.__name__}(...)"
     if verbose:
         print(f"[string_type] END:{type(obj)}")
     raise AssertionError(f"Unsupported type {type(obj).__name__!r} - {type(obj)}")

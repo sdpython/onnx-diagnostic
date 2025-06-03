@@ -405,6 +405,15 @@ def get_parser_validate() -> ArgumentParser:
         "example: --mop attn_implementation=eager",
         action=_ParseDict,
     )
+    parser.add_argument(
+        "--repeat",
+        default=1,
+        type=int,
+        help="number of times to run the model to measures inference time",
+    )
+    parser.add_argument(
+        "--warmup", default=0, type=int, help="number of times to run the model to do warmup"
+    )
     return parser
 
 
@@ -460,6 +469,8 @@ def _cmd_validate(argv: List[Any]):
             subfolder=args.subfolder,
             opset=args.opset,
             runtime=args.runtime,
+            repeat=args.repeat,
+            warmup=args.warmup,
         )
         print("")
         print("-- summary --")
