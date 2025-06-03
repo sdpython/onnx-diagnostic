@@ -159,6 +159,10 @@ class OpRunSequence(OpRunValue):
         "Shallow copy."
         return self.__class__(self.sequence, dtype=self.dtype)
 
+    def string_type(self) -> str:
+        "Returns a string which can be printed."
+        return string_type(self.sequence, with_shape=True)
+
 
 class OpRun:
     """
