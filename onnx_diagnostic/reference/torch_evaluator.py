@@ -143,6 +143,7 @@ class TorchOnnxEvaluator:
     tries to move every weight on CUDA but tries to keep any tensor
     identified as a shape in CPU. Some bugs may remain as torch
     raises an exception when devices are expected to be the same.
+    The runtime was validated with model :epkg:`arnir0/Tiny-LLM`.
     """
 
     class IO:
