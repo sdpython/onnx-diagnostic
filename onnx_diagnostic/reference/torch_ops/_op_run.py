@@ -265,7 +265,7 @@ class OpRun:
 
     def get_attribute_string(
         self, node: onnx.NodeProto, name: str, default_value: Optional[str] = None
-    ) -> Optional[Tuple[int, ...]]:
+    ) -> Optional[str]:
         """
         Returns an attribute as a tuple of ints.
 
