@@ -435,6 +435,23 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             atol=1e-6,
         )
 
+    def test_op_reduce_min_17(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("ReduceMin", ["X"], ["Z"], axes=[1])],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 17)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            atol=1e-6,
+        )
+
     def test_op_reduce_sum(self):
         model = oh.make_model(
             oh.make_graph(
@@ -1103,6 +1120,21 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         )
         B = torch.tensor([[[[0]]]], dtype=torch.float32)
         self._finalize_test(model, X, W, B, use_ort=True)
+
+    def test_nonzero(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("NonZero", ["X"], ["Y"])],
+                "g",
+                [oh.make_tensor_value_info("X", TFLOAT, [None, None])],
+                [oh.make_tensor_value_info("Y", TINT64, [None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+
+        self._finalize_test(
+            model, torch.tensor([[1, 0], [1, 1]], dtype=torch.float32), use_ort=True
+        )
 
 
 if __name__ == "__main__":

@@ -45,6 +45,13 @@ class Concat_1(OpRun):
         return OpRunTensor(torch.cat([t.tensor for t in data], axis=self.axis))
 
 
+class NonZero_13(OpRun):
+    "NonZero"
+
+    def run(self, x: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(torch.nonzero(x.tensor).T)
+
+
 class Transpose_1(OpRun):
     "Transpose"
 

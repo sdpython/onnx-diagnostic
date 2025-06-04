@@ -27,6 +27,12 @@ class ReduceOp(OpRun):
         self.stash_type = None if stash_type is None else onnx_dtype_to_torch_dtype(stash_type)
 
 
+class ReduceOpAxes(ReduceOp):
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
+        super().__init__(node, version)
+        self.axes = self.get_attribute_ints(node, "axes", [])
+
+
 class ReduceMax_18(ReduceOp):
     """ReduceMax"""
 
@@ -65,6 +71,27 @@ class ReduceMean_18(ReduceOp):
         return OpRunTensor(t)
 
 
+class ReduceMin_17(ReduceOpAxes):
+    """ReduceMin"""
+
+    def run(self, x: OpRunTensor) -> OpRunTensor:
+        assert self.stash_type is None, f"Not implemented with stash_type={self.stash_type}"
+        axes = self.axes
+        if not axes:
+            assert (
+                not self.keepdims
+            ), f"axes is Empty, keepdims={self.keepdims} for {self.__class__.__name__}"
+            return OpRunTensor(torch.min(x.tensor).values)
+        taxes = tuple(axes)
+        if len(taxes) == 1:
+            t = x.tensor.min(taxes[0], keepdim=self.keepdims)
+            return OpRunTensor(t.values)
+        t = x.tensor
+        for a in reversed(taxes):
+            t = t.min(a, keepdim=self.keepdims).values
+        return OpRunTensor(t)
+
+
 class ReduceMin_18(ReduceOp):
     """ReduceMin"""
 
@@ -85,7 +112,7 @@ class ReduceMin_18(ReduceOp):
         return OpRunTensor(t)
 
 
-class ReduceSum_18(ReduceOp):
+class ReduceSum_13(ReduceOp):
     """ReduceSum"""
 
     def run(self, x: OpRunTensor, axes: Optional[OpRunTensor] = None) -> OpRunTensor:
