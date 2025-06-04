@@ -14,7 +14,7 @@ class Conv_11(OpRun):
         self.dilations = self.get_attribute_ints(node, "dilations", None)
         self.group = self.get_attribute_int(node, "group", 1)
         self.kernel_shape: Tuple[int, ...] = (
-            self.get_attribute_int(node, "kernel_shape") or tuple()
+            self.get_attribute_ints(node, "kernel_shape") or tuple()
         )
         self.pads = self.get_attribute_ints(node, "pads", None)
         self.strides = self.get_attribute_ints(node, "strides", None)
