@@ -153,6 +153,8 @@ class TestTestHelper(ExtTestCase):
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             optimization="default",
             quiet=False,
+            repeat=2,
+            warmup=1,
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)

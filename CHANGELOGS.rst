@@ -4,6 +4,7 @@ Change Logs
 0.6.1
 +++++
 
+* :pr:`126`: add repeat and warmup to command line validate
 * :pr:`125`: handles sequences in TorchOnnxEvaluator
 * :pr:`123`: add subgraphs to TorchOnnxEvaluator
 * :pr:`122`: add local functions to TorchOnnxEvaluator

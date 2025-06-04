@@ -4,6 +4,7 @@ import os
 import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import time
+import numpy as np
 import onnx
 import onnxscript
 import onnxscript.rewriter.ort_fusions as ort_fusions
@@ -193,11 +194,16 @@ def _quiet_or_not_quiet(
     summary: Dict[str, Any],
     data: Optional[Dict[str, Any]],
     fct: Callable,
+    repeat: int = 1,
+    warmup: int = 0,
 ) -> Any:
     begin = time.perf_counter()
     if quiet:
         try:
-            return fct()
+            res = fct()
+            summary[f"time_{suffix}"] = time.perf_counter() - begin
+            if warmup + repeat == 1:
+                return res
         except Exception as e:
             summary[f"ERR_{suffix}"] = str(e)
             summary[f"time_{suffix}"] = time.perf_counter() - begin
@@ -205,8 +211,29 @@ def _quiet_or_not_quiet(
                 return {f"ERR_{suffix}": e}
             data[f"ERR_{suffix}"] = e
             return None
-    res = fct()
+    else:
+        res = fct()
     summary[f"time_{suffix}"] = time.perf_counter() - begin
+    if warmup + repeat > 1:
+        if suffix == "run":
+            res = torch_deepcopy(res)
+        summary[f"{suffix}_output"] = string_type(res, with_shape=True, with_min_max=True)
+        summary[f"{suffix}_warmup"] = warmup
+        summary[f"{suffix}_repeat"] = repeat
+        for _w in range(max(0, warmup - 1)):
+            t = fct()
+            summary[f"io_{suffix}_{_w+1}"] = string_type(t, with_shape=True, with_min_max=True)
+        summary[f"time_{suffix}_warmup"] = time.perf_counter() - begin
+        times = []
+        for _r in range(repeat):
+            begin = time.perf_counter()
+            t = fct()
+            times.append(time.perf_counter() - begin)
+        a = np.array(times)
+        summary[f"time_{suffix}_latency"] = a.mean()
+        summary[f"time_{suffix}_latency_std"] = a.std()
+        summary[f"time_{suffix}_latency_min"] = a.min()
+        summary[f"time_{suffix}_latency_min"] = a.max()
     return res
 
 
@@ -246,6 +273,8 @@ def validate_model(
     subfolder: Optional[str] = None,
     opset: Optional[int] = None,
     runtime: str = "onnxruntime",
+    repeat: int = 1,
+    warmup: int = 0,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -284,6 +313,8 @@ def validate_model(
     :param opset: onnx opset to use for the conversion
     :param runtime: onnx runtime to use to check about discrepancies,
         only if `do_run` is true
+    :param repeat: number of time to measure the model
+    :param warmup: warmup the model first
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -480,7 +511,13 @@ def validate_model(
         model = data["model"]
 
         expected = _quiet_or_not_quiet(
-            quiet, "run", summary, data, (lambda m=model, inp=inputs: m(**inp))
+            quiet,
+            "run",
+            summary,
+            data,
+            (lambda m=model, inp=inputs: m(**torch_deepcopy(inp))),
+            repeat=repeat,
+            warmup=warmup,
         )
         if "ERR_run" in summary:
             return summary, data
@@ -639,7 +676,12 @@ def validate_model(
 
     if do_run:
         summary_valid, data = validate_onnx_model(
-            data=data, quiet=quiet, verbose=verbose, runtime=runtime
+            data=data,
+            quiet=quiet,
+            verbose=verbose,
+            runtime=runtime,
+            repeat=repeat,
+            warmup=warmup,
         )
         summary.update(summary_valid)
 
@@ -693,7 +735,13 @@ def validate_model(
 
             if do_run:
                 summary_valid, data = validate_onnx_model(
-                    data=data, quiet=quiet, verbose=verbose, flavour=flavour, runtime=runtime
+                    data=data,
+                    quiet=quiet,
+                    verbose=verbose,
+                    flavour=flavour,
+                    runtime=runtime,
+                    repeat=repeat,
+                    warmup=warmup,
                 )
                 summary.update(summary_valid)
 
@@ -906,6 +954,8 @@ def validate_onnx_model(
     verbose: int = 0,
     flavour: Optional[str] = None,
     runtime: str = "onnxruntime",
+    repeat: int = 1,
+    warmup: int = 0,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Verifies that an onnx model produces the same
@@ -919,6 +969,8 @@ def validate_onnx_model(
     :param verbose: verbosity
     :param flavour: use a different version of the inputs
     :param runtime: onnx runtime to use, onnxruntime or torch
+    :param repeat: run that number of times the model
+    :param warmup: warmup the model
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -976,12 +1028,12 @@ def validate_onnx_model(
     )
     sess = _quiet_or_not_quiet(
         quiet,
-        _mk("time_onnx_ort_create"),
+        _mk("onnx_ort_create"),
         summary,
         data,
         (lambda source=source, providers=providers: cls_runtime(source, providers)),
     )
-    if f"ERR_{_mk('time_onnx_ort_create')}" in summary:
+    if f"ERR_{_mk('onnx_ort_create')}" in summary:
         return summary, data
 
     data[_mk("onnx_ort_sess")] = sess
@@ -1009,6 +1061,8 @@ def validate_onnx_model(
         summary,
         data,
         (lambda sess=sess, feeds=feeds: sess.run(None, feeds)),
+        repeat=repeat,
+        warmup=warmup,
     )
     if f"ERR_{_mk('time_onnx_ort_run')}" in summary:
         return summary, data
