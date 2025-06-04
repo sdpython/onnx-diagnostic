@@ -261,7 +261,21 @@ class OpRun:
         :return: value
         """
         att = self._find_attribute(node, name)
-        return default_value if att is None else tuple(att.ints)
+        return default_value if att is None else tuple(map(int, att.ints))
+
+    def get_attribute_string(
+        self, node: onnx.NodeProto, name: str, default_value: Optional[str] = None
+    ) -> Optional[Tuple[int, ...]]:
+        """
+        Returns an attribute as a tuple of ints.
+
+        :param node: NodeProto
+        :param name: name
+        :param default_value: default_value
+        :return: value
+        """
+        att = self._find_attribute(node, name)
+        return default_value if att is None else att.s.decode("utf-8")
 
     def get_attribute_tensor(self, node: onnx.NodeProto, name: str) -> Optional[torch.Tensor]:
         """

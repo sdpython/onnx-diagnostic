@@ -5,6 +5,49 @@ from ...helpers.torch_helper import onnx_dtype_to_torch_dtype
 from . import OpRun, OpRunTensor
 
 
+class Conv_11(OpRun):
+    "Conv"
+
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
+        super().__init__(node, version)
+        self.auto_pad = self.get_attribute_string(node, "auto_pad", "NOTSET")
+        self.dilations = self.get_attribute_ints(node, "dilations", None)
+        self.group = self.get_attribute_int(node, "group", 1)
+        self.kernel_shape = self.get_attribute_int(node, "kernel_shape", [])
+        self.pads = self.get_attribute_ints(node, "pads", None)
+        self.strides = self.get_attribute_ints(node, "strides", None)
+
+    def run(self, x, w, b=None):
+        kernel_shape = self.kernel_shape or w.shape[2:]
+        assert (
+            tuple(kernel_shape) == w.shape[2:]
+        ), f"conv not implemented for kernel_shape={kernel_shape} and w.shape={w.shape}"
+        dilations = self.dilations or [1 for _ in x.shape[2:]]
+        strides = self.strides or [1 for _ in x.shape[2:]]
+        pads = self.pads or ([0 for _ in x.shape[2:]] * 2)
+        assert (
+            self.auto_pad == "NOTSET"
+        ), f"conv not implemented for auto_pad={self.auto_pad!r}"
+        assert len(set(pads)) == 1, f"conv not implemented for dilations={pads}"
+        if b is None:
+            bias = None
+        else:
+            bias = b.tensor.squeeze()
+            if not bias.shape:
+                bias = bias.unsqueeze(0)
+        return OpRunTensor(
+            torch.nn.functional.conv2d(
+                x.tensor,
+                w.tensor,
+                bias=bias,
+                stride=tuple(strides),
+                padding=pads[0],
+                dilation=tuple(dilations),
+                groups=self.group,
+            )
+        )
+
+
 class LayerNormalization_17(OpRun):
     "LayerNormalization"
 
