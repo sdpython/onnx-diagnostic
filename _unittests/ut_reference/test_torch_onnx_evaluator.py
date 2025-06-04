@@ -1138,6 +1138,53 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             model, torch.tensor([[1, 0], [1, 1]], dtype=torch.float32), use_ort=True
         )
 
+    def test_scatternd_2d(self):
+        for reduction in ["none", "add", "min", "max", "mul"]:
+            with self.subTest(reduction=reduction):
+                model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node(
+                                "ScatterND",
+                                ["data", "indices", "updates"],
+                                ["Y"],
+                                reduction=reduction,
+                            )
+                        ],
+                        "g",
+                        [
+                            oh.make_tensor_value_info("data", TFLOAT, [None, None, None]),
+                            oh.make_tensor_value_info("indices", TINT64, [None, None]),
+                            oh.make_tensor_value_info("updates", TFLOAT, [None, None, None]),
+                        ],
+                        [oh.make_tensor_value_info("Y", TFLOAT, [None, None, None])],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                    ir_version=10,
+                )
+
+                self._finalize_test(
+                    model,
+                    torch.tensor(
+                        [
+                            [[1, 2, 3, 4], [5, 6, 7, 8], [8, 7, 6, 5], [4, 3, 2, 1]],
+                            [[1, 2, 3, 4], [5, 6, 7, 8], [8, 7, 6, 5], [4, 3, 2, 1]],
+                            [[8, 7, 6, 5], [4, 3, 2, 1], [1, 2, 3, 4], [5, 6, 7, 8]],
+                            [[8, 7, 6, 5], [4, 3, 2, 1], [1, 2, 3, 4], [5, 6, 7, 8]],
+                        ],
+                        dtype=torch.float32,
+                    ),
+                    torch.tensor([[0], [0]], dtype=torch.int64),
+                    torch.tensor(
+                        [
+                            [[5, 5, 5, 5], [6, 6, 6, 6], [7, 7, 7, 7], [8, 8, 8, 8]],
+                            [[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3], [4, 4, 4, 4]],
+                        ],
+                        dtype=torch.float32,
+                    ),
+                    use_ort=True,
+                )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

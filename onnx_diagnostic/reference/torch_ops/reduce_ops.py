@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 import onnx
 import torch
 from ...helpers.torch_helper import onnx_dtype_to_torch_dtype
@@ -30,7 +30,7 @@ class ReduceOp(OpRun):
 class ReduceOpAxes(ReduceOp):
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
-        self.axes = self.get_attribute_ints(node, "axes") or []
+        self.axes: Tuple[int, ...] = self.get_attribute_ints(node, "axes") or tuple()
 
 
 class ReduceMax_18(ReduceOp):
