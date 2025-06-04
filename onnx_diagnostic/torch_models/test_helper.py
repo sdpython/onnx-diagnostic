@@ -515,7 +515,7 @@ def validate_model(
             "run",
             summary,
             data,
-            (lambda m=model, inp=inputs: m(**inp)),
+            (lambda m=model, inp=inputs: m(**torch_deepcopy(inp))),
             repeat=repeat,
             warmup=warmup,
         )
