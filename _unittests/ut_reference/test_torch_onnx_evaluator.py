@@ -1108,6 +1108,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
                 [oh.make_tensor_value_info("Y", TFLOAT, [None, None, None, None])],
             ),
             opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
         )
         sH, sW = 5, 6
         i = sH // 2
@@ -1130,6 +1131,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
                 [oh.make_tensor_value_info("Y", TINT64, [None, None])],
             ),
             opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
         )
 
         self._finalize_test(

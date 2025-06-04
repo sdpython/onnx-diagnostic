@@ -13,7 +13,7 @@ class Conv_11(OpRun):
         self.auto_pad = self.get_attribute_string(node, "auto_pad", "NOTSET")
         self.dilations = self.get_attribute_ints(node, "dilations", None)
         self.group = self.get_attribute_int(node, "group", 1)
-        self.kernel_shape = self.get_attribute_int(node, "kernel_shape", [])
+        self.kernel_shape = self.get_attribute_int(node, "kernel_shape") or []
         self.pads = self.get_attribute_ints(node, "pads", None)
         self.strides = self.get_attribute_ints(node, "strides", None)
 

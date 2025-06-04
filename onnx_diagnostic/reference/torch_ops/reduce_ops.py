@@ -30,7 +30,7 @@ class ReduceOp(OpRun):
 class ReduceOpAxes(ReduceOp):
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
-        self.axes = self.get_attribute_ints(node, "axes", [])
+        self.axes = self.get_attribute_ints(node, "axes") or []
 
 
 class ReduceMax_18(ReduceOp):
