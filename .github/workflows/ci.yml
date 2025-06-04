@@ -72,6 +72,9 @@ jobs:
       - name: Install requirements dev
         run: python -m pip install -r requirements-dev.txt
 
+      - name: Uninstall onnx-diagnostic
+        run: python -m pip uninstall -y onnx-diagnostic
+
       - name: Uninstall onnx and install onnx-weekly
         run: |
           python -m pip uninstall -y onnx
