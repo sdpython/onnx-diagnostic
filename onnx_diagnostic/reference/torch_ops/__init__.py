@@ -1,5 +1,5 @@
 from ._op_run import OpRun, OpRunFunction, OpRunSequence, OpRunTensor, OpRunValue
-from .access_ops import Gather_1, Slice_13
+from .access_ops import Gather_1, ScatterND_16, Slice_13
 from .binary_ops import (
     And_1,
     Add_1,
@@ -17,9 +17,18 @@ from .binary_ops import (
 )
 from .controlflow_ops import If_1, Loop_16
 from .generator_ops import Range_11
-from .nn_ops import LayerNormalization_17, Softmax_13, Tanh_6
-from .other_ops import Cast_6, CastLike_15, Concat_1, Transpose_1, Trilu_14, Where_9
-from .reduce_ops import ReduceMax_18, ReduceMean_18, ReduceMin_18, ReduceSum_18
+from .nn_ops import AveragePool_11, Conv_11, LayerNormalization_17, Softmax_13, Tanh_6
+from .other_ops import (
+    Cast_6,
+    CastLike_15,
+    NonZero_13,
+    Concat_1,
+    Tile_6,
+    Transpose_1,
+    Trilu_14,
+    Where_9,
+)
+from .reduce_ops import ReduceMax_18, ReduceMean_18, ReduceMin_17, ReduceMin_18, ReduceSum_13
 from .sequence_ops import ConcatFromSequence_11, SequenceEmpty_11, SequenceInsert_11
 from .shape_ops import (
     ConstantOfShape_9,
@@ -33,6 +42,7 @@ from .shape_ops import (
 from .unary_ops import (
     Abs_1,
     Cos_1,
+    Erf_9,
     Exp_1,
     Identity_1,
     Log_1,

@@ -42,7 +42,35 @@ class Concat_1(OpRun):
         self.axis = axis
 
     def run(self, *data: OpRunTensor) -> OpRunTensor:
-        return OpRunTensor(torch.cat([t.tensor for t in data], axis=self.axis))
+        assert data, f"No tensor to concatenate in node name {self.name!r}"
+        devices = [d.get_device() for d in data]
+        if len(set(devices)) == 1:
+            return OpRunTensor(torch.cat([t.tensor for t in data], axis=self.axis))
+        if (
+            data[0].dtype == torch.int64
+            and self.axis == 0
+            and max(d.tensor.ndim for d in data) == 1
+            and max(d.tensor.numel() for d in data) <= 8
+        ):
+            # This is a shape
+            return OpRunTensor(torch.cat([t.tensor.cpu() for t in data], axis=self.axis))
+        index = devices.index(max(devices))
+        device = data[index].tensor.device
+        return OpRunTensor(torch.cat([t.tensor.to(device) for t in data], axis=self.axis))
+
+
+class NonZero_13(OpRun):
+    "NonZero"
+
+    def run(self, x: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(torch.nonzero(x.tensor).T)
+
+
+class Tile_6(OpRun):
+    "Tile"
+
+    def run(self, x: OpRunTensor, repeat: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(torch.tile(x.tensor, repeat.as_tuple_int))
 
 
 class Transpose_1(OpRun):
@@ -74,4 +102,5 @@ class Where_9(OpRun):
     "Where"
 
     def run(self, cond: OpRunTensor, x: OpRunTensor, y: OpRunTensor) -> OpRunTensor:
-        return OpRunTensor(torch.where(cond.tensor, x.tensor, y.tensor))
+        tcond, tx, ty = self.same_device(cond.tensor, x.tensor, y.tensor)
+        return OpRunTensor(torch.where(tcond, tx, ty))

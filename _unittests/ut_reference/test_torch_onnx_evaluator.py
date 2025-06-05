@@ -435,6 +435,57 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             atol=1e-6,
         )
 
+    def test_op_reduce_min_no_axes(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("ReduceMin", ["X"], ["Z"], keepdims=0)],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            atol=1e-6,
+        )
+
+    def test_op_reduce_min_17(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("ReduceMin", ["X"], ["Z"], axes=[1])],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 17)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            atol=1e-6,
+        )
+
+    def test_op_reduce_min_17_no_axes(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("ReduceMin", ["X"], ["Z"], keepdims=0)],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 17)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            atol=1e-6,
+        )
+
     def test_op_reduce_sum(self):
         model = oh.make_model(
             oh.make_graph(
@@ -654,7 +705,8 @@ class TestTorchOnnxEvaluator(ExtTestCase):
                     oh.make_node("Cos", ["X"], ["nx"]),
                     oh.make_node("Sin", ["nx"], ["t"]),
                     oh.make_node("Exp", ["t"], ["u"]),
-                    oh.make_node("Log", ["u"], ["Z"]),
+                    oh.make_node("Log", ["u"], ["uZ"]),
+                    oh.make_node("Erf", ["uZ"], ["Z"]),
                 ],
                 "dummy",
                 [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
@@ -1067,6 +1119,254 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         )
         self._finalize_test(
             model, torch.tensor(5, dtype=torch.int64), torch.tensor(1, dtype=torch.bool)
+        )
+
+    def test_conv(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "Conv",
+                        ["X", "W", "B"],
+                        ["Y"],
+                        pads=[1, 1, 1, 1],
+                        dilations=[1, 1],
+                        strides=[2, 2],
+                    )
+                ],
+                "g",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, [None, None, None, None]),
+                    oh.make_tensor_value_info("W", TFLOAT, [None, None, None, None]),
+                    oh.make_tensor_value_info("B", TFLOAT, [None, None, None, None]),
+                ],
+                [oh.make_tensor_value_info("Y", TFLOAT, [None, None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        sH, sW = 5, 6
+        i = sH // 2
+        j = sW // 2
+        X = torch.zeros((1, 1, sH, sW), dtype=torch.float32)
+        X[0, 0, i, j] = 1.0
+        W = torch.zeros((1, 1, 3, 3), dtype=torch.float32)
+        W[0, 0, :, :] = torch.minimum(
+            2 ** torch.arange(9).reshape((3, -1)), torch.tensor([256])
+        )
+        B = torch.tensor([[[[0]]]], dtype=torch.float32)
+        self._finalize_test(model, X, W, B, use_ort=True)
+
+    def test_conv_autopad_valid(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "Conv",
+                        ["X", "W", "B"],
+                        ["Y"],
+                        dilations=[1, 1],
+                        strides=[2, 2],
+                        auto_pad="VALID",
+                    )
+                ],
+                "g",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, [None, None, None, None]),
+                    oh.make_tensor_value_info("W", TFLOAT, [None, None, None, None]),
+                    oh.make_tensor_value_info("B", TFLOAT, [None, None, None, None]),
+                ],
+                [oh.make_tensor_value_info("Y", TFLOAT, [None, None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        sH, sW = 5, 5
+        i = sH // 2
+        j = sW // 2
+        X = torch.zeros((1, 1, sH, sW), dtype=torch.float32)
+        X[0, 0, i, j] = 1.0
+        W = torch.zeros((1, 1, 3, 3), dtype=torch.float32)
+        W[0, 0, :, :] = torch.minimum(
+            2 ** torch.arange(9).reshape((3, -1)), torch.tensor([256])
+        )
+        B = torch.tensor([[[[0]]]], dtype=torch.float32)
+        self._finalize_test(model, X, W, B, use_ort=True)
+
+    def test_conv_autopad_upper(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "Conv",
+                        ["X", "W", "B"],
+                        ["Y"],
+                        dilations=[1, 1],
+                        strides=[2, 2],
+                        auto_pad="SAME_UPPER",
+                    )
+                ],
+                "g",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, [None, None, None, None]),
+                    oh.make_tensor_value_info("W", TFLOAT, [None, None, None, None]),
+                    oh.make_tensor_value_info("B", TFLOAT, [None, None, None, None]),
+                ],
+                [oh.make_tensor_value_info("Y", TFLOAT, [None, None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        sH, sW = 5, 5
+        i = sH // 2
+        j = sW // 2
+        X = torch.zeros((1, 1, sH, sW), dtype=torch.float32)
+        X[0, 0, i, j] = 1.0
+        W = torch.zeros((1, 1, 3, 3), dtype=torch.float32)
+        W[0, 0, :, :] = torch.minimum(
+            2 ** torch.arange(9).reshape((3, -1)), torch.tensor([256])
+        )
+        B = torch.tensor([[[[0]]]], dtype=torch.float32)
+        self._finalize_test(model, X, W, B, use_ort=True)
+
+    def test_nonzero(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("NonZero", ["X"], ["Y"])],
+                "g",
+                [oh.make_tensor_value_info("X", TFLOAT, [None, None])],
+                [oh.make_tensor_value_info("Y", TINT64, [None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+
+        self._finalize_test(
+            model, torch.tensor([[1, 0], [1, 1]], dtype=torch.float32), use_ort=True
+        )
+
+    def test_scatternd_2d(self):
+        for reduction in ["none", "add", "min", "max", "mul"]:
+            with self.subTest(reduction=reduction):
+                model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node(
+                                "ScatterND",
+                                ["data", "indices", "updates"],
+                                ["Y"],
+                                reduction=reduction,
+                            )
+                        ],
+                        "g",
+                        [
+                            oh.make_tensor_value_info("data", TFLOAT, [None, None, None]),
+                            oh.make_tensor_value_info("indices", TINT64, [None, None]),
+                            oh.make_tensor_value_info("updates", TFLOAT, [None, None, None]),
+                        ],
+                        [oh.make_tensor_value_info("Y", TFLOAT, [None, None, None])],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                    ir_version=10,
+                )
+
+                self._finalize_test(
+                    model,
+                    torch.tensor(
+                        [
+                            [[1, 2, 3, 4], [5, 6, 7, 8], [8, 7, 6, 5], [4, 3, 2, 1]],
+                            [[1, 2, 3, 4], [5, 6, 7, 8], [8, 7, 6, 5], [4, 3, 2, 1]],
+                            [[8, 7, 6, 5], [4, 3, 2, 1], [1, 2, 3, 4], [5, 6, 7, 8]],
+                            [[8, 7, 6, 5], [4, 3, 2, 1], [1, 2, 3, 4], [5, 6, 7, 8]],
+                        ],
+                        dtype=torch.float32,
+                    ),
+                    torch.tensor([[0], [0]], dtype=torch.int64),
+                    torch.tensor(
+                        [
+                            [[5, 5, 5, 5], [6, 6, 6, 6], [7, 7, 7, 7], [8, 8, 8, 8]],
+                            [[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3], [4, 4, 4, 4]],
+                        ],
+                        dtype=torch.float32,
+                    ),
+                    use_ort=True,
+                )
+
+    def test_averagepool_1d(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "AveragePool",
+                        inputs=["x"],
+                        outputs=["y"],
+                        kernel_shape=[2],
+                    )
+                ],
+                "ut",
+                [oh.make_tensor_value_info("x", TFLOAT, [None, None, None])],
+                [oh.make_tensor_value_info("y", TFLOAT, [None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        self._finalize_test(model, torch.rand((1, 3, 32), dtype=torch.float32))
+
+    def test_averagepool_2d(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "AveragePool",
+                        inputs=["x"],
+                        outputs=["y"],
+                        kernel_shape=[5, 5],
+                        pads=[2, 2, 2, 2],
+                    )
+                ],
+                "ut",
+                [oh.make_tensor_value_info("x", TFLOAT, [None, None, None, None])],
+                [oh.make_tensor_value_info("y", TFLOAT, [None, None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        self._finalize_test(
+            model,
+            torch.tensor(
+                [
+                    [
+                        [
+                            [1, 2, 3, 4, 5],
+                            [6, 7, 8, 9, 10],
+                            [11, 12, 13, 14, 15],
+                            [16, 17, 18, 19, 20],
+                            [21, 22, 23, 24, 25],
+                        ]
+                    ]
+                ],
+                dtype=torch.float32,
+            ),
+        )
+
+    def test_tile(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Tile", ["x", "repeat"], ["y"])],
+                "ut",
+                [
+                    oh.make_tensor_value_info("x", TFLOAT, [None, None]),
+                    oh.make_tensor_value_info("repeat", TFLOAT, [None]),
+                ],
+                [oh.make_tensor_value_info("y", TFLOAT, [None, None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        self._finalize_test(
+            model,
+            torch.tensor([[1, 2], [3, 4]], dtype=torch.float32),
+            torch.tensor([2, 2], dtype=torch.int64),
         )
 
 
