@@ -472,7 +472,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
     def test_op_reduce_min_17_no_axes(self):
         model = oh.make_model(
             oh.make_graph(
-                [oh.make_node("ReduceMin", ["X"], ["Z"])],
+                [oh.make_node("ReduceMin", ["X"], ["Z"], keepdims=0)],
                 "dummy",
                 [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"])],
                 [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],

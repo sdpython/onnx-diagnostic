@@ -122,14 +122,24 @@ class LayerNormalization_17(OpRun):
 
     def run(self, x, scale, bias=None):
         original_dtype = x.dtype
-        xt = x.tensor.to(self.stash_type)
-        res = torch.nn.functional.layer_norm(
-            xt,
-            xt.shape[self.axis :],
-            weight=scale.tensor,
-            bias=None if bias is None else bias.tensor,
-            eps=self.epsilon,
-        )
+        if self.stash_type == torch.float32 and x.tensor.dtype != torch.float64:
+            xt = x.tensor
+            res = torch.nn.functional.layer_norm(
+                xt,
+                xt.shape[self.axis :],
+                weight=scale.tensor,
+                bias=None if bias is None else bias.tensor,
+                eps=self.epsilon,
+            )
+        else:
+            xt = x.tensor.to(self.stash_type)
+            res = torch.nn.functional.layer_norm(
+                xt,
+                xt.shape[self.axis :],
+                weight=scale.tensor.to(self.stash_type),
+                bias=None if bias is None else bias.tensor.to(self.stash_type),
+                eps=self.epsilon,
+            )
         if not self.compute_std:
             return OpRunTensor(res.to(original_dtype))
         axes = tuple(range(len(xt.shape)))[self.axis :]
