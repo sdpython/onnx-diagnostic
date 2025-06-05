@@ -52,6 +52,13 @@ class NonZero_13(OpRun):
         return OpRunTensor(torch.nonzero(x.tensor).T)
 
 
+class Tile_6(OpRun):
+    "Tile"
+
+    def run(self, x: OpRunTensor, repeat: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(torch.tile(x.tensor, repeat.as_tuple_int))
+
+
 class Transpose_1(OpRun):
     "Transpose"
 

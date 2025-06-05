@@ -23,6 +23,7 @@ from .other_ops import (
     CastLike_15,
     NonZero_13,
     Concat_1,
+    Tile_6,
     Transpose_1,
     Trilu_14,
     Where_9,
@@ -41,6 +42,7 @@ from .shape_ops import (
 from .unary_ops import (
     Abs_1,
     Cos_1,
+    Erf_9,
     Exp_1,
     Identity_1,
     Log_1,

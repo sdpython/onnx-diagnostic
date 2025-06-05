@@ -16,6 +16,13 @@ class Cos_1(OpRun):
         return OpRunTensor(x.tensor.cos())
 
 
+class Erf_9(OpRun):
+    """Erf"""
+
+    def run(self, x: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(x.tensor.erf())
+
+
 class Exp_1(OpRun):
     """Exp"""
 

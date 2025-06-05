@@ -671,7 +671,8 @@ class TestTorchOnnxEvaluator(ExtTestCase):
                     oh.make_node("Cos", ["X"], ["nx"]),
                     oh.make_node("Sin", ["nx"], ["t"]),
                     oh.make_node("Exp", ["t"], ["u"]),
-                    oh.make_node("Log", ["u"], ["Z"]),
+                    oh.make_node("Log", ["u"], ["uZ"]),
+                    oh.make_node("Erf", ["uZ"], ["Z"]),
                 ],
                 "dummy",
                 [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
@@ -1240,6 +1241,26 @@ class TestTorchOnnxEvaluator(ExtTestCase):
                 ],
                 dtype=torch.float32,
             ),
+        )
+
+    def test_tile(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Tile", ["x", "repeat"], ["y"])],
+                "ut",
+                [
+                    oh.make_tensor_value_info("x", TFLOAT, [None, None]),
+                    oh.make_tensor_value_info("repeat", TFLOAT, [None]),
+                ],
+                [oh.make_tensor_value_info("y", TFLOAT, [None, None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        self._finalize_test(
+            model,
+            torch.tensor([[1, 2], [3, 4]], dtype=torch.float32),
+            torch.tensor([2, 2], dtype=torch.int64),
         )
 
 
