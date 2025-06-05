@@ -1,6 +1,5 @@
 from typing import Optional
 import onnx
-import numpy as np
 import torch
 from . import OpRun, OpRunTensor
 
@@ -28,21 +27,6 @@ class ScatterND_16(OpRun):
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
         self.reduction = self.get_attribute_string(node, "reduction", "none")
-
-    def _scatter_nd_impl(data, indices, updates, reduction=None):  # type: ignore
-        output = np.copy(data)
-        for i in np.ndindex(indices.shape[:-1]):
-            if reduction == "add":
-                output[tuple(indices[i])] += updates[i]
-            elif reduction == "mul":
-                output[tuple(indices[i])] *= updates[i]
-            elif reduction == "max":
-                output[tuple(indices[i])] = np.maximum(output[indices[i]], updates[i])
-            elif reduction == "min":
-                output[tuple(indices[i])] = np.minimum(output[indices[i]], updates[i])
-            else:
-                output[tuple(indices[i])] = updates[i]
-        return output
 
     def run(
         self, data: OpRunTensor, indices: OpRunTensor, updates: OpRunTensor
