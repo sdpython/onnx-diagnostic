@@ -65,11 +65,30 @@ class Conv_11(OpRun):
         ), f"conv not implemented for kernel_shape={kernel_shape} and w.shape={w.shape}"
         dilations = self.dilations or [1 for _ in x.shape[2:]]
         strides = self.strides or [1 for _ in x.shape[2:]]
-        pads = self.pads or ([0 for _ in x.shape[2:]] * 2)
-        assert (
-            self.auto_pad == "NOTSET"
-        ), f"conv not implemented for auto_pad={self.auto_pad!r}"
-        assert len(set(pads)) == 1, f"conv not implemented for pads={pads}"
+
+        if self.auto_pad in {"SAME_LOWER", "SAME_UPPER"}:
+            head = []
+            tail = []
+            for i in range(len(x.shape) - 2):
+                d = x.shape[i + 2]
+                target_size = (d + strides[i] - 1) // strides[i]
+                pad_needed = (target_size - 1) * strides[i] + kernel_shape[i] - d
+                pad_head = (
+                    (pad_needed + 1) // 2 if self.auto_pad == "SAME_LOWER" else pad_needed // 2
+                )
+                pad_tail = pad_needed - pad_head
+                head.append(pad_head)
+                tail.append(pad_tail)
+            pads = head + tail
+        else:
+            pads = self.pads or ([0 for _ in x.shape[2:]] * 2)
+
+        assert len(set(pads)) == 1, (
+            f"conv not implemented for pads={pads}, "
+            f"auto_pad={self.auto_pad!r}, strides={strides}, "
+            f"x.shape={x.shape}, kernel_shape={kernel_shape}"
+        )
+
         if b is None:
             bias = None
         else:

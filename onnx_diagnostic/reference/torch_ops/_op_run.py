@@ -28,8 +28,11 @@ class OpRunTensor(OpRunValue):
     """
 
     def __init__(self, tensor, is_constant: bool = False, may_cpu: bool = False):
-        assert isinstance(tensor, torch.Tensor), f"Unexpected type {type(tensor)}"
-        assert tensor is None or tensor.numel() > 1 or tensor.item() != -666666
+        assert isinstance(tensor, torch.Tensor), (
+            f"Unexpected type {type(tensor)}, "
+            f"__name__={getattr(tensor, '__name__', 'no name')}"
+        )
+        assert tensor is None or tensor.numel() != 1 or tensor.item() != -666666
         self.tensor = (
             tensor.cpu()
             if may_cpu
@@ -197,6 +200,7 @@ class OpRun:
             ), f"Cannot guess version from name={self.__class__.__name__!r}"
             version = int(name[1])
         self.version = version
+        self.name = node.name
 
     def __str__(self) -> str:
         "usual"
@@ -290,6 +294,15 @@ class OpRun:
         if att is None:
             return None
         return to_tensor(att.t)
+
+    def same_device(self, *tensors: torch.Tensor) -> Tuple[torch.Tensor, ...]:
+        """Puts all tensors on the same device."""
+        devices = [t.get_device() for t in tensors]
+        if len(set(devices)) == 1:
+            return tuple(tensors)
+        index = devices.index(max(devices))
+        device = tensors[index].device
+        return tuple(t.to(device) for t in tensors)
 
 
 class OpRunFunction(OpRun):

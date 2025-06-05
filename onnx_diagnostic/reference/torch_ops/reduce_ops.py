@@ -42,7 +42,7 @@ class ReduceMax_18(ReduceOp):
             assert (
                 not self.keepdims
             ), f"axes is Empty, keepdims={self.keepdims} for {self.__class__.__name__}"
-            return OpRunTensor(torch.max(x.tensor).values)
+            return OpRunTensor(x.tensor.max())
         taxes = axes.as_tuple_int
         if len(taxes) == 1:
             t = x.tensor.max(taxes[0], keepdim=self.keepdims)
@@ -81,7 +81,7 @@ class ReduceMin_17(ReduceOpAxes):
             assert (
                 not self.keepdims
             ), f"axes is Empty, keepdims={self.keepdims} for {self.__class__.__name__}"
-            return OpRunTensor(torch.min(x.tensor).values)
+            return OpRunTensor(x.tensor.min())
         taxes = tuple(axes)
         if len(taxes) == 1:
             t = x.tensor.min(taxes[0], keepdim=self.keepdims)
@@ -100,8 +100,8 @@ class ReduceMin_18(ReduceOp):
         if axes is None:
             assert (
                 not self.keepdims
-            ), f"axes is Empty, keepdims={self.keepdims} for {self.__class__.__name__}"
-            return OpRunTensor(torch.min(x.tensor).values)
+            ), f"axes is empty, keepdims={self.keepdims} for {self.__class__.__name__}"
+            return OpRunTensor(torch.min(x.tensor))
         taxes = axes.as_tuple_int
         if len(taxes) == 1:
             t = x.tensor.min(taxes[0], keepdim=self.keepdims)

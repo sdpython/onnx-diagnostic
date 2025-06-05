@@ -435,10 +435,44 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             atol=1e-6,
         )
 
+    def test_op_reduce_min_no_axes(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("ReduceMin", ["X"], ["Z"], keepdims=0)],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            atol=1e-6,
+        )
+
     def test_op_reduce_min_17(self):
         model = oh.make_model(
             oh.make_graph(
                 [oh.make_node("ReduceMin", ["X"], ["Z"], axes=[1])],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 17)],
+        )
+        self._finalize_test(
+            model,
+            torch.rand(3, 4, 5, dtype=torch.float32),
+            atol=1e-6,
+        )
+
+    def test_op_reduce_min_17_no_axes(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("ReduceMin", ["X"], ["Z"])],
                 "dummy",
                 [oh.make_tensor_value_info("X", TFLOAT, ["a", "b", "c"])],
                 [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b", "c"])],
@@ -1112,6 +1146,42 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             ir_version=10,
         )
         sH, sW = 5, 6
+        i = sH // 2
+        j = sW // 2
+        X = torch.zeros((1, 1, sH, sW), dtype=torch.float32)
+        X[0, 0, i, j] = 1.0
+        W = torch.zeros((1, 1, 3, 3), dtype=torch.float32)
+        W[0, 0, :, :] = torch.minimum(
+            2 ** torch.arange(9).reshape((3, -1)), torch.tensor([256])
+        )
+        B = torch.tensor([[[[0]]]], dtype=torch.float32)
+        self._finalize_test(model, X, W, B, use_ort=True)
+
+    def test_conv_autopad_valid(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "Conv",
+                        ["X", "W", "B"],
+                        ["Y"],
+                        dilations=[1, 1],
+                        strides=[2, 2],
+                        auto_pad="VALID",
+                    )
+                ],
+                "g",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT, [None, None, None, None]),
+                    oh.make_tensor_value_info("W", TFLOAT, [None, None, None, None]),
+                    oh.make_tensor_value_info("B", TFLOAT, [None, None, None, None]),
+                ],
+                [oh.make_tensor_value_info("Y", TFLOAT, [None, None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        sH, sW = 5, 5
         i = sH // 2
         j = sW // 2
         X = torch.zeros((1, 1, sH, sW), dtype=torch.float32)
