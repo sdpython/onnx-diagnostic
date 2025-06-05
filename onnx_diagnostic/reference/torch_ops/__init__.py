@@ -17,7 +17,7 @@ from .binary_ops import (
 )
 from .controlflow_ops import If_1, Loop_16
 from .generator_ops import Range_11
-from .nn_ops import Conv_11, LayerNormalization_17, Softmax_13, Tanh_6
+from .nn_ops import AveragePool_11, Conv_11, LayerNormalization_17, Softmax_13, Tanh_6
 from .other_ops import (
     Cast_6,
     CastLike_15,

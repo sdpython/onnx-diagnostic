@@ -1185,6 +1185,63 @@ class TestTorchOnnxEvaluator(ExtTestCase):
                     use_ort=True,
                 )
 
+    def test_averagepool_1d(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "AveragePool",
+                        inputs=["x"],
+                        outputs=["y"],
+                        kernel_shape=[2],
+                    )
+                ],
+                "ut",
+                [oh.make_tensor_value_info("x", TFLOAT, [None, None, None])],
+                [oh.make_tensor_value_info("y", TFLOAT, [None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        self._finalize_test(model, torch.rand((1, 3, 32), dtype=torch.float32))
+
+    def test_averagepool_2d(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "AveragePool",
+                        inputs=["x"],
+                        outputs=["y"],
+                        kernel_shape=[5, 5],
+                        pads=[2, 2, 2, 2],
+                    )
+                ],
+                "ut",
+                [oh.make_tensor_value_info("x", TFLOAT, [None, None, None, None])],
+                [oh.make_tensor_value_info("y", TFLOAT, [None, None, None, None])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        self._finalize_test(
+            model,
+            torch.tensor(
+                [
+                    [
+                        [
+                            [1, 2, 3, 4, 5],
+                            [6, 7, 8, 9, 10],
+                            [11, 12, 13, 14, 15],
+                            [16, 17, 18, 19, 20],
+                            [21, 22, 23, 24, 25],
+                        ]
+                    ]
+                ],
+                dtype=torch.float32,
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
