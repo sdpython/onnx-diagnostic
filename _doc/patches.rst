@@ -81,7 +81,17 @@ Every patched class is prefixed with ``patched_``. It contains two class attribu
 
 The packages automatically parses this file to extract the patched methods.
 More can be added by populating the argument ``custom_patches``:
-``with torch_export_patches(custom_patches=[...])``.
+``with torch_export_patches(patch_transformers=True, custom_patches=[...])``.
+Here is the list of available patches:
+
+.. runpython::
+    :showcode:
+
+    import onnx_diagnostic.torch_export_patches.patches.patch_transformers as p
+
+    for name, cls in p.__dict__.items():
+        if name.startswith("patched_") and hasattr(cls, "_PATCHES_"):
+            print(f"{cls._PATCHED_CLASS_.__name__}: {', '.join(cls._PATCHES_)}")
 
 Cache serialization
 ===================
@@ -96,6 +106,14 @@ This function does one class,
 does all known classes.
 It can be undone with :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.unregister`
 or :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.unregister_cache_serialization`.
+Here is the list of supported caches:
+
+.. runpython::
+    :showcode:
+
+    import onnx_diagnostic.torch_export_patches.onnx_export_serialization as p
+
+    print("\n".join(sorted(p.serialization_functions())))
 
 .. _l-control-flow-rewriting:
 
@@ -184,3 +202,25 @@ We finally get:
     -
     +        outputs = outputs + (attn_weights,)
         return outputs
+
+The locations where it has to be done:
+
+.. runpython::
+    :showcode:
+
+    import pprint
+    from onnx_diagnostic.torch_export_patches.patch_module_helper import (
+        known_transformers_rewritings_clamp_float16,
+    )
+
+    pprint.pprint(known_transformers_rewritings_clamp_float16())
+
+.. runpython::
+    :showcode:
+
+    import pprint
+    from onnx_diagnostic.torch_export_patches.patch_module_helper import (
+        _rewrite_forward_clamp_float16,
+    )
+
+    pprint.pprint(_rewrite_forward_clamp_float16())
