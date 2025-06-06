@@ -1,5 +1,6 @@
 import inspect
 from dataclasses import dataclass
+from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import torch
 import transformers
@@ -531,3 +532,90 @@ class patched_GenerationMixin:
         # 8. Remove unexpected `generate` inputs (TODO @joao: fix trainer and examples)
         model_inputs.pop("labels", None)
         return model_inputs
+
+
+def patched_dynamic_rope_update(rope_forward):
+    """
+    patch:transformers.modeling_rope_utils.dynamic_rope_update
+    """
+
+    def longrope_frequency_update(self, position_ids, device):
+        seq_len = torch.max(position_ids) + 1
+        if hasattr(self.config, "original_max_position_embeddings"):
+            original_max_position_embeddings = self.config.original_max_position_embeddings
+        else:
+            original_max_position_embeddings = self.config.max_position_embeddings
+        # At export time, seq_len is unknown.
+        long_inv_freq, _ = self.rope_init_fn(
+            self.config, device, seq_len=original_max_position_embeddings + 1
+        )
+        original_inv_freq = self.original_inv_freq.to(device)
+
+        cond = (seq_len > original_max_position_embeddings).item()
+        inv_freq = torch.cond(
+            cond,
+            (lambda x, y: x.clone()),
+            (lambda x, y: y.clone()),
+            [long_inv_freq, original_inv_freq],
+        )
+        self.inv_freq = inv_freq
+        # if seq_len > original_max_position_embeddings:
+        #    self.inv_freq = self.long_inv_freq
+        # else:
+        #    self.inv_freq = self.original_inv_freq
+
+    def dynamic_frequency_update(self, position_ids, device):
+        seq_len = torch.max(position_ids) + 1
+        if seq_len > self.max_seq_len_cached:  # growth
+            inv_freq, self.attention_scaling = self.rope_init_fn(
+                self.config, device, seq_len=seq_len
+            )
+            self.register_buffer("inv_freq", inv_freq, persistent=False)
+            self.max_seq_len_cached = seq_len
+
+        if (
+            seq_len < self.original_max_seq_len
+            and self.max_seq_len_cached > self.original_max_seq_len
+        ):
+            self.original_inv_freq = self.original_inv_freq.to(device)
+            self.register_buffer("inv_freq", self.original_inv_freq, persistent=False)
+            self.max_seq_len_cached = self.original_max_seq_len
+
+    @wraps(rope_forward)
+    def wrapper(self, x, position_ids):
+        if "dynamic" in self.rope_type:
+            dynamic_frequency_update(self, position_ids, device=x.device)
+        elif self.rope_type == "longrope":
+            longrope_frequency_update(self, position_ids, device=x.device)
+        return rope_forward(self, x, position_ids)
+
+    return wrapper
+
+
+class patched_Phi3RotaryEmbedding(torch.nn.Module):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding
+
+    @torch.no_grad()
+    @patched_dynamic_rope_update
+    def forward(self, x, position_ids):
+        inv_freq_expanded = (
+            self.inv_freq[None, :, None]
+            .float()
+            .expand(position_ids.shape[0], -1, 1)
+            .to(x.device)
+        )
+        position_ids_expanded = position_ids[:, None, :].float()
+
+        device_type = (
+            x.device.type
+            if isinstance(x.device.type, str) and x.device.type != "mps"
+            else "cpu"
+        )
+        with torch.autocast(device_type=device_type, enabled=False):  # Force float32
+            freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2)
+            emb = torch.cat((freqs, freqs), dim=-1)
+            cos = emb.cos() * self.attention_scaling
+            sin = emb.sin() * self.attention_scaling
+
+        return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
