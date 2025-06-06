@@ -4,12 +4,13 @@ Change Logs
 0.6.1
 +++++
 
+* :pr:`128`: patch for Phi3RotaryEmbedding
 * :pr:`126`: add repeat and warmup to command line validate
 * :pr:`125`: handles sequences in TorchOnnxEvaluator
 * :pr:`123`: add subgraphs to TorchOnnxEvaluator
 * :pr:`122`: add local functions to TorchOnnxEvaluator
 * :pr:`120`: enables TorchOnnxEvaluator in command line ``python -m onnx_diagnostic validate ...``
-* :pr:`115`, :pr:`116`, :pr:`117`, :pr:`118`, :pr:`119`:
+* :pr:`115`, :pr:`116`, :pr:`117`, :pr:`118`, :pr:`119`, :pr:`127`:
   first steps for TorchOnnxEvaluator
 * :pr:`114`: extends the list of known rewritings
 * :pr:`113`: fixes a couple of issues with ModelBuilder
