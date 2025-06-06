@@ -356,7 +356,7 @@ def get_parser_validate() -> ArgumentParser:
         "--runtime",
         choices=["onnxruntime", "torch", "ref"],
         default="onnxruntime",
-        help="onnx runtime to use, ",
+        help="onnx runtime to use, onnxruntime by default",
     )
     parser.add_argument(
         "-o",
