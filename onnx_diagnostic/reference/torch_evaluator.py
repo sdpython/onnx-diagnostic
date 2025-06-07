@@ -9,7 +9,7 @@ from . import torch_ops
 
 
 @functools.lru_cache
-def get_kernels() -> Dict[Tuple[str, str, int], type[torch_ops.OpRun]]:
+def get_kernels() -> Dict[Tuple[str, str, int], type[torch_ops.OpRunKernel]]:
     """
     Retrieves all the available kernels class :class:`TorchOnnxEvaluator`
     can use. The full list is the following.
@@ -28,7 +28,7 @@ def get_kernels() -> Dict[Tuple[str, str, int], type[torch_ops.OpRun]]:
     """
     res = {}
     for _k, v in torch_ops.__dict__.items():
-        if isinstance(v, type) and issubclass(v, torch_ops.OpRun) and "_" in v.__name__:
+        if isinstance(v, type) and issubclass(v, torch_ops.OpRunKernel) and "_" in v.__name__:
             name, version = v.__name__.split("_")
             domain = getattr(v, "domain", "")
             res[domain, name, int(version)] = v
@@ -161,11 +161,11 @@ class TorchOnnxEvaluator:
         from onnx_diagnostic.helpers import string_type
         from onnx_diagnostic.helpers.torch_helper import onnx_dtype_to_torch_dtype
         from onnx_diagnostic.reference import TorchOnnxEvaluator
-        from onnx_diagnostic.reference.torch_ops import OpRun, OpRunTensor
+        from onnx_diagnostic.reference.torch_ops import OpRunKernel, OpRunTensor
 
         TFLOAT16 = onnx.TensorProto.FLOAT16
 
-        class LayerNormalizationOrt(OpRun):
+        class LayerNormalizationOrt(OpRunKernel):
             "LayerNormalization based on onnxruntime"
 
             def __init__(self, node: onnx.NodeProto, version=None):
@@ -284,11 +284,11 @@ class TorchOnnxEvaluator:
         opsets: Optional[Dict[str, int]] = None,
         local_functions: Optional[Dict[Tuple[str, str], "TorchOnnxEvaluator"]] = None,
         verbose: int = 0,
-        custom_kernels: Optional[Dict[Tuple[str, str], type[torch_ops.OpRun]]] = None,
+        custom_kernels: Optional[Dict[Tuple[str, str], type[torch_ops.OpRunKernel]]] = None,
     ):
         self.providers = providers
         self.constants: Dict[str, torch.Tensor] = {}
-        self.kernels: List[Optional[torch_ops.OpRun]] = []
+        self.kernels: List[Optional[torch_ops.OpRunKernel]] = []
         self.functions = local_functions.copy() if local_functions else {}
         self.CPU = torch.tensor([0]).to("cpu").device
         self.verbose = verbose

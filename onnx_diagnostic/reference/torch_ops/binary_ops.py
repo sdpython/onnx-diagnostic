@@ -1,8 +1,8 @@
 import torch
-from . import OpRun, OpRunTensor
+from . import OpRunKernel, OpRunTensor
 
 
-class OpRunBinary(OpRun):
+class OpRunBinary(OpRunKernel):
     "Binary Op"
 
     def run(self, x: OpRunTensor, y: OpRunTensor) -> OpRunTensor:

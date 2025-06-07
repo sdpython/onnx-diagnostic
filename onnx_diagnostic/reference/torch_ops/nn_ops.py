@@ -2,10 +2,10 @@ from typing import Optional, Tuple
 import onnx
 import torch
 from ...helpers.torch_helper import onnx_dtype_to_torch_dtype
-from . import OpRun, OpRunTensor
+from . import OpRunKernel, OpRunTensor
 
 
-class AveragePool_11(OpRun):
+class AveragePool_11(OpRunKernel):
     "AveragePool"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -44,7 +44,7 @@ class AveragePool_11(OpRun):
         )
 
 
-class Conv_11(OpRun):
+class Conv_11(OpRunKernel):
     "Conv"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -108,7 +108,7 @@ class Conv_11(OpRun):
         )
 
 
-class LayerNormalization_17(OpRun):
+class LayerNormalization_17(OpRunKernel):
     "LayerNormalization"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -152,7 +152,7 @@ class LayerNormalization_17(OpRun):
         )
 
 
-class Softmax_13(OpRun):
+class Softmax_13(OpRunKernel):
     "Softmax"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -169,7 +169,7 @@ class Softmax_13(OpRun):
         )
 
 
-class Tanh_6(OpRun):
+class Tanh_6(OpRunKernel):
     "Tanh"
 
     def run(self, data: OpRunTensor) -> OpRunTensor:

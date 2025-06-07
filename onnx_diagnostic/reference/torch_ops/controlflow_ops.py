@@ -1,10 +1,10 @@
 from typing import Any, Dict, Optional
 import onnx
 import torch
-from . import OpRun, OpRunTensor
+from . import OpRunKernel, OpRunTensor
 
 
-class OpRunControlFlow(OpRun):
+class OpRunControlFlow(OpRunKernel):
     """Common ancestor for control flows."""
 
     @classmethod
