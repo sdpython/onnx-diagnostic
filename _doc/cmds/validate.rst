@@ -1,5 +1,10 @@
+.. _l-cmd-validate:
+
 -m onnx_diagnostic validate ... validate a model id
 ===================================================
+
+The command line is a wrapper around function
+:func:`onnx_diagnostic.torch_models.test_helper.validate_model`.
 
 Description
 +++++++++++

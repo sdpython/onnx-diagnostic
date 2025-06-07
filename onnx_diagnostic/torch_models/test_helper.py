@@ -278,6 +278,8 @@ def validate_model(
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
+    The function can also be called through the command line
+    :ref:`l-cmd-validate`.
 
     :param model_id: model id to validate
     :param task: task used to generate the necessary inputs,
@@ -285,7 +287,8 @@ def validate_model(
         if it can be determined
     :param do_run: checks the model works with the defined inputs
     :param exporter: exporter the model using this exporter,
-        available list: ``export-strict``, ``export-nostrict``, ``onnx``
+        available list: ``export-strict``, ``export-nostrict``, ...
+        see below
     :param do_same: checks the discrepancies of the exported model
     :param verbose: verbosity level
     :param dtype: uses this dtype to check the model
@@ -322,6 +325,20 @@ def validate_model(
     information:
 
     * ``PRINT_CONFIG``: prints the model configuration
+
+    The following exporters are available:
+
+    * ``export-nostrict``: run :func:`torch.export.export`(..., strict=False)
+    * ``onnx-dynamo``: run :func:`torch.onnx.export`(..., dynamo=True),
+      models can be optimized with ``optimization`` in ``("ir", "os_ort")``
+    * ``modelbuilder``: use :epkg:`ModelBuilder` to builds the onnx model
+    * ``custom``: custom exporter (see :epkg:`experimental-experiment`),
+      models can be optimized with ``optimization`` in
+      ``("default", "default+onnxruntime", "default+os_ort", "default+onnxruntime+os_ort")``
+
+    The default runtime, :epkg:`onnxruntime` is used to validate a model and check the
+    exported model returns the same outputs as the original one, otherwise,
+    :class:`onnx_diagnostic.reference.TorchOnnxEvaluator` is used.
     """
     assert (
         not rewrite or patch
