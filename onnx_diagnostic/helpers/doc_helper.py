@@ -25,8 +25,8 @@ class LayerNormalizationOrt(OpRunKernel):
         self.axis = self.get_attribute_int(node, "axis", -1)
         self.epsilon = self.get_attribute_float(node, "epsilon", 1e-5)
         self.device = device
-        self.stash_type = onnx_dtype_to_torch_dtype(  # type: ignore[arg-type]
-            self.get_attribute_int(node, "stash_type", onnx.TensorProto.FLOAT)
+        self.stash_type = onnx_dtype_to_torch_dtype(
+            self.get_attribute_int(node, "stash_type", onnx.TensorProto.FLOAT)  # type: ignore[arg-type]
         )
         self.compute_std = len(node.output) > 1
         assert not self.compute_std, (
