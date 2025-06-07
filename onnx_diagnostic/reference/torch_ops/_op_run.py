@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Union, Tuple
+from typing import Any, Dict, List, Optional, Union, Tuple
 import onnx
 import torch
 from ...api import TensorLike
@@ -185,7 +185,13 @@ class OpRunKernel:
         """Returns True if the kernel has subgraphs."""
         return False
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
+    def __init__(
+        self,
+        node: onnx.NodeProto,
+        version: Optional[int] = None,
+        verbose: int = 0,
+        custom_kernels: Optional[Dict[Tuple[str, str], type]] = None,
+    ):
         assert isinstance(
             node, onnx.NodeProto
         ), f"node must be a NodeProto but node is {type(node)}"
@@ -193,6 +199,8 @@ class OpRunKernel:
         self.domain = node.domain
         self.input = node.input
         self.output = node.output
+        self.verbose = verbose
+        self.custom_kernels = custom_kernels
         if version is None:
             name = self.__class__.__name__.split("_")
             assert (
@@ -315,8 +323,9 @@ class OpRunFunction(OpRunKernel):
         runtime: "onnx_diagnostic.reference.TorchOnnxEvaluator",  # noqa: F821
         node: onnx.NodeProto,
         version: Optional[int] = None,
+        verbose: int = 0,
     ):
-        super().__init__(node, version)
+        super().__init__(node, version, verbose=verbose)
         self.runtime = runtime
         self.input_names = runtime.input_names
 

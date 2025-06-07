@@ -8,8 +8,13 @@ from . import OpRunKernel, OpRunTensor
 class AveragePool_11(OpRunKernel):
     "AveragePool"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(
+        self,
+        node: onnx.NodeProto,
+        version: Optional[int] = None,
+        verbose: int = 0,
+    ):
+        super().__init__(node, version, verbose=verbose)
         self.auto_pad = self.get_attribute_string(node, "auto_pad", "NOTSET")
         self.ceil_mode = bool(self.get_attribute_int(node, "ceil_mode", 0))
         self.count_include_pad = bool(self.get_attribute_int(node, "count_include_pad", 0))
@@ -47,8 +52,13 @@ class AveragePool_11(OpRunKernel):
 class Conv_11(OpRunKernel):
     "Conv"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(
+        self,
+        node: onnx.NodeProto,
+        version: Optional[int] = None,
+        verbose: int = 0,
+    ):
+        super().__init__(node, version, verbose=verbose)
         self.auto_pad = self.get_attribute_string(node, "auto_pad", "NOTSET")
         self.dilations = self.get_attribute_ints(node, "dilations", None)
         self.group = self.get_attribute_int(node, "group", 1)
@@ -111,8 +121,13 @@ class Conv_11(OpRunKernel):
 class LayerNormalization_17(OpRunKernel):
     "LayerNormalization"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(
+        self,
+        node: onnx.NodeProto,
+        version: Optional[int] = None,
+        verbose: int = 0,
+    ):
+        super().__init__(node, version, verbose=verbose)
         self.axis = self.get_attribute_int(node, "axis", -1)
         self.epsilon = self.get_attribute_float(node, "epsilon", 1e-5)
         self.stash_type = onnx_dtype_to_torch_dtype(
@@ -155,8 +170,13 @@ class LayerNormalization_17(OpRunKernel):
 class Softmax_13(OpRunKernel):
     "Softmax"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(
+        self,
+        node: onnx.NodeProto,
+        version: Optional[int] = None,
+        verbose: int = 0,
+    ):
+        super().__init__(node, version, verbose=verbose)
         self.axis = self.get_attribute_int(node, "axis", -1)
         assert isinstance(self.axis, int), f"Unexpected value for attribute axis={self.axis!r}"
         # this is out of spec

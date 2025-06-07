@@ -10,6 +10,7 @@ onnx_diagnostic.helpers
     bench_run
     cache_helper
     config_helper
+    doc_helper
     graph_helper
     helper
     memory_peak

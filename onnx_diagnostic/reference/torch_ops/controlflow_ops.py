@@ -17,8 +17,9 @@ class OpRunControlFlow(OpRunKernel):
         node: onnx.NodeProto,
         version: Optional[int] = None,
         parent: Optional["onnx_diagnostic.reference.TorchOnnxEvaluator"] = None,  # noqa: F821
+        verbose: int = 0,
     ):
-        super().__init__(node, version)
+        super().__init__(node, version, verbose=verbose)
         assert (
             parent is not None
         ), f"parent must be specified for operator {self.__class__.__name__!r}"
@@ -30,6 +31,7 @@ class OpRunControlFlow(OpRunKernel):
                     opsets=parent.opsets,
                     local_functions=parent.functions,
                     verbose=parent.verbose,
+                    custom_kernels=parent.custom_kernels,
                 )
                 setattr(self, att.name, rt)
 
@@ -50,8 +52,9 @@ class Loop_16(OpRunControlFlow):
         node: onnx.NodeProto,
         version: Optional[int] = None,
         parent: Optional["onnx_diagnostic.reference.TorchOnnxEvaluator"] = None,  # noqa: F821
+        verbose: int = 0,
     ):
-        super().__init__(node, version, parent)
+        super().__init__(node, version, parent, verbose=verbose)
         self.output_index = {n: i for i, n in enumerate(self.body.output_names)}
         self.N = len(self.body.input_names) - 2
         self.K = len(self.body.output_names) - self.N - 1
