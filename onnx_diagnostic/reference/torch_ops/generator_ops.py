@@ -1,10 +1,10 @@
 from typing import Optional
 import onnx
 import torch
-from . import OpRun, OpRunTensor
+from . import OpRunKernel, OpRunTensor
 
 
-class Range_11(OpRun):
+class Range_11(OpRunKernel):
     """Range"""
 
     @classmethod

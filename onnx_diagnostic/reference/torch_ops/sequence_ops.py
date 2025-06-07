@@ -2,10 +2,10 @@ from typing import Optional
 import onnx
 import torch
 from ...helpers.torch_helper import onnx_dtype_to_torch_dtype
-from . import OpRun, OpRunSequence, OpRunTensor
+from . import OpRunKernel, OpRunSequence, OpRunTensor
 
 
-class OpRunOpSequence(OpRun):
+class OpRunOpSequence(OpRunKernel):
     "Ancestor for kernel using sequences."
 
 

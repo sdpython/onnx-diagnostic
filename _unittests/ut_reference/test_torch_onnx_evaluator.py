@@ -8,7 +8,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
 from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.helpers.torch_helper import onnx_dtype_to_torch_dtype
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, TorchOnnxEvaluator
-from onnx_diagnostic.reference.torch_ops import OpRun, OpRunTensor
+from onnx_diagnostic.reference.torch_ops import OpRunKernel, OpRunTensor
 from onnx_diagnostic.reference.torch_evaluator import get_kernels
 
 
@@ -1373,7 +1373,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         )
 
     def test_custom_kernels(self):
-        class LayerNormalizationOrt(OpRun):
+        class LayerNormalizationOrt(OpRunKernel):
             "LayerNormalization"
 
             _shared = [0]
