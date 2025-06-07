@@ -6,8 +6,8 @@ from . import OpRunKernel, OpRunTensor
 
 
 class ReduceOp(OpRunKernel):
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         self.keepdims = bool(self.get_attribute_int(node, "keepdims", 1))
         self.noop_with_empty_axes = bool(
             self.get_attribute_int(node, "noop_with_empty_axes", 0)
@@ -28,8 +28,8 @@ class ReduceOp(OpRunKernel):
 
 
 class ReduceOpAxes(ReduceOp):
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         self.axes: Tuple[int, ...] = self.get_attribute_ints(node, "axes") or tuple()
 
 

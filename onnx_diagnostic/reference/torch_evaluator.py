@@ -410,19 +410,24 @@ class TorchOnnxEvaluator:
         kernels = get_kernels()
         self.kernels.clear()
         for node in nodes:
+            kernel_kwargs = dict(verbose=max(0, self.verbose - 1))
             opset = self.opsets[node.domain]
             key = node.domain, node.op_type, opset
             if key[:2] in self.custom_kernels:
                 cls = self.custom_kernels[key[:2]]
                 ags = [self.default_device] if cls.device_dependent() else []
                 kws = dict(parent=self) if cls.has_subgraphs() else {}
-                kernel2 = cls(node, opset, *ags, **kws)
+                kws.update(kernel_kwargs)  # type: ignore[arg-type]
+                kernel2 = cls(node, opset, *ags, **kws)  # type: ignore[arg-type]
                 self.kernels.append(kernel2)
                 continue
 
             if (node.domain, node.op_type) in self.functions:
                 kernel = torch_ops.OpRunFunction(
-                    self.functions[node.domain, node.op_type], node, self.opsets[node.domain]
+                    self.functions[node.domain, node.op_type],
+                    node,
+                    self.opsets[node.domain],
+                    **kernel_kwargs,
                 )
                 self.kernels.append(kernel)
                 continue
@@ -442,7 +447,8 @@ class TorchOnnxEvaluator:
             cls = kernels[key]
             ags = [self.default_device] if cls.device_dependent() else []
             kws = dict(parent=self) if cls.has_subgraphs() else {}
-            kernel2 = cls(node, opset, *ags, **kws)
+            kws.update(kernel_kwargs)  # type: ignore[arg-type]
+            kernel2 = cls(node, opset, *ags, **kws)  # type: ignore[arg-type]
             self.kernels.append(kernel2)
 
     def run(

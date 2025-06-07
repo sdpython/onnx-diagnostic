@@ -19,8 +19,9 @@ class ConstantOfShape_9(OpRunKernel):
         node: onnx.NodeProto,
         version: Optional[int] = None,
         device: Optional[torch.device] = None,
+        verbose: int = 0,
     ):
-        super().__init__(node, version)
+        super().__init__(node, version, verbose=verbose)
         value = self.get_attribute_tensor(node, "value")
         if value is None:
             value = torch.tensor([0], dtype=torch.float32)
@@ -48,8 +49,8 @@ class Expand_8(OpRunKernel):
 class Reshape_14(OpRunKernel):
     "Reshape"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         self.allowzero = self.get_attribute_int(node, "allowzero", 0)
 
     def run(self, data: OpRunTensor, shape: OpRunTensor) -> OpRunTensor:
@@ -65,8 +66,8 @@ class Reshape_14(OpRunKernel):
 
 
 class Shape_15(OpRunKernel):
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         self.start = self.get_attribute_int(node, "start", 0)
         self.end = self.get_attribute_int(node, "end", None)
 
@@ -77,8 +78,8 @@ class Shape_15(OpRunKernel):
 
 
 class Split_18(OpRunKernel):
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         self.axis = self.get_attribute_int(node, "axis", 0)
         self.num_outputs = self.get_attribute_int(node, "num_outputs", None)
 
