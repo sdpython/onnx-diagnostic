@@ -45,6 +45,8 @@ class TorchOnnxEvaluator:
     :param opsets: needed if proto is a graph
     :param functions: known local functions
     :param verbose: verbosity level
+    :param custom_kernels: dictionary of kernels the user can defined to overwrite
+        a specific implementation: ``("", "LayerNormalization"): CustomKernel``
 
     The class holds the following attributes:
 
@@ -98,7 +100,10 @@ class TorchOnnxEvaluator:
         result = sess.run(None, feeds)
         print(string_type(result, with_shape=True, with_min_max=True))
 
-    Adding ``verbose=1`` shows which kernels is executed:
+    With ``verbose=1``, the class prints out every kernel run and
+    and every result deleted along the run.
+    It shows when a result is not needed anymore. In that case,
+    it is deleted to free the memory it takes.
 
     .. runpython::
         :showcode:
@@ -134,8 +139,6 @@ class TorchOnnxEvaluator:
         result = sess.run(None, feeds)
         print(string_type(result, with_shape=True, with_min_max=True))
 
-    It also shows when a result is not needed anymore. In that case,
-    it is deleted to free the memory it takes.
     The runtime can also execute the kernel the onnx model on CUDA.
     It follows the same logic as :class:`onnxruntime.InferenceSession`:
     ``providers=["CUDAExecutionProvider"]``.
@@ -144,6 +147,115 @@ class TorchOnnxEvaluator:
     identified as a shape in CPU. Some bugs may remain as torch
     raises an exception when devices are expected to be the same.
     The runtime was validated with model :epkg:`arnir0/Tiny-LLM`.
+    Next example shows how to replace a kernel with a different
+    one based on :epkg:`onnxruntime`.
+
+    .. runpython::
+        :showcode:
+
+        import numpy as np
+        import onnx
+        import onnx.helper as oh
+        import onnxruntime
+        import torch
+        from onnx_diagnostic.helpers import string_type
+        from onnx_diagnostic.helpers.torch_helper import onnx_dtype_to_torch_dtype
+        from onnx_diagnostic.reference import TorchOnnxEvaluator
+        from onnx_diagnostic.reference.torch_ops import OpRun, OpRunTensor
+
+        TFLOAT16 = onnx.TensorProto.FLOAT16
+
+        class LayerNormalizationOrt(OpRun):
+            "LayerNormalization based on onnxruntime"
+
+            def __init__(self, node: onnx.NodeProto, version=None):
+                super().__init__(node, version)
+                self.axis = self.get_attribute_int(node, "axis", -1)
+                self.epsilon = self.get_attribute_float(node, "epsilon", 1e-5)
+                self.stash_type = onnx_dtype_to_torch_dtype(
+                    self.get_attribute_int(node, "stash_type", onnx.TensorProto.FLOAT)
+                )
+                self.compute_std = len(node.output) > 1
+                assert not self.compute_std, "The keren only computes the first output."
+                layer_model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node(
+                                "LayerNormalization",
+                                ["X", "W", "B"],
+                                ["Z"],
+                                axis=-1,
+                                epsilon=9.999999974752427e-7,
+                            )
+                        ],
+                        "dummy",
+                        [
+                            oh.make_tensor_value_info("X", TFLOAT16, ["b", "c", "d"]),
+                            oh.make_tensor_value_info("W", TFLOAT16, ["d"]),
+                            oh.make_tensor_value_info("B", TFLOAT16, ["d"]),
+                        ],
+                        [oh.make_tensor_value_info("Z", TFLOAT16, ["b", "c", "d"])],
+                    ),
+                    ir_version=9,
+                    opset_imports=[oh.make_opsetid("", 17)],
+                )
+                self.ort_sess = onnxruntime.InferenceSession(
+                    layer_model.SerializeToString(), providers=["CUDAExecutionProvider"]
+                )
+
+            def run(self, x, scale, bias=None):
+                print(f"-- running {self.__class__.__name__}")
+                feeds = dict(X=x, W=scale)
+                if bias is not None:
+                    feeds["B"] = bias
+                feeds = {k: v.tensor.detach().cpu().numpy() for k, v in feeds.items()}
+                got = self.ort_sess.run(None, feeds)[0]
+                return OpRunTensor(torch.from_numpy(got).to(x.dtype).to(x.device))
+
+        # This kernel is tested on this model.
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "LayerNormalization",
+                        ["X", "W", "B"],
+                        ["ln"],
+                        axis=-1,
+                        epsilon=9.999999974752427e-7,
+                    ),
+                    oh.make_node(
+                        "Add", ["ln", "W"], ["Z"], axis=-1, epsilon=9.999999974752427e-7
+                    ),
+                ],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT16, ["b", "c", "d"]),
+                    oh.make_tensor_value_info("W", TFLOAT16, ["d"]),
+                    oh.make_tensor_value_info("B", TFLOAT16, ["d"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT16, ["b", "c", "d"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 17)],
+        )
+
+        torch_sess = TorchOnnxEvaluator(
+            model,
+            custom_kernels={("", "LayerNormalization"): LayerNormalizationOrt},
+            verbose=1,
+        )
+        feeds = dict(
+            zip(
+                torch_sess.input_names,
+                [
+                    torch.rand(3, 4, 5, dtype=torch.float16),
+                    torch.abs(torch.rand(5, dtype=torch.float16)),
+                    torch.rand(5, dtype=torch.float16),
+                ],
+            )
+        )
+        res = torch_sess.run(None, feeds)
+        print(string_type(res, with_shape=True, with_min_max=True))
     """
 
     class IO:
@@ -172,6 +284,7 @@ class TorchOnnxEvaluator:
         opsets: Optional[Dict[str, int]] = None,
         local_functions: Optional[Dict[Tuple[str, str], "TorchOnnxEvaluator"]] = None,
         verbose: int = 0,
+        custom_kernels: Optional[Dict[Tuple[str, str], type[torch_ops.OpRun]]] = None,
     ):
         self.providers = providers
         self.constants: Dict[str, torch.Tensor] = {}
@@ -179,6 +292,7 @@ class TorchOnnxEvaluator:
         self.functions = local_functions.copy() if local_functions else {}
         self.CPU = torch.tensor([0]).to("cpu").device
         self.verbose = verbose
+        self.custom_kernels = custom_kernels or {}
         dev = self._on_cuda(providers)
         if dev < 0:
             self.default_device = self.CPU
@@ -296,6 +410,16 @@ class TorchOnnxEvaluator:
         kernels = get_kernels()
         self.kernels.clear()
         for node in nodes:
+            opset = self.opsets[node.domain]
+            key = node.domain, node.op_type, opset
+            if key[:2] in self.custom_kernels:
+                cls = self.custom_kernels[key[:2]]
+                ags = [self.default_device] if cls.device_dependent() else []
+                kws = dict(parent=self) if cls.has_subgraphs() else {}
+                kernel2 = cls(node, opset, *ags, **kws)
+                self.kernels.append(kernel2)
+                continue
+
             if (node.domain, node.op_type) in self.functions:
                 kernel = torch_ops.OpRunFunction(
                     self.functions[node.domain, node.op_type], node, self.opsets[node.domain]
@@ -308,8 +432,6 @@ class TorchOnnxEvaluator:
                 self.kernels.append(None)
                 continue
 
-            opset = self.opsets[node.domain]
-            key = node.domain, node.op_type, opset
             while key not in kernels and opset > 0:
                 opset -= 1
                 key = node.domain, node.op_type, opset
@@ -438,7 +560,9 @@ class TorchOnnxEvaluator:
         context: Optional[Dict[str, RuntimeValue]] = None,
     ) -> Union[torch_ops.OpRunValue, Tuple[torch_ops.OpRunValue, ...]]:
         """
-        Runs the ONNX model.
+        Runs the ONNX model. The signature is different.
+        This method is called by every kernel hokding a subgraph.
+        The local variables are stored in `context`.
 
         :param args: inputs
         :param context: local context for the execution of subgraphs

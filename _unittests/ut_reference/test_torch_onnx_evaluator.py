@@ -6,11 +6,14 @@ import onnx.numpy_helper as onh
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
 from onnx_diagnostic.helpers.onnx_helper import from_array_extended
+from onnx_diagnostic.helpers.torch_helper import onnx_dtype_to_torch_dtype
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, TorchOnnxEvaluator
+from onnx_diagnostic.reference.torch_ops import OpRun, OpRunTensor
 from onnx_diagnostic.reference.torch_evaluator import get_kernels
 
 
 TFLOAT = onnx.TensorProto.FLOAT
+TFLOAT16 = onnx.TensorProto.FLOAT16
 TINT64 = onnx.TensorProto.INT64
 
 
@@ -1368,6 +1371,105 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             torch.tensor([[1, 2], [3, 4]], dtype=torch.float32),
             torch.tensor([2, 2], dtype=torch.int64),
         )
+
+    def test_custom_kernels(self):
+        class LayerNormalizationOrt(OpRun):
+            "LayerNormalization"
+
+            _shared = [0]
+
+            def __init__(self, node: onnx.NodeProto, version=None):
+                super().__init__(node, version)
+                self.axis = self.get_attribute_int(node, "axis", -1)
+                self.epsilon = self.get_attribute_float(node, "epsilon", 1e-5)
+                self.stash_type = onnx_dtype_to_torch_dtype(
+                    self.get_attribute_int(node, "stash_type", onnx.TensorProto.FLOAT)
+                )
+                self.compute_std = len(node.output) > 1
+                assert not self.compute_std
+                layer_model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node(
+                                "LayerNormalization",
+                                ["X", "W", "B"],
+                                ["Z"],
+                                axis=-1,
+                                epsilon=9.999999974752427e-7,
+                            )
+                        ],
+                        "dummy",
+                        [
+                            oh.make_tensor_value_info("X", TFLOAT16, ["b", "c", "d"]),
+                            oh.make_tensor_value_info("W", TFLOAT16, ["d"]),
+                            oh.make_tensor_value_info("B", TFLOAT16, ["d"]),
+                        ],
+                        [oh.make_tensor_value_info("Z", TFLOAT16, ["b", "c", "d"])],
+                    ),
+                    ir_version=9,
+                    opset_imports=[oh.make_opsetid("", 17)],
+                )
+                import onnxruntime
+
+                self.ort_sess = onnxruntime.InferenceSession(
+                    layer_model.SerializeToString(), providers=["CUDAExecutionProvider"]
+                )
+
+            def run(self, x, scale, bias=None):
+                self._shared[0] += 1
+                feeds = dict(X=x, W=scale)
+                if bias is not None:
+                    feeds["B"] = bias
+                feeds = {k: v.tensor.detach().cpu().numpy() for k, v in feeds.items()}
+                got = self.ort_sess.run(None, feeds)[0]
+                return OpRunTensor(torch.from_numpy(got).to(x.dtype).to(x.device))
+
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "LayerNormalization",
+                        ["X", "W", "B"],
+                        ["ln"],
+                        axis=-1,
+                        epsilon=9.999999974752427e-7,
+                    ),
+                    oh.make_node(
+                        "Add", ["ln", "W"], ["Z"], axis=-1, epsilon=9.999999974752427e-7
+                    ),
+                ],
+                "dummy",
+                [
+                    oh.make_tensor_value_info("X", TFLOAT16, ["b", "c", "d"]),
+                    oh.make_tensor_value_info("W", TFLOAT16, ["d"]),
+                    oh.make_tensor_value_info("B", TFLOAT16, ["d"]),
+                ],
+                [oh.make_tensor_value_info("Z", TFLOAT16, ["b", "c", "d"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 17)],
+        )
+
+        torch_sess = TorchOnnxEvaluator(model, verbose=0)
+        torch_sess_custom = TorchOnnxEvaluator(
+            model,
+            verbose=0,
+            custom_kernels={("", "LayerNormalization"): LayerNormalizationOrt},
+        )
+        feeds = dict(
+            zip(
+                torch_sess.input_names,
+                [
+                    torch.rand(3, 4, 5, dtype=torch.float16),
+                    torch.abs(torch.rand(5, dtype=torch.float16)),
+                    torch.rand(5, dtype=torch.float16),
+                ],
+            )
+        )
+        expected = torch_sess.run(None, feeds)
+        got = torch_sess_custom.run(None, feeds)
+        self.assertEqualAny(expected, got)
+        self.assertEqual([1], LayerNormalizationOrt._shared)
 
 
 if __name__ == "__main__":
