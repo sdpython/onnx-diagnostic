@@ -16,8 +16,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest, windows-latest]
         python: ['3.11', '3.12']
-        transformers: ['4.48.3', '4.51.3', 'main']
-        torch: ['2.6', 'main']
+        transformers: ['4.48.3', '4.52.4', 'main']
+        torch: ['2.6', '2.7', 'main']
 
     steps:
 
