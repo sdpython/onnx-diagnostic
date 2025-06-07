@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.6.2
++++++
+
+* :pr:`131`: support for custom kernels in TorchOnnxEvaluator
+
 0.6.1
 +++++
 
