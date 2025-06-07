@@ -8,8 +8,8 @@ from . import OpRunKernel, OpRunTensor
 class Cast_6(OpRunKernel):
     "Cast"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         to = self.get_attribute_int(node, "to", 0)
         assert isinstance(to, int), f"Unexpected value for attribute to={to!r}"
         self.to = onnx_dtype_to_torch_dtype(to)
@@ -23,8 +23,8 @@ class Cast_6(OpRunKernel):
 class CastLike_15(OpRunKernel):
     "Cast"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         self.saturate = self.get_attribute_int(node, "saturate", 1)
         assert self.saturate == 1, f"saturate={self.saturate} not implemented for CastLike"
 
@@ -35,8 +35,8 @@ class CastLike_15(OpRunKernel):
 class Concat_1(OpRunKernel):
     "Concat"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         axis = self.get_attribute_int(node, "axis", 0)
         assert isinstance(axis, int), f"Unexpected value for attribute axis={axis!r}"
         self.axis = axis
@@ -76,8 +76,8 @@ class Tile_6(OpRunKernel):
 class Transpose_1(OpRunKernel):
     "Transpose"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         self.perm = self.get_attribute_ints(node, "perm", None)
 
     def run(self, data: OpRunTensor) -> OpRunTensor:
@@ -87,8 +87,8 @@ class Transpose_1(OpRunKernel):
 class Trilu_14(OpRunKernel):
     "Trilu"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         self.upper = self.get_attribute_int(node, "upper", 1)
 
     def run(self, data: OpRunTensor, k: Optional[OpRunTensor] = None) -> OpRunTensor:

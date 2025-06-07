@@ -12,8 +12,8 @@ class OpRunOpSequence(OpRunKernel):
 class ConcatFromSequence_11(OpRunOpSequence):
     "ConcatFromSequence"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         axis = self.get_attribute_int(node, "axis", None)
         assert isinstance(axis, int), f"Unexpected value for attribute axis={axis!r}"
         self.axis = axis
@@ -39,8 +39,8 @@ class ConcatFromSequence_11(OpRunOpSequence):
 class SequenceEmpty_11(OpRunOpSequence):
     "SqeuenceEmpty"
 
-    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
-        super().__init__(node, version)
+    def __init__(self, node: onnx.NodeProto, version: Optional[int] = None, verbose: int = 0):
+        super().__init__(node, version, verbose=verbose)
         self.dtype = onnx_dtype_to_torch_dtype(
             self.get_attribute_int(node, "dtype", onnx.TensorProto.FLOAT)  # type: ignore[arg-type]
         )

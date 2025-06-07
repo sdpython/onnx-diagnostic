@@ -19,8 +19,9 @@ class Range_11(OpRunKernel):
         node: onnx.NodeProto,
         version: Optional[int] = None,
         device: Optional[torch.device] = None,
+        verbose: int = 0,
     ):
-        super().__init__(node, version)
+        super().__init__(node, version, verbose=verbose)
         self.device = device
 
     def run(self, starts: OpRunTensor, limit: OpRunTensor, delta: OpRunTensor) -> OpRunTensor:

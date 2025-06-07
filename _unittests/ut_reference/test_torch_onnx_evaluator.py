@@ -1378,8 +1378,8 @@ class TestTorchOnnxEvaluator(ExtTestCase):
 
             _shared = [0]
 
-            def __init__(self, node: onnx.NodeProto, version=None):
-                super().__init__(node, version)
+            def __init__(self, node: onnx.NodeProto, version=None, verbose=0):
+                super().__init__(node, version, verbose=verbose)
                 self.axis = self.get_attribute_int(node, "axis", -1)
                 self.epsilon = self.get_attribute_float(node, "epsilon", 1e-5)
                 self.stash_type = onnx_dtype_to_torch_dtype(
