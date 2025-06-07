@@ -1,10 +1,10 @@
 from typing import Optional, Tuple
 import onnx
 import torch
-from . import OpRun, OpRunTensor
+from . import OpRunKernel, OpRunTensor
 
 
-class ConstantOfShape_9(OpRun):
+class ConstantOfShape_9(OpRunKernel):
     "ConstantOfShape"
 
     @classmethod
@@ -37,7 +37,7 @@ class ConstantOfShape_9(OpRun):
         )
 
 
-class Expand_8(OpRun):
+class Expand_8(OpRunKernel):
     "Expand"
 
     def run(self, data: OpRunTensor, shape: OpRunTensor) -> OpRunTensor:
@@ -45,7 +45,7 @@ class Expand_8(OpRun):
         return OpRunTensor(data.tensor.expand(ishape))
 
 
-class Reshape_14(OpRun):
+class Reshape_14(OpRunKernel):
     "Reshape"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -64,7 +64,7 @@ class Reshape_14(OpRun):
         return OpRunTensor(data.tensor.reshape(ishape))
 
 
-class Shape_15(OpRun):
+class Shape_15(OpRunKernel):
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
         self.start = self.get_attribute_int(node, "start", 0)
@@ -76,7 +76,7 @@ class Shape_15(OpRun):
         return OpRunTensor(torch.tensor(sh, dtype=torch.int64), is_constant=True)
 
 
-class Split_18(OpRun):
+class Split_18(OpRunKernel):
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
         self.axis = self.get_attribute_int(node, "axis", 0)
@@ -101,7 +101,7 @@ class Split_18(OpRun):
         return tuple(OpRunTensor(t) for t in spl)
 
 
-class Squeeze_13(OpRun):
+class Squeeze_13(OpRunKernel):
     "Squeeze"
 
     def run(self, data: OpRunTensor, axes: Optional[OpRunTensor] = None) -> OpRunTensor:
@@ -110,7 +110,7 @@ class Squeeze_13(OpRun):
         return OpRunTensor(data.tensor.squeeze(axes.as_tuple_int))
 
 
-class Unsqueeze_13(OpRun):
+class Unsqueeze_13(OpRunKernel):
     "Unsqueeze"
 
     def run(self, data: OpRunTensor, axes: OpRunTensor) -> OpRunTensor:

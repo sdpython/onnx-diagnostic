@@ -18,10 +18,10 @@ onnx_diagnostic.reference.torch_ops
     shape_ops
     unary_ops
 
-OpRun
-+++++
+OpRunKernel
++++++++++++
 
-.. autoclass:: onnx_diagnostic.reference.torch_ops.OpRun
+.. autoclass:: onnx_diagnostic.reference.torch_ops.OpRunKernel
     :members:
 
 OpRunTensor

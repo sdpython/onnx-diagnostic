@@ -167,7 +167,7 @@ class OpRunSequence(OpRunValue):
         return string_type(self.sequence, with_shape=True)
 
 
-class OpRun:
+class OpRunKernel:
     """
     Main class. Every kernel should inherit from it.
     It does not copy the proto.
@@ -305,7 +305,7 @@ class OpRun:
         return tuple(t.to(device) for t in tensors)
 
 
-class OpRunFunction(OpRun):
+class OpRunFunction(OpRunKernel):
     """
     Defines a kernel based on a local functions.
     """

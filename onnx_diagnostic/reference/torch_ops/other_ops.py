@@ -2,10 +2,10 @@ from typing import Optional
 import onnx
 import torch
 from ...helpers.torch_helper import onnx_dtype_to_torch_dtype
-from . import OpRun, OpRunTensor
+from . import OpRunKernel, OpRunTensor
 
 
-class Cast_6(OpRun):
+class Cast_6(OpRunKernel):
     "Cast"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -20,7 +20,7 @@ class Cast_6(OpRun):
         return OpRunTensor(data.tensor.to(self.to))
 
 
-class CastLike_15(OpRun):
+class CastLike_15(OpRunKernel):
     "Cast"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -32,7 +32,7 @@ class CastLike_15(OpRun):
         return OpRunTensor(data.tensor.to(like.tensor.dtype))
 
 
-class Concat_1(OpRun):
+class Concat_1(OpRunKernel):
     "Concat"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -59,21 +59,21 @@ class Concat_1(OpRun):
         return OpRunTensor(torch.cat([t.tensor.to(device) for t in data], axis=self.axis))
 
 
-class NonZero_13(OpRun):
+class NonZero_13(OpRunKernel):
     "NonZero"
 
     def run(self, x: OpRunTensor) -> OpRunTensor:
         return OpRunTensor(torch.nonzero(x.tensor).T)
 
 
-class Tile_6(OpRun):
+class Tile_6(OpRunKernel):
     "Tile"
 
     def run(self, x: OpRunTensor, repeat: OpRunTensor) -> OpRunTensor:
         return OpRunTensor(torch.tile(x.tensor, repeat.as_tuple_int))
 
 
-class Transpose_1(OpRun):
+class Transpose_1(OpRunKernel):
     "Transpose"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -84,7 +84,7 @@ class Transpose_1(OpRun):
         return OpRunTensor(torch.permute(data.tensor, self.perm))
 
 
-class Trilu_14(OpRun):
+class Trilu_14(OpRunKernel):
     "Trilu"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -98,7 +98,7 @@ class Trilu_14(OpRun):
         return OpRunTensor(torch.tril(data.tensor, diagonal=diagonal))
 
 
-class Where_9(OpRun):
+class Where_9(OpRunKernel):
     "Where"
 
     def run(self, cond: OpRunTensor, x: OpRunTensor, y: OpRunTensor) -> OpRunTensor:

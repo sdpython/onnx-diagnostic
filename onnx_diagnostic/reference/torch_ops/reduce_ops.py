@@ -2,10 +2,10 @@ from typing import Optional, Tuple
 import onnx
 import torch
 from ...helpers.torch_helper import onnx_dtype_to_torch_dtype
-from . import OpRun, OpRunTensor
+from . import OpRunKernel, OpRunTensor
 
 
-class ReduceOp(OpRun):
+class ReduceOp(OpRunKernel):
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
         super().__init__(node, version)
         self.keepdims = bool(self.get_attribute_int(node, "keepdims", 1))

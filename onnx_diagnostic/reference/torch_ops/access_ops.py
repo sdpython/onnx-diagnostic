@@ -1,10 +1,10 @@
 from typing import Optional
 import onnx
 import torch
-from . import OpRun, OpRunTensor
+from . import OpRunKernel, OpRunTensor
 
 
-class Gather_1(OpRun):
+class Gather_1(OpRunKernel):
     "Gather"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -21,7 +21,7 @@ class Gather_1(OpRun):
         return OpRunTensor(x.tensor[tuple(ind)])
 
 
-class ScatterND_16(OpRun):
+class ScatterND_16(OpRunKernel):
     "ScatterND"
 
     def __init__(self, node: onnx.NodeProto, version: Optional[int] = None):
@@ -54,7 +54,7 @@ class ScatterND_16(OpRun):
         return OpRunTensor(output)
 
 
-class Slice_13(OpRun):
+class Slice_13(OpRunKernel):
     "Slice"
 
     def run(
