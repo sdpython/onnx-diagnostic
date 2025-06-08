@@ -143,7 +143,7 @@ print(df)
 # %%
 # Visually.
 
-df["abs"].plot(title="Discrepancies ORT / torch for LayerNorm(X) @ W + B")
+df["abs"].plot.bar(title="Discrepancies ORT / torch for LayerNorm(X) @ W + B")
 
 # %%
 # The discrepancies are significant on CUDA, higher for float16.
@@ -207,4 +207,6 @@ print(df)
 # %%
 # Visually.
 
-df[["diff_ort", "diff_torch"]].plot(title="ORT/Torch or Torch/ORT for LayerNorm(X) @ W + B")
+df[["diff_ort", "diff_torch"]].plot.bar(
+    title="ORT/Torch or Torch/ORT for LayerNorm(X) @ W + B"
+)

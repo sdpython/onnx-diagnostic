@@ -20,7 +20,7 @@ class LayerNormalizationOrt(OpRunKernel):
         node: onnx.NodeProto,
         version=None,
         device: Optional[torch.device] = None,
-        verbose=0,
+        verbose: int = 0,
     ):
         super().__init__(node, version, verbose=verbose)
         self.axis = self.get_attribute_int(node, "axis", -1)
@@ -101,7 +101,7 @@ class MatMulOrt(OpRunKernel):
         node: onnx.NodeProto,
         version=None,
         device: Optional[torch.device] = None,
-        verbose=0,
+        verbose: int = 0,
     ):
         super().__init__(node, version, verbose=verbose)
         self.device = device
