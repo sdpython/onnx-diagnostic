@@ -2,8 +2,9 @@ from typing import Dict, Optional, Tuple
 import onnx
 import onnx.helper as oh
 import torch
-from .torch_helper import onnx_dtype_to_torch_dtype, torch_dtype_to_onnx_dtype
 from ..reference.torch_ops import OpRunKernel, OpRunTensor
+from .torch_helper import onnx_dtype_to_torch_dtype, torch_dtype_to_onnx_dtype
+from .ort_session import InferenceSessionForTorch
 
 
 class LayerNormalizationOrt(OpRunKernel):
@@ -36,50 +37,55 @@ class LayerNormalizationOrt(OpRunKernel):
         self._cache: Dict[Tuple[int, int], onnx.ModelProto] = {}
         self.is_cpu = torch.device("cpu") == self.device
 
-    def _make_model(self, itype: int, rank: int) -> onnx.ModelProto:
+    def _make_model(self, itype: int, rank: int, has_bias: bool) -> onnx.ModelProto:
         shape = [*["d{i}" for i in range(rank - 1)], "last"]
         layer_model = oh.make_model(
             oh.make_graph(
                 [
                     oh.make_node(
                         "LayerNormalization",
-                        ["X", "W", "B"],
+                        ["X", "W", "B"] if has_bias else ["X", "W"],
                         ["Z"],
                         axis=self.axis,
                         epsilon=self.epsilon,
                     )
                 ],
                 "dummy",
-                [
-                    oh.make_tensor_value_info("X", itype, shape),
-                    oh.make_tensor_value_info("W", itype, ["last"]),
-                    oh.make_tensor_value_info("B", itype, ["last"]),
-                ],
+                (
+                    [
+                        oh.make_tensor_value_info("X", itype, shape),
+                        oh.make_tensor_value_info("W", itype, ["last"]),
+                        oh.make_tensor_value_info("B", itype, ["last"]),
+                    ]
+                    if has_bias
+                    else [
+                        oh.make_tensor_value_info("X", itype, shape),
+                        oh.make_tensor_value_info("W", itype, ["last"]),
+                    ]
+                ),
                 [oh.make_tensor_value_info("Z", itype, shape)],
             ),
             ir_version=9,
             opset_imports=[oh.make_opsetid("", 18)],
         )
-        import onnxruntime
-
         provider = "CPUExecutionProvider" if self.is_cpu else "CUDAExecutionProvider"
-        return onnxruntime.InferenceSession(
-            layer_model.SerializeToString(), providers=[provider]
-        )
+        self._provider = provider
+        return InferenceSessionForTorch(layer_model, providers=[provider])
 
     def run(self, x, scale, bias=None):
         itype = torch_dtype_to_onnx_dtype(x.dtype)
         rank = len(x.shape)
         key = itype, rank
         if key not in self._cache:
-            self._cache[key] = self._make_model(itype, rank)
+            self._cache[key] = self._make_model(itype, rank, bias is not None)
         sess = self._cache[key]
-        feeds = dict(X=x, W=scale)
+        if self.verbose:
+            print(f"[LayerNormalizationOrt] running on {self._provider!r}")
+        feeds = dict(X=x.tensor, W=scale.tensor)
         if bias is not None:
-            feeds["B"] = bias
-        feeds = {k: v.tensor.detach().cpu().numpy() for k, v in feeds.items()}
+            feeds["B"] = bias.tensor
         got = sess.run(None, feeds)[0]
-        return OpRunTensor(torch.from_numpy(got).to(x.dtype).to(x.device))
+        return OpRunTensor(got)
 
 
 class MatMulOrt(OpRunKernel):
@@ -117,12 +123,11 @@ class MatMulOrt(OpRunKernel):
                 [oh.make_tensor_value_info("C", itype, shapec)],
             ),
             ir_version=9,
-            opset_imports=[oh.make_opsetid("", 17)],
+            opset_imports=[oh.make_opsetid("", 18)],
         )
-        import onnxruntime
-
         provider = "CPUExecutionProvider" if self.is_cpu else "CUDAExecutionProvider"
-        return onnxruntime.InferenceSession(model.SerializeToString(), providers=[provider])
+        self._provider = provider
+        return InferenceSessionForTorch(model, providers=[provider])
 
     def run(self, a, b):
         itype = torch_dtype_to_onnx_dtype(a.dtype)
@@ -131,7 +136,8 @@ class MatMulOrt(OpRunKernel):
         if key not in self._cache:
             self._cache[key] = self._make_model(itype, ranka, rankb)
         sess = self._cache[key]
-        feeds = dict(A=a, B=b)
-        feeds = {k: v.tensor.detach().cpu().numpy() for k, v in feeds.items()}
+        if self.verbose:
+            print(f"[MatMulOrt] running on {self._provider!r}")
+        feeds = dict(A=a.tensor, B=b.tensor)
         got = sess.run(None, feeds)[0]
-        return OpRunTensor(torch.from_numpy(got).to(a.dtype).to(a.device))
+        return OpRunTensor(got)

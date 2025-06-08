@@ -1,4 +1,6 @@
 """
+.. _l-plot-parallelized-reduction:
+
 Reproducible Parallelized Reduction is difficult
 ================================================
 
