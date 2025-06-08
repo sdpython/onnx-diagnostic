@@ -68,10 +68,13 @@ class TestDocumentationTechnical(ExtTestCase):
         this = os.path.abspath(os.path.dirname(__file__))
         fold = os.path.normpath(os.path.join(this, "..", "..", "_doc", "technical"))
         found = os.listdir(fold)
+        has_dot = int(os.environ.get("UNITTEST_DOT", "0"))
         for name in found:
             if not name.endswith(".py") or not name.startswith("plot_"):
                 continue
             reason = None
+            if not reason and not has_dot and name in {"plot_layer_norm_discrepancies.py"}:
+                reason = "dot not installed"
 
             if reason:
 
