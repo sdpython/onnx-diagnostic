@@ -387,6 +387,12 @@ def validate_model(
         if model_options:
             print(f"[validate_model] model_options={model_options!r}")
         print(f"[validate_model] get dummy inputs with input_options={input_options}...")
+        print(
+            f"[validate_model] rewrite={rewrite}, patch={patch}, "
+            f"stop_if_static={stop_if_static}"
+        )
+        print(f"[validate_model] exporter={exporter!r}, optimization={optimization!r}")
+        print(f"[validate_model] dump_folder={dump_folder!r}")
         summary["model_id"] = model_id
         summary["model_subfolder"] = subfolder or ""
 
@@ -446,6 +452,8 @@ def validate_model(
                 print(f"[validate_model] model_rewrite={summary['model_rewrite']}")
         else:
             del data["rewrite"]
+            if verbose:
+                print("[validate_model] no rewrite")
     if os.environ.get("PRINT_CONFIG", "0") in (1, "1"):
         print("[validate_model] -- PRINT CONFIG")
         print("-- type(config)", type(data["configuration"]))

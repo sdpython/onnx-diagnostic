@@ -80,6 +80,7 @@ def known_transformers_rewritings_clamp_float16() -> Dict[str, str]:
         "AutoformerModel": "AutoformerEncoderLayer",
         "BartEncoderLayer": "BartEncoderLayer",
         "BartForConditionalGeneration": "BartEncoderLayer",
+        "BartModel": "BartEncoderLayer",
         "BigBirdPegasusForConditionalGeneration": "BigBirdPegasusEncoderLayer",
         "BigBirdPegasusForQuestionAnswering": "BigBirdPegasusEncoderLayer",
         "BigBirdPegasusForCausalLM": "BigBirdPegasusEncoderLayer",

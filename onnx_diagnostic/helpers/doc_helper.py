@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import onnx
 import onnx.helper as oh
 import torch
@@ -7,7 +7,7 @@ from ..reference.torch_ops import OpRunKernel, OpRunTensor
 from .torch_helper import onnx_dtype_to_torch_dtype, torch_dtype_to_onnx_dtype
 from .ort_session import InferenceSessionForTorch
 
-_SAVED = []
+_SAVED: List[str] = []
 _SAVE_OPTIMIZED_MODEL_ = int(os.environ.get("DUMP_ONNX", "0"))
 
 
