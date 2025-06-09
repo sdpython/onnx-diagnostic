@@ -21,6 +21,7 @@ import onnx.helper as oh
 import onnxruntime
 import torch
 from onnx_array_api.plotting.graphviz_helper import plot_dot
+from onnx_diagnostic.doc import rotate_align, save_fig
 from onnx_diagnostic.ext_test_case import unit_test_going
 from onnx_diagnostic.helpers import max_diff, string_diff, string_type
 from onnx_diagnostic.helpers.onnx_helper import onnx_dtype_name, onnx_dtype_to_np_dtype
@@ -143,7 +144,12 @@ print(df)
 # %%
 # Visually.
 
-df["abs"].plot.bar(title="Discrepancies ORT / torch for LayerNorm(X) @ W + B")
+save_fig(
+    rotate_align(
+        df[["abs"]].plot.bar(title="Discrepancies ORT / torch for LayerNorm(X) @ W + B")
+    ),
+    "plot_layer_norm_discrepancies_1.png",
+)
 
 # %%
 # The discrepancies are significant on CUDA, higher for float16.
@@ -207,6 +213,11 @@ print(df)
 # %%
 # Visually.
 
-df[["diff_ort", "diff_torch"]].plot.bar(
-    title="ORT/Torch or Torch/ORT for LayerNorm(X) @ W + B"
+save_fig(
+    rotate_align(
+        df[["diff_ort", "diff_torch"]].plot.bar(
+            title="ORT/Torch or Torch/ORT for LayerNorm(X) @ W + B"
+        )
+    ),
+    "plot_layer_norm_discrepancies_2.png",
 )

@@ -30,3 +30,21 @@ def plot_legend(
     ax.grid(False)
     ax.set_axis_off()
     return ax
+
+
+def rotate_align(ax, angle=15, align="right"):
+    """Rotates x-label and align them to thr right. Returns ax."""
+    for label in ax.get_xticklabels():
+        label.set_rotation(angle)
+        label.set_horizontalalignment(align)
+    return ax
+
+
+def save_fig(ax, name: str):
+    """Applies ``tight_layout`` and saves the figures. Returns ax."""
+    import matplotlib.pyplot as plt
+
+    plt.tight_layout()
+    fig = ax.get_figure()
+    fig.savefig(name)
+    return ax

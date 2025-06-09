@@ -188,6 +188,7 @@ print(df)
 # Visually.
 
 ax = df.plot.bar(logy=True)
+ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
 fig = ax.get_figure()
 fig.savefig("plot_parallelized_reduction.png")
 
