@@ -1,3 +1,7 @@
+from typing import Optional
+import numpy as np
+
+
 def reset_torch_transformers(gallery_conf, fname):
     "Resets torch dynamo for :epkg:`sphinx-gallery`."
     import matplotlib.pyplot as plt
@@ -47,4 +51,28 @@ def save_fig(ax, name: str):
     plt.tight_layout()
     fig = ax.get_figure()
     fig.savefig(name)
+    return ax
+
+
+def title(ax: "plt.axes", title: str) -> "plt.axes":  # noqa: F821
+    "Adds a title to axes and returns them."
+    ax.set_title(title)
+    return ax
+
+
+def plot_histogram(
+    tensor: np.ndarray,
+    ax: Optional["plt.axes"] = None,  # noqa: F821
+    bins: int = 30,
+    color: str = "orange",
+    alpha: float = 0.7,
+) -> "plt.axes":  # noqa: F821
+    "Computes the distribution for a tensor."
+    if ax is None:
+        import matplotlib.pyplot as plt
+
+        ax = plt.gca()
+        ax.cla()
+    ax.hist(tensor, bins=30, color="orange", alpha=0.7)
+    ax.set_yscale("log")
     return ax
