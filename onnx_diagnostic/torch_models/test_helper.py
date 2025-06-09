@@ -387,6 +387,12 @@ def validate_model(
         if model_options:
             print(f"[validate_model] model_options={model_options!r}")
         print(f"[validate_model] get dummy inputs with input_options={input_options}...")
+        print(
+            f"[validate_model] rewrite={rewrite}, patch={patch}, "
+            f"stop_if_static={stop_if_static}"
+        )
+        print(f"[validate_model] exporter={exporter!r}, optimization={optimization!r}")
+        print(f"[validate_model] dump_folder={dump_folder!r}")
         summary["model_id"] = model_id
         summary["model_subfolder"] = subfolder or ""
 
@@ -446,6 +452,8 @@ def validate_model(
                 print(f"[validate_model] model_rewrite={summary['model_rewrite']}")
         else:
             del data["rewrite"]
+            if verbose:
+                print("[validate_model] no rewrite")
     if os.environ.get("PRINT_CONFIG", "0") in (1, "1"):
         print("[validate_model] -- PRINT CONFIG")
         print("-- type(config)", type(data["configuration"]))
@@ -1334,13 +1342,13 @@ def call_torch_export_custom(
         "custom-nostrict",
         "custom-nostrict-default",
         "custom-nostrict-all",
-        "custom-inline",
-        "custom-strict-inline",
-        "custom-strict-default-inline",
-        "custom-strict-all-inline",
-        "custom-nostrict-inline",
-        "custom-nostrict-default-inline",
-        "custom-nostrict-all-inline",
+        "custom-noinline",
+        "custom-strict-noinline",
+        "custom-strict-default-noinline",
+        "custom-strict-all-noinline",
+        "custom-nostrict-noinline",
+        "custom-nostrict-default-noinline",
+        "custom-nostrict-all-noinline",
     }
     assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
@@ -1381,10 +1389,7 @@ def call_torch_export_custom(
         ),
         save_ep=(os.path.join(dump_folder, f"{exporter}.ep") if dump_folder else None),
     )
-    inline = "-inline" in exporter
-    if inline:
-        export_options.aten_as_function = set()
-
+    inline = "-noinline" not in exporter
     options = OptimizationOptions(patterns=optimization) if optimization else None
     model = data["model"]
     kws = dict(

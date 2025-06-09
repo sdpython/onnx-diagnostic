@@ -23,6 +23,12 @@ Or the normalization of the vector:
 
 With :math:`\\mathbb{E}X = mean(X)`,
 :math:`\\mathbb{V}X = mean\\left(\\left(X - mean(X)\\right)^2\\right)`.
+
+Methodology
++++++++++++
+
+**Permutation should not change the average.**
+
 We draw 128 random permutations of X. The average or mean should not change.
 And the normalized vector should have the same values. In the first case, we compute
 the difference between the highest and the lowest values obtained for the average.
@@ -188,6 +194,7 @@ print(df)
 # Visually.
 
 ax = df.plot.bar(logy=True)
+ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
 fig = ax.get_figure()
 fig.savefig("plot_parallelized_reduction.png")
 

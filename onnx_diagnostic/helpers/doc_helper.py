@@ -1,10 +1,22 @@
-from typing import Dict, Optional, Tuple
+import os
+from typing import Dict, List, Optional, Tuple
 import onnx
 import onnx.helper as oh
 import torch
 from ..reference.torch_ops import OpRunKernel, OpRunTensor
 from .torch_helper import onnx_dtype_to_torch_dtype, torch_dtype_to_onnx_dtype
 from .ort_session import InferenceSessionForTorch
+
+_SAVED: List[str] = []
+_SAVE_OPTIMIZED_MODEL_ = int(os.environ.get("DUMP_ONNX", "0"))
+
+
+def _get_model_name(op_name: str, provider: str) -> Optional[str]:
+    if _SAVE_OPTIMIZED_MODEL_:
+        name = f"dump_doc_layer_norm_{provider}_{len(_SAVED)}.onnx"
+        _SAVED.append(name)
+        return name
+    return None
 
 
 class LayerNormalizationOrt(OpRunKernel):
@@ -13,7 +25,7 @@ class LayerNormalizationOrt(OpRunKernel):
     @classmethod
     def device_dependent(cls) -> bool:
         "Needs device."
-        return False
+        return True
 
     def __init__(
         self,
@@ -70,7 +82,11 @@ class LayerNormalizationOrt(OpRunKernel):
         )
         provider = "CPUExecutionProvider" if self.is_cpu else "CUDAExecutionProvider"
         self._provider = provider
-        return InferenceSessionForTorch(layer_model, providers=[provider])
+        return InferenceSessionForTorch(
+            layer_model,
+            optimized_model_filepath=_get_model_name("layer_norm", provider),
+            providers=[provider],
+        )
 
     def run(self, x, scale, bias=None):
         itype = torch_dtype_to_onnx_dtype(x.dtype)
@@ -94,7 +110,7 @@ class MatMulOrt(OpRunKernel):
     @classmethod
     def device_dependent(cls) -> bool:
         "Needs device."
-        return False
+        return True
 
     def __init__(
         self,
@@ -127,7 +143,11 @@ class MatMulOrt(OpRunKernel):
         )
         provider = "CPUExecutionProvider" if self.is_cpu else "CUDAExecutionProvider"
         self._provider = provider
-        return InferenceSessionForTorch(model, providers=[provider])
+        return InferenceSessionForTorch(
+            model,
+            optimized_model_filepath=_get_model_name("matmul", provider),
+            providers=[provider],
+        )
 
     def run(self, a, b):
         itype = torch_dtype_to_onnx_dtype(a.dtype)

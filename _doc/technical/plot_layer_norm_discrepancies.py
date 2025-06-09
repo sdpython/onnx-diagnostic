@@ -6,21 +6,26 @@ This example applies what was illustrated
 :ref:`l-plot-parallelized-reduction`, reduction operations
 are sensitive to parallelization.
 
-We consider a small model including a layer normalization
-followed by a matrix multiplication and we show that replacing
-a kernel by another one may significantly impact the output.
+Methodology
++++++++++++
+
+We consider a simple model with a LayerNormalization followed by a MatMul.
+Each operator can be run with :epkg:`onnxruntime` or :epkg:`pytorch`.
+We compare the four combinations.
 
 The model
 +++++++++
 """
 
 import itertools
+import numpy as np
 import pandas
 import onnx
 import onnx.helper as oh
 import onnxruntime
 import torch
 from onnx_array_api.plotting.graphviz_helper import plot_dot
+from onnx_diagnostic.doc import rotate_align, save_fig, plot_histogram, title
 from onnx_diagnostic.ext_test_case import unit_test_going
 from onnx_diagnostic.helpers import max_diff, string_diff, string_type
 from onnx_diagnostic.helpers.onnx_helper import onnx_dtype_name, onnx_dtype_to_np_dtype
@@ -79,6 +84,8 @@ def make_feeds(last_dim: int):
 
 
 def cast_feeds(itype, provider, feeds):
+    ttype = onnx_dtype_to_torch_dtype(itype)
+    np_dtype = onnx_dtype_to_np_dtype(itype)
     np_feeds = {k: v.detach().numpy() for k, v in feeds.items()}
     if provider == "CUDA":
         if not torch.cuda.is_available():
@@ -101,8 +108,6 @@ data = []
 baseline = {}
 
 for provider, itype in itertools.product(["CPU", "CUDA"], [TFLOAT, TFLOAT16]):
-    ttype = onnx_dtype_to_torch_dtype(itype)
-    np_dtype = onnx_dtype_to_np_dtype(itype)
     tch_feeds, ort_feeds = cast_feeds(itype, provider, feeds)
     if tch_feeds is None:
         continue
@@ -143,12 +148,33 @@ print(df)
 # %%
 # Visually.
 
-df["abs"].plot.bar(title="Discrepancies ORT / torch for LayerNorm(X) @ W + B")
+save_fig(
+    rotate_align(
+        df[["abs"]].plot.bar(title="Discrepancies ORT / torch for LayerNorm(X) @ W + B")
+    ),
+    "plot_layer_norm_discrepancies_1.png",
+)
 
 # %%
 # The discrepancies are significant on CUDA, higher for float16.
 # Let's see which operator is responsible for them,
 # *LayerNormalization* or *MatMul*.
+
+# %%
+# Distribution of the results
+# +++++++++++++++++++++++++++
+
+tensor = baseline[TFLOAT16, "CPU", "ort"][0].ravel().astype(np.float32)
+print(pandas.DataFrame({"expected": tensor}).describe())
+
+# %%
+# Histogram.
+
+save_fig(
+    title(plot_histogram(tensor), "Distribution of the computed results"),
+    "plot_layer_norm_discrepancies_hist.png",
+)
+
 
 # %%
 # The discrepancies come from?
@@ -159,7 +185,7 @@ df["abs"].plot.bar(title="Discrepancies ORT / torch for LayerNorm(X) @ W + B")
 data = []
 
 for mod, provider, itype in itertools.product(
-    ["ORT-TORCH", "TORCH-ORT"], ["CPU", "CUDA"], [TFLOAT, TFLOAT16]
+    ["ORT-ORT", "ORT-TORCH", "TORCH-ORT", "TORCH-TORCH"], ["CPU", "CUDA"], [TFLOAT, TFLOAT16]
 ):
     ttype = onnx_dtype_to_torch_dtype(itype)
     np_dtype = onnx_dtype_to_np_dtype(itype)
@@ -167,11 +193,10 @@ for mod, provider, itype in itertools.product(
     if tch_feeds is None:
         continue
 
+    ker1, ker2 = mod.split("-")
     custom_kernels = (
-        {("", "LayerNormalization"): LayerNormalizationOrt}
-        if mod == "ORT-TORCH"
-        else {("", "MatMul"): MatMulOrt}
-    )
+        {("", "LayerNormalization"): LayerNormalizationOrt} if ker1 == "ORT" else {}
+    ) | ({("", "MatMul"): MatMulOrt} if ker2 == "ORT" else {})
 
     model = get_model(itype)
     print()
@@ -200,13 +225,27 @@ for mod, provider, itype in itertools.product(
     )
 
 # %%
-df = pandas.DataFrame(data).set_index(["model", "provider", "dtype"])
+df = pandas.DataFrame(data).set_index(["dtype", "provider", "model"])
 df = df.sort_index()
 print(df)
 
 # %%
 # Visually.
 
-df[["diff_ort", "diff_torch"]].plot.bar(
-    title="ORT/Torch or Torch/ORT for LayerNorm(X) @ W + B"
+save_fig(
+    rotate_align(
+        df[["diff_ort", "diff_torch"]].plot.bar(
+            title="ORT/Torch or Torch/ORT for LayerNorm(X) @ W + B",
+            figsize=(10, 4),
+        )
+    ),
+    "plot_layer_norm_discrepancies_2.png",
 )
+
+# %%
+# Conclusion
+# ++++++++++
+#
+# :epkg:`torch` seems able to replicate the same results if the same computation
+# is run multiple times. :epkg:`onnxruntime` is only able to do that on CUDA.
+# With float16 and CUDA, LayerNormalization seems to introduce some discrepancies.
