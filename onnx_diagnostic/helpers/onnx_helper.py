@@ -1072,7 +1072,9 @@ def enumerate_results(
                 yield r
     else:
         if verbose:
-            print(f"[enumerate_results] {indent}searching for {name!r} into List[NodeProto]...")
+            print(
+                f"[enumerate_results] {indent}searching for {name!r} into List[NodeProto]..."
+            )
         for node_i, node in enumerate(proto):
             if set(node.input) & name:
                 for n in node.input:
