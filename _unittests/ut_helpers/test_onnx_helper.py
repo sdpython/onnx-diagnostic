@@ -16,10 +16,12 @@ from onnx_diagnostic.helpers.onnx_helper import (
     iterator_initializer_constant,
     from_array_extended,
     tensor_statistics,
+    enumerate_results,
 )
 
 
 TFLOAT = TensorProto.FLOAT
+TINT64 = TensorProto.INT64
 
 
 class TestOnnxHelper(ExtTestCase):
@@ -250,6 +252,155 @@ class TestOnnxHelper(ExtTestCase):
         rnd = np.random.rand(40, 50).astype(np.float32)
         stat = tensor_statistics(rnd)
         self.assertEqual(stat["stype"], "FLOAT")
+
+    @hide_stdout()
+    def test_enumerate_results(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+                    oh.make_node("Unsqueeze", ["xu1", "un"], ["xu2"]),
+                    oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+                    oh.make_node("Cast", ["xm2c"], ["xm2"], to=1),
+                    oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                    oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, [320, 1280])],
+                [oh.make_tensor_value_info("Z", TFLOAT, [3, 5, 320, 640])],
+                [
+                    onh.from_array(
+                        np.random.rand(3, 5, 1280, 640).astype(np.float32), name="Y"
+                    ),
+                    onh.from_array(np.array([0], dtype=np.int64), name="zero"),
+                    onh.from_array(np.array([1], dtype=np.int64), name="un"),
+                    onh.from_array(np.array([1, 320, 1280], dtype=np.int64), name="shape1"),
+                    onh.from_array(np.array([15, 1280, 640], dtype=np.int64), name="shape2"),
+                    onh.from_array(np.array([3, 5, 320, 640], dtype=np.int64), name="shape3"),
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        res = list(enumerate_results(model, "xu1", verbose=2))
+        ress = ";".join(str(r) for r in res)
+        self.assertEqual(
+            "<< xu1 - (0:Unsqueeze:) :: Unsqueeze(X, zero) -> xu1;"
+            ">> xu1 - (1:Unsqueeze:) :: Unsqueeze(xu1, un) -> xu2",
+            ress,
+        )
+        self.assertEqual(2, len(list(enumerate_results(model, "shape1", verbose=2))))
+        self.assertEqual(2, len(list(enumerate_results(model, "X", verbose=2))))
+        self.assertEqual(2, len(list(enumerate_results(model, "Z", verbose=2))))
+
+    def test_enumerate_results_loop(self):
+        x = np.array([1, 2, 3, 4, 5]).astype(np.float32)
+
+        model = oh.make_model(
+            graph=oh.make_graph(
+                name="loop_test",
+                inputs=[
+                    oh.make_tensor_value_info("trip_count", TINT64, ["a"]),
+                    oh.make_tensor_value_info("cond", TensorProto.BOOL, [1]),
+                ],
+                outputs=[oh.make_tensor_value_info("res", TFLOAT, [])],
+                nodes=[
+                    oh.make_node("SequenceEmpty", [], ["seq_empty"], dtype=TFLOAT),
+                    oh.make_node(
+                        "Loop",
+                        inputs=["trip_count", "cond", "seq_empty"],
+                        outputs=["seq_res"],
+                        body=oh.make_graph(
+                            [
+                                oh.make_node(
+                                    "Identity", inputs=["cond_in"], outputs=["cond_out"]
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["x"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_x",
+                                        data_type=TFLOAT,
+                                        dims=x.shape,
+                                        vals=x.flatten().astype(float),
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["one"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_one",
+                                        data_type=TINT64,
+                                        dims=(),
+                                        vals=[1],
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["slice_start"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_zero",
+                                        data_type=TINT64,
+                                        dims=(1,),
+                                        vals=[0],
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Add", inputs=["iter_count", "one"], outputs=["end"]
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["axes"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_axes",
+                                        data_type=TINT64,
+                                        dims=(1,),
+                                        vals=[0],
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Unsqueeze", inputs=["end", "axes"], outputs=["slice_end"]
+                                ),
+                                oh.make_node(
+                                    "Slice",
+                                    inputs=["x", "slice_start", "slice_end"],
+                                    outputs=["slice_out"],
+                                ),
+                                oh.make_node(
+                                    "SequenceInsert",
+                                    inputs=["seq_in", "slice_out"],
+                                    outputs=["seq_out"],
+                                ),
+                            ],
+                            "loop_body",
+                            [
+                                oh.make_tensor_value_info("iter_count", TINT64, []),
+                                oh.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
+                                oh.make_tensor_sequence_value_info("seq_in", TFLOAT, None),
+                            ],
+                            [
+                                oh.make_tensor_value_info("cond_out", TensorProto.BOOL, []),
+                                oh.make_tensor_sequence_value_info("seq_out", TFLOAT, None),
+                            ],
+                        ),
+                    ),
+                    oh.make_node(
+                        "ConcatFromSequence",
+                        inputs=["seq_res"],
+                        outputs=["res"],
+                        axis=0,
+                        new_axis=0,
+                    ),
+                ],
+            )
+        )
+        res = list(enumerate_results(model, "slice_start", verbose=2))
+        print(res)
 
 
 if __name__ == "__main__":

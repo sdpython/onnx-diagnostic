@@ -197,18 +197,29 @@ def get_parser_find() -> ArgumentParser:
         "-v",
         "--verbose",
         default=0,
+        type=int,
         required=False,
         help="verbosity",
+    )
+    parser.add_argument(
+        "--v2",
+        default=False,
+        action=BooleanOptionalAction,
+        help="use enumerate_results instead of onnx_find",
     )
     return parser
 
 
 def _cmd_find(argv: List[Any]):
-    from .helpers.onnx_helper import onnx_find
+    from .helpers.onnx_helper import onnx_find, enumerate_results
 
     parser = get_parser_find()
     args = parser.parse_args(argv[1:])
-    onnx_find(args.input, verbose=args.verbose, watch=set(args.names.split(",")))
+    if args.v2:
+        onx = onnx.load(args.input, load_external_data=False)
+        list(enumerate_results(onx, name=set(args.names.split(",")), verbose=args.verbose))
+    else:
+        onnx_find(args.input, verbose=args.verbose, watch=set(args.names.split(",")))
 
 
 def get_parser_config() -> ArgumentParser:
