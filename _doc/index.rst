@@ -71,11 +71,17 @@ Enlightening Examples
 
 * :ref:`l-plot-export_tiny_phi2`
 
-**Torch Export**
+**Exporter Recipes**
 
+* :ref:`l-plot-export-dim1`
 * :ref:`l-plot-export-cond`
 * :ref:`l-plot-export-with-dynamic`
 * :ref:`l-plot-export-with-dynamic-shape`
+* :ref:`l-plot-dynamic-shapes-python-int`
+
+**Torch Export Models**
+
+* :ref:`l-plot-nonzero`
 * :ref:`l-plot-export-locale-issue`
 * :ref:`l-plot-tiny-llm-export`
 * :ref:`l-plot-tiny-llm-export-patched`

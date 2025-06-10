@@ -1,4 +1,6 @@
 """
+.. _l-plot-nonzero:
+
 Half certain nonzero
 ====================
 
