@@ -17,6 +17,7 @@ from onnx_diagnostic.helpers.onnx_helper import (
     from_array_extended,
     tensor_statistics,
     enumerate_results,
+    shadowing_names,
 )
 
 
@@ -400,7 +401,64 @@ class TestOnnxHelper(ExtTestCase):
             )
         )
         res = list(enumerate_results(model, "slice_start", verbose=2))
-        print(res)
+        self.assertEqual(len(res), 2)
+
+    def test_shadowing_names(self):
+        def _mkv_(name):
+            value_info_proto = ValueInfoProto()
+            value_info_proto.name = name
+            return value_info_proto
+
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("ReduceSum", ["X"], ["Xred"]),
+                    oh.make_node("Add", ["X", "two"], ["X0"]),
+                    oh.make_node("Add", ["X0", "zero"], ["X00"]),
+                    oh.make_node("CastLike", ["one", "Xred"], ["one_c"]),
+                    oh.make_node("Greater", ["Xred", "one_c"], ["cond"]),
+                    oh.make_node("Identity", ["two"], ["three"]),
+                    oh.make_node(
+                        "If",
+                        ["cond"],
+                        ["Z_c"],
+                        then_branch=oh.make_graph(
+                            [
+                                # shadowing
+                                oh.make_node("Constant", [], ["three"], value_floats=[2.1]),
+                                oh.make_node("Add", ["X00", "three"], ["Y"]),
+                            ],
+                            "then",
+                            [],
+                            [_mkv_("Y")],
+                        ),
+                        else_branch=oh.make_graph(
+                            [
+                                # not shadowing
+                                oh.make_node("Sub", ["X0", "three"], ["Y"]),
+                            ],
+                            "else",
+                            [],
+                            [_mkv_("Y")],
+                        ),
+                    ),
+                    oh.make_node("CastLike", ["Z_c", "X"], ["Z"]),
+                ],
+                "test",
+                [
+                    oh.make_tensor_value_info("X", TensorProto.FLOAT, ["N"]),
+                    oh.make_tensor_value_info("one", TensorProto.FLOAT, ["N"]),
+                ],
+                [oh.make_tensor_value_info("Z", TensorProto.UNDEFINED, ["N"])],
+                [
+                    onh.from_array(np.array([0], dtype=np.float32), name="zero"),
+                    onh.from_array(np.array([2], dtype=np.float32), name="two"),
+                ],
+            ),
+            opset_imports=[oh.make_operatorsetid("", 18)],
+            ir_version=10,
+        )
+        self.assertEqual({"three"}, shadowing_names(model))
 
 
 if __name__ == "__main__":

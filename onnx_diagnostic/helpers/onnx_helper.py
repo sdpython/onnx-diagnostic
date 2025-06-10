@@ -1119,3 +1119,64 @@ def enumerate_results(
                         yield r
     if verbose:
         print(f"[enumerate_results] {indent}done")
+
+
+def shadowing_names(
+    proto: Union[FunctionProto, GraphProto, ModelProto, Sequence[NodeProto]],
+    verbose: int = 0,
+    existing: Optional[Set[str]] = None,
+    shadow_context: Optional[Set[str]] = None,
+) -> Set[str]:
+    """Returns the shadowing names."""
+    if isinstance(proto, ModelProto):
+        return shadowing_names(proto.graph)
+    if isinstance(proto, GraphProto):
+        assert (
+            existing is None and shadow_context is None
+        ), "existing must be None if nodes is None"
+        return shadowing_names(
+            proto.node,
+            verbose=verbose,
+            existing=set(i.name for i in proto.initializer)
+            | set(i.name for i in proto.sparse_initializer)
+            | set(i.name for i in proto.input if i.name),
+            shadow_context=set(),
+        )
+    if isinstance(proto, FunctionProto):
+        assert (
+            existing is None and shadow_context is None
+        ), "existing must be None if nodes is None"
+        return shadowing_names(
+            proto.node,
+            verbose=verbose,
+            existing=set(i for i in proto.input if i),
+            shadow_context=set(),
+        )
+
+    assert (
+        existing is not None and shadow_context is not None
+    ), "existing must not be None if nodes is not None"
+    shadow = set()
+    shadow_context = shadow_context.copy()
+    existing = existing.copy()
+    for node in proto:
+        not_empty = set(n for n in node.input if n)
+        intersection = not_empty & existing
+        assert len(intersection) == len(not_empty), (
+            f"One input in {not_empty}, node={pretty_onnx(node)} "
+            f"was not found in {existing}"
+        )
+        for att in node.attribute:
+            if att.type == AttributeProto.GRAPH:
+                g = att.g
+                shadow |= set(i.name for i in g.input) & shadow_context
+                shadow |= set(i.name for i in g.initializer) & shadow_context
+                shadow |= set(i.name for i in g.sparse_initializer) & shadow_context
+                shadow |= shadowing_names(
+                    g.node, verbose=verbose, existing=existing, shadow_context=existing
+                )
+
+        not_empty = set(n for n in node.output if n)
+        shadow |= not_empty & shadow_context
+        existing |= not_empty
+    return shadow
