@@ -1126,8 +1126,12 @@ def shadowing_names(
     verbose: int = 0,
     existing: Optional[Set[str]] = None,
     shadow_context: Optional[Set[str]] = None,
-) -> Set[str]:
-    """Returns the shadowing names."""
+    post_shadow_context: Optional[Set[str]] = None,
+) -> Tuple[Set[str], Set[str], Set[str]]:
+    """
+    Returns the shadowing names, the names created in the main graph
+    after they were created in a subgraphs and the names created by the nodes.
+    """
     if isinstance(proto, ModelProto):
         return shadowing_names(proto.graph)
     if isinstance(proto, GraphProto):
@@ -1141,6 +1145,7 @@ def shadowing_names(
             | set(i.name for i in proto.sparse_initializer)
             | set(i.name for i in proto.input if i.name),
             shadow_context=set(),
+            post_shadow_context=set(),
         )
     if isinstance(proto, FunctionProto):
         assert (
@@ -1151,6 +1156,7 @@ def shadowing_names(
             verbose=verbose,
             existing=set(i for i in proto.input if i),
             shadow_context=set(),
+            post_shadow_context=set(),
         )
 
     assert (
@@ -1159,6 +1165,8 @@ def shadowing_names(
     shadow = set()
     shadow_context = shadow_context.copy()
     existing = existing.copy()
+    created = set()
+    post_shadow = set()
     for node in proto:
         not_empty = set(n for n in node.input if n)
         intersection = not_empty & existing
@@ -1172,11 +1180,15 @@ def shadowing_names(
                 shadow |= set(i.name for i in g.input) & shadow_context
                 shadow |= set(i.name for i in g.initializer) & shadow_context
                 shadow |= set(i.name for i in g.sparse_initializer) & shadow_context
-                shadow |= shadowing_names(
+                s, ps, c = shadowing_names(
                     g.node, verbose=verbose, existing=existing, shadow_context=existing
                 )
+                shadow |= s
+                created |= c
 
         not_empty = set(n for n in node.output if n)
+        post_shadow |= not_empty & created
         shadow |= not_empty & shadow_context
         existing |= not_empty
-    return shadow
+        created |= not_empty
+    return shadow, post_shadow, created

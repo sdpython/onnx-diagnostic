@@ -458,7 +458,14 @@ class TestOnnxHelper(ExtTestCase):
             opset_imports=[oh.make_operatorsetid("", 18)],
             ir_version=10,
         )
-        self.assertEqual({"three"}, shadowing_names(model))
+        self.assertEqual(
+            (
+                {"three"},
+                set(),
+                {"cond", "Z", "X0", "Z_c", "three", "one_c", "Xred", "X00", "Y"},
+            ),
+            shadowing_names(model),
+        )
 
 
 if __name__ == "__main__":

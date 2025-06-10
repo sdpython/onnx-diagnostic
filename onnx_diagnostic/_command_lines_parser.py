@@ -218,7 +218,9 @@ def _cmd_find(argv: List[Any]):
     args = parser.parse_args(argv[1:])
     if args.names == "SHADOW":
         onx = onnx.load(args.input, load_external_data=False)
-        print(f"shadowing names: {shadowing_names(onx)}")
+        s, ps = shadowing_names(onx)[:2]
+        print(f"shadowing names: {s}")
+        print(f"post-shadowing names: {ps}")
     elif args.v2:
         onx = onnx.load(args.input, load_external_data=False)
         res = list(
