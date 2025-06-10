@@ -191,7 +191,8 @@ def get_parser_find() -> ArgumentParser:
         "--names",
         type=str,
         required=False,
-        help="names to look at comma separated values",
+        help="names to look at comma separated values, if 'SHADOW', "
+        "search for shadowing names",
     )
     parser.add_argument(
         "-v",
@@ -211,13 +212,20 @@ def get_parser_find() -> ArgumentParser:
 
 
 def _cmd_find(argv: List[Any]):
-    from .helpers.onnx_helper import onnx_find, enumerate_results
+    from .helpers.onnx_helper import onnx_find, enumerate_results, shadowing_names
 
     parser = get_parser_find()
     args = parser.parse_args(argv[1:])
-    if args.v2:
+    if args.names == "SHADOW":
         onx = onnx.load(args.input, load_external_data=False)
-        list(enumerate_results(onx, name=set(args.names.split(",")), verbose=args.verbose))
+        print(f"shadowing names: {shadowing_names(onx)}")
+    elif args.v2:
+        onx = onnx.load(args.input, load_external_data=False)
+        res = list(
+            enumerate_results(onx, name=set(args.names.split(",")), verbose=args.verbose)
+        )
+        if not args.verbose:
+            print("\n".join(map(str, res)))
     else:
         onnx_find(args.input, verbose=args.verbose, watch=set(args.names.split(",")))
 
