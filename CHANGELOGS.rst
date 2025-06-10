@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.6.3
++++++
+
+* :pr:`140`: improves command line find
+
 0.6.2
 +++++
 
