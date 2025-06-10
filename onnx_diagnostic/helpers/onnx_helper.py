@@ -994,11 +994,11 @@ def enumerate_results(
     indent = "  " * len(coordinates)
     if isinstance(proto, ModelProto):
         if verbose:
-            print(f"[enumerate_results] {indent}seaching for {name!r} into ModelProto...")
+            print(f"[enumerate_results] {indent}searching for {name!r} into ModelProto...")
         yield from enumerate_results(proto.graph, name, verbose=verbose)
     elif isinstance(proto, FunctionProto):
         if verbose:
-            print(f"[enumerate_results] {indent}seaching for {name!r} into FunctionProto...")
+            print(f"[enumerate_results] {indent}searching for {name!r} into FunctionProto...")
         for i in proto.input:
             if i in name:
                 r = ResultFound(
@@ -1024,7 +1024,7 @@ def enumerate_results(
                 yield r
     elif isinstance(proto, GraphProto):
         if verbose:
-            print(f"[enumerate_results] {indent}seaching for {name!r} into GraphProto...")
+            print(f"[enumerate_results] {indent}searching for {name!r} into GraphProto...")
         for i in proto.initializer:
             if i.name in name:
                 r = ResultFound(
@@ -1072,7 +1072,7 @@ def enumerate_results(
                 yield r
     else:
         if verbose:
-            print(f"[enumerate_results] {indent}seaching for {name!r} into List[NodeProto]...")
+            print(f"[enumerate_results] {indent}searching for {name!r} into List[NodeProto]...")
         for node_i, node in enumerate(proto):
             if set(node.input) & name:
                 for n in node.input:
