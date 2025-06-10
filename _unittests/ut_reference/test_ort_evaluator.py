@@ -261,7 +261,6 @@ class TestOnnxruntimeEvaluatoruator(ExtTestCase):
 
     @hide_stdout()
     def test_if(self):
-
         def _mkv_(name):
             value_info_proto = onnx.ValueInfoProto()
             value_info_proto.name = name

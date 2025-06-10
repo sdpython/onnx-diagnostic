@@ -316,7 +316,7 @@ def check_model_ort(
 
 
 @functools.cache
-def onnx_dtype_name(itype: int) -> str:
+def onnx_dtype_name(itype: int, exc: bool = True) -> str:
     """
     Returns the ONNX name for a specific element type.
 
@@ -335,7 +335,11 @@ def onnx_dtype_name(itype: int) -> str:
             v = getattr(TensorProto, k)
             if v == itype:
                 return k
-    raise ValueError(f"Unexpected value itype: {itype}")
+    if exc:
+        raise ValueError(f"Unexpected value itype: {itype}")
+    if itype == 0:
+        return "UNDEFINED"
+    return "UNEXPECTED"
 
 
 def pretty_onnx(
@@ -365,7 +369,7 @@ def pretty_onnx(
         itype = onx.type.tensor_type.elem_type
         shape = tuple((d.dim_param or d.dim_value) for d in onx.type.tensor_type.shape.dim)
         shape_str = ",".join(map(str, shape))
-        return f"{onnx_dtype_name(itype)}[{shape_str}] {name}"
+        return f"{onnx_dtype_name(itype, exc=False)}[{shape_str}] {name}"
 
     if isinstance(onx, AttributeProto):
         att = onx
@@ -767,7 +771,7 @@ def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
 
 
 def iterator_initializer_constant(
-    model: Union[onnx.FunctionProto, onnx.GraphProto, onnx.ModelProto],
+    model: Union[FunctionProto, GraphProto, ModelProto],
     use_numpy: bool = True,
     prefix: str = "",
 ) -> Iterator[Tuple[str, Union["torch.Tensor", np.ndarray]]]:  # noqa: F821
@@ -779,8 +783,8 @@ def iterator_initializer_constant(
     :param prefix: for subgraph
     :return: iterator
     """
-    if not isinstance(model, onnx.FunctionProto):
-        graph = model if isinstance(model, onnx.GraphProto) else model.graph
+    if not isinstance(model, FunctionProto):
+        graph = model if isinstance(model, GraphProto) else model.graph
         if not use_numpy:
             from .torch_helper import to_tensor
         if prefix:
@@ -791,7 +795,7 @@ def iterator_initializer_constant(
             )
         nodes = graph.node
         name = graph.name
-        if isinstance(model, onnx.ModelProto):
+        if isinstance(model, ModelProto):
             for f in model.functions:
                 yield from iterator_initializer_constant(
                     f, use_numpy=use_numpy, prefix=f"{prefix}{f.name}"
@@ -908,3 +912,283 @@ def tensor_statistics(tensor: Union[np.ndarray, TensorProto]) -> Dict[str, Union
     qu = np.quantile(tensor, ii)
     stat.update({f"q{i}": float(q) for i, q in zip(ii, qu)})
     return stat
+
+
+class NodeCoordinates:
+    """
+    A way to localize a node,
+    path is a tuple of three information, node index, node type, node name.
+    """
+
+    __slots__ = ("node", "path")
+
+    def __init__(
+        self,
+        node: Union[onnx.TensorProto, NodeProto, str],
+        path: Tuple[Tuple[int, str, str], ...],
+    ):
+        assert isinstance(path, tuple), f"Unexpected type {type(path)} for path"
+        assert all(isinstance(t, tuple) for t in path), f"Unexpected type in path={path}"
+        self.node = node
+        self.path = path
+
+    def __str__(self) -> str:
+        "usual"
+        if isinstance(self.node, str):
+            return f"{self.path_to_str()} :: {self.node!r}"
+        return f"{self.path_to_str()} :: {pretty_onnx(self.node)}"
+
+    def path_to_str(self) -> str:
+        "Strings representing coordinates."
+        return "x".join(f"({':'.join(map(str, t))})" for t in self.path)
+
+
+class ResultFound:
+    """
+    Class returned by :func:`enumerate_results`.
+    """
+
+    __slots__ = ("consumer", "name", "producer")
+
+    def __init__(
+        self,
+        name: str,
+        producer: Optional[NodeCoordinates],
+        consumer: Optional[NodeCoordinates],
+    ):
+        assert isinstance(name, str), f"unexpected type {type(name)} for name"
+        self.name = name
+        self.producer = producer
+        self.consumer = consumer
+
+    def __str__(self) -> str:
+        "usuals"
+        return (
+            f"<< {self.name} - {self.consumer}"
+            if self.producer is None
+            else f">> {self.name} - {self.producer}"
+        )
+
+
+def enumerate_results(
+    proto: Union[FunctionProto, GraphProto, ModelProto, Sequence[NodeProto]],
+    name: Union[Set[str], str],
+    verbose: int = 0,
+    coordinates: Optional[List[Tuple[int, str, str]]] = None,
+) -> Iterator[ResultFound]:
+    """
+    Iterates on all nodes, attributes to find where a name is used.
+
+    :param proto: a proto
+    :param name: name or names to find
+    :param verbose: verbosity
+    :param coordinates: coordinates of a node
+    :return: iterator on :class:`ResultFound`
+    """
+    if not isinstance(name, set):
+        name = {name}
+    coordinates = coordinates or []
+    assert all(
+        isinstance(c, tuple) for c in coordinates
+    ), f"Unexpected type in coordinates={coordinates}"
+    indent = "  " * len(coordinates)
+    if isinstance(proto, ModelProto):
+        if verbose:
+            print(f"[enumerate_results] {indent}searching for {name!r} into ModelProto...")
+        yield from enumerate_results(proto.graph, name, verbose=verbose)
+    elif isinstance(proto, FunctionProto):
+        if verbose:
+            print(f"[enumerate_results] {indent}searching for {name!r} into FunctionProto...")
+        for i in proto.input:
+            if i in name:
+                r = ResultFound(
+                    i,
+                    NodeCoordinates(i, tuple([*coordinates, (-1, "INPUT", "")])),  # noqa: C409
+                    None,
+                )
+                if verbose > 1:
+                    print(f"[enumerate_results] {indent}-- {r}")
+                yield r
+        yield from enumerate_results(proto.node, name, verbose=verbose)
+        for i in proto.output:
+            if i in name:
+                r = ResultFound(
+                    i,
+                    None,
+                    NodeCoordinates(
+                        i, tuple([*coordinates, (len(proto.node), "OUTPUT", "")])  # noqa: C409
+                    ),
+                )
+                if verbose > 1:
+                    print(f"[enumerate_results] {indent}-- {r}")
+                yield r
+    elif isinstance(proto, GraphProto):
+        if verbose:
+            print(f"[enumerate_results] {indent}searching for {name!r} into GraphProto...")
+        for i in proto.initializer:
+            if i.name in name:
+                r = ResultFound(
+                    i.name,
+                    NodeCoordinates(i, tuple([*coordinates, (-1, "INIT", "")])),  # noqa: C409
+                    None,
+                )
+                if verbose > 1:
+                    print(f"[enumerate_results] {indent}-- {r}")
+                yield r
+        for i in proto.sparse_initializer:
+            if i.name in name:
+                r = ResultFound(
+                    i.name,
+                    NodeCoordinates(i, tuple([*coordinates, (-1, "INIT", "")])),  # noqa: C409
+                    None,
+                )
+                if verbose > 1:
+                    print(f"[enumerate_results] {indent}-- {r}")
+                yield r
+        for i in proto.input:
+            if i.name in name:
+                r = ResultFound(
+                    i.name,
+                    NodeCoordinates(i, tuple([*coordinates, (-1, "INPUT", "")])),  # noqa: C409
+                    None,
+                )
+                if verbose > 1:
+                    print(f"[enumerate_results] {indent}-- {r}")
+                yield r
+        yield from enumerate_results(
+            proto.node, name, verbose=verbose, coordinates=coordinates
+        )
+        for i in proto.output:
+            if i.name in name:
+                r = ResultFound(
+                    i.name,
+                    None,
+                    NodeCoordinates(
+                        i, tuple([*coordinates, (len(proto.node), "OUTPUT", "")])  # noqa: C409
+                    ),
+                )
+                if verbose > 1:
+                    print(f"[enumerate_results] {indent}-- {r}")
+                yield r
+    else:
+        if verbose:
+            print(
+                f"[enumerate_results] {indent}searching for {name!r} into List[NodeProto]..."
+            )
+        for node_i, node in enumerate(proto):
+            if set(node.input) & name:
+                for n in node.input:
+                    if n in name:
+                        r = ResultFound(
+                            n,
+                            NodeCoordinates(
+                                node,
+                                tuple(  # noqa: C409
+                                    [*coordinates, (node_i, node.op_type, node.name)]
+                                ),
+                            ),
+                            None,
+                        )
+                        if verbose > 1:
+                            print(f"[enumerate_results] {indent}-- {r}")
+                        yield r
+            if node.op_type in {"If", "Scan", "Loop", "SequenceMap"}:
+                for att in node.attribute:
+                    if att.type == onnx.AttributeProto.GRAPH:
+                        yield from enumerate_results(
+                            att.g,
+                            name,
+                            verbose=verbose,
+                            coordinates=[*coordinates, (node_i, node.op_type, node.name)],
+                        )
+            if set(node.output) & name:
+                for n in node.output:
+                    if n in name:
+                        r = ResultFound(
+                            n,
+                            None,
+                            NodeCoordinates(
+                                node,
+                                tuple(  # noqa: C409
+                                    [*coordinates, (node_i, node.op_type, node.name)]
+                                ),
+                            ),
+                        )
+                        if verbose > 1:
+                            print(f"[enumerate_results] {indent}-- {r}")
+                        yield r
+    if verbose:
+        print(f"[enumerate_results] {indent}done")
+
+
+def shadowing_names(
+    proto: Union[FunctionProto, GraphProto, ModelProto, Sequence[NodeProto]],
+    verbose: int = 0,
+    existing: Optional[Set[str]] = None,
+    shadow_context: Optional[Set[str]] = None,
+    post_shadow_context: Optional[Set[str]] = None,
+) -> Tuple[Set[str], Set[str], Set[str]]:
+    """
+    Returns the shadowing names, the names created in the main graph
+    after they were created in a subgraphs and the names created by the nodes.
+    """
+    if isinstance(proto, ModelProto):
+        return shadowing_names(proto.graph)
+    if isinstance(proto, GraphProto):
+        assert (
+            existing is None and shadow_context is None
+        ), "existing must be None if nodes is None"
+        return shadowing_names(
+            proto.node,
+            verbose=verbose,
+            existing=set(i.name for i in proto.initializer)
+            | set(i.name for i in proto.sparse_initializer)
+            | set(i.name for i in proto.input if i.name),
+            shadow_context=set(),
+            post_shadow_context=set(),
+        )
+    if isinstance(proto, FunctionProto):
+        assert (
+            existing is None and shadow_context is None
+        ), "existing must be None if nodes is None"
+        return shadowing_names(
+            proto.node,
+            verbose=verbose,
+            existing=set(i for i in proto.input if i),
+            shadow_context=set(),
+            post_shadow_context=set(),
+        )
+
+    assert (
+        existing is not None and shadow_context is not None
+    ), "existing must not be None if nodes is not None"
+    shadow = set()
+    shadow_context = shadow_context.copy()
+    existing = existing.copy()
+    created = set()
+    post_shadow = set()
+    for node in proto:
+        not_empty = set(n for n in node.input if n)
+        intersection = not_empty & existing
+        assert len(intersection) == len(not_empty), (
+            f"One input in {not_empty}, node={pretty_onnx(node)} "
+            f"was not found in {existing}"
+        )
+        for att in node.attribute:
+            if att.type == AttributeProto.GRAPH:
+                g = att.g
+                shadow |= set(i.name for i in g.input) & shadow_context
+                shadow |= set(i.name for i in g.initializer) & shadow_context
+                shadow |= set(i.name for i in g.sparse_initializer) & shadow_context
+                s, ps, c = shadowing_names(
+                    g.node, verbose=verbose, existing=existing, shadow_context=existing
+                )
+                shadow |= s
+                created |= c
+
+        not_empty = set(n for n in node.output if n)
+        post_shadow |= not_empty & created
+        shadow |= not_empty & shadow_context
+        existing |= not_empty
+        created |= not_empty
+    return shadow, post_shadow, created

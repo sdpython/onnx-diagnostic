@@ -38,6 +38,13 @@ class TestCommandLines(ExtTestCase):
         text = st.getvalue()
         self.assertIsInstance(text, str)
 
+    def test_parser_find_v2(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            main(["find", "-i", self.dummy_path, "-n", "node_Add_188", "--v2"])
+        text = st.getvalue()
+        self.assertIsInstance(text, str)
+
     def test_parser_config(self):
         st = StringIO()
         with redirect_stdout(st):
