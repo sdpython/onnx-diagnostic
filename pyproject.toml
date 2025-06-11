@@ -18,7 +18,7 @@ exclude = [
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.doc"]
-disable_error_code = ["call-overload", "name-defined"]
+disable_error_code = ["call-overload", "name-defined", "import-untyped"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.ext_test_case"]

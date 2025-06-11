@@ -46,7 +46,9 @@ class ReportResultComparison:
         self.unique_run_names = set()
 
     @property
-    def value(self) -> Dict[Tuple[str, ReportKeyNameType], Dict[str, Union[float, str]]]:
+    def value(
+        self,
+    ) -> Dict[Tuple[Tuple[int, str], ReportKeyNameType], Dict[str, Union[float, str]]]:
         "Returns the report."
         return self.report_cmp
 

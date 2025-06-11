@@ -52,7 +52,7 @@ class OnnxruntimeEvaluator:
     :param ir_version: ir version to use when unknown
     :param opsets: opsets to use when unknown
     :param whole: if True, do not split node by node
-    :param torch_or_numpy: force the use of one of them, Ture for torch,
+    :param torch_or_numpy: force the use of one of them, True for torch,
         False for numpy, None to let the class choose
     """
 
@@ -229,18 +229,18 @@ class OnnxruntimeEvaluator:
         report_cmp: Optional[ReportResultComparison] = None,
     ) -> Union[Dict[str, Any], List[Any]]:
         """
-         Runs the model.
-         It only works with numpy arrays.
+        Runs the model.
+        It only works with numpy arrays.
 
-         :param outputs: required outputs or None for all
-         :param feed_inputs: inputs
-         :param intermediate: returns all output instead of the last ones
-         :param report_cmp: used as a reference,
-             every intermediate results is compare to every existing one,
-             if not empty, it is an instance of
-             :class:`onnx_diagnostic.reference.ReportResultComparison`
+        :param outputs: required outputs or None for all
+        :param feed_inputs: inputs
+        :param intermediate: returns all output instead of the last ones
+        :param report_cmp: used as a reference,
+            every intermediate results is compare to every existing one,
+            if not empty, it is an instance of
+            :class:`onnx_diagnostic.reference.ReportResultComparison`
         :return: outputs, as a list if return_all is False,
-             as a dictionary if return_all is True
+            as a dictionary if return_all is True
         """
         if self.rt_nodes_ is None:
             # runs a whole
