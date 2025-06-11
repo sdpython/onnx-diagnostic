@@ -71,6 +71,6 @@ class ReportResultsComparison:
                     diff = self.max_diff(t, t2)
                 else:
                     diff = self.max_diff(tensor, t2)
-                res.append((name, held_key, diff))
+                res.append((name, held_key, diff))  # type: ignore[arg-type]
                 self.report_cmp[name, held_key] = diff
         return res

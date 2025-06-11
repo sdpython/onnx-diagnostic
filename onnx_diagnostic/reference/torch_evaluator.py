@@ -544,9 +544,9 @@ class TorchOnnxEvaluator:
                             zip(
                                 kernel.output,
                                 (
-                                    tuple((r.tensor if r else None) for r in res)
+                                    tuple((r.tensor if r else None) for r in res)  # type: ignore[attr-defined]
                                     if isinstance(res, tuple)
-                                    else ((res.tensor if res else None),)
+                                    else ((res.tensor if res else None),)  # type: ignore[attr-defined]
                                 ),
                             )
                         )
