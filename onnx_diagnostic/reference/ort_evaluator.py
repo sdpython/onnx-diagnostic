@@ -450,9 +450,6 @@ class OnnxruntimeEvaluator:
             and (not isinstance(self.torch_or_numpy, bool) or not self.torch_or_numpy)
             else InferenceSessionForTorch
         )
-        assert (
-            cls is InferenceSessionForTorch
-        ), f"ERROR: {string_type(inputs, with_shape=True)}"
         try:
             sess = cls(onx, **self.session_kwargs)
         except (
