@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.7.0
++++++
+
+* :pr:`143`: compares intermediate results
+
 0.6.3
 +++++
 
