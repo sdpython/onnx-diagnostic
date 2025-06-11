@@ -1,7 +1,8 @@
 from typing import Dict, List, Tuple, Union
 
 
-ReportKeyType = Union[str, Tuple[Union[int, str], ...]]
+ReportKeyNameType = Union[str, Tuple[str, int, str]]
+ReportKeyValueType = Tuple[int, Tuple[int, ...]]
 
 
 class ReportResultsComparison:
@@ -13,7 +14,7 @@ class ReportResultsComparison:
     :param tensors: tensor
     """
 
-    def __init__(self, tensors: Dict[ReportKeyType, "torch.Tensor"]):  # noqa: F821
+    def __init__(self, tensors: Dict[ReportKeyNameType, "torch.Tensor"]):  # noqa: F821
         from ..helpers.onnx_helper import dtype_to_tensor_dtype
         from ..helpers import max_diff
 
@@ -22,7 +23,7 @@ class ReportResultsComparison:
         self.tensors = tensors
         self._build_mapping()
 
-    def key(self, tensor: "torch.Tensor") -> ReportKeyType:  # noqa: F821
+    def key(self, tensor: "torch.Tensor") -> ReportKeyValueType:  # noqa: F821
         "Returns a key for a tensor, (onnx dtype, shape)."
         return self.dtype_to_tensor_dtype(tensor.dtype), tuple(map(int, tensor.shape))
 
@@ -41,13 +42,13 @@ class ReportResultsComparison:
         self.report_cmp = {}
 
     @property
-    def value(self) -> Dict[Tuple[str, ReportKeyType], Dict[str, Union[float, str]]]:
+    def value(self) -> Dict[Tuple[str, ReportKeyNameType], Dict[str, Union[float, str]]]:
         "Returns the report."
         return self.report_cmp
 
     def report(
         self, outputs: Dict[str, "torch.Tensor"]  # noqa: F821
-    ) -> List[Tuple[str, ReportKeyType]]:
+    ) -> List[Tuple[str, ReportKeyNameType, Dict[str, Union[float, str]]]]:
         """
         For every tensor in outputs, compares it to every tensor held by
         this class if it shares the same type and shape. The function returns
