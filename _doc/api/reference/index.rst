@@ -30,10 +30,10 @@ OnnxruntimeEvaluator
 .. autoclass:: onnx_diagnostic.reference.OnnxruntimeEvaluator
     :members:
 
-ReportResultsComparison
-+++++++++++++++++++++++
+ReportResultComparison
+++++++++++++++++++++++
 
-.. autoclass:: onnx_diagnostic.reference.ReportResultsComparison
+.. autoclass:: onnx_diagnostic.reference.ReportResultComparison
     :members:
 
 TorchOnnxEvaluator

@@ -11,7 +11,7 @@ from onnx_diagnostic.helpers.torch_helper import onnx_dtype_to_torch_dtype
 from onnx_diagnostic.reference import (
     ExtendedReferenceEvaluator,
     TorchOnnxEvaluator,
-    ReportResultsComparison,
+    ReportResultComparison,
 )
 from onnx_diagnostic.reference.torch_ops import OpRunKernel, OpRunTensor
 from onnx_diagnostic.reference.torch_evaluator import get_kernels
@@ -1496,7 +1496,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         )
         x = torch.rand(5, 6, dtype=torch.float32)
         onnx.checker.check_model(model)
-        cmp = ReportResultsComparison(dict(r_x=x, r_cos=x.cos(), r_exp=x.cos().sin().exp()))
+        cmp = ReportResultComparison(dict(r_x=x, r_cos=x.cos(), r_exp=x.cos().sin().exp()))
         cmp.clear()
         feeds = dict(zip([i.name for i in model.graph.input], (x,)))
         rt = TorchOnnxEvaluator(model, verbose=10)

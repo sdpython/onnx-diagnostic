@@ -236,6 +236,7 @@ With the following versions:
     import ml_dtypes
     import sklearn
     import onnx
+    import onnx_ir
     import onnxruntime
     import onnxscript
     import torch
@@ -247,6 +248,7 @@ With the following versions:
         ml_dtypes,
         sklearn,
         onnx,
+        onnx_ir,
         onnxruntime,
         onnxscript,
         torch,

@@ -5,7 +5,7 @@ ReportKeyNameType = Union[str, Tuple[str, int, str]]
 ReportKeyValueType = Tuple[int, Tuple[int, ...]]
 
 
-class ReportResultsComparison:
+class ReportResultComparison:
     """
     Holds tensors a runtime can use as a reference to compare
     intermediate results.
@@ -16,8 +16,11 @@ class ReportResultsComparison:
 
     def __init__(self, tensors: Dict[ReportKeyNameType, "torch.Tensor"]):  # noqa: F821
         from ..helpers.onnx_helper import dtype_to_tensor_dtype
-        from ..helpers import max_diff
+        from ..helpers import max_diff, string_type
 
+        assert all(
+            hasattr(v, "shape") and hasattr(v, "dtype") for v in tensors.values()
+        ), f"One of the tensors is not: {string_type(tensors, with_shape=True)}"
         self.dtype_to_tensor_dtype = dtype_to_tensor_dtype
         self.max_diff = max_diff
         self.tensors = tensors

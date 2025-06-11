@@ -9,7 +9,7 @@ from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.reference import (
     OnnxruntimeEvaluator,
     ExtendedReferenceEvaluator,
-    ReportResultsComparison,
+    ReportResultComparison,
 )
 
 try:
@@ -217,7 +217,7 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         )
         x = torch.rand(5, 6, dtype=torch.float32)
         onnx.checker.check_model(model)
-        cmp = ReportResultsComparison(dict(r_x=x, r_cos=x.cos(), r_exp=x.cos().sin().exp()))
+        cmp = ReportResultComparison(dict(r_x=x, r_cos=x.cos(), r_exp=x.cos().sin().exp()))
         cmp.clear()
         feeds = dict(zip([i.name for i in model.graph.input], (x,)))
         rt = OnnxruntimeEvaluator(model, verbose=10)

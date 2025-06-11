@@ -22,7 +22,8 @@ from ..helpers.ort_session import (
     InferenceSessionForNumpy,
     _InferenceSession,
 )
-from .report_results_comparison import ReportResultsComparison
+from ..helpers.torch_helper import to_tensor
+from .report_results_comparison import ReportResultComparison
 from .evaluator import ExtendedReferenceEvaluator
 
 
@@ -51,6 +52,8 @@ class OnnxruntimeEvaluator:
     :param ir_version: ir version to use when unknown
     :param opsets: opsets to use when unknown
     :param whole: if True, do not split node by node
+    :param torch_or_numpy: force the use of one of them, Ture for torch,
+        False for numpy, None to let the class choose
     """
 
     def __init__(
@@ -73,6 +76,7 @@ class OnnxruntimeEvaluator:
         ir_version: int = 10,
         opsets: Optional[Union[int, Dict[str, int]]] = None,
         whole: bool = False,
+        torch_or_numpy: Optional[bool] = None,
     ):
         if isinstance(proto, str):
             self.proto: Proto = load(proto)
@@ -104,8 +108,10 @@ class OnnxruntimeEvaluator:
             disable_aot_function_inlining=disable_aot_function_inlining,
             use_training_api=use_training_api,
         )
+        self.to_tensor_or_array = to_array_extended if not torch_or_numpy else to_tensor
 
         self.verbose = verbose
+        self.torch_or_numpy = torch_or_numpy
         self.sess_: Optional[_InferenceSession] = None
         if whole:
             self.nodes: Optional[List[NodeProto]] = None
@@ -124,7 +130,10 @@ class OnnxruntimeEvaluator:
                 )
             )
             self.rt_inits_ = (
-                {init.name: to_array_extended(init) for init in self.proto.graph.initializer}
+                {
+                    init.name: self.to_tensor_or_array(init)
+                    for init in self.proto.graph.initializer
+                }
                 if hasattr(self.proto, "graph")
                 else {}
             )
@@ -192,13 +201,14 @@ class OnnxruntimeEvaluator:
             return a
         device = f"D{a.get_device()}:" if hasattr(a, "detach") else ""
         if hasattr(a, "shape"):
+            prefix = "A:" if hasattr(a, "astype") else "T:"
             if self.verbose < 4:  # noqa: PLR2004
-                return f"{device}{a.dtype}:{a.shape} in [{a.min()}, {a.max()}]"
+                return f"{prefix}{device}{a.dtype}:{a.shape} in [{a.min()}, {a.max()}]"
             elements = a.ravel().tolist()
             if len(elements) > 10:  # noqa: PLR2004
                 elements = elements[:10]
-                return f"{device}{a.dtype}:{a.shape}:{','.join(map(str, elements))}..."
-            return f"{device}{a.dtype}:{a.shape}:{elements}"
+                return f"{prefix}{device}{a.dtype}:{a.shape}:{','.join(map(str, elements))}..."
+            return f"{prefix}{device}{a.dtype}:{a.shape}:{elements}"
         if hasattr(a, "append"):
             return ", ".join(map(self._log_arg, a))
         return a
@@ -216,7 +226,7 @@ class OnnxruntimeEvaluator:
         outputs: Optional[List[str]],
         feed_inputs: Dict[str, Any],
         intermediate: bool = False,
-        report_cmp: Optional[ReportResultsComparison] = None,
+        report_cmp: Optional[ReportResultComparison] = None,
     ) -> Union[Dict[str, Any], List[Any]]:
         """
          Runs the model.
@@ -228,7 +238,7 @@ class OnnxruntimeEvaluator:
          :param report_cmp: used as a reference,
              every intermediate results is compare to every existing one,
              if not empty, it is an instance of
-             :class:`onnx_diagnostic.reference.ReportResultsComparison`
+             :class:`onnx_diagnostic.reference.ReportResultComparison`
         :return: outputs, as a list if return_all is False,
              as a dictionary if return_all is True
         """
@@ -437,8 +447,12 @@ class OnnxruntimeEvaluator:
         cls = (
             InferenceSessionForNumpy
             if any(isinstance(i, np.ndarray) for i in inputs)
+            and (not isinstance(self.torch_or_numpy, bool) or not self.torch_or_numpy)
             else InferenceSessionForTorch
         )
+        assert (
+            cls is InferenceSessionForTorch
+        ), f"ERROR: {string_type(inputs, with_shape=True)}"
         try:
             sess = cls(onx, **self.session_kwargs)
         except (
@@ -497,6 +511,7 @@ class OnnxruntimeEvaluator:
             verbose=self.verbose,
             ir_version=self.ir_version,
             opsets=self.opsets,
+            torch_or_numpy=self.torch_or_numpy,
             **self.session_kwargs,
         )
         return onx, sess
@@ -511,6 +526,7 @@ class OnnxruntimeEvaluator:
             verbose=self.verbose,
             ir_version=self.ir_version,
             opsets=self.opsets,
+            torch_or_numpy=self.torch_or_numpy,
             **self.session_kwargs,
         )
         return ev.proto, sess
@@ -586,6 +602,7 @@ class OnnxruntimeEvaluator:
             verbose=self.verbose,
             ir_version=self.ir_version,
             opsets=self.opsets,
+            torch_or_numpy=self.torch_or_numpy,
             whole=True,
             **self.session_kwargs,
         )

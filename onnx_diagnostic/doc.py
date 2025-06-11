@@ -2,6 +2,28 @@ from typing import Optional
 import numpy as np
 
 
+def get_latest_pypi_version(package_name="onnx-diagnostic") -> str:
+    """Returns the latest published version."""
+
+    import requests
+
+    url = f"https://pypi.org/pypi/{package_name}/json"
+    response = requests.get(url)
+
+    assert response.status_code == 200, f"Unable to retrieve the version response={response}"
+    data = response.json()
+    version = data["info"]["version"]
+    return version
+
+
+def update_version_package(version: str, package_name="onnx-diagnostic") -> str:
+    "Adds dev if the major version is different from the latest published one."
+    released = get_latest_pypi_version(package_name)
+    shorten_r = ".".join(released.split(".")[:2])
+    shorten_v = ".".join(version.split(".")[:2])
+    return version if shorten_r == shorten_v else f"{shorten_v}.dev"
+
+
 def reset_torch_transformers(gallery_conf, fname):
     "Resets torch dynamo for :epkg:`sphinx-gallery`."
     import matplotlib.pyplot as plt
