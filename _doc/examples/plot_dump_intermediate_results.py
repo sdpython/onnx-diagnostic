@@ -12,7 +12,7 @@ unavoidable question. Unless there is an obvious reason,
 the only way is to compare intermediate outputs alon the computation.
 The first step into that direction is to dump the intermediate results
 coming from :epkg:`pytorch`.
-We use :func:`onnx_diagnostic.helpers.torch_helper import steal_forward` for that.
+We use :func:`onnx_diagnostic.helpers.torch_helper.steal_forward` for that.
 
 A simple LLM Model
 ++++++++++++++++++
