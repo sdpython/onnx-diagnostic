@@ -92,6 +92,7 @@ Enlightening Examples
 * :ref:`l-plot-failing-reference-evaluator`
 * :ref:`l-plot-failing-onnxruntime-evaluator`
 * :ref:`l-plot-failing-model-extract`
+* :ref:`l-plot-intermediate-results`
 
 Some Usefuls Tools
 ==================

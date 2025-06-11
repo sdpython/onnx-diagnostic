@@ -532,6 +532,8 @@ def create_input_tensors_from_onnx_model(
     :param engine: runtime to use, onnx, the default value, onnxruntime
     :param sep: separator
     :return: restored data
+
+    See example :ref:`l-plot-intermediate-results` for an example.
     """
     if engine == "ExtendedReferenceEvaluator":
         from ..reference import ExtendedReferenceEvaluator

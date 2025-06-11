@@ -288,7 +288,8 @@ def steal_forward(
     """
     The necessary modification to steem forward method and prints out inputs
     and outputs using :func:`onnx_diagnostic.helpers.string_type`.
-    See example :ref:`l-plot-tiny-llm-export`.
+    See example :ref:`l-plot-tiny-llm-export` or
+    :ref:`l-plot-intermediate-results`.
 
     :param model: a model or a list of models to monitor,
         every model can also be a tuple(name, model), name is displayed well.
