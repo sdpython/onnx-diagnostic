@@ -45,6 +45,10 @@ module = ["onnx_diagnostic.helpers.ort_session"]
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
+module = ["onnx_diagnostic.reference.report_results_comparison"]
+disable_error_code = ["name-defined"]
+
+[[tool.mypy.overrides]]
 module = ["onnx_diagnostic.reference.torch_ops.*"]
 disable_error_code = ["override"]
 

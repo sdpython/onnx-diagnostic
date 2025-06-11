@@ -55,12 +55,12 @@ class ReportResultsComparison:
         the results of the comparison. The function also collects the results
         into a dictionary the user can retrieve later.
         """
-        res = []
+        res: List[Tuple[str, ReportKeyNameType, Dict[str, Union[float, str]]]] = []
         for name, tensor in outputs.items():
             key = self.key(tensor)
             if key not in self.mapping:
                 continue
-            cache = {}
+            cache: Dict["torch.device", "torch.Tensor"] = {}  # noqa: F821, UP037
             for held_key in self.mapping[key]:
                 t2 = self.tensors[held_key]
                 if hasattr(t2, "device") and hasattr(tensor, "device"):
