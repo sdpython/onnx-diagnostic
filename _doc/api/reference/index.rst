@@ -15,6 +15,7 @@ onnx_diagnostic.reference
     evaluator
     quantized_tensor
     ort_evaluator
+    report_results_comparison
     torch_evaluator
 
 ExtendedReferenceEvaluator
@@ -27,6 +28,12 @@ OnnxruntimeEvaluator
 ++++++++++++++++++++
 
 .. autoclass:: onnx_diagnostic.reference.OnnxruntimeEvaluator
+    :members:
+
+ReportResultComparison
+++++++++++++++++++++++
+
+.. autoclass:: onnx_diagnostic.reference.ReportResultComparison
     :members:
 
 TorchOnnxEvaluator

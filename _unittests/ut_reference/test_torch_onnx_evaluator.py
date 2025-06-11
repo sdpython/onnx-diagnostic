@@ -1,13 +1,18 @@
 import unittest
 import numpy as np
+import pandas
 import onnx
 import onnx.helper as oh
 import onnx.numpy_helper as onh
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
+from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, hide_stdout
 from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.helpers.torch_helper import onnx_dtype_to_torch_dtype
-from onnx_diagnostic.reference import ExtendedReferenceEvaluator, TorchOnnxEvaluator
+from onnx_diagnostic.reference import (
+    ExtendedReferenceEvaluator,
+    TorchOnnxEvaluator,
+    ReportResultComparison,
+)
 from onnx_diagnostic.reference.torch_ops import OpRunKernel, OpRunTensor
 from onnx_diagnostic.reference.torch_evaluator import get_kernels
 
@@ -1470,6 +1475,41 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         got = torch_sess_custom.run(None, feeds)
         self.assertEqualAny(expected, got, atol=1e-3)
         self.assertEqual([1], LayerNormalizationOrt._shared)
+
+    @hide_stdout()
+    def test_report_results_comparison(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Cos", ["X"], ["nx"]),
+                    oh.make_node("Sin", ["nx"], ["t"]),
+                    oh.make_node("Exp", ["t"], ["u"]),
+                    oh.make_node("Log", ["u"], ["uZ"]),
+                    oh.make_node("Erf", ["uZ"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        x = torch.rand(5, 6, dtype=torch.float32)
+        onnx.checker.check_model(model)
+        cmp = ReportResultComparison(dict(r_x=x, r_cos=x.cos(), r_exp=x.cos().sin().exp()))
+        cmp.clear()
+        feeds = dict(zip([i.name for i in model.graph.input], (x,)))
+        rt = TorchOnnxEvaluator(model, verbose=10)
+        rt.run(None, feeds, report_cmp=cmp)
+        d = {k: d["abs"] for k, d in cmp.value.items()}
+        self.assertEqual(d[(0, "nx"), "r_cos"], 0)
+        self.assertEqual(d[(2, "u"), "r_exp"], 0)
+        data = cmp.data
+        self.assertIsInstance(data, list)
+        df = pandas.DataFrame(data)
+        piv = df.pivot(index=("run_index", "run_name"), columns="ref_name", values="abs")
+        self.assertEqual(list(piv.columns), ["r_cos", "r_exp", "r_x"])
+        self.assertEqual(list(piv.index), [(0, "nx"), (1, "t"), (2, "u"), (3, "uZ"), (4, "Z")])
 
 
 if __name__ == "__main__":

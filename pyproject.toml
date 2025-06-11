@@ -18,7 +18,7 @@ exclude = [
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.doc"]
-disable_error_code = ["call-overload", "name-defined"]
+disable_error_code = ["call-overload", "name-defined", "import-untyped"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.ext_test_case"]
@@ -43,6 +43,10 @@ disable_error_code = ["assignment", "arg-type", "name-defined", "union-attr"]
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.ort_session"]
 disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.reference.report_results_comparison"]
+disable_error_code = ["name-defined"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.reference.torch_ops.*"]

@@ -1,3 +1,4 @@
 from .evaluator import ExtendedReferenceEvaluator
 from .ort_evaluator import OnnxruntimeEvaluator
 from .torch_evaluator import TorchOnnxEvaluator
+from .report_results_comparison import ReportResultComparison

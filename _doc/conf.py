@@ -5,6 +5,7 @@ from sphinx_runpython.github_link import make_linkcode_resolve
 from sphinx_runpython.conf_helper import has_dvipng, has_dvisvgm
 import torch
 from onnx_diagnostic import __version__
+from onnx_diagnostic.doc import update_version_package
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -40,8 +41,8 @@ master_doc = "index"
 project = "onnx-diagnostic"
 copyright = "2025"
 author = "Xavier Dupré"
-version = __version__
-release = __version__
+version = update_version_package(__version__)
+release = version
 language = "en"
 exclude_patterns = []
 pygments_style = "sphinx"

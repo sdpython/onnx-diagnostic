@@ -19,20 +19,29 @@ A simple LLM Model
 
 See :func:`onnx_diagnostic.helpers.torch_helper.dummy_llm`
 for its definition. It is mostly used for unit test or example.
-
 """
 
+import numpy as np
+import pandas
 import onnx
 import torch
+import onnxruntime
 from onnx_array_api.plotting.graphviz_helper import plot_dot
 from onnx_diagnostic import doc
-from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.helpers.torch_helper import dummy_llm
+from onnx_diagnostic.helpers import max_diff, string_diff, string_type
+from onnx_diagnostic.helpers.torch_helper import dummy_llm, steal_forward
 from onnx_diagnostic.helpers.mini_onnx_builder import create_input_tensors_from_onnx_model
-from onnx_diagnostic.helpers.torch_helper import steal_forward
+from onnx_diagnostic.reference import OnnxruntimeEvaluator, ReportResultComparison
 
 
 model, inputs, ds = dummy_llm(dynamic_shapes=True)
+
+# %%
+# We use float16.
+model = model.to(torch.float16)
+
+# %%
+# Let's check.
 
 print(f"type(model)={type(model)}")
 print(f"inputs={string_type(inputs, with_shape=True)}")
@@ -65,7 +74,7 @@ with steal_forward(
     verbose=1,
     storage_limit=2**28,
 ):
-    model(*inputs)
+    expected = model(*inputs)
 
 
 # %%
@@ -124,7 +133,74 @@ epo.optimize()
 epo.save("plot_dump_intermediate_results.onnx")
 
 # %%
-# It looks like the following.
+# Discrepancies
+# +++++++++++++
+#
+# We have a torch model, intermediate results and an ONNX graph
+# equivalent to the torch model.
+# Let's see how we can check the discrepancies.
+# First the discrepancies of the whole model.
+
+sess = onnxruntime.InferenceSession(
+    "plot_dump_intermediate_results.onnx", providers=["CPUExecutionProvider"]
+)
+feeds = dict(
+    zip([i.name for i in sess.get_inputs()], [t.detach().cpu().numpy() for t in inputs])
+)
+got = sess.run(None, feeds)
+diff = max_diff(expected, got)
+print(f"discrepancies torch/ORT: {string_diff(diff)}")
+
+# %%
+# What about intermediate results?
+# Let's use a runtime still based on :epkg:`onnxruntime`
+# running an eager evaluation.
+
+sess_eager = OnnxruntimeEvaluator(
+    "plot_dump_intermediate_results.onnx",
+    providers=["CPUExecutionProvider"],
+    torch_or_numpy=True,
+)
+feeds_tensor = dict(zip([i.name for i in sess.get_inputs()], inputs))
+got = sess_eager.run(None, feeds_tensor)
+diff = max_diff(expected, got)
+print(f"discrepancies torch/eager ORT: {string_diff(diff)}")
+
+# %%
+# They are almost the same. That's good.
+# Let's now dig into the intermediate results.
+# They are compared to the outputs stored in saved_tensors
+# during the execution of the model.
+baseline = {}
+for k, v in saved_tensors.items():
+    if k[-1] == "I":  # inputs are excluded
+        continue
+    if isinstance(v, torch.Tensor):
+        baseline[f"{k[0]}.{k[1]}".replace("model.decoder", "decoder")] = v
+
+report_cmp = ReportResultComparison(baseline)
+sess_eager.run(None, feeds_tensor, report_cmp=report_cmp)
+
+# %%
+# Let's see the results.
+
+data = report_cmp.data
+df = pandas.DataFrame(data)
+piv = df.pivot(index=("run_index", "run_name"), columns="ref_name", values="abs")
+print(piv)
+
+# %%
+# Let's clean a little bit.
+piv[piv >= 1] = np.nan
+print(piv.dropna(axis=0, how="all"))
+
+# %%
+# We can identity which results is mapped to which expected tensor.
+
+# %%
+# Picture of the model
+# ++++++++++++++++++++
+
 onx = onnx.load("plot_dump_intermediate_results.onnx")
 plot_dot(onx)
 

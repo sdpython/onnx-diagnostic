@@ -5,6 +5,7 @@ import onnx
 import torch
 from ..helpers.torch_helper import to_tensor
 from ..torch_onnx.runtime_info import first_used_last_used, RuntimeValue
+from .report_results_comparison import ReportResultComparison
 from . import torch_ops
 
 
@@ -455,12 +456,17 @@ class TorchOnnxEvaluator:
         self,
         outputs: Optional[List[str]],
         feeds: Union[Dict[str, torch.Tensor], Dict[str, np.ndarray]],
+        report_cmp: Optional[ReportResultComparison] = None,
     ) -> Union[List[Optional[torch.Tensor]], List[Optional[np.ndarray]]]:
         """
         Runs the ONNX model.
 
         :param outputs: outputs required
         :param feeds: inputs
+        :param report_cmp: used as a reference,
+            every intermediate results is compare to every existing one,
+            if not empty, it is an instance of
+            :class:`onnx_diagnostic.reference.ReportResultComparison`
         :return: output tensors.
         """
         use_numpy = any(isinstance(t, np.ndarray) for t in feeds.values())
@@ -532,6 +538,21 @@ class TorchOnnxEvaluator:
                             f"+R {kernel.output[0]}: "
                             f"{self.runtime_info[kernel.output[0]].string_type()}"
                         )
+                if report_cmp:
+                    reported = report_cmp.report(
+                        dict(
+                            zip(
+                                kernel.output,
+                                (
+                                    tuple((r.tensor if r else None) for r in res)  # type: ignore[attr-defined]
+                                    if isinstance(res, tuple)
+                                    else ((res.tensor if res else None),)  # type: ignore[attr-defined]
+                                ),
+                            )
+                        )
+                    )
+                    if self.verbose > 1:
+                        print(f"  -- report {len(reported)} comparisons")
 
             # free intermediate results
             for name in self.last_used[it]:

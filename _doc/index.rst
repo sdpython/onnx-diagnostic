@@ -213,10 +213,8 @@ The function replaces dynamic dimensions defined as strings by
 Older versions
 ++++++++++++++
 
+* `0.7.0 <../v0.7.0/index.html>`_
 * `0.6.3 <../v0.6.3/index.html>`_
-* `0.6.2 <../v0.6.2/index.html>`_
-* `0.6.1 <../v0.6.1/index.html>`_
-* `0.6.0 <../v0.6.0/index.html>`_
 * `0.5.0 <../v0.5.0/index.html>`_
 * `0.4.4 <../v0.4.4/index.html>`_
 * `0.3.0 <../v0.3.0/index.html>`_
@@ -238,6 +236,7 @@ With the following versions:
     import ml_dtypes
     import sklearn
     import onnx
+    import onnx_ir
     import onnxruntime
     import onnxscript
     import torch
@@ -249,6 +248,7 @@ With the following versions:
         ml_dtypes,
         sklearn,
         onnx,
+        onnx_ir,
         onnxruntime,
         onnxscript,
         torch,
