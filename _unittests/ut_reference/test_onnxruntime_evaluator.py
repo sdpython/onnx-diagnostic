@@ -4,14 +4,21 @@ import onnx
 import onnx.helper as oh
 import torch
 import onnxruntime
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.helpers.onnx_helper import from_array_extended
-from onnx_diagnostic.reference import OnnxruntimeEvaluator, ExtendedReferenceEvaluator
+from onnx_diagnostic.reference import (
+    OnnxruntimeEvaluator,
+    ExtendedReferenceEvaluator,
+    ReportResultsComparison,
+)
 
 try:
     from experimental_experiment.torch_interpreter import to_onnx, ExportOptions
 except ImportError:
     to_onnx = None
+
+
+TFLOAT = onnx.TensorProto.FLOAT
 
 
 class TestOnnxruntimeEvaluator(ExtTestCase):
@@ -189,6 +196,35 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         )
         got = ref.run(None, feeds)
         self.assertEqualArray(expected, got[0])
+
+    @hide_stdout()
+    def test_report_results_comparison_ort(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Cos", ["X"], ["nx"]),
+                    oh.make_node("Sin", ["nx"], ["t"]),
+                    oh.make_node("Exp", ["t"], ["u"]),
+                    oh.make_node("Log", ["u"], ["uZ"]),
+                    oh.make_node("Erf", ["uZ"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, ["a", "b"])],
+                [oh.make_tensor_value_info("Z", TFLOAT, ["a", "b"])],
+            ),
+            ir_version=9,
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        x = torch.rand(5, 6, dtype=torch.float32)
+        onnx.checker.check_model(model)
+        cmp = ReportResultsComparison(dict(r_x=x, r_cos=x.cos(), r_exp=x.cos().sin().exp()))
+        cmp.clear()
+        feeds = dict(zip([i.name for i in model.graph.input], (x,)))
+        rt = OnnxruntimeEvaluator(model, verbose=10)
+        rt.run(None, feeds, report_cmp=cmp)
+        d = {k: d["abs"] for k, d in cmp.value.items()}
+        self.assertLess(d[(0, "nx"), "r_cos"], 1e-6)
+        self.assertLess(d[(2, "u"), "r_exp"], 1e-6)
 
 
 if __name__ == "__main__":

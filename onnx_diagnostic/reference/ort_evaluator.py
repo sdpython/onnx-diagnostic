@@ -22,7 +22,9 @@ from ..helpers.ort_session import (
     InferenceSessionForNumpy,
     _InferenceSession,
 )
+from .report_results_comparison import ReportResultsComparison
 from .evaluator import ExtendedReferenceEvaluator
+
 
 PROTO = (FunctionProto, ModelProto, GraphProto, NodeProto)
 Proto = Union[FunctionProto, ModelProto, GraphProto, NodeProto]
@@ -214,16 +216,21 @@ class OnnxruntimeEvaluator:
         outputs: Optional[List[str]],
         feed_inputs: Dict[str, Any],
         intermediate: bool = False,
+        report_cmp: Optional[ReportResultsComparison] = None,
     ) -> Union[Dict[str, Any], List[Any]]:
         """
-        Runs the model.
-        It only works with numpy arrays.
+         Runs the model.
+         It only works with numpy arrays.
 
-        :param outputs: required outputs or None for all
-        :param feed_inputs: inputs
-        :param intermediate: returns all output instead of the last ones
+         :param outputs: required outputs or None for all
+         :param feed_inputs: inputs
+         :param intermediate: returns all output instead of the last ones
+         :param report_cmp: used as a reference,
+             every intermediate results is compare to every existing one,
+             if not empty, it is an instance of
+             :class:`onnx_diagnostic.reference.ReportResultsComparison`
         :return: outputs, as a list if return_all is False,
-            as a dictionary if return_all is True
+             as a dictionary if return_all is True
         """
         if self.rt_nodes_ is None:
             # runs a whole
@@ -267,6 +274,10 @@ class OnnxruntimeEvaluator:
                 self._log(2, " + %s: %s", name, value)  # type: ignore[arg-type]
                 assert isinstance(name, str), f"unexpected type for name {type(name)}"
                 results[name] = value
+            if report_cmp:
+                reported = report_cmp.report(dict(zip(node.output, outputs)))
+                if self.verbose > 1:
+                    print(f"  -- report {len(reported)} comparisons")
             if not intermediate:
                 self._clean_unused_inplace(i_node, node, results)
 

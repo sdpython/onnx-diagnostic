@@ -31,7 +31,7 @@ OnnxruntimeEvaluator
     :members:
 
 ReportResultsComparison
-++++++++++++++++++
++++++++++++++++++++++++
 
 .. autoclass:: onnx_diagnostic.reference.ReportResultsComparison
     :members:

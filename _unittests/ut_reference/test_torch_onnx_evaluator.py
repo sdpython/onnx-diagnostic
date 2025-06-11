@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import pandas
 import onnx
 import onnx.helper as oh
 import onnx.numpy_helper as onh
@@ -1501,8 +1502,14 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         rt = TorchOnnxEvaluator(model, verbose=10)
         rt.run(None, feeds, report_cmp=cmp)
         d = {k: d["abs"] for k, d in cmp.value.items()}
-        self.assertEqual(d["nx", "r_cos"], 0)
-        self.assertEqual(d["u", "r_exp"], 0)
+        self.assertEqual(d[(0, "nx"), "r_cos"], 0)
+        self.assertEqual(d[(2, "u"), "r_exp"], 0)
+        data = cmp.data
+        self.assertIsInstance(data, list)
+        df = pandas.DataFrame(data)
+        piv = df.pivot(index=("run_index", "run_name"), columns="ref_name", values="abs")
+        self.assertEqual(list(piv.columns), ["r_cos", "r_exp", "r_x"])
+        self.assertEqual(list(piv.index), [(0, "nx"), (1, "t"), (2, "u"), (3, "uZ"), (4, "Z")])
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 
 ReportKeyNameType = Union[str, Tuple[str, int, str]]
@@ -9,7 +9,7 @@ class ReportResultsComparison:
     """
     Holds tensors a runtime can use as a reference to compare
     intermediate results.
-    See :meth:`onnx_diagnostic.reference.TorchOnnxEvalutor.run`.
+    See :meth:`onnx_diagnostic.reference.TorchOnnxEvaluator.run`.
 
     :param tensors: tensor
     """
@@ -40,23 +40,37 @@ class ReportResultsComparison:
     def clear(self):
         """Clears the last report."""
         self.report_cmp = {}
+        self.unique_run_names = set()
 
     @property
     def value(self) -> Dict[Tuple[str, ReportKeyNameType], Dict[str, Union[float, str]]]:
         "Returns the report."
         return self.report_cmp
 
+    @property
+    def data(self) -> List[Dict[str, Any]]:
+        "Returns data which can be consumed by a dataframe."
+        rows = []
+        for k, v in self.value.items():
+            (i_run, run_name), ref_name = k
+            d = dict(run_index=i_run, run_name=run_name, ref_name=ref_name)
+            d.update(v)
+            rows.append(d)
+        return rows
+
     def report(
         self, outputs: Dict[str, "torch.Tensor"]  # noqa: F821
-    ) -> List[Tuple[str, ReportKeyNameType, Dict[str, Union[float, str]]]]:
+    ) -> List[Tuple[Tuple[int, str], ReportKeyNameType, Dict[str, Union[float, str]]]]:
         """
         For every tensor in outputs, compares it to every tensor held by
         this class if it shares the same type and shape. The function returns
         the results of the comparison. The function also collects the results
         into a dictionary the user can retrieve later.
         """
-        res: List[Tuple[str, ReportKeyNameType, Dict[str, Union[float, str]]]] = []
+        res: List[Tuple[Tuple[int, str], ReportKeyNameType, Dict[str, Union[float, str]]]] = []
         for name, tensor in outputs.items():
+            i_run = len(self.unique_run_names)
+            self.unique_run_names.add(name)
             key = self.key(tensor)
             if key not in self.mapping:
                 continue
@@ -71,6 +85,6 @@ class ReportResultsComparison:
                     diff = self.max_diff(t, t2)
                 else:
                     diff = self.max_diff(tensor, t2)
-                res.append((name, held_key, diff))  # type: ignore[arg-type]
-                self.report_cmp[name, held_key] = diff
+                res.append((i_run, name, held_key, diff))  # type: ignore[arg-type]
+                self.report_cmp[(i_run, name), held_key] = diff
         return res
