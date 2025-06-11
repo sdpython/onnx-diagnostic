@@ -4,9 +4,21 @@
 Dumps intermediate results of a torch model
 ===========================================
 
+Looking for discrepancies is quickly annoying. Discrepancies
+come from two results obtained with the same models
+implemented in two different ways, :epkg:`pytorch` and :epkg:`onnx`.
+Models are big so where do they come from? That's the
+unavoidable question. Unless there is an obious reason,
+the only way is to compare intermediate outputs alon the computation.
+The first step into that direction is to dump the intermediate results
+coming from :epkg:`pytorch`.
+We use :func:`onnx_diagnostic.helpers.torch_helper import steal_forward` for that.
 
-codellama/CodeLlama-7b-Python-hf
-++++++++++++++++++++++++++++++++
+A simple LLM Model
+++++++++++++++++++
+
+See :func:`onnx_diagnostic.helpers.torch_helper.dummy_llm`
+for its definition. It is mostly used for unit test or example.
 
 """
 
@@ -87,7 +99,7 @@ for k, v in saved_tensors.items():
 #                |                 it is possible to call multiple times,
 #                |                 the model to store more
 #                |
-#                +--> the name given to steal forward
+#                +--> the name given to function steal_forward
 #
 # The same goes for output except ``'I'`` is replaced by ``'O'``.
 #
