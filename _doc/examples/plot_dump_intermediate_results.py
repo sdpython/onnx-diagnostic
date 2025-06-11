@@ -63,7 +63,8 @@ with steal_forward(
 # All the intermediate tensors were saved in one unique onnx model,
 # every tensor is stored in a constant node.
 # The model can be run with any runtime to restore the inputs
-# and function :func:`onnx_diagnostic.helpers.mini_onnx_builder.create_input_tensors_from_onnx_model`
+# and function :func:`create_input_tensors_from_onnx_model
+# <onnx_diagnostic.helpers.mini_onnx_builder.create_input_tensors_from_onnx_model>`
 # can restore their names.
 
 saved_tensors = create_input_tensors_from_onnx_model(
