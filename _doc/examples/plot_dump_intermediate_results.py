@@ -8,7 +8,7 @@ Looking for discrepancies is quickly annoying. Discrepancies
 come from two results obtained with the same models
 implemented in two different ways, :epkg:`pytorch` and :epkg:`onnx`.
 Models are big so where do they come from? That's the
-unavoidable question. Unless there is an obious reason,
+unavoidable question. Unless there is an obvious reason,
 the only way is to compare intermediate outputs alon the computation.
 The first step into that direction is to dump the intermediate results
 coming from :epkg:`pytorch`.
