@@ -393,7 +393,8 @@ def create_onnx_model_from_input_tensors(
     Creates a model proto including all the value as initializers.
     They can be restored by executing the model.
     We assume these inputs are not bigger than 2Gb,
-    the limit of protobuf.
+    the limit of protobuf. Nothing is implemented yet to get around
+    that limit.
 
     :param inputs: anything
     :param switch_low_high: if None, it is equal to ``switch_low_high=sys.byteorder != "big"``
