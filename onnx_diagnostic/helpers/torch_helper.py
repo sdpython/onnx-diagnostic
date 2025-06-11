@@ -288,7 +288,8 @@ def steal_forward(
     """
     The necessary modification to steem forward method and prints out inputs
     and outputs using :func:`onnx_diagnostic.helpers.string_type`.
-    See example :ref:`l-plot-tiny-llm-export`.
+    See example :ref:`l-plot-tiny-llm-export` or
+    :ref:`l-plot-intermediate-results`.
 
     :param model: a model or a list of models to monitor,
         every model can also be a tuple(name, model), name is displayed well.
@@ -410,12 +411,15 @@ def steal_forward(
             proto = create_onnx_model_from_input_tensors(storage)
             if verbose:
                 print("-- dumps stored objects")
+            location = f"{os.path.split(dump_file)[-1]}.data"
+            if os.path.exists(location):
+                os.remove(location)
             onnx.save(
                 proto,
                 dump_file,
                 save_as_external_data=True,
                 all_tensors_to_one_file=True,
-                location=f"{os.path.split(dump_file)[-1]}.data",
+                location=location,
             )
             if verbose:
                 print("-- done dump stored objects")
