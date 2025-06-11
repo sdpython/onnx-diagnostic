@@ -73,12 +73,7 @@ class TestDocumentationTechnical(ExtTestCase):
             if not name.endswith(".py") or not name.startswith("plot_"):
                 continue
             reason = None
-            if (
-                not reason
-                and not has_dot
-                and name
-                in {"plot_layer_norm_discrepancies.py", "plot_dump_intermediate_results.py"}
-            ):
+            if not reason and not has_dot and name in {"plot_layer_norm_discrepancies.py"}:
                 reason = "dot not installed"
 
             if reason:
