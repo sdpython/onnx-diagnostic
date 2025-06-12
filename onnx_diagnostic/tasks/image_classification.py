@@ -69,7 +69,7 @@ def get_inputs(
     )
     if model.__class__.__name__ == "ViTForImageClassification":
         inputs["interpolate_pos_encoding"] = True
-        shapes["interpolate_pos_encoding"] = None  # type: ignore[type-assignment]
+        shapes["interpolate_pos_encoding"] = None  # type: ignore[assignment]
     res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
         res["inputs2"] = get_inputs(
