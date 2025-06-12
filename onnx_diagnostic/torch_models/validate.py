@@ -1003,7 +1003,7 @@ def call_torch_export_export(
         if "ERR_export_export" in summary:
             return summary, data
 
-        disc = max_diff(data["expected"], expected)
+        disc = max_diff(data["run_expected"], expected)
         for k, v in disc.items():
             summary[f"disc_exported_{k}"] = str(v)
         if verbose:

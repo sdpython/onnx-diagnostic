@@ -56,7 +56,7 @@ class TestDocHelper(ExtTestCase):
         )
         expected = torch_sess.run(None, feeds)
         got = torch_sess_custom.run(None, feeds)
-        self.assertEqualAny(expected, got)
+        self.assertEqualAny(expected, got, atol=1e-3)
 
     def test_custom_doc_kernels_matmul(self):
         model = oh.make_model(

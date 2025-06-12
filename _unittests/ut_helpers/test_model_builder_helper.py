@@ -1,4 +1,3 @@
-import os
 import unittest
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
@@ -48,32 +47,17 @@ class TestModelBuilderHelper(ExtTestCase):
             cache_dir=folder,
             verbose=1,
         )
-        self.assertGreater(len(onnx_model.nodes), 5)
-
-        proto = save_model_builder(onnx_model, verbose=1)
-        import onnxruntime
-
-        onnxruntime.InferenceSession(
-            proto.SerializeToString(), providers=["CPUExecutionProvider"]
-        )
-
-        # We need to start again.
-        onnx_model = create_model_builder(
-            data["configuration"],
-            data["model"],
-            precision="fp32",
-            execution_provider="cpu",
-            cache_dir=folder,
-            verbose=1,
-        )
-        save_model_builder(onnx_model, folder, verbose=1)
-        model_name = os.path.join(folder, "model.onnx")
+        self.assertGreater(onnx_model.model.graph.num_nodes(), 5)
+        model_name = save_model_builder(onnx_model, folder, verbose=1)
         self.assertExists(model_name)
 
-        feeds = make_feeds(proto, data["inputs"], use_numpy=True)
-        expected = data["model"](**data["inputs"])
+        import onnxruntime
 
         sess = onnxruntime.InferenceSession(model_name, providers=["CPUExecutionProvider"])
+        del data["inputs"]["position_ids"]
+        feeds = make_feeds([i.name for i in sess.get_inputs()], data["inputs"], use_numpy=True)
+        expected = data["model"](**data["inputs"])
+
         try:
             got = sess.run(None, feeds)
         except onnxruntime.capi.onnxruntime_pybind11_state.InvalidArgument as e:
