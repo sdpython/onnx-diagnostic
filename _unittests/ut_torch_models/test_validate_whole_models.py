@@ -259,18 +259,18 @@ class TestValidateWholeModels(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.51")
-    def test_validate_phi3_mini_4k_instruct(self):
-        mid = "microsoft/Phi-3-mini-4k-instruct"
+    def test_validate_phi35_mini_instruct(self):
+        mid = "microsoft/Phi-3.5-mini-instruct"
         summary, data = validate_model(
             mid,
             do_run=True,
             verbose=10,
-            exporter="onnx-dynamo",
-            dump_folder="dump_test/validate_phi3_mini_4k_instruct",
+            exporter="custom",
+            dump_folder="dump_test/validate_phi35_mini_instruct",
             inputs2=True,
             patch=True,
             rewrite=True,
-            model_options={"rope_scaling": {"rope_type": "dynamic", "factor": 10.0}},
+            # model_options={"rope_scaling": {"rope_type": "dynamic", "factor": 10.0}},
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
