@@ -10,10 +10,8 @@ from .onnx_export_serialization import (
 from .patches import patch_transformers as patch_transformers_list
 
 
-def get_function(name: str) -> Tuple["module", "function"]:  # noqa: F821
-    """
-    Returns the module and the function based on its name.
-    """
+def get_function(name: str) -> Tuple[type, Callable]:
+    """Returns the module and the function based on its name."""
     spl = name.split(".")
     module_name = ".".join(spl[:-1])
     fname = spl[-1]

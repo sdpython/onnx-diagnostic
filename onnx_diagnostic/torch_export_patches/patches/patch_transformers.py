@@ -546,6 +546,7 @@ def patched__compute_dynamic_ntk_parameters(
 
     Computes the inverse frequencies with NTK scaling.
     Credits to the Reddit users /u/bloc97 and /u/emozilla
+
     Args:
         config ([`~transformers.PretrainedConfig`]):
             The model configuration.
@@ -557,6 +558,7 @@ def patched__compute_dynamic_ntk_parameters(
         rope_kwargs (`Dict`, *optional*):
             BC compatibility with the previous
             RoPE class instantiation, will be removed in v4.45.
+
     Returns:
         Tuple of (`torch.Tensor`, `float`),
         containing the inverse frequencies for the RoPE embeddings and the
