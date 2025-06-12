@@ -21,7 +21,7 @@ from onnx_diagnostic.torch_models.validate import (
 from onnx_diagnostic.tasks import supported_tasks
 
 
-class TestValidate(ExtTestCase):
+class TestValidateWholeModels(ExtTestCase):
     def test_get_inputs_for_task(self):
         fcts = supported_tasks()
         for task in self.subloop(sorted(fcts)):
