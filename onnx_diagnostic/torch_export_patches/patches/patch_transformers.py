@@ -540,7 +540,7 @@ def patched__compute_dynamic_ntk_parameters(
     seq_len: Optional[int] = None,
     **rope_kwargs,
 ) -> Tuple["torch.Tensor", float]:
-    """
+    """manual patch:
     ``[patch:transformers.modeling_rope_utils._compute_dynamic_ntk_parameters]``
 
     Computes the inverse frequencies with NTK scaling.
@@ -594,8 +594,9 @@ def patched__compute_dynamic_ntk_parameters(
         seq_len = max_position_embeddings
     else:
         torch._check(isinstance(seq_len, torch.Tensor))
-        seq_len = torch.max(
-            seq_len, torch.Tensor(max_position_embeddings, dtype=seq_len.dtype)
+        seq_len = torch.maximum(
+            seq_len,
+            torch.tensor(max_position_embeddings, dtype=seq_len.dtype, device=seq_len.device),
         )
 
     # Compute the inverse frequencies
@@ -676,13 +677,23 @@ def patched_dynamic_rope_update(rope_forward):
     """
 
     def longrope_frequency_update(self, position_ids, device):
+        # It is no use to patch the function after the model is created
+        # as rope_init_fn is an attribute set to one function when the model
+        # is created and when no patch is applied yet.
+        # So we select the patched version here.
+        rope_init_fn = (
+            patched__compute_dynamic_ntk_parameters
+            if self.rope_init_fn
+            is transformers.modeling_rope_utils._compute_dynamic_ntk_parameters
+            else self.rope_init_fn
+        )
         seq_len = torch.max(position_ids) + 1
         if hasattr(self.config, "original_max_position_embeddings"):
             original_max_position_embeddings = self.config.original_max_position_embeddings
         else:
             original_max_position_embeddings = self.config.max_position_embeddings
         # At export time, seq_len is unknown.
-        long_inv_freq, _ = self.rope_init_fn(
+        long_inv_freq, _ = rope_init_fn(
             self.config, device, seq_len=original_max_position_embeddings + 1
         )
         original_inv_freq = self.original_inv_freq.to(device)
@@ -705,6 +716,17 @@ def patched_dynamic_rope_update(rope_forward):
         # - self.max_seq_len_cached = config.max_position_embeddings
         # - self.original_max_seq_len = config.max_position_embeddings
         # - inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
+
+        # It is no use to patch the function after the model is created
+        # as rope_init_fn is an attribute set to one function when the model
+        # is created and when no patch is applied yet.
+        # So we select the patched version here.
+        rope_init_fn = (
+            patched__compute_dynamic_ntk_parameters
+            if self.rope_init_fn
+            is transformers.modeling_rope_utils._compute_dynamic_ntk_parameters
+            else self.rope_init_fn
+        )
 
         # This behaviour is difficult to translate.
         # The sequence always grows.
@@ -729,7 +751,7 @@ def patched_dynamic_rope_update(rope_forward):
         # )
 
         seq_len = torch.max(position_ids) + 1
-        long_inv_freq, self.attention_scaling = self.rope_init_fn(
+        long_inv_freq, self.attention_scaling = rope_init_fn(
             self.config, device, seq_len=seq_len
         )
 

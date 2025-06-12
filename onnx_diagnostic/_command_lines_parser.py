@@ -5,7 +5,7 @@ import re
 import sys
 import textwrap
 import onnx
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from argparse import ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
 from textwrap import dedent
 
@@ -291,6 +291,14 @@ def _cmd_config(argv: List[Any]):
         print(f"task: {task_from_id(args.mid)}")
 
 
+def _parse_json(value: str) -> Union[str, Dict[str, Any]]:
+    assert isinstance(value, str), f"value should be string but value={value!r}"
+    if value and value[0] == "{" and value[-1] == "}":
+        # a dictionary
+        return json.loads(value.replace("'", '"'))
+    return value
+
+
 class _ParseDict(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         d = getattr(namespace, self.dest) or {}
@@ -314,7 +322,7 @@ class _ParseDict(argparse.Action):
                     continue
                 except (TypeError, ValueError):
                     pass
-                d[key] = value
+                d[key] = _parse_json(value)
 
         setattr(namespace, self.dest, d)
 
@@ -430,7 +438,8 @@ def get_parser_validate() -> ArgumentParser:
         metavar="KEY=VALUE",
         nargs="*",
         help="Additional model options, use to change some parameters of the model, "
-        "example: --mop attn_implementation=eager",
+        "example: ``--mop attn_implementation=eager`` or "
+        "``--mop \"rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}\"``",
         action=_ParseDict,
     )
     parser.add_argument(

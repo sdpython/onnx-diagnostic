@@ -265,7 +265,7 @@ class TestValidateWholeModels(ExtTestCase):
             mid,
             do_run=True,
             verbose=10,
-            exporter="custom",
+            exporter="onnx-dynamo",
             dump_folder="dump_test/validate_phi3_mini_4k_instruct",
             inputs2=True,
             patch=True,
