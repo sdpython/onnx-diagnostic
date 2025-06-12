@@ -302,5 +302,6 @@ class TestValidateWholeModels(ExtTestCase):
         op_types = set(n.op_type for n in onx.graph.node)
         self.assertIn("If", op_types)
 
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
