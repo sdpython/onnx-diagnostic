@@ -8,7 +8,7 @@ from onnx_diagnostic.ext_test_case import (
     requires_experimental,
     requires_transformers,
 )
-from onnx_diagnostic.torch_models.test_helper import validate_model
+from onnx_diagnostic.torch_models.validate import validate_model
 
 
 class TestValidateModel(ExtTestCase):

@@ -52,7 +52,7 @@ def get_inputs(
         input_width, int
     ), f"Unexpected type for input_width {type(input_width)}{config}"
     assert isinstance(
-        input_width, int
+        input_height, int
     ), f"Unexpected type for input_height {type(input_height)}{config}"
 
     shapes = {
@@ -67,6 +67,9 @@ def get_inputs(
             -1, 1
         ),
     )
+    if model.__class__.__name__ == "ViTForImageClassification":
+        inputs["interpolate_pos_encoding"] = True
+        shapes["interpolate_pos_encoding"] = None  # type: ignore[assignment]
     res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
         res["inputs2"] = get_inputs(

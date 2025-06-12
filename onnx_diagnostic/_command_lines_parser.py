@@ -374,6 +374,13 @@ def get_parser_validate() -> ArgumentParser:
         help="validate the trained model (requires downloading)",
     )
     parser.add_argument(
+        "--inputs2",
+        default=True,
+        action=BooleanOptionalAction,
+        help="if run is on, the command lines validates the model on a "
+        "second set of inputs to check the exported model supports dynamism",
+    )
+    parser.add_argument(
         "--runtime",
         choices=["onnxruntime", "torch", "ref"],
         default="onnxruntime",
@@ -440,7 +447,7 @@ def get_parser_validate() -> ArgumentParser:
 
 def _cmd_validate(argv: List[Any]):
     from .helpers import string_type
-    from .torch_models.test_helper import get_inputs_for_task, validate_model
+    from .torch_models.validate import get_inputs_for_task, validate_model
     from .tasks import supported_tasks
 
     parser = get_parser_validate()
@@ -492,6 +499,7 @@ def _cmd_validate(argv: List[Any]):
             runtime=args.runtime,
             repeat=args.repeat,
             warmup=args.warmup,
+            inputs2=args.inputs2,
         )
         print("")
         print("-- summary --")

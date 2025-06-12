@@ -3,9 +3,9 @@ import os
 import requests
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from urllib.parse import urlparse
-from onnx import helper, save_model, external_data_helper, ModelProto
+from onnx import ModelProto, TensorProto
 
 CACHE_SUBDIR = "onnx-diagnostic"
 
@@ -114,87 +114,58 @@ def _make_model(self, model, verbose: int = 0):
                 self.make_lm_head(module)
 
 
-def save_model_builder(self, out_dir: Optional[str] = "", verbose: int = 0) -> ModelProto:
+def save_model_builder(
+    self, out_dir: Optional[str] = "", verbose: int = 0
+) -> Union[str, ModelProto]:
     """
     Saves a model created by function :func:`create_model_builder`.
     If out_dir is empty or not specified, the function still returns the
     generated model.
     """
+    import onnx_ir
+
     if verbose:
-        print(f"[save_model_builder] Saving ONNX model in {out_dir}")
+        print(f"[save_model_builder] Saving ONNX model in {out_dir!r}")
 
-    # Create ONNX model
-    model = helper.make_model(
-        opset_imports=[
-            self.clear_field(
-                helper.make_operatorsetid("", 21 if self.quant_attrs["use_qdq"] else 14),
-                "domain",
-            ),
-            helper.make_operatorsetid("com.microsoft", 1),
-        ],
-        ir_version=7,
-        producer_name="onnxruntime-genai",
-        producer_version="0.0.0",
-        graph=self.make_graph(
-            name="main_graph",
-            inputs=self.inputs,
-            outputs=self.outputs,
-            initializer=self.initializers,
-            value_info=self.value_infos,
-            nodes=self.nodes,
-        ),
-    )
-
-    # Load external data into ONNX model
-    external_data_helper.load_external_data_for_model(model, self.cache_dir)
-
-    # Delete external data files on disk before re-saving
-    for path in os.listdir(self.cache_dir):
-        if path.endswith(".bin"):
-            os.remove(os.path.join(self.cache_dir, path))
-
-    # Delete temporary cache dir if empty
-    # if len(os.listdir(self.cache_dir)) == 0:
-    #    os.rmdir(self.cache_dir)
-
-    # Quantize ONNX model to desired precision
+    # Skip quantizing `MatMul` in `DequantizeLinear --> Transpose --> MatMul` path
     already_quantized_in_qdq_format = (
         self.quant_type is not None and self.quant_attrs["use_qdq"]
-    )  # Skip quantizing `MatMul` in `DequantizeLinear --> Transpose --> MatMul` path
-    if self.onnx_dtype == "int4" and not already_quantized_in_qdq_format:
-        model = self.to_int4(model)
+    )
+    model = (
+        self.to_int4()
+        if self.onnx_dtype in {onnx_ir.DataType.INT4, onnx_ir.DataType.UINT4}
+        and not already_quantized_in_qdq_format
+        else self.model
+    )
+    model.graph.sort()
+    if not out_dir:
+        return onnx_ir.to_proto(model)
+
+    out_path = os.path.join(out_dir, self.filename)
+    data_path = os.path.join(out_dir, os.path.basename(out_path) + ".data")
 
     # Save ONNX model with only one external data file and delete any existing duplicate copies
-    if out_dir:
-        out_path = os.path.join(out_dir, self.filename)
-        data_path = os.path.join(out_dir, os.path.basename(out_path) + ".data")
-        if os.path.exists(out_path):
-            if verbose:
-                print(f"[save_model_builder] Overwriting {out_path!r}")
-            os.remove(out_path)
-        if os.path.exists(data_path):
-            if verbose:
-                print(f"[save_model_builder] Overwriting {data_path!r}")
-            os.remove(data_path)
-
-    if out_dir:
-        location = os.path.basename(data_path)
-        if os.path.exists(location):
-            os.remove(location)
+    out_path = os.path.join(out_dir, self.filename)
+    data_path = os.path.join(out_dir, os.path.basename(out_path) + ".data")
+    if os.path.exists(out_path):
         if verbose:
-            print(f"[save_model_builder] out_path={out_path!r}")
-            print(f"[save_model_builder] location={location!r}")
-        save_model(
-            model,
-            out_path,
-            save_as_external_data=True,
-            all_tensors_to_one_file=True,
-            location=location,
-            size_threshold=1024,
-            convert_attribute=False,
-        )
-        return None
-    return model
+            print(f"[save_model_builder] Overwriting {out_path!r}")
+        os.remove(out_path)
+    if os.path.exists(data_path):
+        if verbose:
+            print(f"[save_model_builder] Overwriting {data_path!r}")
+        os.remove(data_path)
+
+    onnx_ir.save(
+        model,
+        out_path,
+        external_data=os.path.basename(data_path),
+        size_threshold_bytes=2**10,
+    )
+    if verbose:
+        print(f"[save_model_builder] saved in {out_dir!r}")
+
+    return out_path
 
 
 def create_model_builder(
@@ -335,13 +306,23 @@ def create_model_builder(
     for c in remove:
         delattr(config, c)
 
-    onnx_model = cls(config, io_dtype, precision, execution_provider, cache_dir, extra_options)
+    convert = {
+        "fp32": TensorProto.FLOAT,
+        "fp16": TensorProto.FLOAT16,
+        "bfp16": TensorProto.BFLOAT16,
+    }
+    assert (
+        precision in convert
+    ), f"Unexpected value for precision={precision!r}, should be in {convert}"
+    onnx_model = cls(
+        config, io_dtype, convert[precision], execution_provider, cache_dir, extra_options
+    )
 
     if post:
         post(onnx_model)
     _make_model(onnx_model, model, verbose=verbose)
 
-    assert onnx_model.nodes, (
+    assert onnx_model.model, (
         f"No node in the model, io_dtype={io_dtype!r}, "
         f"precision={precision!r}, execution_provider={execution_provider!r}, "
         f"extra_options={extra_options!r}, cache_dir={cache_dir!r}, "

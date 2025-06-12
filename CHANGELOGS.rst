@@ -4,7 +4,13 @@ Change Logs
 0.7.0
 +++++
 
-* :pr:`143`: compares intermediate results
+* :pr:`144`: support for second inputs with different dimension,
+  rename test_helper into validate,
+  support ``interpolate_pos_encoding`` for ``VitModel``,
+  update model builder helpers for this PR
+  `Use ONNX IR for model builder
+  <https://github.com/microsoft/onnxruntime-genai/pull/1416>`_
+* :pr:`143`: compares intermediate results,
 
 0.6.3
 +++++
