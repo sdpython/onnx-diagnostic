@@ -11,7 +11,7 @@ from ...helpers.torch_helper import is_torchdynamo_exporting
 
 
 def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) -> Callable:
-    """Patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""
+    """manual patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""
     from ...helpers import string_type
 
     dimensions: List[Tuple[Optional[int], ...]] = [
@@ -534,19 +534,169 @@ class patched_GenerationMixin:
         return model_inputs
 
 
-def patched_dynamic_rope_update(rope_forward):
+def patched__compute_dynamic_ntk_parameters(
+    config: Optional[transformers.PretrainedConfig] = None,
+    device: Optional["torch.device"] = None,
+    seq_len: Optional[int] = None,
+    **rope_kwargs,
+) -> Tuple["torch.Tensor", float]:
     """
-    patch:transformers.modeling_rope_utils.dynamic_rope_update
+    manual patch:
+    ``[patch:transformers.modeling_rope_utils._compute_dynamic_ntk_parameters]``
+
+    Computes the inverse frequencies with NTK scaling.
+    Credits to the Reddit users /u/bloc97 and /u/emozilla
+
+    Args:
+        config ([`~transformers.PretrainedConfig`]):
+            The model configuration.
+        device (`torch.device`):
+            The device to use for initialization of the inverse frequencies.
+        seq_len (`int`, *optional*):
+            The current sequence length,
+            used to update the dynamic RoPE at inference time.
+        rope_kwargs (`Dict`, *optional*):
+            BC compatibility with the previous
+            RoPE class instantiation, will be removed in v4.45.
+
+    Returns:
+        Tuple of (`torch.Tensor`, `float`),
+        containing the inverse frequencies for the RoPE embeddings and the
+        post-processing scaling factor applied to the
+        omputed cos/sin (unused in this type of RoPE).
+    """
+    if config is not None and len(rope_kwargs) > 0:
+        raise ValueError(
+            "Unexpected arguments: `**rope_kwargs` and `config` are mutually exclusive in "
+            f"`_compute_dynamic_ntk_parameters`, got "
+            f"`rope_kwargs`={rope_kwargs} and `config`={config}"
+        )
+    if len(rope_kwargs) > 0:
+        base = rope_kwargs["base"]
+        dim = rope_kwargs["dim"]
+        max_position_embeddings = rope_kwargs["max_position_embeddings"]
+        factor = rope_kwargs["factor"]
+    elif config is not None:
+        base = config.rope_theta
+        partial_rotary_factor = (
+            config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
+        )
+        head_dim = getattr(
+            config, "head_dim", config.hidden_size // config.num_attention_heads
+        )
+        dim = int(head_dim * partial_rotary_factor)
+        max_position_embeddings = config.max_position_embeddings
+        factor = config.rope_scaling["factor"]
+
+    attention_factor = 1.0  # Unused in this type of RoPE
+
+    # seq_len: default to max_position_embeddings, e.g. at init time
+    # seq_len = seq_len if seq_len is not None and
+    #       seq_len > max_position_embeddings else max_position_embeddings
+    if seq_len is None:
+        seq_len = max_position_embeddings
+    else:
+        torch._check(isinstance(seq_len, torch.Tensor))
+        seq_len = torch.maximum(
+            seq_len,
+            torch.tensor(max_position_embeddings, dtype=seq_len.dtype, device=seq_len.device),
+        )
+
+    # Compute the inverse frequencies
+    base = base * ((factor * seq_len / max_position_embeddings) - (factor - 1)) ** (
+        dim / (dim - 2)
+    )
+    inv_freq = 1.0 / (
+        base
+        ** (
+            torch.arange(0, dim, 2, dtype=torch.int64).to(device=device, dtype=torch.float)
+            / dim
+        )
+    )
+    return inv_freq, attention_factor
+
+
+def patched_dynamic_rope_update(rope_forward):
+    """manual patch: ``[patch:transformers.modeling_rope_utils.dynamic_rope_update]``
+
+    ``rope_type`` is determined in the constructor of class
+    :class:`transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding`.
+
+    .. code-block:: python
+
+        if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
+            self.rope_type = config.rope_scaling.get(
+                "rope_type", config.rope_scaling.get("type"))
+        else:
+            self.rope_type = "default"
+
+    The original code of the patched function:
+
+    .. code-block:: python
+
+        def dynamic_rope_update(rope_forward):
+            def longrope_frequency_update(self, position_ids, device):
+                seq_len = torch.max(position_ids) + 1
+                if hasattr(self.config, "original_max_position_embeddings"):
+                    original_max_position_embeddings =
+                        self.config.original_max_position_embeddings
+                else:
+                    original_max_position_embeddings =
+                        self.config.max_position_embeddings
+                if seq_len > original_max_position_embeddings:
+                    if not hasattr(self, "long_inv_freq"):
+                        self.long_inv_freq, _ = self.rope_init_fn(
+                            self.config, device, seq_len=original_max_position_embeddings + 1
+                        )
+                    self.register_buffer("inv_freq", self.long_inv_freq, persistent=False)
+                else:
+                    self.original_inv_freq = self.original_inv_freq.to(device)
+                    self.register_buffer("inv_freq", self.original_inv_freq, persistent=False)
+
+            def dynamic_frequency_update(self, position_ids, device):
+                seq_len = torch.max(position_ids) + 1
+                if seq_len > self.max_seq_len_cached:  # growth
+                    inv_freq, self.attention_scaling = self.rope_init_fn(
+                        self.config, device, seq_len=seq_len)
+                    self.register_buffer("inv_freq", inv_freq, persistent=False)
+                    self.max_seq_len_cached = seq_len
+
+                if seq_len < self.original_max_seq_len and
+                        self.max_seq_len_cached > self.original_max_seq_len:
+                    self.original_inv_freq = self.original_inv_freq.to(device)
+                    self.register_buffer("inv_freq", self.original_inv_freq, persistent=False)
+                    self.max_seq_len_cached = self.original_max_seq_len
+
+            @wraps(rope_forward)
+            def wrapper(self, x, position_ids):
+                if "dynamic" in self.rope_type:
+                    dynamic_frequency_update(self, position_ids, device=x.device)
+                elif self.rope_type == "longrope":
+                    longrope_frequency_update(self, position_ids, device=x.device)
+                return rope_forward(self, x, position_ids)
+
+            return wrapper
+
     """
 
     def longrope_frequency_update(self, position_ids, device):
+        # It is no use to patch the function after the model is created
+        # as rope_init_fn is an attribute set to one function when the model
+        # is created and when no patch is applied yet.
+        # So we select the patched version here.
+        rope_init_fn = (
+            patched__compute_dynamic_ntk_parameters
+            if self.rope_init_fn
+            is transformers.modeling_rope_utils._compute_dynamic_ntk_parameters
+            else self.rope_init_fn
+        )
         seq_len = torch.max(position_ids) + 1
         if hasattr(self.config, "original_max_position_embeddings"):
             original_max_position_embeddings = self.config.original_max_position_embeddings
         else:
             original_max_position_embeddings = self.config.max_position_embeddings
         # At export time, seq_len is unknown.
-        long_inv_freq, _ = self.rope_init_fn(
+        long_inv_freq, _ = rope_init_fn(
             self.config, device, seq_len=original_max_position_embeddings + 1
         )
         original_inv_freq = self.original_inv_freq.to(device)
@@ -565,21 +715,70 @@ def patched_dynamic_rope_update(rope_forward):
         #    self.inv_freq = self.original_inv_freq
 
     def dynamic_frequency_update(self, position_ids, device):
-        seq_len = torch.max(position_ids) + 1
-        if seq_len > self.max_seq_len_cached:  # growth
-            inv_freq, self.attention_scaling = self.rope_init_fn(
-                self.config, device, seq_len=seq_len
-            )
-            self.register_buffer("inv_freq", inv_freq, persistent=False)
-            self.max_seq_len_cached = seq_len
+        # constructor:
+        # - self.max_seq_len_cached = config.max_position_embeddings
+        # - self.original_max_seq_len = config.max_position_embeddings
+        # - inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
 
-        if (
-            seq_len < self.original_max_seq_len
-            and self.max_seq_len_cached > self.original_max_seq_len
-        ):
-            self.original_inv_freq = self.original_inv_freq.to(device)
-            self.register_buffer("inv_freq", self.original_inv_freq, persistent=False)
-            self.max_seq_len_cached = self.original_max_seq_len
+        # It is no use to patch the function after the model is created
+        # as rope_init_fn is an attribute set to one function when the model
+        # is created and when no patch is applied yet.
+        # So we select the patched version here.
+        rope_init_fn = (
+            patched__compute_dynamic_ntk_parameters
+            if self.rope_init_fn
+            is transformers.modeling_rope_utils._compute_dynamic_ntk_parameters
+            else self.rope_init_fn
+        )
+
+        # This behaviour is difficult to translate.
+        # The sequence always grows.
+        # The test should always True.
+        # So:  self.max_seq_len_cached = max(self.max_seq_len_cached, seq_len) --> seq_len
+        #
+        # if seq_len > self.max_seq_len_cached:  # growth
+        #    inv_freq, self.attention_scaling = self.rope_init_fn(
+        #        self.config, device, seq_len=seq_len
+        #    )
+        #    self.register_buffer("inv_freq", inv_freq, persistent=False)
+        #    self.max_seq_len_cached = seq_len
+        #
+        # So we should not need what follows.
+        #
+        # cond = (seq_len > self.max_seq_len_cached).item()
+        # self.attention_scaling = torch.cond(
+        #    cond,
+        #    (lambda x, y: x.clone()),
+        #    (lambda x, y: y.clone()),
+        #    [attention_scaling, self.attention_scaling],
+        # )
+
+        seq_len = torch.max(position_ids) + 1
+        long_inv_freq, self.attention_scaling = rope_init_fn(
+            self.config, device, seq_len=seq_len
+        )
+
+        # Second test to translate.
+        # Let's keep in mind, self.max_seq_len_cached = seq_len is likely to be True.
+        # But in that case the following condition is a way to restore the original cache.
+
+        # if (
+        #    seq_len < self.original_max_seq_len
+        #    and self.max_seq_len_cached > self.original_max_seq_len
+        # ):
+        #    self.original_inv_freq = self.original_inv_freq.to(device)
+        #    self.register_buffer("inv_freq", self.original_inv_freq, persistent=False)
+        #    self.max_seq_len_cached = self.original_max_seq_len
+
+        original_inv_freq = self.original_inv_freq.to(device)
+        cond = (seq_len >= self.original_max_seq_len).item()
+        inv_freq = torch.cond(
+            cond,
+            (lambda x, y: x.clone()),
+            (lambda x, y: y.clone()),
+            [long_inv_freq, original_inv_freq],
+        )
+        self.inv_freq = inv_freq
 
     @wraps(rope_forward)
     def wrapper(self, x, position_ids):

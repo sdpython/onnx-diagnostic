@@ -1,10 +1,48 @@
+import functools
+import importlib
 import contextlib
-from typing import Any, Callable, Dict, List, Optional
+import re
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from .onnx_export_serialization import (
     register_cache_serialization,
     unregister_cache_serialization,
 )
 from .patches import patch_transformers as patch_transformers_list
+
+
+def get_function(name: str) -> Tuple[type, Callable]:
+    """Returns the module and the function based on its name."""
+    spl = name.split(".")
+    module_name = ".".join(spl[:-1])
+    fname = spl[-1]
+    mod = importlib.import_module(module_name)
+    return mod, getattr(mod, fname)
+
+
+@functools.lru_cache
+def get_patches(mod, verbose: int = 0) -> Tuple[str, List[Any]]:
+    """Returns the list of patches to make for a specific module."""
+    to_patch = []
+    for k in dir(mod):
+        if k.startswith("patched_"):
+            v = getattr(mod, k)
+            if hasattr(v, "_PATCHED_CLASS_") and hasattr(v, "_PATCHES_"):
+                to_patch.append(v)
+            else:
+                # a function
+                doc = v.__doc__.lstrip()
+                if doc.startswith("manual patch"):
+                    continue
+                reg = re.compile("[[]patch:([a-z_A-Z.]+)[]]")
+                fall = reg.findall(doc)
+                assert (
+                    len(fall) == 1
+                ), f"Unable to find patching information for {v} in \n{doc}"
+                fmod, f = get_function(fall[0])
+                to_patch.append({"module": fmod, "function": f, "patch": v})
+
+    name = mod.__name__
+    return name, to_patch
 
 
 def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Callable]]:
@@ -23,16 +61,21 @@ def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Call
         to_patch = mod
         name = "list"
     else:
-        to_patch = []
-        for k in dir(mod):
-            if k.startswith("patched_"):
-                v = getattr(mod, k)
-                if hasattr(v, "_PATCHED_CLASS_") and hasattr(v, "_PATCHES_"):
-                    to_patch.append(v)
-        name = mod.__name__
+        name, to_patch = get_patches(mod, verbose)
 
     res = {}
     for cls in to_patch:
+        if isinstance(cls, dict):
+            # a function
+            keep = {}
+            original = cls["module"]
+            f = cls["function"]
+            res[f] = f
+            if verbose:
+                print(f"[patch_module_or_classes] function: {original.__name__}.{f.__name__}")
+            setattr(original, f.__name__, cls["patch"])
+            continue
+
         original = cls._PATCHED_CLASS_
         methods = cls._PATCHES_
         if verbose:
@@ -57,26 +100,36 @@ def unpatch_module_or_classes(mod, info: Dict[type, Dict[type, Callable]], verbo
         to_patch = mod
         name = "list"
     else:
-        to_patch = []
-        for k in dir(mod):
-            if k.startswith("patched_"):
-                v = getattr(mod, k)
-                if hasattr(v, "_PATCHED_CLASS_") and hasattr(v, "_PATCHES_"):
-                    to_patch.append(v)
-        name = mod.__name__
-    set_patch = set(to_patch)
+        name, to_patch = get_patches(mod, verbose)
+
+    set_patch_cls = {i for i in to_patch if not isinstance(i, dict)}
+    dict_patch_fct = {i["function"]: i for i in to_patch if isinstance(i, dict)}
 
     for cls, methods in info.items():
-        assert cls in set_patch, f"No patch registered for {cls} in {mod} (found {set_patch})"
+        if cls in set_patch_cls:
+            if verbose:
+                print(
+                    f"[unpatch_module_or_classes] {name}.{cls.__name__}: {', '.join(methods)}"
+                )
+            original = cls._PATCHED_CLASS_
+            for n, v in methods.items():
+                if v is None:
+                    # The method did not exist. We remove it.
+                    delattr(original, n)
+                else:
+                    setattr(original, n, v)
+            continue
+        assert cls in dict_patch_fct, (
+            f"No patch registered for {cls} in {mod} "
+            f"(found {set_patch_cls} and {set(dict_patch_fct)})"
+        )
+        patch = dict_patch_fct[cls]
         if verbose:
-            print(f"[unpatch_module_or_classes] {name}.{cls.__name__}: {', '.join(methods)}")
-        original = cls._PATCHED_CLASS_
-        for n, v in methods.items():
-            if v is None:
-                # The method did not exist. We remove it.
-                delattr(original, n)
-            else:
-                setattr(original, n, v)
+            print(
+                f"[unpatch_module_or_classes] function "
+                f"{patch['module'].__name__}.{cls.__name__}"
+            )
+        setattr(patch["module"], cls.__name__, patch["function"])
 
 
 @contextlib.contextmanager

@@ -34,10 +34,14 @@ def update_config(config: Any, mkwargs: Dict[str, Any]):
                 config._attn_implementation_autoset = False
             continue
         if isinstance(v, dict):
-            assert hasattr(
-                config, k
-            ), f"missing attribute {k!r} in config={config}, cannot update it with {v}"
-            update_config(getattr(config, k), v)
+            if not hasattr(config, k) or getattr(config, k) is None:
+                setattr(config, k, v)
+                continue
+            existing = getattr(config, k)
+            if type(existing) is dict:
+                existing.update(v)
+            else:
+                update_config(getattr(config, k), v)
             continue
         setattr(config, k, v)
 

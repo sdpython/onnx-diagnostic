@@ -138,6 +138,7 @@ nitpick_ignore = [
     ("py:class", "transformers.cache_utils.SlidingWindowCache"),
     ("py:class", "transformers.configuration_utils.PretrainedConfig"),
     ("py:class", "transformers.modeling_outputs.BaseModelOutput"),
+    ("py:class", "transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding"),
     ("py:func", "torch.export._draft_export.draft_export"),
     ("py:func", "torch._export.tools.report_exportability"),
     ("py:func", "torch.utils._pytree.register_pytree_node"),

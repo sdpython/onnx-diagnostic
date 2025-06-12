@@ -1,6 +1,7 @@
 import copy
 import unittest
 import packaging.version as pv
+import onnx
 import torch
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
@@ -63,7 +64,7 @@ class TestValidateWholeModels(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="export-nostrict",
-            dump_folder="dump_test_validate_model_export",
+            dump_folder="dump_test/validate_model_export",
             patch=True,
         )
         self.assertIsInstance(summary, dict)
@@ -79,7 +80,7 @@ class TestValidateWholeModels(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="onnx-dynamo",
-            dump_folder="dump_test_validate_model_onnx_dynamo",
+            dump_folder="dump_test/validate_model_onnx_dynamo_ir",
             patch=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             optimization="ir",
@@ -104,7 +105,7 @@ class TestValidateWholeModels(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="onnx-dynamo",
-            dump_folder="dump_test_validate_model_onnx_dynamo",
+            dump_folder="dump_test/validate_model_onnx_dynamo_os_ort",
             patch=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             optimization="os_ort",
@@ -126,7 +127,7 @@ class TestValidateWholeModels(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="custom",
-            dump_folder="dump_validate_model_custom_os_ort",
+            dump_folder="dump_test/validate_model_custom_os_ort",
             patch=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             optimization="default+os_ort",
@@ -148,7 +149,7 @@ class TestValidateWholeModels(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="custom",
-            dump_folder="dump_test_validate_model_custom",
+            dump_folder="dump_test/validate_model_custom_tiny_llm",
             patch=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             optimization="default",
@@ -177,7 +178,7 @@ class TestValidateWholeModels(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="custom-noinline",
-            dump_folder="dump_test_validate_model_custom_torch",
+            dump_folder="dump_test/validate_model_custom_torch",
             patch=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             optimization="default",
@@ -221,7 +222,7 @@ class TestValidateWholeModels(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="modelbuilder",
-            dump_folder="dump_test_validate_model_modelbuilder",
+            dump_folder="dump_test/validate_model_modelbuilder",
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
@@ -240,7 +241,7 @@ class TestValidateWholeModels(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="onnx-dynamo",
-            dump_folder="dump_test_validate_model_onnx_dynamo",
+            dump_folder="dump_test/validate_model_vit_model",
             inputs2=True,
         )
         self.assertIsInstance(summary, dict)
@@ -253,6 +254,30 @@ class TestValidateWholeModels(ExtTestCase):
         self.assertEqual("#1[A1s3x2]", summary["run_output_inputs2"])
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
+
+    @requires_torch("2.7")
+    @hide_stdout()
+    @ignore_warnings(FutureWarning)
+    @requires_transformers("4.51")
+    def test_validate_phi35_mini_instruct(self):
+        mid = "microsoft/Phi-3.5-mini-instruct"
+        summary, data = validate_model(
+            mid,
+            do_run=True,
+            verbose=10,
+            exporter="custom",
+            dump_folder="dump_test/validate_phi35_mini_instruct",
+            inputs2=True,
+            patch=True,
+            rewrite=True,
+            # model_options={"rope_scaling": {"rope_type": "dynamic", "factor": 10.0}},
+        )
+        self.assertIsInstance(summary, dict)
+        self.assertIsInstance(data, dict)
+        onnx_filename = data["onnx_filename"]
+        onx = onnx.load(onnx_filename)
+        op_types = set(n.op_type for n in onx.graph.node)
+        self.assertIn("If", op_types)
 
 
 if __name__ == "__main__":
