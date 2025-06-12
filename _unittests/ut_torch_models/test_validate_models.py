@@ -28,7 +28,7 @@ class TestValidateModel(ExtTestCase):
             patch=True,
             rewrite=True,
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
-            dump_folder="dump_test_validate_model_custom",
+            dump_folder="dump_test/validate_microsoft_phi4_reasoning",
         )
         self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-5)
         self.assertIn("onnx_filename", data)
