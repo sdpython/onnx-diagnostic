@@ -24,30 +24,26 @@ def get_function(name: str) -> Tuple["module", "function"]:  # noqa: F821
 @functools.lru_cache
 def get_patches(mod, verbose: int = 0) -> Tuple[str, List[Any]]:
     """Returns the list of patches to make for a specific module."""
-    if isinstance(mod, list):
-        to_patch = mod
-        name = "list"
-    else:
-        to_patch = []
-        for k in dir(mod):
-            if k.startswith("patched_"):
-                v = getattr(mod, k)
-                if hasattr(v, "_PATCHED_CLASS_") and hasattr(v, "_PATCHES_"):
-                    to_patch.append(v)
-                else:
-                    # a function
-                    doc = v.__doc__
-                    if doc.startswith("manual patch"):
-                        continue
-                    reg = re.compile("[[]patch:([a-z_A-Z.]+)[]]")
-                    fall = reg.findall(doc)
-                    assert (
-                        len(fall) == 1
-                    ), f"Unable to find patching information for {v} in \n{doc}"
-                    fmod, f = get_function(fall[0])
-                    to_patch.append({"module": fmod, "function": f, "patch": v})
+    to_patch = []
+    for k in dir(mod):
+        if k.startswith("patched_"):
+            v = getattr(mod, k)
+            if hasattr(v, "_PATCHED_CLASS_") and hasattr(v, "_PATCHES_"):
+                to_patch.append(v)
+            else:
+                # a function
+                doc = v.__doc__
+                if doc.startswith("manual patch"):
+                    continue
+                reg = re.compile("[[]patch:([a-z_A-Z.]+)[]]")
+                fall = reg.findall(doc)
+                assert (
+                    len(fall) == 1
+                ), f"Unable to find patching information for {v} in \n{doc}"
+                fmod, f = get_function(fall[0])
+                to_patch.append({"module": fmod, "function": f, "patch": v})
 
-        name = mod.__name__
+    name = mod.__name__
     return name, to_patch
 
 
@@ -63,7 +59,11 @@ def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Call
     :param verbose: verbosity
     :return: patch info
     """
-    name, to_patch = get_patches(mod, verbose)
+    if isinstance(mod, list):
+        to_patch = mod
+        name = "list"
+    else:
+        name, to_patch = get_patches(mod, verbose)
 
     res = {}
     for cls in to_patch:
@@ -98,7 +98,12 @@ def unpatch_module_or_classes(mod, info: Dict[type, Dict[type, Callable]], verbo
     :param mod: module of list of clsses to patch
     :param verbose: verbosity
     """
-    name, to_patch = get_patches(mod, verbose)
+    if isinstance(mod, list):
+        to_patch = mod
+        name = "list"
+    else:
+        name, to_patch = get_patches(mod, verbose)
+
     set_patch_cls = {i for i in to_patch if not isinstance(i, dict)}
     dict_patch_fct = {i["function"]: i for i in to_patch if isinstance(i, dict)}
 
