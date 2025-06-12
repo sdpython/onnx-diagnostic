@@ -540,7 +540,8 @@ def patched__compute_dynamic_ntk_parameters(
     seq_len: Optional[int] = None,
     **rope_kwargs,
 ) -> Tuple["torch.Tensor", float]:
-    """manual patch:
+    """
+    manual patch:
     ``[patch:transformers.modeling_rope_utils._compute_dynamic_ntk_parameters]``
 
     Computes the inverse frequencies with NTK scaling.

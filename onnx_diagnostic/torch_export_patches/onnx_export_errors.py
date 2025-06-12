@@ -32,7 +32,7 @@ def get_patches(mod, verbose: int = 0) -> Tuple[str, List[Any]]:
                 to_patch.append(v)
             else:
                 # a function
-                doc = v.__doc__
+                doc = v.__doc__.lstrip()
                 if doc.startswith("manual patch"):
                     continue
                 reg = re.compile("[[]patch:([a-z_A-Z.]+)[]]")
