@@ -11,7 +11,7 @@ from onnx_diagnostic.ext_test_case import (
     requires_onnxscript,
     requires_transformers,
 )
-from onnx_diagnostic.torch_models.test_helper import (
+from onnx_diagnostic.torch_models.validate import (
     get_inputs_for_task,
     validate_model,
     filter_inputs,
@@ -21,7 +21,7 @@ from onnx_diagnostic.torch_models.test_helper import (
 from onnx_diagnostic.tasks import supported_tasks
 
 
-class TestTestHelper(ExtTestCase):
+class TestValidate(ExtTestCase):
     def test_get_inputs_for_task(self):
         fcts = supported_tasks()
         for task in self.subloop(sorted(fcts)):
@@ -221,11 +221,36 @@ class TestTestHelper(ExtTestCase):
             do_run=True,
             verbose=10,
             exporter="modelbuilder",
-            dump_folder="dump_test_validate_model_onnx_dynamo",
+            dump_folder="dump_test_validate_model_modelbuilder",
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
         self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
+        onnx_filename = data["onnx_filename"]
+        self.assertExists(onnx_filename)
+
+    @requires_torch("2.7")
+    @hide_stdout()
+    @ignore_warnings(FutureWarning)
+    @requires_transformers("4.51")
+    def test_validate_model_vit_model(self):
+        mid = "ydshieh/tiny-random-ViTForImageClassification"
+        summary, data = validate_model(
+            mid,
+            do_run=True,
+            verbose=10,
+            exporter="onnx-dynamo",
+            dump_folder="dump_test_validate_model_onnx_dynamo",
+            inputs2=True,
+        )
+        self.assertIsInstance(summary, dict)
+        self.assertIsInstance(data, dict)
+        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-3)
+        self.assertLess(summary["disc_onnx_ort_run2_abs"], 1e-3)
+        self.assertEqual("dict(pixel_values:A1s2x3x30x30)", summary["run_feeds_inputs"])
+        self.assertEqual("dict(pixel_values:A1s3x3x31x31)", summary["run_feeds_inputs2"])
+        self.assertEqual("#1[A1s2x2]", summary["run_output_inputs"])
+        self.assertEqual("#1[A1s3x2]", summary["run_output_inputs2"])
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
 

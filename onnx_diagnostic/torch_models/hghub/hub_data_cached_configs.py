@@ -4093,3 +4093,30 @@ def _ccached_microsoft_phi4_reasoning():
             "vocab_size": 200064,
         }
     )
+
+
+def _ccached_ydshieh_tiny_random_vit_for_image_classification():
+    "ydshieh/tiny-random-ViTForImageClassification"
+    return transformers.Phi3Config(
+        **{
+            "_name_or_path": ".temp/dummy/vit/ViTForImageClassification",
+            "architectures": ["ViTForImageClassification"],
+            "attention_probs_dropout_prob": 0.1,
+            "encoder_stride": 2,
+            "hidden_act": "gelu",
+            "hidden_dropout_prob": 0.1,
+            "hidden_size": 32,
+            "image_size": 30,
+            "initializer_range": 0.02,
+            "intermediate_size": 37,
+            "layer_norm_eps": 1e-12,
+            "model_type": "vit",
+            "num_attention_heads": 4,
+            "num_channels": 3,
+            "num_hidden_layers": 5,
+            "patch_size": 2,
+            "qkv_bias": true,
+            "torch_dtype": "float32",
+            "transformers_version": "4.24.0.dev0",
+        }
+    )

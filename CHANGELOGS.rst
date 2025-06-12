@@ -4,7 +4,10 @@ Change Logs
 0.7.0
 +++++
 
-* :pr:`143`: compares intermediate results
+* :pr:`143`: compares intermediate results,
+  support for second inputs with different dimension,
+  rename test_helper into validate,
+  support ``interpolate_pos_encoding`` for ``VitModel``
 
 0.6.3
 +++++

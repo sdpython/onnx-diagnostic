@@ -4,7 +4,7 @@
 ===================================================
 
 The command line is a wrapper around function
-:func:`onnx_diagnostic.torch_models.test_helper.validate_model`.
+:func:`onnx_diagnostic.torch_models.validate.validate_model`.
 
 Description
 +++++++++++
@@ -110,7 +110,7 @@ Run onnxruntime fusions
 
 This option runs `transformers optimizations <https://onnxruntime.ai/docs/performance/transformers-optimization.html>`_ 
 implemented in :epkg:`onnxruntime`. The list of supported ``model_type`` can be found in the documentation
-of function :func:`onnx_diagnostic.torch_models.test_helper.run_ort_fusion`.
+of function :func:`onnx_diagnostic.torch_models.validate.run_ort_fusion`.
 
 .. code-block::
 

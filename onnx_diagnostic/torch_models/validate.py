@@ -147,7 +147,7 @@ def version_summary() -> Dict[str, Union[int, float, str]]:
         :showcode:
 
         import pprint
-        from onnx_diagnostic.torch_models.test_helper import version_summary
+        from onnx_diagnostic.torch_models.validate import version_summary
 
         pprint.pprint(version_summary())
     """
@@ -275,6 +275,7 @@ def validate_model(
     runtime: str = "onnxruntime",
     repeat: int = 1,
     warmup: int = 0,
+    inputs2: bool = True,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -307,7 +308,7 @@ def validate_model(
     :param drop_inputs: drops this list of inputs (given their names)
     :param ortfusiontype: runs ort fusion, the parameters defines the fusion type,
         it accepts multiple values separated by ``|``,
-        see :func:`onnx_diagnostic.torch_models.test_helper.run_ort_fusion`
+        see :func:`onnx_diagnostic.torch_models.validate.run_ort_fusion`
     :param input_options: additional options to define the dummy inputs
         used to export
     :param model_options: additional options when creating the model such as
@@ -318,6 +319,8 @@ def validate_model(
         only if `do_run` is true
     :param repeat: number of time to measure the model
     :param warmup: warmup the model first
+    :param inputs2: checks that the second set of inputs is reunning as well,
+        this ensures that the model does support dynamism
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -361,6 +364,7 @@ def validate_model(
             version_stop_if_static=str(stop_if_static),
             version_exporter=exporter or "",
             version_runtime=runtime,
+            version_inputs2=inputs2,
         )
     )
     if opset:
@@ -404,7 +408,7 @@ def validate_model(
         summary,
         None,
         (
-            lambda mid=model_id, v=verbose, task=task, tr=trained, iop=iop, sub=subfolder: (
+            lambda mid=model_id, v=verbose, task=task, tr=trained, iop=iop, sub=subfolder, i2=inputs2: (  # noqa: E501
                 get_untrained_model_with_inputs(
                     mid,
                     verbose=v,
@@ -413,9 +417,14 @@ def validate_model(
                     inputs_kwargs=iop,
                     model_kwargs=mop,
                     subfolder=sub,
+                    add_second_input=i2,
                 )
             )
         ),
+    )
+    assert not inputs2 or "inputs2" in data, (
+        f"inputs2 is True but second set is missing in data for "
+        f"model id {model_id!r}: {sorted(data)}"
     )
 
     if exporter == "modelbuilder":
@@ -483,6 +492,16 @@ def validate_model(
         if verbose:
             print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
             print(f"[validate_model] new dynamic_hapes: {string_type(data['dynamic_shapes'])}")
+        if inputs2:
+            assert (
+                "inputs2" in data
+            ), "Cannot test a second set of inputs as it was not defined."
+            data["inputs2"], _ = filter_inputs(
+                data["inputs2"],
+                drop_names=drop_inputs,
+                model=data["model"],
+                dynamic_shapes=data["dynamic_shapes"],
+            )
 
     if not empty(dtype):
         if isinstance(dtype, str):
@@ -492,6 +511,8 @@ def validate_model(
         data["model"] = to_any(data["model"], dtype)  # type: ignore
         data["inputs"] = to_any(data["inputs"], dtype)  # type: ignore
         summary["model_dtype"] = str(dtype)
+        if "inputs2" in data:
+            data["inputs2"] = to_any(data["inputs2"], dtype)  # type: ignore
 
     if not empty(device):
         if verbose:
@@ -499,6 +520,8 @@ def validate_model(
         data["model"] = to_any(data["model"], device)  # type: ignore
         data["inputs"] = to_any(data["inputs"], device)  # type: ignore
         summary["model_device"] = str(device)
+        if "inputs2" in data:
+            data["inputs2"] = to_any(data["inputs2"], device)  # type: ignore
 
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
@@ -527,35 +550,13 @@ def validate_model(
         print("[validate_model] --")
 
     if do_run:
-        if verbose:
-            print("[validate_model] -- run the model...")
-            print(f"[validate_model] inputs={string_type(data['inputs'], with_shape=True)}")
-        # We make a copy of the input just in case the model modifies them inplace
-        hash_inputs = string_type(data["inputs"], with_shape=True)
-        inputs = torch_deepcopy(data["inputs"])
-        model = data["model"]
-
-        expected = _quiet_or_not_quiet(
-            quiet,
-            "run",
-            summary,
-            data,
-            (lambda m=model, inp=inputs: m(**torch_deepcopy(inp))),
-            repeat=repeat,
-            warmup=warmup,
+        _validate_do_run_model(
+            data, summary, "inputs", "run", "run_expected", verbose, repeat, warmup, quiet
         )
-        if "ERR_run" in summary:
-            return summary, data
-
-        summary["model_expected"] = string_type(expected, with_shape=True)
-        if verbose:
-            print("[validate_model] done (run)")
-        data["expected"] = expected
-        assert hash_inputs == string_type(data["inputs"], with_shape=True), (
-            f"The model execution did modified the inputs:\n"
-            f"before: {hash_inputs}\n"
-            f" after: {string_type(data['inputs'], with_shape=True)}"
-        )
+        if inputs2:
+            _validate_do_run_model(
+                data, summary, "inputs2", "run2", "run_expected2", verbose, 1, 0, quiet
+            )
 
     if exporter:
         print(
@@ -578,43 +579,7 @@ def validate_model(
                 data["inputs_export"] = modificator(data["inputs"])  # type: ignore
 
                 if do_run:
-                    # We run a second time the model to check the patch did not
-                    # introduce any discrepancies
-                    if verbose:
-                        print("[validate_model] run patched model...")
-                        print(
-                            f"[validate_model] patched inputs="
-                            f"{string_type(data['inputs_export'], with_shape=True)}"
-                        )
-                    hash_inputs = string_type(data["inputs_export"], with_shape=True)
-
-                    # We make a copy of the input just in case the model modifies them inplace
-                    inputs = torch_deepcopy(data["inputs_export"])
-                    model = data["model"]
-
-                    expected = _quiet_or_not_quiet(
-                        quiet,
-                        "run_patched",
-                        summary,
-                        data,
-                        (lambda m=model, inp=inputs: m(**inp)),
-                    )
-                    if "ERR_run_patched" in summary:
-                        return summary, data
-
-                    disc = max_diff(data["expected"], expected)
-                    for k, v in disc.items():
-                        summary[f"disc_patched_{k}"] = str(v)
-                    if verbose:
-                        print("[validate_model] done (patched run)")
-                        print(f"[validate_model] patched discrepancies={string_diff(disc)}")
-                    assert hash_inputs == string_type(
-                        data["inputs_export"], with_shape=True
-                    ), (
-                        f"The model execution did modified the inputs:\n"
-                        f"before: {hash_inputs}\n"
-                        f" after: {string_type(data['inputs_export'], with_shape=True)}"
-                    )
+                    _validate_do_run_exported_program(data, summary, verbose, quiet)
 
                 # data is modified inplace
                 summary_export, data = call_exporter(
@@ -707,6 +672,7 @@ def validate_model(
             runtime=runtime,
             repeat=repeat,
             warmup=warmup,
+            inputs2=inputs2,
         )
         summary.update(summary_valid)
 
@@ -767,6 +733,7 @@ def validate_model(
                     runtime=runtime,
                     repeat=repeat,
                     warmup=warmup,
+                    inputs2=inputs2,
                 )
                 summary.update(summary_valid)
 
@@ -777,6 +744,79 @@ def validate_model(
             for k, v in sorted(summary.items()):
                 f.write(f":{k}:{v};\n")
     return summary, data
+
+
+def _validate_do_run_model(
+    data, summary, key, tag, expected_tag, verbose, repeat, warmup, quiet
+):
+    if verbose:
+        print(f"[validate_model] -- run the model inputs={key!r}...")
+        print(f"[validate_model] {key}={string_type(data[key], with_shape=True)}")
+    # We make a copy of the input just in case the model modifies them inplace
+    hash_inputs = string_type(data[key], with_shape=True)
+    inputs = torch_deepcopy(data[key])
+    model = data["model"]
+
+    expected = _quiet_or_not_quiet(
+        quiet,
+        tag,
+        summary,
+        data,
+        (lambda m=model, inp=inputs: m(**torch_deepcopy(inp))),
+        repeat=repeat,
+        warmup=warmup,
+    )
+    if f"ERR_{tag}" in summary:
+        return summary, data
+
+    summary[expected_tag] = string_type(expected, with_shape=True)
+    if verbose:
+        print(f"[validate_model] done ([{tag}])")
+    data[expected_tag] = expected
+    assert hash_inputs == string_type(data[key], with_shape=True), (
+        f"The model execution did modified the inputs:\n"
+        f"before: {hash_inputs}\n"
+        f" after: {string_type(data[key], with_shape=True)}"
+    )
+
+
+def _validate_do_run_exported_program(data, summary, verbose, quiet):
+
+    # We run a second time the model to check the patch did not
+    # introduce any discrepancies
+    if verbose:
+        print("[validate_model] run patched model...")
+        print(
+            f"[validate_model] patched inputs="
+            f"{string_type(data['inputs_export'], with_shape=True)}"
+        )
+    hash_inputs = string_type(data["inputs_export"], with_shape=True)
+
+    # We make a copy of the input just in case the model modifies them inplace
+    inputs = torch_deepcopy(data["inputs_export"])
+    model = data["model"]
+
+    expected = _quiet_or_not_quiet(
+        quiet,
+        "run_patched",
+        summary,
+        data,
+        (lambda m=model, inp=inputs: m(**inp)),
+    )
+    if "ERR_run_patched" in summary:
+        return summary, data
+
+    disc = max_diff(data["run_expected"], expected)
+    for k, v in disc.items():
+        summary[f"disc_patched_{k}"] = str(v)
+    if verbose:
+        print("[validate_model] done (patched run)")
+        print(f"[validate_model] patched discrepancies={string_diff(disc)}")
+    assert hash_inputs == string_type(data["inputs_export"], with_shape=True), (
+        f"The model execution did modified the inputs:\n"
+        f"before: {hash_inputs}\n"
+        f" after: {string_type(data['inputs_export'], with_shape=True)}"
+    )
 
 
 def call_exporter(
@@ -845,7 +885,11 @@ def call_exporter(
         )
         return summary, data
     raise NotImplementedError(
-        f"export with {exporter!r} and optimization={optimization!r} not implemented yet"
+        f"export with {exporter!r} and optimization={optimization!r} not implemented yet, "
+        f"exporter must startswith 'onnx-', 'custom', 'export', 'modelbuilder' "
+        f"(onnx-dynamo, custom, export), optimization can 'ir', "
+        f"'default', 'default+onnxruntime', "
+        f"'default+onnxruntime+os_ort', 'ir', 'os_ort'"
     )
 
 
@@ -981,6 +1025,7 @@ def validate_onnx_model(
     runtime: str = "onnxruntime",
     repeat: int = 1,
     warmup: int = 0,
+    inputs2: bool = True,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Verifies that an onnx model produces the same
@@ -996,6 +1041,8 @@ def validate_onnx_model(
     :param runtime: onnx runtime to use, onnxruntime or torch
     :param repeat: run that number of times the model
     :param warmup: warmup the model
+    :param inputs: to validate the model on the second input set
+        to make sure the exported model supports dynamism
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1065,43 +1112,51 @@ def validate_onnx_model(
     if verbose:
         print(f"[validate_onnx_model] done (ort_session) flavour={flavour!r}")
 
-    # make_feeds
-    if verbose:
-        print("[validate_onnx_model] -- make_feeds...")
-        print(f"[validate_onnx_model] inputs={string_type(data['inputs'], with_shape=True)}")
-    feeds = make_feeds(sess, data["inputs"], use_numpy=True, check_flatten=False)
-    if verbose:
-        print(f"[validate_onnx_model] ort inputs={string_type(feeds, with_shape=True)}")
-    summary[_mk("onnx_ort_inputs")] = string_type(feeds, with_shape=True)
-    if verbose:
-        print("[validate_onnx_model] done (make_feeds)")
+    keys = [("inputs", "run_expected", "")]
+    if inputs2:
+        keys.append(("inputs2", "run_expected2", "2"))
+    for k_input, k_expected, suffix in keys:
+        # make_feeds
+        if verbose:
+            print(f"[validate_onnx_model] -- make_feeds for {k_input!r}...")
+            print(
+                f"[validate_onnx_model] inputs={string_type(data[k_input], with_shape=True)}"
+            )
+        feeds = make_feeds(sess, data[k_input], use_numpy=True, check_flatten=False)
+        if verbose:
+            print(f"[validate_onnx_model] ort inputs={string_type(feeds, with_shape=True)}")
+        summary[_mk(f"onnx_ort_inputs{suffix}")] = string_type(feeds, with_shape=True)
+        if verbose:
+            print("[validate_onnx_model] done (make_feeds)")
 
-    # run ort
-    if verbose:
-        print("[validate_onnx_model] run session...")
+        # run ort
+        if verbose:
+            print("[validate_onnx_model] run session...")
 
-    got = _quiet_or_not_quiet(
-        quiet,
-        _mk("time_onnx_ort_run"),
-        summary,
-        data,
-        (lambda sess=sess, feeds=feeds: sess.run(None, feeds)),
-        repeat=repeat,
-        warmup=warmup,
-    )
-    if f"ERR_{_mk('time_onnx_ort_run')}" in summary:
-        return summary, data
+        got = _quiet_or_not_quiet(
+            quiet,
+            _mk(f"time_onnx_ort_run{suffix}"),
+            summary,
+            data,
+            (lambda sess=sess, feeds=feeds: sess.run(None, feeds)),
+            repeat=repeat,
+            warmup=warmup,
+        )
+        if f"ERR_{_mk(f'time_onnx_ort_run{suffix}')}" in summary:
+            return summary, data
 
-    if verbose:
-        print("[validate_onnx_model] done (run)")
-        print(f"[validate_onnx_model] got={string_type(got, with_shape=True)}")
+        summary[f"run_feeds_{k_input}"] = string_type(feeds, with_shape=True, with_device=True)
+        summary[f"run_output_{k_input}"] = string_type(got, with_shape=True, with_device=True)
+        if verbose:
+            print("[validate_onnx_model] done (run)")
+            print(f"[validate_onnx_model] got={string_type(got, with_shape=True)}")
 
-    # compute discrepancies
-    disc = max_diff(data["expected"], got, flatten=True)
-    if verbose:
-        print(f"[validate_onnx_model] discrepancies={string_diff(disc)}")
-    for k, v in disc.items():
-        summary[_mk(f"disc_onnx_ort_run_{k}")] = v
+        # compute discrepancies
+        disc = max_diff(data[k_expected], got, flatten=True)
+        if verbose:
+            print(f"[validate_onnx_model] discrepancies={string_diff(disc)}")
+        for k, v in disc.items():
+            summary[_mk(f"disc_onnx_ort_run{suffix}_{k}")] = v
     return summary, data
 
 
