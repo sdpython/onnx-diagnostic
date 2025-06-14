@@ -584,7 +584,7 @@ class TestHelpers(ExtTestCase):
         self.assertIn("EncoderDecoderCache", s)
 
     def test_string_typeçconfig(self):
-        conf = get_pretrained_config("microsoft/phi-2")
+        conf = get_pretrained_config("microsoft/phi-2", use_only_preinstalled=True)
         s = string_type(conf)
         self.assertStartsWith("PhiConfig(**{", s)
 

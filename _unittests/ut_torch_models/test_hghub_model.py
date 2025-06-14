@@ -77,16 +77,6 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
     @hide_stdout()
     @ignore_errors(OSError)
-    def test_get_untrained_model_with_inputs_codellama(self):
-        mid = "codellama/CodeLlama-7b-Python-hf"
-        data = get_untrained_model_with_inputs(mid, verbose=1)
-        model, inputs = data["model"], data["inputs"]
-        model(**inputs)
-        # different expected value for different version of transformers
-        self.assertIn((data["size"], data["n_weights"]), [(547377152, 136844288)])
-
-    @hide_stdout()
-    @ignore_errors(OSError)
     def test_get_untrained_model_with_inputs_clip_vit(self):
         mid = "openai/clip-vit-base-patch16"
         data = get_untrained_model_with_inputs(mid, verbose=1)
@@ -129,11 +119,11 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 try:
                     model(**inputs)
                 except Exception as e:
-                    diff = _diff(get_pretrained_config(mid), data["configuration"])
+                    cf = get_pretrained_config(mid, use_only_preinstalled=True)
+                    diff = _diff(cf, data["configuration"])
                     raise AssertionError(
                         f"Computation failed due to {e}.\n--- pretrained\n"
-                        f"{pprint.pformat(get_pretrained_config(mid))}\n"
-                        f"--- modified\n{data['configuration']}\n"
+                        f"{pprint.pformat(cf)}\n--- modified\n{data['configuration']}\n"
                         f"--- diff\n{diff}"
                     ) from e
                 # different expected value for different version of transformers

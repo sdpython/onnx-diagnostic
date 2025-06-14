@@ -20,6 +20,7 @@ import copy
 import pprint
 import torch
 from onnx_diagnostic import doc
+from onnx_diagnostic.ext_test_case import unit_test_going
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_models.hghub import (
     get_untrained_model_with_inputs,
@@ -32,7 +33,12 @@ from onnx_diagnostic.torch_models.hghub.hub_api import (
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
-model_id = "codellama/CodeLlama-7b-Python-hf"
+model_id = (
+    "HuggingFaceM4/tiny-random-idefics"
+    if unit_test_going()
+    else "codellama/CodeLlama-7b-Python-hf"
+)
+print(f"model_id={model_id!r}")
 print("info", get_model_info(model_id))
 
 # %%

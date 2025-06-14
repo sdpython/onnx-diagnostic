@@ -2,6 +2,7 @@ import copy
 import functools
 import json
 import os
+import pprint
 from typing import Any, Dict, List, Optional, Union
 import transformers
 from huggingface_hub import HfApi, model_info, hf_hub_download
@@ -33,10 +34,14 @@ def _retrieve_cached_configurations() -> Dict[str, transformers.PretrainedConfig
     return res
 
 
-def get_cached_configuration(name: str, **kwargs) -> Optional[transformers.PretrainedConfig]:
+def get_cached_configuration(
+    name: str, exc: bool = False, **kwargs
+) -> Optional[transformers.PretrainedConfig]:
     """
     Returns cached configuration to avoid having to many accesses to internet.
     It returns None if not Cache. The list of cached models follows.
+    If *exc* is True or if environment variable ``NOHTTP`` is defined,
+    the function raises an exception if *name* is not found.
 
     .. runpython::
 
@@ -54,8 +59,11 @@ def get_cached_configuration(name: str, **kwargs) -> Optional[transformers.Pretr
             conf = copy.deepcopy(conf)
             update_config(conf, kwargs)
         return conf
-    if os.environ.get("NOHTTP", ""):
-        raise AssertionError(f"Unable to find {name!r} in {sorted(cached)}")
+    assert not exc and not os.environ.get("NOHTTP", ""), (
+        f"Unable to find {name!r} (exc={exc}, "
+        f"NOHTTP={os.environ.get('NOHTTP', '')!r}) "
+        f"in {pprint.pformat(sorted(cached))}"
+    )
     return None
 
 
@@ -64,6 +72,7 @@ def get_pretrained_config(
     trust_remote_code: bool = True,
     use_preinstalled: bool = True,
     subfolder: Optional[str] = None,
+    use_only_preinstalled: bool = False,
     **kwargs,
 ) -> Any:
     """
@@ -77,13 +86,20 @@ def get_pretrained_config(
         :func:`get_cached_configuration`, the cached list is mostly for
         unit tests
     :param subfolder: subfolder for the given model id
+    :param use_only_preinstalled: if True, raises an exception if not preinstalled
     :param kwargs: additional kwargs
     :return: a configuration
     """
     if use_preinstalled:
-        conf = get_cached_configuration(model_id, subfolder=subfolder, **kwargs)
+        conf = get_cached_configuration(
+            model_id, exc=use_only_preinstalled, subfolder=subfolder, **kwargs
+        )
         if conf is not None:
             return conf
+    assert not use_only_preinstalled, (
+        f"Inconsistencies: use_only_preinstalled={use_only_preinstalled}, "
+        f"use_preinstalled={use_preinstalled!r}"
+    )
     if subfolder:
         try:
             return transformers.AutoConfig.from_pretrained(
