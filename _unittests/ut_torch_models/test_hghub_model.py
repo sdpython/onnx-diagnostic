@@ -129,11 +129,11 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 try:
                     model(**inputs)
                 except Exception as e:
-                    diff = _diff(get_pretrained_config(mid), data["configuration"])
+                    cf = get_pretrained_config(mid, use_only_preinstalled=True)
+                    diff = _diff(cf, data["configuration"])
                     raise AssertionError(
                         f"Computation failed due to {e}.\n--- pretrained\n"
-                        f"{pprint.pformat(get_pretrained_config(mid))}\n"
-                        f"--- modified\n{data['configuration']}\n"
+                        f"{pprint.pformat(cf)}\n--- modified\n{data['configuration']}\n"
                         f"--- diff\n{diff}"
                     ) from e
                 # different expected value for different version of transformers

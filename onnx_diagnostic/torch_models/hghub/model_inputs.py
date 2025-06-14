@@ -26,6 +26,7 @@ def get_untrained_model_with_inputs(
     use_preinstalled: bool = True,
     add_second_input: bool = False,
     subfolder: Optional[str] = None,
+    use_only_preinstalled: bool = True,
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
@@ -46,6 +47,7 @@ def get_untrained_model_with_inputs(
     :param add_second_input: provides a second inputs to check a model
         supports different shapes
     :param subfolder: subfolder to use for this model id
+    :param use_only_preinstalled: use only preinstalled version
     :return: dictionary with a model, inputs, dynamic shapes, and the configuration,
         some necessary rewriting as well
 
@@ -74,6 +76,7 @@ def get_untrained_model_with_inputs(
         config = get_pretrained_config(
             model_id,
             use_preinstalled=use_preinstalled,
+            use_only_preinstalled=use_only_preinstalled,
             subfolder=subfolder,
             **(model_kwargs or {}),
         )
