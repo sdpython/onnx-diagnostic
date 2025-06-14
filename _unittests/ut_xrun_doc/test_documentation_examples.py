@@ -99,7 +99,12 @@ class TestDocumentationExamples(ExtTestCase):
 
             if (
                 not reason
-                and name in {"plot_export_locate_issue.py", "plot_export_with_auto.py"}
+                and name
+                in {
+                    "plot_export_locate_issue.py",
+                    "plot_export_with_auto.py",
+                    "plot_export_hub_codellama.py",
+                }
                 and not has_torch("2.8")
             ):
                 reason = "torch<2.8"
