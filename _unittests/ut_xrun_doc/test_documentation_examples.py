@@ -100,9 +100,9 @@ class TestDocumentationExamples(ExtTestCase):
             if (
                 not reason
                 and name in {"plot_export_locate_issue.py", "plot_export_with_auto.py"}
-                and not has_torch("2.7")
+                and not has_torch("2.8")
             ):
-                reason = "torch<2.7"
+                reason = "torch<2.8"
 
             if reason:
 
