@@ -92,8 +92,15 @@ class TestDocumentationExamples(ExtTestCase):
 
             if (
                 not reason
+                and name in {"plot_export_hub_codellama.py"}
+                and not has_transformers("4.52")
+            ):
+                reason = "transformers<4.52"
+
+            if (
+                not reason
                 and name in {"plot_export_locate_issue.py", "plot_export_with_auto.py"}
-                and not has_torch("4.7")
+                and not has_torch("2.7")
             ):
                 reason = "torch<2.7"
 
