@@ -34,16 +34,16 @@ class CubeLogs:
             self.data = self._data
         elif isinstance(self._data, list) and all(isinstance(r, dict) for r in self._data):
             if verbose:
-                print(f"[CubeLogs.load] load from list of dicts, shape={self._data.shape}")
+                print(f"[CubeLogs.load] load from list of dicts, n={len(self._data)}")
             self.data = pandas.DataFrame(self._data)
         else:
             raise NotImplementedError(
                 f"Not implemented with the provided data (type={type(self._data)})"
             )
 
-        assert all(isinstance(c, str) for c in self._data.columns), (
+        assert all(isinstance(c, str) for c in self.data.columns), (
             f"The class only supports string as column names "
-            f"but found {[c for c in self._data.columns if not isinstance(c, str)]}"
+            f"but found {[c for c in self.data.columns if not isinstance(c, str)]}"
         )
         if verbose:
             print(f"[CubeLogs.load] loaded with shape={self.data.shape}")
@@ -183,14 +183,16 @@ class CubeLogs:
         assert set(values) <= set(
             self.values
         ), f"Non existing columns in values {set(values) - set(self.values)}"
-        key_columns = {c for c in self.keys if c not in key_index}
+        set_key_columns = {c for c in self.keys if c not in key_index}
         if ignore_unique:
             key_index = [k for k in key_index if len(self.values_for_key[k]) > 1]
-            key_columns = [k for k in key_columns if len(self.values_for_key[k]) > 1]
+            key_columns = [k for k in set_key_columns if len(self.values_for_key[k]) > 1]
+        else:
+            key_columns = sorted(set_key_columns)
         if order:
-            assert set(order) <= set(key_columns), (
+            assert set(order) <= set_key_columns, (
                 f"Non existing columns from order in key_columns "
-                f"{set(order) - set(key_columns)}"
+                f"{set(order) - set_key_columns}"
             )
             key_columns = [*order, *[c for c in key_columns if c not in order]]
         return self.data.pivot(index=key_index[::-1], columns=key_columns, values=values)
