@@ -59,9 +59,11 @@ def get_cached_configuration(
             conf = copy.deepcopy(conf)
             update_config(conf, kwargs)
         return conf
-    assert not exc and not os.environ.get(
-        "NOHTTP", ""
-    ), f"Unable to find {name!r} in {pprint.pformat(sorted(cached))}"
+    assert not exc and not os.environ.get("NOHTTP", ""), (
+        f"Unable to find {name!r} (exc={exc}, "
+        f"NOHTTP={os.environ.get('NOHTTP', '')!r}) "
+        f"in {pprint.pformat(sorted(cached))}"
+    )
     return None
 
 

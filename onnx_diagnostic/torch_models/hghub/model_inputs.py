@@ -26,7 +26,7 @@ def get_untrained_model_with_inputs(
     use_preinstalled: bool = True,
     add_second_input: bool = False,
     subfolder: Optional[str] = None,
-    use_only_preinstalled: bool = True,
+    use_only_preinstalled: bool = False,
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
