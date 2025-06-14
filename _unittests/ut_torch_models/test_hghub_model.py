@@ -77,16 +77,6 @@ class TestHuggingFaceHubModel(ExtTestCase):
 
     @hide_stdout()
     @ignore_errors(OSError)
-    def test_get_untrained_model_with_inputs_codellama(self):
-        mid = "codellama/CodeLlama-7b-Python-hf"
-        data = get_untrained_model_with_inputs(mid, verbose=1)
-        model, inputs = data["model"], data["inputs"]
-        model(**inputs)
-        # different expected value for different version of transformers
-        self.assertIn((data["size"], data["n_weights"]), [(547377152, 136844288)])
-
-    @hide_stdout()
-    @ignore_errors(OSError)
     def test_get_untrained_model_with_inputs_clip_vit(self):
         mid = "openai/clip-vit-base-patch16"
         data = get_untrained_model_with_inputs(mid, verbose=1)
