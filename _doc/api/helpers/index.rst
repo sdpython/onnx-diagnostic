@@ -13,6 +13,7 @@ onnx_diagnostic.helpers
     doc_helper
     graph_helper
     helper
+    log_helper
     memory_peak
     mini_onnx_builder
     model_builder_helper
