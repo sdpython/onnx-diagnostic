@@ -3,6 +3,16 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 import pandas
 
 
+class CubeViewDef:
+    """
+    Defines how to compute a view.
+    """
+    def __init__(self, )
+        key_index: Sequence[str],
+        values: Sequence[str],
+        ignore_unique: bool = True,
+        order: Optional[Sequence[str]] = None,
+
 class CubeLogs:
     """
     Processes logs coming from experiments.
@@ -83,10 +93,15 @@ class CubeLogs:
 
         # Let's apply the formulas
         if self._formulas:
+            cols = set(self.data.columns)
             for k, f in self._formulas.items():
-                if verbose:
-                    print(f"[CubeLogs.load] apply formaula {k!r}")
-                self.data[k] = f(self.data)
+                if k in cols:
+                    if verbose:
+                        print(f"[CubeLogs.load] skip formula {k!r}")
+                else:
+                    if verbose:
+                        print(f"[CubeLogs.load] apply formula {k!r}")
+                    self.data[k] = f(self.data)
         self.values_for_key = {k: set(self.data[k]) for k in self.keys}
         nans = [c for c in self.keys if self.data[c].isna().astype(int).sum() > 0]
         assert not nans, f"The following keys {nans} have nan values. This is not allowed."
