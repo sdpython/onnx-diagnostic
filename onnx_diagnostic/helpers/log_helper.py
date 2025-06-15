@@ -38,7 +38,7 @@ class CubeViewDef:
 
     def __repr__(self) -> str:
         "usual"
-        return string_sig(self)
+        return string_sig(self)  # type: ignore[arg-type]
 
 
 class CubeLogs:
