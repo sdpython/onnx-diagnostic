@@ -3,13 +3,13 @@ import textwrap
 import unittest
 import pandas
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
-from onnx_diagnostic.helpers.log_helper import CubeLogs
+from onnx_diagnostic.helpers.log_helper import CubeLogs, CubeViewDef
 
 
 class TestLogHelper(ExtTestCase):
-    @hide_stdout()
-    def test_cube_logs(self):
-        df = pandas.read_csv(
+    @classmethod
+    def df1(cls):
+        return pandas.read_csv(
             io.StringIO(
                 textwrap.dedent(
                     """
@@ -22,12 +22,25 @@ class TestLogHelper(ExtTestCase):
                 )
             )
         )
+
+    @classmethod
+    def cube1(cls, verbose=0):
+        cube = CubeLogs(
+            cls.df1(),
+            recent=True,
+            formulas={"speedup": lambda df: df["time_baseline"] / df["time_baseline"]},
+        )
+        return cube.load(verbose=verbose)
+
+    @hide_stdout()
+    def test_cube_logs_load_df(self):
+        df = self.df1()
         cube = CubeLogs(df)
         text = str(cube)
         self.assertIsInstance(text, str)
         self.assertRaise(lambda: cube.load(verbose=1), AssertionError)
         cube = CubeLogs(
-            df,
+            self.df1(),
             recent=True,
             formulas={"speedup": lambda df: df["time_baseline"] / df["time_baseline"]},
         )
@@ -36,7 +49,43 @@ class TestLogHelper(ExtTestCase):
         self.assertIsInstance(text, str)
         self.assertEqual((3, df.shape[1] + 1), cube.shape)
         self.assertEqual(set(cube.columns), {*df.columns, "speedup"})
-        view = cube.view(["version.*", "model_name"], ["time_latency", "time_baseline"])
+
+    @hide_stdout()
+    def test_cube_logs_load_list(self):
+        cube = CubeLogs(
+            [
+                dict(
+                    date="1/1/2001",
+                    version_python="3.13",
+                    model_exporter="A",
+                    time_latency=5.6,
+                ),
+                dict(
+                    date="1/1/2001",
+                    version_python="3.13",
+                    model_exporter="B",
+                    time_latency=5.7,
+                ),
+            ]
+        )
+        cube.load(verbose=1)
+        self.assertEqual((2, 4), cube.shape)
+
+    def test_cube_logs_view_repr(self):
+        v = CubeViewDef(["version.*", "model_name"], ["time_latency", "time_baseline"])
+        r = repr(v)
+        self.assertEqual(
+            "CubeViewDef(key_index=['version.*', 'model_name'], "
+            "values=['time_latency', 'time_baseline'])",
+            r,
+        )
+
+    @hide_stdout()
+    def test_cube_logs_view(self):
+        cube = self.cube1(verbose=1)
+        view = cube.view(
+            CubeViewDef(["version.*", "model_name"], ["time_latency", "time_baseline"])
+        )
         self.assertEqual((3, 4), view.shape)
         self.assertEqual(
             [
@@ -52,7 +101,9 @@ class TestLogHelper(ExtTestCase):
         )
 
         view = cube.view(
-            ["version.*"], ["time_latency", "time_baseline"], order=["model_exporter"]
+            CubeViewDef(
+                ["version.*"], ["time_latency", "time_baseline"], order=["model_exporter"]
+            )
         )
         self.assertEqual((2, 6), view.shape)
         self.assertEqual(
@@ -67,6 +118,19 @@ class TestLogHelper(ExtTestCase):
             list(view.columns),
         )
         self.assertEqual(["3.12.3", "3.13.3"], list(view.index))
+
+    def test_cube_logs_view_agg(self):
+        cube = self.cube1(verbose=0)
+        view = cube.view(
+            CubeViewDef(
+                ["version.*", "model.*"],
+                ["time_latency", "time_baseline"],
+                key_agg=["model_name"],
+            )
+        )
+        self.assertEqual((2, 2), view.shape)
+        self.assertEqual(["time_baseline", "time_latency"], list(view.columns))
+        self.assertEqual([("3.13.3", "export"), ("3.12.3", "onnx-dynamo")], list(view.index))
 
 
 if __name__ == "__main__":

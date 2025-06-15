@@ -1,17 +1,45 @@
 import re
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
+from .helper import string_sig
 import pandas
 
 
 class CubeViewDef:
     """
     Defines how to compute a view.
+
+    :param key_index: keys to put in the row index
+    :param values: values to show
+    :param ignore_unique: ignore keys with a unique value
+    :param order: to reorder key in columns index
+    :param key_agg: aggregate according to these columns before
+        creating the view
+    :param agg_args: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
+    :param agg_kwargs: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
     """
-    def __init__(self, )
+
+    def __init__(
+        self,
         key_index: Sequence[str],
         values: Sequence[str],
         ignore_unique: bool = True,
         order: Optional[Sequence[str]] = None,
+        key_agg: Optional[Sequence[str]] = None,
+        agg_args: Sequence[Any] = ("sum",),
+        agg_kwargs: Optional[Dict[str, Any]] = None,
+    ):
+        self.key_index = key_index
+        self.values = values
+        self.ignore_unique = ignore_unique
+        self.order = order
+        self.key_agg = key_agg
+        self.agg_args = agg_args
+        self.agg_kwargs = agg_kwargs
+
+    def __repr__(self) -> str:
+        "usual"
+        return string_sig(self)
+
 
 class CubeLogs:
     """
@@ -37,7 +65,7 @@ class CubeLogs:
         self._formulas = formulas
 
     def load(self, verbose: int = 0):
-        """Loads and preprocesses the data."""
+        """Loads and preprocesses the data. Returns self."""
         if isinstance(self._data, pandas.DataFrame):
             if verbose:
                 print(f"[CubeLogs.load] load from dataframe, shape={self._data.shape}")
@@ -103,10 +131,16 @@ class CubeLogs:
                         print(f"[CubeLogs.load] apply formula {k!r}")
                     self.data[k] = f(self.data)
         self.values_for_key = {k: set(self.data[k]) for k in self.keys}
-        nans = [c for c in self.keys if self.data[c].isna().astype(int).sum() > 0]
+        nans = [
+            c for c in [self.time, *self.keys] if self.data[c].isna().astype(int).sum() > 0
+        ]
         assert not nans, f"The following keys {nans} have nan values. This is not allowed."
         if verbose:
+            print(f"[CubeLogs.load] convert column {self.time!r} into date")
+        self.data[self.time] = pandas.to_datetime(self.data[self.time])
+        if verbose:
             print(f"[CubeLogs.load] done, shape={self.shape}")
+        return self
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -171,43 +205,63 @@ class CubeLogs:
         "usual"
         return str(self.data) if hasattr(self, "data") else str(self._data)
 
-    def view(
-        self,
-        key_index: Sequence[str],
-        values: Sequence[str],
-        ignore_unique: bool = True,
-        order: Optional[Sequence[str]] = None,
-    ) -> pandas.DataFrame:
+    def view(self, view_def: CubeViewDef) -> pandas.DataFrame:
         """
         Returns a dataframe, a pivot view.
         `key_index` determines the index, the other key columns determines
         the columns. If `ignore_unique` is True, every columns with a unique value
         is removed.
 
-        :param key_index: keys to put in the row index
-        :param values: values to show
-        :param ignore_unique: ignore keys with a unique value
-        :param order: to reorder key in columns index
+        :param view_def: view definition
         :return: dataframe
         """
-        key_index = self._filter_column(key_index, self.keys)
-        values = self._filter_column(values, self.values)
-        assert set(key_index) <= set(
+        key_agg = self._filter_column(view_def.key_agg, self.keys) if view_def.key_agg else []
+        set_key_agg = set(key_agg)
+        assert set_key_agg <= set(
             self.keys
-        ), f"Non existing columns in key_index {set(key_index) - set(self.keys)}"
+        ), f"Non existing keys in key_agg {set_key_agg - set(self.keys)}"
+
+        values = self._filter_column(view_def.values, self.values)
         assert set(values) <= set(
             self.values
         ), f"Non existing columns in values {set(values) - set(self.values)}"
-        set_key_columns = {c for c in self.keys if c not in key_index}
-        if ignore_unique:
+
+        if key_agg:
+            key_index = [
+                c
+                for c in self._filter_column(view_def.key_index, self.keys)
+                if c not in set_key_agg
+            ]
+            keys_no_agg = [c for c in self.keys if c not in set_key_agg]
+            data = (
+                self.data[[*keys_no_agg, *values]]
+                .groupby(key_index, as_index=False)
+                .agg(*view_def.agg_args, **(view_def.agg_kwargs or {}))
+            )
+        else:
+            key_index = self._filter_column(view_def.key_index, self.keys)
+            data = self.data[[*self.keys, *values]]
+
+        assert set(key_index) <= set(
+            self.keys
+        ), f"Non existing keys in key_index {set(key_index) - set(self.keys)}"
+
+        set_key_columns = {
+            c for c in self.keys if c not in key_index and c not in set(key_agg)
+        }
+        if view_def.ignore_unique:
             key_index = [k for k in key_index if len(self.values_for_key[k]) > 1]
             key_columns = [k for k in set_key_columns if len(self.values_for_key[k]) > 1]
         else:
             key_columns = sorted(set_key_columns)
-        if order:
-            assert set(order) <= set_key_columns, (
+
+        if view_def.order:
+            assert set(view_def.order) <= set_key_columns, (
                 f"Non existing columns from order in key_columns "
-                f"{set(order) - set_key_columns}"
+                f"{set(view_def.order) - set_key_columns}"
             )
-            key_columns = [*order, *[c for c in key_columns if c not in order]]
-        return self.data.pivot(index=key_index[::-1], columns=key_columns, values=values)
+            key_columns = [
+                *view_def.order,
+                *[c for c in key_columns if c not in view_def.order],
+            ]
+        return data.pivot(index=key_index[::-1], columns=key_columns, values=values)
