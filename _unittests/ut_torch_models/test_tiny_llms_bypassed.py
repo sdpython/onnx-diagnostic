@@ -2,12 +2,13 @@ import copy
 import unittest
 import torch
 from transformers.cache_utils import DynamicCache
-from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
+from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, hide_stdout
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.torch_models.llms import get_phi2
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
     patched_DynamicCache,
 )
@@ -15,6 +16,7 @@ from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
 
 class TestTinyLlmBypassed(ExtTestCase):
     @ignore_warnings(UserWarning)
+    @hide_stdout()
     def test_export_tiny_llm_2_bypassed(self):
         data = get_tiny_llm()
         model, inputs = data["model"], data["inputs"]
@@ -50,7 +52,11 @@ class TestTinyLlmBypassed(ExtTestCase):
                 debug()
 
             ep = torch.export.export(
-                model, (), kwargs=inputs, dynamic_shapes=data["dynamic_shapes"], strict=False
+                model,
+                (),
+                kwargs=inputs,
+                dynamic_shapes=use_dyn_not_str(data["dynamic_shapes"]),
+                strict=False,
             )
             got = ep.module()(**inputs)
             self.assertEqualArrayAny(expected, got)
