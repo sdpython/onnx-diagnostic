@@ -132,6 +132,26 @@ class TestLogHelper(ExtTestCase):
         self.assertEqual(["time_baseline", "time_latency"], list(view.columns))
         self.assertEqual([("3.13.3", "export"), ("3.12.3", "onnx-dynamo")], list(view.index))
 
+    @hide_stdout()
+    def test_cube_logs_excel(self):
+        output = self.get_dump_file("test_cube_logs_excel.xlsx")
+        cube = self.cube1(verbose=0)
+        cube.to_excel(
+            output,
+            {
+                "example": CubeViewDef(
+                    ["version.*", "model_name"], ["time_latency", "time_baseline"]
+                ),
+                "agg": CubeViewDef(
+                    ["version.*", "model.*"],
+                    ["time_latency", "time_baseline"],
+                    key_agg=["model_name"],
+                ),
+            },
+            verbose=1,
+        )
+        self.assertExists(output)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -2,6 +2,7 @@ import re
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 from .helper import string_sig
 import pandas
+from pandas.api.types import is_numeric_dtype
 
 
 class CubeViewDef:
@@ -265,3 +266,165 @@ class CubeLogs:
                 *[c for c in key_columns if c not in view_def.order],
             ]
         return data.pivot(index=key_index[::-1], columns=key_columns, values=values)
+
+    def describe(self) -> pandas.DataFrame:
+        """Basic description of all variables."""
+        rows = []
+        for name in self.data.columns:
+            values = self.data[name]
+            dtype = values.dtype
+            nonan = values.dropna()
+            obs = dict(
+                name=name,
+                dtype=str(dtype),
+                missing=len(values) - len(nonan),
+            )
+            if len(nonan) > 0:
+                obs.update(
+                    dict(
+                        min=nonan.min(),
+                        max=nonan.max(),
+                        count=len(nonan),
+                    )
+                )
+                if is_numeric_dtype(nonan):
+                    obs.update(
+                        dict(
+                            mean=nonan.mean(),
+                            sum=nonan.sum(),
+                        )
+                    )
+                else:
+                    unique = set(nonan)
+                    obs["n_values"] = len(unique)
+                    if len(unique) < 20:
+                        obs["values"] = ",".join(map(str, sorted(unique)))
+            rows.append(obs)
+        return pandas.DataFrame(rows).set_index("name")
+
+    def to_excel(
+        self,
+        output: str,
+        views: Dict[str, CubeViewDef],
+        main: Optional[str] = "main",
+        raw: Optional[str] = "raw",
+        verbose: int = 0,
+    ):
+        """
+        Creates an excel file with a list of view.
+
+        :param output: output file to create
+        :param views: list of views to append
+        :param main: add a page with statitcs on all variables
+        :param raw: add a page with the raw data
+        :param verbose: verbosity
+        """
+
+        with pandas.ExcelWriter(output, engine="openpyxl") as writer:
+            if main:
+                assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
+                df = self.describe()
+                if verbose:
+                    print(f"[CubeLogs.to_helper] add sheet {main!r} with shape {df.shape}")
+                df.to_excel(writer, sheet_name=main, freeze_panes=(1, 1))
+                self._apply_excel_style(main, writer, df)
+            if raw:
+                assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
+                if verbose:
+                    print(f"[CubeLogs.to_helper] add sheet {raw!r} with shape {self.shape}")
+                self.data.to_excel(writer, sheet_name=raw, freeze_panes=(1, 1), index=True)
+                self._apply_excel_style(raw, writer, self.data)
+
+            for name, view in views.items():
+                df = self.view(view)
+                if verbose:
+                    print(
+                        f"[CubeLogs.to_helper] add sheet {name!r} with shape "
+                        f"{df.shape}, index={df.index.names}, columns={df.columns.names}"
+                    )
+                df.to_excel(
+                    writer,
+                    sheet_name=name,
+                    freeze_panes=(df.index.nlevels, df.columns.nlevels),
+                )
+                self._apply_excel_style(name, writer, df)
+        if verbose:
+            print(f"[CubeLogs.to_helper] done with {len(views)} views")
+
+    def _apply_excel_style(self, name: str, writer: pandas.ExcelWriter, df: pandas.DataFrame):
+        from openpyxl.styles import Alignment
+        from openpyxl.utils import get_column_letter
+
+        # from openpyxl.styles import Font, PatternFill, numbers
+
+        left = Alignment(horizontal="left")
+        right = Alignment(horizontal="right")
+        # center = Alignment(horizontal="center")
+        # bold_font = Font(bold=True)
+        # red = Font(color="FF0000")
+        # yellow = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+        # redf = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+
+        sheet = writer.sheets[name]
+        n_rows = df.shape[0] + df.columns.nlevels + df.index.nlevels
+        n_cols = df.shape[1] + df.index.nlevels
+        co = {}
+        sizes = {}
+        cols = set()
+        for i in range(1, n_rows):
+            for j, cell in enumerate(sheet[i]):
+                if j > n_cols:
+                    break
+                cols.add(cell.column)
+                if isinstance(cell.value, float):
+                    co[j] = co.get(j, 0) + 1
+                elif isinstance(cell.value, str):
+                    sizes[cell.column] = max(sizes.get(cell.column, 0), len(cell.value))
+
+        for k, v in sizes.items():
+            c = get_column_letter(k)
+            sheet.column_dimensions[c].width = max(15, v)
+        for k in cols:
+            if k not in sizes:
+                c = get_column_letter(k)
+                sheet.column_dimensions[c].width = 15
+
+        for i in range(1, n_rows):
+            for j, cell in enumerate(sheet[i]):
+                if j > n_cols:
+                    break
+                if isinstance(cell.value, pandas.Timestamp):
+                    cell.alignment = right
+                    dt = cell.value.to_pydatetime()
+                    cell.value = dt
+                    cell.number_format = (
+                        "YYYY-MM-DD"
+                        if (
+                            dt.hour == 0
+                            and dt.minute == 0
+                            and dt.second == 0
+                            and dt.microsecond == 0
+                        )
+                        else "YYYY-MM-DD 00:00:00"
+                    )
+                elif isinstance(cell.value, (float, int)):
+                    cell.alignment = right
+                    x = abs(cell.value)
+                    if int(x) == x:
+                        cell.number_format = "0"
+                    elif x > 5000:
+                        cell.number_format = "# ##0"
+                    elif x >= 500:
+                        cell.number_format = "0.0"
+                    elif x >= 50:
+                        cell.number_format = "0.00"
+                    elif x >= 5:
+                        cell.number_format = "0.000"
+                    elif x > 0.5:
+                        cell.number_format = "0.0000"
+                    elif x > 0.005:
+                        cell.number_format = "0.00000"
+                    else:
+                        cell.number_format = "0.000E+00"
+                else:
+                    cell.alignment = left
