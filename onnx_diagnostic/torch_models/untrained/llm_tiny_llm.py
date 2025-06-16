@@ -58,8 +58,8 @@ def get_tiny_llm(
     num_key_value_heads = config["num_key_value_heads"]
 
     batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = torch.export.Dim("seq_length", min=1, max=4096)
-    cache_length = torch.export.Dim("cache_length", min=1, max=4096)
+    seq_length = torch.export.Dim("seq_length", min=1, max=8192)
+    cache_length = torch.export.Dim("cache_length", min=1, max=8192)
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},

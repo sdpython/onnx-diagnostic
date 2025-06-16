@@ -1,9 +1,16 @@
 import io
+import os
 import textwrap
 import unittest
+import zipfile
 import pandas
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
-from onnx_diagnostic.helpers.log_helper import CubeLogs, CubeViewDef
+from onnx_diagnostic.helpers.log_helper import (
+    CubeLogs,
+    CubeViewDef,
+    enumerate_csv_files,
+    open_dataframe,
+)
 
 
 class TestLogHelper(ExtTestCase):
@@ -151,6 +158,21 @@ class TestLogHelper(ExtTestCase):
             verbose=1,
         )
         self.assertExists(output)
+
+    def test_enumerate_csv_files(self):
+        df = self.df1()
+        filename = self.get_dump_file("test_enumerate_csv_files.csv")
+        df.to_csv(filename, index=False)
+        zip_file = self.get_dump_file("test_enumerate_csv_files.zip")
+        with zipfile.ZipFile(zip_file, "w", zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(filename)
+
+        dirname = os.path.dirname(filename)
+        data = [os.path.join(dirname, "*.csv"), os.path.join(dirname, "*.zip")]
+        dfs = list(enumerate_csv_files(data, verbose=1))
+        self.assertNotEmpty(dfs)
+        for df in dfs:
+            open_dataframe(df)
 
 
 if __name__ == "__main__":

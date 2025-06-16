@@ -82,11 +82,10 @@ class TestOrtSessionTinyLLM(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         expected = model(**copy.deepcopy(inputs))
 
-        with torch_export_patches(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True, stop_if_static=1):
             if to_onnx:
                 proto = to_onnx(model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=ds)
             else:
-                stop
                 proto = torch.onnx.export(
                     model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=ds, dynamo=True
                 ).model_proto

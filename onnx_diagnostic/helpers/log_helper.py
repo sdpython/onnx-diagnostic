@@ -1,8 +1,130 @@
+import datetime
+import glob
+import os
 import re
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple
+import zipfile
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 from .helper import string_sig
 import pandas
 from pandas.api.types import is_numeric_dtype
+
+
+def enumerate_csv_files(
+    data: Union[
+        pandas.DataFrame, List[Union[str, Tuple[str, str]]], str, Tuple[str, str, str, str]
+    ],
+    verbose: int = 0,
+) -> Iterator[Union[pandas.DataFrame, str, Tuple[str, str, str, str]]]:
+    """
+    Enumerates files considered for the aggregation.
+    Only csv files are considered.
+    If a zip file is given, the function digs into the zip files and
+    loops over csv candidates.
+
+    :param data: dataframe with the raw data or a file or list of files
+
+    data can contains:
+    * a dataframe
+    * a string for a filename, zip or csv
+    * a list of string
+    * a tuple
+    """
+    if not isinstance(data, list):
+        data = [data]
+    for itn, filename in enumerate(data):
+        if isinstance(filename, pandas.DataFrame):
+            if verbose:
+                print(f"[enumerate_csv_files] data[{itn}] is a dataframe")
+            yield filename
+            continue
+
+        if isinstance(filename, tuple):
+            # A file in a zipfile
+            if verbose:
+                print(f"[enumerate_csv_files] data[{itn}] is {filename!r}")
+            yield filename
+            continue
+
+        if os.path.exists(filename):
+            ext = os.path.splitext(filename)[-1]
+            if ext == ".csv":
+                # We check the first line is ok.
+                if verbose:
+                    print(f"[enumerate_csv_files] data[{itn}] is a csv file: {filename!r}]")
+                with open(filename, "r", encoding="utf-8") as f:
+                    line = f.readline()
+                    if "~help" in line or (",CMD" not in line and ",DATE" not in line):
+                        continue
+                    dt = datetime.datetime.fromtimestamp(os.stat(filename).st_mtime)
+                    du = dt.strftime("%Y-%m-%d %H:%M:%S")
+                    yield (os.path.split(filename)[-1], du, filename, "")
+                continue
+
+            if ext == ".zip":
+                if verbose:
+                    print(f"[enumerate_csv_files] data[{itn}] is a zip file: {filename!r}]")
+                zf = zipfile.ZipFile(filename, "r")
+                for ii, info in enumerate(zf.infolist()):
+                    name = info.filename
+                    ext = os.path.splitext(name)[-1]
+                    if ext != ".csv":
+                        continue
+                    if verbose:
+                        print(
+                            f"[enumerate_csv_files] data[{itn}][{ii}] is a csv file: {name!r}]"
+                        )
+                    with zf.open(name) as f:
+                        line = f.readline()
+                    yield (
+                        os.path.split(name)[-1],
+                        "%04d-%02d-%02d %02d:%02d:%02d" % info.date_time,
+                        name,
+                        filename,
+                    )
+                zf.close()
+                continue
+
+            raise AssertionError(f"Unexpected format {filename!r}, cannot read it.")
+
+        # filename is a pattern.
+        found = glob.glob(filename)
+        if verbose and not found:
+            print(f"[enumerate_csv_files] unable to find file in {filename!r}")
+        for ii, f in enumerate(found):
+            if verbose:
+                print(f"[enumerate_csv_files] data[{itn}][{ii}] {f!r} from {filename!r}")
+            yield from enumerate_csv_files(f, verbose=verbose)
+
+
+def open_dataframe(
+    data: Union[str, Tuple[str, str, str, str], pandas.DataFrame],
+) -> pandas.DataFrame:
+    """
+    Opens a filename.
+
+    :param data: a dataframe, a filename, a tuple indicating the file is coming
+        from a zip file
+    :return: a dataframe
+    """
+    if isinstance(data, pandas.DataFrame):
+        return data
+    if isinstance(data, str):
+        df = pandas.read_csv(data)
+        df["RAWFILENAME"] = data
+        return df
+    if isinstance(data, tuple):
+        if not data[-1]:
+            df = pandas.read_csv(data[2])
+            df["RAWFILENAME"] = data[2]
+            return df
+        zf = zipfile.ZipFile(data[-1])
+        with zf.open(data[2]) as f:
+            df = pandas.read_csv(f)
+            df["RAWFILENAME"] = f"{data[-1]}/{data[2]}"
+        zf.close()
+        return df
+
+    raise ValueError(f"Unexpected value for data: {data!r}")
 
 
 class CubeViewDef:
