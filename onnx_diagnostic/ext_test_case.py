@@ -1014,7 +1014,7 @@ class ExtTestCase(unittest.TestCase):
                     msg_ = "\n".join(excs)
                     msg = f"{msg}\n{msg_}" if msg else msg_
                     raise AssertionError(f"Found {len(excs)} discrepancies\n{msg}")
-        elif expected.__class__.__name__ == "DynamicCache":
+        elif expected.__class__.__name__ in ("DynamicCache", "StaticCache"):
             atts = {"key_cache", "value_cache"}
             self.assertEqualArrayAny(
                 {k: expected.__dict__.get(k, None) for k in atts},

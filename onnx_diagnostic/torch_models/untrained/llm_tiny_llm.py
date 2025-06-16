@@ -57,13 +57,13 @@ def get_tiny_llm(
     res = get_inputs(
         model,
         conf,
-        dummy_max_token_id=config["vocab_size"],
-        num_hidden_layers=config["num_hidden_layers"],
+        dummy_max_token_id=config["vocab_size"],  # type: ignore[arg-type]
+        num_hidden_layers=config["num_hidden_layers"],  # type: ignore[arg-type]
         batch_size=batch_size,
         sequence_length=sequence_length,
         sequence_length2=sequence_length2,
         dynamic_rope=dynamic_rope,
-        num_key_value_heads=config["num_key_value_heads"],
+        num_key_value_heads=config["num_key_value_heads"],  # type: ignore[arg-type]
         cls_cache="StaticCache" if use_static_cache else "DynamicCache",
     )
 
