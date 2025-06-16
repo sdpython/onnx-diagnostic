@@ -70,6 +70,7 @@ from onnx_diagnostic import doc
 from onnx_diagnostic.helpers.cache_helper import is_cache_dynamic_registered
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 
 
@@ -110,7 +111,7 @@ with torch_export_patches(patch_transformers=True, verbose=10) as modificator:
         untrained_model,
         (),
         kwargs=modificator(cloned_inputs),
-        dynamic_shapes=dynamic_shapes,
+        dynamic_shapes=use_dyn_not_str(dynamic_shapes),
         strict=False,  # mandatory for torch==2.6
     )
     print("It worked:")
@@ -131,7 +132,7 @@ with torch_export_patches(patch_transformers=True, verbose=10) as modificator:
         model,
         (),
         kwargs=modificator(cloned_inputs),
-        dynamic_shapes=dynamic_shapes,
+        dynamic_shapes=use_dyn_not_str(dynamic_shapes),
         strict=False,  # mandatory for torch==2.6
     )
     print("It worked:")

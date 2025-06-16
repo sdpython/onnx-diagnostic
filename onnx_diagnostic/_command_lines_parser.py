@@ -138,7 +138,6 @@ def get_parser_print() -> ArgumentParser:
                 "\n"
             )
         ),
-        formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument("input", type=str, help="onnx model to load")
     return parser
