@@ -1,7 +1,12 @@
 import copy
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, requires_transformers
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    ignore_warnings,
+    requires_transformers,
+    requires_torch,
+)
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -16,6 +21,7 @@ class TestTinyLlm(ExtTestCase):
         model(**inputs)
 
     @ignore_warnings(UserWarning)
+    @requires_torch("2.8")
     def test_tiny_llm_export_dynamic(self):
         data = get_tiny_llm()
         model, inputs = data["model"], data["inputs"]

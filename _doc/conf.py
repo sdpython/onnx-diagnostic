@@ -136,6 +136,7 @@ nitpick_ignore = [
     ("py:class", "transformers.cache_utils.EncoderDecoderCache"),
     ("py:class", "transformers.cache_utils.MambaCache"),
     ("py:class", "transformers.cache_utils.SlidingWindowCache"),
+    ("py:class", "transformers.cache_utils.StaticCache"),
     ("py:class", "transformers.configuration_utils.PretrainedConfig"),
     ("py:class", "transformers.modeling_outputs.BaseModelOutput"),
     ("py:class", "transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding"),
