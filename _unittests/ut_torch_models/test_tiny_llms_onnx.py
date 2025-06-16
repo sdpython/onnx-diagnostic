@@ -97,6 +97,11 @@ class TestTinyLlmOnnx(ExtTestCase):
     @ignore_warnings((UserWarning, DeprecationWarning, FutureWarning))
     @hide_stdout()
     def test_bypass_onnx_export_tiny_llm_official_full(self):
+        try:
+            from experimental_experiment.torch_interpreter import to_onnx
+        except ImportError:
+            to_onnx = None
+
         data = get_tiny_llm()
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         self.assertEqual(
@@ -106,22 +111,25 @@ class TestTinyLlmOnnx(ExtTestCase):
             patch_transformers=True, verbose=1, stop_if_static=1
         ) as modificator:
             new_inputs = modificator(copy.deepcopy(inputs))
-            ep = torch.onnx.export(
-                model,
-                (),
-                kwargs=new_inputs,
-                dynamic_shapes=ds,
-                dynamo=True,
-                optimize=True,
-                report=True,
-                verify=False,
-            )
+            if to_onnx:
+                proto = to_onnx(model, (), kwargs=new_inputs, dynamic_shapes=ds)
+            else:
+                proto = torch.onnx.export(
+                    model,
+                    (),
+                    kwargs=new_inputs,
+                    dynamic_shapes=ds,
+                    dynamo=True,
+                    optimize=True,
+                    report=True,
+                    verify=False,
+                ).model_proto
         # There are some discrepancies with torch==2.6
         if not has_torch("2.7"):
             raise unittest.SkipTest("discrepancies observed with torch<2.7")
         self.assert_onnx_disc(
             inspect.currentframe().f_code.co_name,
-            ep.model_proto,
+            proto,
             model,
             inputs,
             verbose=1,

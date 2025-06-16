@@ -74,8 +74,8 @@ def enumerate_csv_files(
                         print(
                             f"[enumerate_csv_files] data[{itn}][{ii}] is a csv file: {name!r}]"
                         )
-                    with zf.open(name) as f:
-                        line = f.readline()
+                    with zf.open(name) as zzf:
+                        line = zzf.readline()
                     yield (
                         os.path.split(name)[-1],
                         "%04d-%02d-%02d %02d:%02d:%02d" % info.date_time,
