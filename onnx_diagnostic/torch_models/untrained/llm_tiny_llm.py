@@ -50,7 +50,8 @@ def get_tiny_llm(
 
     config.update(**kwargs)
     conf = transformers.LlamaConfig(**config)
-    conf.cache_implementation = "static"
+    if use_static_cache:
+        conf.cache_implementation = "static"
     model = transformers.LlamaForCausalLM(conf)
     model.eval()
 
