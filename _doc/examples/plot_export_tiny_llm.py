@@ -33,6 +33,7 @@ from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.torch_helper import steal_forward
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
+from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
 MODEL_NAME = "arnir0/Tiny-LLM"
@@ -131,7 +132,11 @@ print("result type", string_type(expected_output, with_shape=True))
 
 try:
     ep = torch.export.export(
-        untrained_model, (), kwargs=cloned_inputs, dynamic_shapes=dynamic_shapes, strict=False
+        untrained_model,
+        (),
+        kwargs=cloned_inputs,
+        dynamic_shapes=use_dyn_not_str(dynamic_shapes),
+        strict=False,
     )
     print("It worked:")
     print(ep)
@@ -166,7 +171,11 @@ pprint.pprint(dynamic_shapes)
 
 try:
     ep = torch.export.export(
-        model, (), kwargs=cloned_inputs, dynamic_shapes=dynamic_shapes, strict=False
+        model,
+        (),
+        kwargs=cloned_inputs,
+        dynamic_shapes=use_dyn_not_str(dynamic_shapes),
+        strict=False,
     )
     print("It worked:")
     print(ep)

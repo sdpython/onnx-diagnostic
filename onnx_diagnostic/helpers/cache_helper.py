@@ -141,6 +141,65 @@ else:
         return cache
 
 
+def make_static_cache(
+    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+) -> transformers.cache_utils.DynamicCache:
+    """
+    Creates an instance of :class:`transformers.cache_utils.StaticCache`.
+    :param key_value_pairs: list of pairs of (key, values)
+    :return: :class:`transformers.cache_utils.StaticCache`
+
+    Example:
+
+    .. runpython::
+        :showcode:
+
+        import torch
+        from onnx_diagnostic.helpers import string_type
+        from onnx_diagnostic.helpers.cache_helper import make_static_cache
+
+        n_layers = 2
+        bsize, nheads, slen, dim = 2, 4, 3, 7
+
+        past_key_values = make_static_cache(
+            [
+                (
+                    torch.randn(bsize, nheads, slen, dim),
+                    torch.randn(bsize, nheads, slen, dim),
+                )
+                for i in range(n_layers)
+            ]
+        )
+        print(string_type(past_key_values, with_shape=True))
+    """
+
+    class _config:
+        def __init__(self):
+            self.head_dim = key_value_pairs[0][0].shape[-1]
+            self.num_attention_heads = key_value_pairs[0][0].shape[1]
+            self.num_hidden_layers = len(key_value_pairs)
+
+    cache = transformers.cache_utils.StaticCache(
+        _config(),
+        max_batch_size=key_value_pairs[0][0].shape[0],
+        device=key_value_pairs[0][0].device,
+        dtype=key_value_pairs[0][0].dtype,
+        max_cache_len=key_value_pairs[0][0].shape[2],
+    )
+    for i in range(len(key_value_pairs)):
+        assert cache.key_cache[i].shape == key_value_pairs[i][0].shape, (
+            f"Shape mismatch, expected {cache.key_cache[i].shape}, "
+            f"got {key_value_pairs[i][0].shape}"
+        )
+        cache.key_cache[i][:, :, :, :] = key_value_pairs[i][0]
+        assert cache.value_cache[i].shape == key_value_pairs[i][1].shape, (
+            f"Shape mismatch, expected {cache.value_cache[i].shape}, "
+            f"got {key_value_pairs[i][1].shape}"
+        )
+        cache.value_cache[i][:, :, :, :] = key_value_pairs[i][1]
+    return cache
+
+
 def make_encoder_decoder_cache(
     self_attention_cache: transformers.cache_utils.DynamicCache,
     cross_attention_cache: transformers.cache_utils.DynamicCache,

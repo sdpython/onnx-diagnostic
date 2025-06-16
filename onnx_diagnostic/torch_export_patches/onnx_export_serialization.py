@@ -9,9 +9,11 @@ from transformers.cache_utils import (
     MambaCache,
     EncoderDecoderCache,
     SlidingWindowCache,
+    StaticCache,
 )
 from transformers.modeling_outputs import BaseModelOutput
 from ..helpers import string_type
+from ..helpers.cache_helper import make_static_cache
 
 
 PATCH_OF_PATCHES: Set[Any] = set()
@@ -175,6 +177,13 @@ def serialization_functions(verbose: int = 0) -> Dict[str, Union[Callable, int]]
             flatten_with_keys_sliding_window_cache,
             verbose=verbose,
         ),
+        StaticCache=register_class_serialization(
+            StaticCache,
+            flatten_static_cache,
+            unflatten_static_cache,
+            flatten_with_keys_static_cache,
+            verbose=verbose,
+        ),
     )
 
 
@@ -307,6 +316,34 @@ def unflatten_dynamic_cache(
     for k, v in values.items():
         setattr(cache, k, v)
     return cache
+
+
+##############
+# DynamicCache
+##############
+
+
+def flatten_static_cache(
+    cache: StaticCache,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    """Serializes a :class:`transformers.cache_utils.StaticCache` with python objects."""
+    flat = [("key_cache", cache.key_cache), ("value_cache", cache.value_cache)]
+    return [f[1] for f in flat], [f[0] for f in flat]
+
+
+def flatten_with_keys_static_cache(
+    cache: StaticCache,
+) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
+    """Serializes a :class:`transformers.cache_utils.StaticCache` with python objects."""
+    values, context = flatten_static_cache(cache)
+    return [(torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)], context
+
+
+def unflatten_static_cache(
+    values: List[Any], context: torch.utils._pytree.Context, output_type=None
+) -> StaticCache:
+    """Restores a :class:`transformers.cache_utils.StaticCache` from python objects."""
+    return make_static_cache(list(zip(values[0], values[1])))
 
 
 ####################

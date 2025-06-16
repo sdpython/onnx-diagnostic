@@ -558,7 +558,7 @@ def string_type(
             print(f"[string_type] CACHE1:{type(obj)}")
         return f"MambaCache(conv_states={c}, ssm_states={d})"
 
-    if obj.__class__.__name__ in ("DynamicCache", "SlidingWindowCache"):
+    if obj.__class__.__name__ in {"DynamicCache", "SlidingWindowCache", "StaticCache"}:
         kc = string_type(
             obj.key_cache,
             with_shape=with_shape,
@@ -857,7 +857,7 @@ def flatten_object(x: Any, drop_keys: bool = False) -> Any:
             return flatten_object(list(x.values()), drop_keys=drop_keys)
         return flatten_object(list(x.items()), drop_keys=drop_keys)
 
-    if x.__class__.__name__ == "DynamicCache":
+    if x.__class__.__name__ in {"DynamicCache", "StaticCache"}:
         res = flatten_object(x.key_cache) + flatten_object(x.value_cache)
         return tuple(res)
     if x.__class__.__name__ == "EncoderDecoderCache":
@@ -1424,10 +1424,37 @@ def max_diff(
             f"level={level}"
         )
 
+    if expected.__class__.__name__ == "StaticCache":
+        if got.__class__.__name__ == "StaticCache":
+            if verbose >= 6:
+                print(f"[max_diff] StaticCache: {string_type(expected)} ? {string_type(got)}")
+            return max_diff(
+                [expected.key_cache, expected.value_cache],
+                [got.key_cache, got.value_cache],
+                verbose=verbose,
+                hist=hist,
+            )
+        if isinstance(got, tuple) and len(got) == 2:
+            return max_diff(
+                [expected.key_cache, expected.value_cache],
+                [got[0], got[1]],
+                debug_info=_debug(expected.__class__.__name__),
+                **_dkws,
+            )
+        raise AssertionError(
+            f"StaticCache not fully implemented with classes "
+            f"{expected.__class__.__name__!r} and {got.__class__.__name__!r}, "
+            f"and expected={string_type(expected)}, got={string_type(got)},\n"
+            f"level={level}"
+        )
+
     if expected.__class__.__name__ == "SlidingWindowCache":
         if got.__class__.__name__ == "SlidingWindowCache":
             if verbose >= 6:
-                print(f"[max_diff] DynamicCache: {string_type(expected)} ? {string_type(got)}")
+                print(
+                    f"[max_diff] SlidingWindowCache: "
+                    f"{string_type(expected)} ? {string_type(got)}"
+                )
             return max_diff(
                 [expected.key_cache, expected.value_cache],
                 [got.key_cache, got.value_cache],

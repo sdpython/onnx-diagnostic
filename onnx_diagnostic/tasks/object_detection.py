@@ -41,6 +41,9 @@ def get_inputs(
     :param input_height: input height
     :return: dictionary
     """
+    assert (
+        "cls_cache" not in kwargs
+    ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     assert isinstance(
         input_width, int
     ), f"Unexpected type for input_width {type(input_width)}{config}"

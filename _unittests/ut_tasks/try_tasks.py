@@ -99,6 +99,35 @@ class TestHuggingFaceHubModel(ExtTestCase):
         print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
 
     @never_test()
+    def test_text2text_generation_static(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k text2t
+
+        import torch
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+
+        tokenizer = AutoTokenizer.from_pretrained("arnir0/Tiny-LLM")
+        model = AutoModelForCausalLM.from_pretrained("arnir0/Tiny-LLM")
+
+        text = "def greet(user): print(f'hello <extra_id_0>!')"
+        input_ids = tokenizer(text, return_tensors="pt").input_ids
+        mask = (
+            torch.tensor([1 for i in range(input_ids.shape[1])])
+            .to(torch.int64)
+            .reshape((1, -1))
+        )
+
+        # simply generate a single sequence
+        print()
+        with steal_forward(model):
+            generated_ids = model.generate(
+                input_ids=input_ids,
+                attention_mask=mask,
+                max_new_tokens=117,
+                cache_implementation="static",
+            )
+        print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
+
+    @never_test()
     def test_text_generation_phi4_mini(self):
         # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k phi4_mini
 

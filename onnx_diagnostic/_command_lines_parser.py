@@ -7,17 +7,16 @@ import textwrap
 import onnx
 from typing import Any, Dict, List, Optional, Union
 from argparse import ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
-from textwrap import dedent
 
 
 def get_parser_lighten() -> ArgumentParser:
     parser = ArgumentParser(
         prog="lighten",
-        description=dedent(
+        description=textwrap.dedent(
             """
-        Removes the weights from a heavy model, stores statistics to restore
-        random weights.
-        """
+            Removes the weights from a heavy model, stores statistics to restore
+            random weights.
+            """
         ),
         epilog="This is mostly used to write unit tests without adding "
         "a big onnx file to the repository.",
@@ -70,11 +69,11 @@ def _cmd_lighten(argv: List[Any]):
 def get_parser_unlighten() -> ArgumentParser:
     parser = ArgumentParser(
         prog="unlighten",
-        description=dedent(
+        description=textwrap.dedent(
             """
-        Restores random weights for a model reduces with command lighten,
-        the command expects to find a file nearby with extension '.stats'.
-        """
+            Restores random weights for a model reduces with command lighten,
+            the command expects to find a file nearby with extension '.stats'.
+            """
         ),
         epilog="This is mostly used to write unit tests without adding "
         "a big onnx file to the repository.",
@@ -120,11 +119,7 @@ def _cmd_unlighten(argv: List[Any]):
 def get_parser_print() -> ArgumentParser:
     parser = ArgumentParser(
         prog="print",
-        description=dedent(
-            """
-        Prints the model on the standard output.
-        """
-        ),
+        description="Prints the model on the standard output.",
         epilog="To show a model.",
         formatter_class=RawTextHelpFormatter,
     )
@@ -171,11 +166,11 @@ def _cmd_print(argv: List[Any]):
 def get_parser_find() -> ArgumentParser:
     parser = ArgumentParser(
         prog="find",
-        description=dedent(
+        description=textwrap.dedent(
             """
-        Look into a model and search for a set of names,
-        tells which node is consuming or producing it.
-        """
+            Look into a model and search for a set of names,
+            tells which node is consuming or producing it.
+            """
         ),
         epilog="Enables Some quick validation.",
     )
@@ -191,8 +186,8 @@ def get_parser_find() -> ArgumentParser:
         "--names",
         type=str,
         required=False,
-        help="names to look at comma separated values, if 'SHADOW', "
-        "search for shadowing names",
+        help="Names to look at comma separated values, if 'SHADOW', "
+        "search for shadowing names.",
     )
     parser.add_argument(
         "-v",
@@ -206,7 +201,7 @@ def get_parser_find() -> ArgumentParser:
         "--v2",
         default=False,
         action=BooleanOptionalAction,
-        help="use enumerate_results instead of onnx_find",
+        help="Uses enumerate_results instead of onnx_find.",
     )
     return parser
 
@@ -235,12 +230,13 @@ def _cmd_find(argv: List[Any]):
 def get_parser_config() -> ArgumentParser:
     parser = ArgumentParser(
         prog="config",
-        description=dedent(
+        description=textwrap.dedent(
             """
-        Prints out a configuration for a model id,
-        prints the associated task as well.
-        """
+            Prints out a configuration for a model id,
+            prints the associated task as well.
+            """
         ),
+        formatter_class=RawTextHelpFormatter,
         epilog="",
     )
     parser.add_argument(
@@ -248,29 +244,29 @@ def get_parser_config() -> ArgumentParser:
         "--mid",
         type=str,
         required=True,
-        help="model id, usually <author>/<name>",
+        help="model id, usually `<author>/<name>`",
     )
     parser.add_argument(
         "-t",
         "--task",
         default=False,
         action=BooleanOptionalAction,
-        help="displays the task as well",
+        help="Displays the task as well.",
     )
     parser.add_argument(
         "-c",
         "--cached",
         default=True,
         action=BooleanOptionalAction,
-        help="uses cached configuration, only available for some of them, "
-        "mostly for unit test purposes",
+        help="Uses cached configuration, only available for some of them,\n"
+        "mostly for unit test purposes.",
     )
     parser.add_argument(
         "--mop",
         metavar="KEY=VALUE",
         nargs="*",
         help="Additional model options, use to change some parameters of the model, "
-        "example: --mop attn_implementation=eager",
+        "example:\n  --mop attn_implementation=sdpa or --mop attn_implementation=eager",
         action=_ParseDict,
     )
     return parser
@@ -329,15 +325,16 @@ class _ParseDict(argparse.Action):
 
 def get_parser_validate() -> ArgumentParser:
     parser = ArgumentParser(
-        prog="test",
-        description=dedent(
+        prog="validate",
+        description=textwrap.dedent(
             """
-        Prints out dummy inputs for a particular task or a model id.
-        If both mid and task are empty, the command line displays the list
-        of supported tasks.
-        """
+            Prints out dummy inputs for a particular task or a model id.
+            If both mid and task are empty, the command line displays the list
+            of supported tasks.
+            """
         ),
         epilog="If the model id is specified, one untrained version of it is instantiated.",
+        formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument("-m", "--mid", type=str, help="model id, usually <author>/<name>")
     parser.add_argument("-t", "--task", default=None, help="force the task to use")
@@ -348,62 +345,61 @@ def get_parser_validate() -> ArgumentParser:
         "--run",
         default=False,
         action=BooleanOptionalAction,
-        help="runs the model to check it runs",
+        help="Runs the model to check it runs.",
     )
     parser.add_argument(
         "-q",
         "--quiet",
         default=False,
         action=BooleanOptionalAction,
-        help="catches exception, report them in the summary",
+        help="Catches exception, reports them in the summary.",
     )
     parser.add_argument(
         "--patch",
         default=True,
         action=BooleanOptionalAction,
-        help="applies patches before exporting",
+        help="Applies patches before exporting.",
     )
     parser.add_argument(
         "--rewrite",
         default=True,
         action=BooleanOptionalAction,
-        help="applies rewrite before exporting",
+        help="Applies rewrite before exporting.",
     )
     parser.add_argument(
         "--stop-if-static",
         default=0,
         type=int,
-        help="raises an exception if a dynamic dimension becomes static",
+        help="Raises an exception if a dynamic dimension becomes static.",
     )
     parser.add_argument(
         "--trained",
         default=False,
         action=BooleanOptionalAction,
-        help="validate the trained model (requires downloading)",
+        help="Validates the trained model (requires downloading).",
     )
     parser.add_argument(
         "--inputs2",
         default=True,
         action=BooleanOptionalAction,
-        help="if run is on, the command lines validates the model on a "
-        "second set of inputs to check the exported model supports dynamism",
+        help="Validates the model on a second set of inputs\n"
+        "to check the exported model supports dynamism.",
     )
     parser.add_argument(
         "--runtime",
         choices=["onnxruntime", "torch", "ref"],
         default="onnxruntime",
-        help="onnx runtime to use, onnxruntime by default",
+        help="onnx runtime to use, `onnxruntime` by default",
     )
     parser.add_argument(
         "-o",
         "--dump-folder",
-        help="if not empty, a folder is created to dumps statistics, "
-        "exported program, onnx...",
+        help="A folder is created to dumps statistics,\nexported program, onnx...",
     )
     parser.add_argument(
         "--drop",
-        help="drops the following inputs names, it should be a list "
-        "with comma separated values",
+        help="Drops the following inputs names, it should be a list\n"
+        "with comma separated values.",
     )
     parser.add_argument(
         "--opset",
@@ -413,24 +409,25 @@ def get_parser_validate() -> ArgumentParser:
     )
     parser.add_argument(
         "--subfolder",
-        help="subfolder where to find the model and the configuration",
+        help="Subfolder where to find the model and the configuration.",
     )
     parser.add_argument(
         "--ortfusiontype",
         required=False,
-        help="applies onnxruntime fusion, this parameter should contain the "
-        "model type or multiple values separated by `|`. `ALL` can be used "
-        "to run them all",
+        help="Applies onnxruntime fusion, this parameter should contain the\n"
+        "model type or multiple values separated by `|`. `ALL` can be used\n"
+        "to run them all.",
     )
     parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
-    parser.add_argument("--dtype", help="changes dtype if necessary")
-    parser.add_argument("--device", help="changes the device if necessary")
+    parser.add_argument("--dtype", help="Changes dtype if necessary.")
+    parser.add_argument("--device", help="Changes the device if necessary.")
     parser.add_argument(
         "--iop",
         metavar="KEY=VALUE",
         nargs="*",
-        help="Additional input options, use to change the default "
-        "inputs use to export, example: --iop cls_cache=SlidingWindowCache",
+        help="Additional input options, use to change the default"
+        "inputs use to export, example:\n  --iop cls_cache=SlidingWindowCache"
+        "\n  --iop cls_cache=StaticCache",
         action=_ParseDict,
     )
     parser.add_argument(
@@ -438,8 +435,8 @@ def get_parser_validate() -> ArgumentParser:
         metavar="KEY=VALUE",
         nargs="*",
         help="Additional model options, use to change some parameters of the model, "
-        "example: ``--mop attn_implementation=eager`` or "
-        "``--mop \"rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}\"``",
+        "example:\n  --mop attn_implementation=sdpa --mop attn_implementation=eager\n  "
+        "--mop \"rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}\"",
         action=_ParseDict,
     )
     parser.add_argument(
@@ -519,11 +516,7 @@ def _cmd_validate(argv: List[Any]):
 def get_parser_stats() -> ArgumentParser:
     parser = ArgumentParser(
         prog="stats",
-        description=dedent(
-            """
-        Prints out statistics on an ONNX model.
-        """
-        ),
+        description="Prints out statistics on an ONNX model.",
         epilog="",
     )
     parser.add_argument(
@@ -570,8 +563,8 @@ def get_parser_stats() -> ArgumentParser:
         required=False,
         default="",
         type=str,
-        help="keeps only tensors whose name verifies "
-        "this regular expression, empty = no filter",
+        help="Keeps only tensors whose name verifies "
+        "this regular expression, empty = no filter.",
     )
     return parser
 
@@ -623,17 +616,17 @@ def get_main_parser() -> ArgumentParser:
         formatter_class=RawTextHelpFormatter,
         epilog=textwrap.dedent(
             """
-        Type 'python -m onnx_diagnostic <cmd> --help'
-        to get help for a specific command.
+            Type 'python -m onnx_diagnostic <cmd> --help'
+            to get help for a specific command.
 
-        config     - prints a configuration for a model id
-        find       - find node consuming or producing a result
-        lighten    - makes an onnx model lighter by removing the weights,
-        unlighten  - restores an onnx model produces by the previous experiment
-        print      - prints the model on standard output
-        validate   - validate a model
-        stats      - produces statistics on a model
-        """
+            config     - prints a configuration for a model id
+            find       - find node consuming or producing a result
+            lighten    - makes an onnx model lighter by removing the weights,
+            unlighten  - restores an onnx model produces by the previous experiment
+            print      - prints the model on standard output
+            validate   - validate a model
+            stats      - produces statistics on a model
+            """
         ),
     )
     parser.add_argument(

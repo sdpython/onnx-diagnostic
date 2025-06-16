@@ -52,6 +52,9 @@ def get_inputs(
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :return: dictionary
     """
+    assert (
+        "cls_cache" not in kwargs
+    ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
     cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)

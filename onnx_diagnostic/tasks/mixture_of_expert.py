@@ -61,6 +61,9 @@ def get_inputs(
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :return: dictionary
     """
+    assert (
+        "cls_cache" not in kwargs
+    ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     assert not add_second_input, "add_second_input=True not yet implemented"
     raise NotImplementedError(f"get_inputs not yet implemented for task {__TASK__!r}.")
 

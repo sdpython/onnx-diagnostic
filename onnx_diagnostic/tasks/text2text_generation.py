@@ -64,6 +64,9 @@ def get_inputs(
         decoder_input_ids:T7s1x1,
         encoder_outputs:dict(last_hidden_state:T1s1x16x512)
     """
+    assert (
+        "cls_cache" not in kwargs
+    ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
     cache_length = "cache_length_key"  # torch.export.Dim("cache_length", min=1, max=4096)
