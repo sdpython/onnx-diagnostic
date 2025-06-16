@@ -102,7 +102,9 @@ class TestTinyLlmOnnx(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with torch_export_patches(patch_transformers=True, verbose=1) as modificator:
+        with torch_export_patches(
+            patch_transformers=True, verbose=1, stop_if_static=1
+        ) as modificator:
             new_inputs = modificator(copy.deepcopy(inputs))
             ep = torch.onnx.export(
                 model,

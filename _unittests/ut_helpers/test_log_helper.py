@@ -58,6 +58,13 @@ class TestLogHelper(ExtTestCase):
         self.assertEqual(set(cube.columns), {*df.columns, "speedup"})
 
     @hide_stdout()
+    def test_cube_logs_load_dfdf(self):
+        df = self.df1()
+        cube = CubeLogs([df, df], recent=True)
+        cube.load(verbose=1)
+        self.assertEqual((3, 10), cube.shape)
+
+    @hide_stdout()
     def test_cube_logs_load_list(self):
         cube = CubeLogs(
             [
@@ -173,6 +180,11 @@ class TestLogHelper(ExtTestCase):
         self.assertNotEmpty(dfs)
         for df in dfs:
             open_dataframe(df)
+
+        cube = CubeLogs(data, recent=True)
+        cube.load(verbose=1)
+        self.assertEqual((3, 11), cube.shape)
+        self.assertIn("RAWFILENAME", cube.data.columns)
 
 
 if __name__ == "__main__":

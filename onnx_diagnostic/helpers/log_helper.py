@@ -4,9 +4,10 @@ import os
 import re
 import zipfile
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple, Union
-from .helper import string_sig
+import numpy as np
 import pandas
 from pandas.api.types import is_numeric_dtype
+from .helper import string_sig
 
 
 def enumerate_csv_files(
@@ -197,6 +198,27 @@ class CubeLogs:
             if verbose:
                 print(f"[CubeLogs.load] load from list of dicts, n={len(self._data)}")
             self.data = pandas.DataFrame(self._data)
+        elif isinstance(self._data, list) and all(
+            isinstance(r, pandas.DataFrame) for r in self._data
+        ):
+            if verbose:
+                print(f"[CubeLogs.load] load from list of DataFrame, n={len(self._data)}")
+            self.data = pandas.concat(self._data, axis=0)
+        elif isinstance(self._data, list):
+            cubes = []
+            for item in enumerate_csv_files(self._data, verbose=verbose):
+                df = open_dataframe(item)
+                cube = CubeLogs(
+                    df,
+                    time=self._time,
+                    keys=self._keys,
+                    values=self._values,
+                    ignored=self._ignored,
+                    recent=self.recent,
+                )
+                cube.load()
+                cubes.append(cube.data)
+            self.data = pandas.concat(cubes, axis=0)
         else:
             raise NotImplementedError(
                 f"Not implemented with the provided data (type={type(self._data)})"
@@ -281,16 +303,25 @@ class CubeLogs:
         last = self.values[0]
         gr = self.data[[self.time, *self.keys, last]].groupby([self.time, *self.keys]).count()
         gr = gr[gr[last] > 1]
-        assert gr.shape[0] == 0, f"There are duplicated rows:\n{gr}"
         if self.recent:
-            gr = self.data[[*self.keys, self.time]].groupby(self.keys, as_index=False).max()
-            filtered = pandas.merge(self.data, gr, on=[self.time, *self.keys])
+            cp = self.data.copy()
+            assert (
+                "__index__" not in cp.columns
+            ), f"'__index__' should not be a column in {cp.columns}"
+            cp["__index__"] = np.arange(cp.shape[0])
+            gr = (
+                cp[[*self.keys, self.time, "__index__"]]
+                .groupby(self.keys, as_index=False)
+                .max()
+            )
+            filtered = pandas.merge(cp, gr, on=[self.time, "__index__", *self.keys])
             assert filtered.shape[0] <= self.data.shape[0], (
                 f"Keeping the latest row brings more row {filtered.shape} "
                 f"(initial is {self.data.shape})."
             )
-            self.data = filtered
+            self.data = filtered.drop("__index__", axis=1)
         else:
+            assert gr.shape[0] == 0, f"There are duplicated rows:\n{gr}"
             gr = self.data[[*self.keys, self.time]].groupby(self.keys).count()
             gr = gr[gr[self.time] > 1]
             assert (
