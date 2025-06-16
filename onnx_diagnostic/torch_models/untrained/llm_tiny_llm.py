@@ -1,7 +1,5 @@
 from typing import Any, Dict
-import torch
 import transformers
-from ...helpers.cache_helper import make_dynamic_cache
 
 
 def get_tiny_llm(
@@ -9,6 +7,7 @@ def get_tiny_llm(
     sequence_length: int = 30,
     sequence_length2: int = 3,
     dynamic_rope: bool = False,
+    use_static_cache: bool = False,
     **kwargs,
 ) -> Dict[str, Any]:
     """
@@ -18,11 +17,14 @@ def get_tiny_llm(
     :param sequence_length: sequence length
     :param sequence_length2: new sequence length
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
+    :param use_static_cache: use StaticCache instead of DynamicCache
     :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
     :return: dictionary
 
     See :ref:`l-plot-tiny-llm-export` or :ref:`l-plot-tiny-llm-export-patched` for examples.
     """
+    from ...tasks.text_generation import get_inputs
+
     config = {
         "architectures": ["LlamaForCausalLM"],
         "bos_token_id": 1,
@@ -48,56 +50,26 @@ def get_tiny_llm(
 
     config.update(**kwargs)
     conf = transformers.LlamaConfig(**config)
+    conf.cache_implementation = "static"
     model = transformers.LlamaForCausalLM(conf)
     model.eval()
 
-    # now the inputs
-    cache_last_dim = 96
-    max_token_id = config["vocab_size"] - 1
-    n_layers = config["num_hidden_layers"]
-    num_key_value_heads = config["num_key_value_heads"]
-
-    batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = torch.export.Dim("seq_length", min=1, max=8192)
-    cache_length = torch.export.Dim("cache_length", min=1, max=8192)
-
-    shapes = {
-        "input_ids": {0: batch, 1: seq_length},
-        "attention_mask": {
-            0: batch,
-            1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
-        },
-        "position_ids": {
-            0: batch,
-            1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
-        },
-        "past_key_values": [
-            [{0: batch, 2: cache_length} for _ in range(n_layers)],
-            [{0: batch, 2: cache_length} for _ in range(n_layers)],
-        ],
-    }
-    inputs = dict(
-        input_ids=torch.randint(0, max_token_id, (batch_size, sequence_length2)).to(
-            torch.int64
-        ),
-        attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
-            torch.int64
-        ),
-        position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
-        .to(torch.int64)
-        .expand((batch_size, -1)),
-        past_key_values=make_dynamic_cache(
-            [
-                (
-                    torch.randn(
-                        batch_size, num_key_value_heads, sequence_length, cache_last_dim
-                    ),
-                    torch.randn(
-                        batch_size, num_key_value_heads, sequence_length, cache_last_dim
-                    ),
-                )
-                for i in range(n_layers)
-            ]
-        ),
+    res = get_inputs(
+        model,
+        conf,
+        dummy_max_token_id=config["vocab_size"],
+        num_hidden_layers=config["num_hidden_layers"],
+        batch_size=batch_size,
+        sequence_length=sequence_length,
+        sequence_length2=sequence_length2,
+        dynamic_rope=dynamic_rope,
+        num_key_value_heads=config["num_key_value_heads"],
+        cls_cache="StaticCache" if use_static_cache else "DynamicCache",
     )
-    return dict(inputs=inputs, model=model, dynamic_shapes=shapes, configuration=conf)
+
+    return dict(
+        inputs=res["inputs"],
+        model=model,
+        dynamic_shapes=res["dynamic_shapes"],
+        configuration=conf,
+    )

@@ -35,6 +35,9 @@ def get_inputs(
         token_type_ids:T7s1x13[0,0:A0.0],
         attention_mask:T7s1x13[1,1:A1.0])
     """
+    assert (
+        "cls_cache" not in kwargs
+    ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = "sequence_length"
     shapes = {

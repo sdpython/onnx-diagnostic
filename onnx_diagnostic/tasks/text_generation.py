@@ -5,6 +5,7 @@ from ..helpers.cache_helper import (
     make_dynamic_cache,
     make_mamba_cache,
     make_sliding_window_cache,
+    make_static_cache,
 )
 from ..helpers.config_helper import update_config, check_hasattr, _pick
 
@@ -151,52 +152,98 @@ def get_inputs(
             assert config, "head_dim is None, the value cannot be set without a configuration"
             head_dim = config.hidden_size // config.num_attention_heads
 
-        shapes = {
-            "input_ids": {0: batch, 1: seq_length},
-            "attention_mask": {
-                0: batch,
-                1: "cache+seq",  # cache_length + seq_length
-            },
-            "position_ids": {
-                0: batch,
-                1: "cache+seq",  # cache_length + seq_length
-            },
-            "past_key_values": [
-                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-            ],
+        cache_name = (
+            cls_cache
+            if cls_cache is None or isinstance(cls_cache, str)
+            else cls_cache.__name__
+        )
+        make_caches = {
+            "DynamicCache": make_dynamic_cache,
+            "SlidingWindowCache": make_sliding_window_cache,
+            "StaticCache": make_static_cache,
         }
-
-        make_cache = (
-            make_sliding_window_cache
-            if cls_cache in ("SlidingWindowCache", transformers.cache_utils.SlidingWindowCache)
-            else make_dynamic_cache
+        assert cache_name is None or cache_name in make_caches, (
+            f"Unable to handle cls_cache={cache_name!r}, it should be in "
+            f"{sorted(make_caches)}"
         )
+        make_cache = make_dynamic_cache if cache_name is None else make_caches[cache_name]
+        is_static = cache_name == "StaticCache"
 
-        inputs = dict(
-            input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
-                torch.int64
-            ),
-            attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
-                torch.int64
-            ),
-            position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
-            .to(torch.int64)
-            .expand((batch_size, -1)),
-            past_key_values=make_cache(
-                [
-                    (
-                        torch.randn(
-                            batch_size, num_key_value_heads, sequence_length, head_dim
-                        ),
-                        torch.randn(
-                            batch_size, num_key_value_heads, sequence_length, head_dim
-                        ),
-                    )
-                    for i in range(num_hidden_layers)
-                ]
-            ),
-        )
+        if is_static:
+            # static
+            shapes = {
+                "input_ids": {0: batch, 1: seq_length},
+                "attention_mask": {0: batch, 2: "seq"},
+                "cache_position": {1: "seq"},
+                "past_key_values": [
+                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                ],
+            }
+            inputs = dict(
+                input_ids=torch.randint(
+                    0, dummy_max_token_id, (batch_size, sequence_length2)
+                ).to(torch.int64),
+                attention_mask=torch.ones(
+                    (batch_size, num_key_value_heads, sequence_length2, head_dim)
+                ).to(torch.bool),
+                cache_position=torch.arange(sequence_length2).to(torch.int64),
+                past_key_values=make_cache(
+                    [
+                        (
+                            torch.randn(
+                                batch_size, num_key_value_heads, sequence_length, head_dim
+                            ),
+                            torch.randn(
+                                batch_size, num_key_value_heads, sequence_length, head_dim
+                            ),
+                        )
+                        for i in range(num_hidden_layers)
+                    ]
+                ),
+            )
+        else:
+            # dynamic
+            shapes = {
+                "input_ids": {0: batch, 1: seq_length},
+                "attention_mask": {
+                    0: batch,
+                    1: "cache+seq",  # cache_length + seq_length
+                },
+                "position_ids": {
+                    0: batch,
+                    1: "cache+seq",  # cache_length + seq_length
+                },
+                "past_key_values": [
+                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                ],
+            }
+
+            inputs = dict(
+                input_ids=torch.randint(
+                    0, dummy_max_token_id, (batch_size, sequence_length2)
+                ).to(torch.int64),
+                attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
+                    torch.int64
+                ),
+                position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
+                .to(torch.int64)
+                .expand((batch_size, -1)),
+                past_key_values=make_cache(
+                    [
+                        (
+                            torch.randn(
+                                batch_size, num_key_value_heads, sequence_length, head_dim
+                            ),
+                            torch.randn(
+                                batch_size, num_key_value_heads, sequence_length, head_dim
+                            ),
+                        )
+                        for i in range(num_hidden_layers)
+                    ]
+                ),
+            )
         res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
         res["inputs2"] = get_inputs(

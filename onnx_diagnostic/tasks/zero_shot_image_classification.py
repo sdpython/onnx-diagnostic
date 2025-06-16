@@ -55,6 +55,9 @@ def get_inputs(
     # attention_mask:T7s2x7
     # pixel_values:T1s2x3x224x224
     """
+    assert (
+        "cls_cache" not in kwargs
+    ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     assert isinstance(
         input_width, int
     ), f"Unexpected type for input_width {type(input_width)}{config}"

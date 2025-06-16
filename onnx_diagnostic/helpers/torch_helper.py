@@ -16,6 +16,7 @@ from .cache_helper import (
     make_encoder_decoder_cache,
     make_sliding_window_cache,
     make_mamba_cache,
+    make_static_cache,
 )
 from .mini_onnx_builder import create_onnx_model_from_input_tensors
 from .onnx_helper import (
@@ -727,6 +728,15 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
                 )
             )
         )
+    if value.__class__.__name__ == "StaticCache":
+        return make_static_cache(
+            list(
+                zip(
+                    [t.to(to_value) for t in value.key_cache],
+                    [t.to(to_value) for t in value.value_cache],
+                )
+            )
+        )
     if value.__class__.__name__ == "EncoderDecoderCache":
         return make_encoder_decoder_cache(
             to_any(value.self_attention_cache, to_value),
@@ -773,6 +783,8 @@ def torch_deepcopy(value: Any) -> Any:
         return make_dynamic_cache(
             torch_deepcopy(list(zip(value.key_cache, value.value_cache)))
         )
+    if value.__class__.__name__ == "StaticCache":
+        return make_static_cache(torch_deepcopy(list(zip(value.key_cache, value.value_cache))))
     if value.__class__.__name__ == "SlidingWindowCache":
         return make_sliding_window_cache(
             torch_deepcopy(list(zip(value.key_cache, value.value_cache)))
