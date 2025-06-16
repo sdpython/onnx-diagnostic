@@ -73,16 +73,23 @@ class TestOrtSessionTinyLLM(ExtTestCase):
     @ignore_warnings((UserWarning, DeprecationWarning, FutureWarning))
     @hide_stdout()
     def test_check_allruntimes_on_tiny_llm(self):
+        try:
+            from experimental_experiment.torch_interpreter import to_onnx
+        except ImportError:
+            to_onnx = None
+
         data = get_tiny_llm()
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         expected = model(**copy.deepcopy(inputs))
 
-        with torch_export_patches(patch_transformers=True):
-            ep = torch.onnx.export(
-                model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=ds, dynamo=True
-            )
+        with torch_export_patches(patch_transformers=True, stop_if_static=1):
+            if to_onnx:
+                proto = to_onnx(model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=ds)
+            else:
+                proto = torch.onnx.export(
+                    model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=ds, dynamo=True
+                ).model_proto
 
-        proto = ep.model_proto
         self.dump_onnx("test_check_allruntimes_on_tiny_llm.onnx", proto)
         feeds = make_feeds(proto, inputs, use_numpy=True, copy=True)
         sess = onnxruntime.InferenceSession(
