@@ -368,8 +368,8 @@ class CubeLogs:
         sheet = writer.sheets[name]
         n_rows = df.shape[0] + df.columns.nlevels + df.index.nlevels
         n_cols = df.shape[1] + df.index.nlevels
-        co = {}
-        sizes = {}
+        co: Dict[int, int] = {}
+        sizes: Dict[int, int] = {}
         cols = set()
         for i in range(1, n_rows):
             for j, cell in enumerate(sheet[i]):
