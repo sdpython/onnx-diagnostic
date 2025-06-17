@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.7.1
++++++
+
+* :pr:`151`: adds command line ``agg``
+
 0.7.0
 +++++
 
