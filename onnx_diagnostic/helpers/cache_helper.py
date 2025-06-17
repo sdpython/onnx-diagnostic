@@ -1,11 +1,15 @@
-from typing import Any, List, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 import packaging.version as pv
 import torch
 import transformers
 import transformers.cache_utils
 
 
-def flatten_unflatten_for_dynamic_shapes(obj: Any, use_dict: bool = False) -> Any:
+def flatten_unflatten_for_dynamic_shapes(
+    obj: Any,
+    use_dict: bool = False,
+    change_function: Optional[Callable[[torch.Tensor], Any]] = None,
+) -> Any:
     """
     Returns the object in a different structure similar to what
     the definition of the dynamic shapes should use.
@@ -16,10 +20,12 @@ def flatten_unflatten_for_dynamic_shapes(obj: Any, use_dict: bool = False) -> An
         the context gives the dictionary keys but it is not expressed
         in the dynamic shapes, these specifications seems to be different
         for the strict and non strict mode.
+    :param change_function: to modifies the tensor in the structure itself,
+        like replace them by a shape
     :return: the serialized object
     """
     if isinstance(obj, torch.Tensor):
-        return obj
+        return change_function(obj) if change_function else obj
     flat, spec = torch.utils._pytree.tree_flatten(obj)
     start = 0
     end = 0
@@ -27,7 +33,9 @@ def flatten_unflatten_for_dynamic_shapes(obj: Any, use_dict: bool = False) -> An
     for subspec in spec.children_specs:
         end += subspec.num_leaves
         value = subspec.unflatten(flat[start:end])
-        value = flatten_unflatten_for_dynamic_shapes(value, use_dict=use_dict)
+        value = flatten_unflatten_for_dynamic_shapes(
+            value, use_dict=use_dict, change_function=change_function
+        )
         subtrees.append(value)
         start = end
     if use_dict and (spec.type is dict or spec.context):

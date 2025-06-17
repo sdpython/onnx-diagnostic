@@ -211,8 +211,9 @@ The function replaces dynamic dimensions defined as strings by
 ``torch.export.Dim.DYNAMIC``.
 
 Older versions
-++++++++++++++
+==============
 
+* `0.7.1 <../v0.7.1/index.html>`_
 * `0.7.0 <../v0.7.0/index.html>`_
 * `0.6.3 <../v0.6.3/index.html>`_
 * `0.5.0 <../v0.5.0/index.html>`_

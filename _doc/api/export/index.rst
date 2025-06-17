@@ -6,6 +6,7 @@ onnx_diagnostic.export
     :caption: modules
 
     dynamic_shapes
+    shape_helper
     validate
 
 CoupleInputsDynamicShapes
