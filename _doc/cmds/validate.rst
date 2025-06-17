@@ -121,3 +121,27 @@ of function :func:`onnx_diagnostic.torch_models.validate.run_ort_fusion`.
     from onnx_diagnostic._command_lines_parser import main
 
     main("validate -m arnir0/Tiny-LLM --run -v 1 --export onnx-dynamo -o dump_models --patch --opt ir --ortfusiontype ALL".split())
+
+Sdpa or Eager implementation or Use a StaticCache
++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Add ``--mop cache_implementation=static --iop cls_cache=StaticCache`` to use a StaticCache instead of a DynamicCache (default).
+Add ``--mop attn_implementation=eager`` to explicitely select eager implementation for attention.
+
+.. code-block:: bash
+
+    python -m onnx_diagnostic validate \
+                -m google/gemma-2b \
+                --run \
+                -v 1 \
+                --export custom \
+                -o dump_test \
+                --dtype float16 \
+                --device cpu \
+                --patch \
+                --no-quiet \
+                --opt default \
+                --rewrite \
+                --mop attn_implementation=eager \
+                --mop cache_implementation=static \
+                --iop cls_cache=StaticCache
