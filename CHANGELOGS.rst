@@ -4,6 +4,7 @@ Change Logs
 0.7.0
 +++++
 
+* :pr:`149`: supports for StaticCache
 * :pr:`147`: simplified log processing
 * :pr:`146`: patch for IdeficsAttention, IdeficsEmbedding
 * :pr:`145`: patch for _compute_dynamic_ntk_parameters (Phi3RotaryEmbedding)
