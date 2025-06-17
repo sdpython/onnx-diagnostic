@@ -126,7 +126,7 @@ Sdpa or Eager implementation or Use a StaticCache
 +++++++++++++++++++++++++++++++++++++++++++++++++
 
 Add ``--mop cache_implementation=static --iop cls_cache=StaticCache`` to use a StaticCache instead of a DynamicCache (default).
-Add ``--mop attn_implementation=eager`` to explicitely select eager implementation for attention.
+Add ``--mop attn_implementation=eager`` to explicitly select eager implementation for attention.
 
 .. code-block:: bash
 
