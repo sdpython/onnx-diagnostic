@@ -312,6 +312,11 @@ class CubeLogs:
             print(f"[CubeLogs.load] done, shape={self.shape}")
         return self
 
+    def _process_formula(
+        self, formula: Union[str, Callable[[pandas.DataFrame], pandas.Series]]
+    ) -> Callable[[pandas.DataFrame], pandas.Series]:
+        return formula
+
     @property
     def shape(self) -> Tuple[int, int]:
         "Returns the shape."
@@ -650,14 +655,28 @@ class CubeLogsPerformance(CubeLogs):
     def __init__(
         self,
         data: Any,
-        time: str = "date",
-        keys: Sequence[str] = ("version_.*", "model_.*"),
-        values: Sequence[str] = ("time_.*", "disc_.*", "ERR_.*"),
-        ignored: Sequence[str] = (),
-        recent: bool = False,
+        time: str = "DATE",
+        keys: Sequence[str] = (
+            "^version_.*",
+            "^model_.*",
+            "providers",
+            "opt_patterns",
+            "suite",
+            "memory_peak",
+            "machine",
+            "exporter",
+            "dynamic",
+            "rtopt",
+            "dtype",
+            "device",
+            "architecture",
+        ),
+        values: Sequence[str] = ("^time_.*", "^disc.*", "^ERR_.*", "CMD", "^ITER"),
+        ignored: Sequence[str] = ("version_python",),
+        recent: bool = True,
         formulas: Optional[
             Dict[str, Union[str, Callable[[pandas.DataFrame], pandas.Series]]]
-        ] = None,
+        ] = ("speedup", "bucket[speedup]", "ERR1"),
     ):
         self._data = data
         self._time = time
@@ -665,7 +684,7 @@ class CubeLogsPerformance(CubeLogs):
         self._values = values
         self._ignored = ignored
         self.recent = recent
-        self._formulas = formulas
+        self._formulas = formulas  # type: ignore[assignment]
 
     def _process_formula(
         self, formula: Union[str, Callable[[pandas.DataFrame], pandas.Series]]
@@ -793,7 +812,7 @@ class CubeLogsPerformance(CubeLogs):
                 ),
                 ignore_unique=True,
                 key_agg=["model_name"],
-                agg_args="mean"
+                agg_args="mean",
             )
         if name == "disc":
             return CubeViewDef(
