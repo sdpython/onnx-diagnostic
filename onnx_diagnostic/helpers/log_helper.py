@@ -1,6 +1,7 @@
 import datetime
 import glob
 import os
+import pprint
 import re
 import zipfile
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple, Union
@@ -15,6 +16,7 @@ def enumerate_csv_files(
         pandas.DataFrame, List[Union[str, Tuple[str, str]]], str, Tuple[str, str, str, str]
     ],
     verbose: int = 0,
+    filtering: Optional[Callable[[str], bool]] = None,
 ) -> Iterator[Union[pandas.DataFrame, str, Tuple[str, str, str, str]]]:
     """
     Enumerates files considered for the aggregation.
@@ -23,6 +25,10 @@ def enumerate_csv_files(
     loops over csv candidates.
 
     :param data: dataframe with the raw data or a file or list of files
+    :param vrbose: verbosity
+    :param filtering: function to filter in or out files in zip files,
+        must return true to keep the file, false to skip it.
+    :return: a generator yielding tuples with the filename, date, full path and zip file
 
     data can contains:
     * a dataframe
@@ -67,8 +73,11 @@ def enumerate_csv_files(
                 zf = zipfile.ZipFile(filename, "r")
                 for ii, info in enumerate(zf.infolist()):
                     name = info.filename
-                    ext = os.path.splitext(name)[-1]
-                    if ext != ".csv":
+                    if filtering is None:
+                        ext = os.path.splitext(name)[-1]
+                        if ext != ".csv":
+                            continue
+                    elif not filtering(name):
                         continue
                     if verbose:
                         print(
@@ -96,7 +105,7 @@ def enumerate_csv_files(
         for ii, f in enumerate(found):
             if verbose:
                 print(f"[enumerate_csv_files] data[{itn}][{ii}] {f!r} from {filename!r}")
-            yield from enumerate_csv_files(f, verbose=verbose)
+            yield from enumerate_csv_files(f, verbose=verbose, filtering=filtering)
 
 
 def open_dataframe(
@@ -241,6 +250,8 @@ class CubeLogs:
             print(f"[CubeLogs.load] ignored={self.ignored}")
             print(f"[CubeLogs.load] ignored_values={self.ignored_values}")
             print(f"[CubeLogs.load] ignored_keys={self.ignored_keys}")
+        assert self.keys, f"No keys found with {self._keys} from {self.data.columns}"
+        assert self.values, f"No values found with {self._values} from {self.data.columns}"
         assert not (
             set(self.keys) & set(self.values)
         ), f"Columns {set(self.keys) & set(self.values)} cannot be keys and values"
@@ -254,7 +265,11 @@ class CubeLogs:
             self.time not in self.keys
             and self.time not in self.values
             and self.time not in self.ignored
-        ), f"Column {self.time!r} is also a key, a value or ignored"
+        ), (
+            f"Column {self.time!r} is also a key, a value or ignored, "
+            f"keys={sorted(self.keys)}, values={sorted(self.values)}, "
+            f"ignored={sorted(self.ignored)}"
+        )
         self._columns = [self.time, *self.keys, *self.values, *self.ignored]
         self.dropped = [c for c in self.data.columns if c not in set(self.columns)]
         self.data = self.data[self.columns]
@@ -262,14 +277,19 @@ class CubeLogs:
             print(f"[CubeLogs.load] dropped={self.dropped}")
             print(f"[CubeLogs.load] data.shape={self.data.shape}")
 
+        shape = self.data.shape
         self._preprocess()
+        assert (
+            self.data.shape[0] > 0
+        ), f"The preprocessing reduced shape {shape} to {self.data.shape}."
         if self.recent and verbose:
             print(f"[CubeLogs.load] keep most recent data.shape={self.data.shape}")
 
         # Let's apply the formulas
         if self._formulas:
-            cols = set(self.data.columns)
-            for k, f in self._formulas.items():
+            cols = set(self.values)
+            for k, ff in self._formulas.items():
+                f = self._process_formula(ff)
                 if k in cols:
                     if verbose:
                         print(f"[CubeLogs.load] skip formula {k!r}")
@@ -277,13 +297,16 @@ class CubeLogs:
                     if verbose:
                         print(f"[CubeLogs.load] apply formula {k!r}")
                     self.data[k] = f(self.data)
-        self.values_for_key = {k: set(self.data[k]) for k in self.keys}
-        nans = [
+                    self.values.append(k)
+                    cols.add(k)
+        self.values_for_key = {k: set(self.data[k].dropna()) for k in self.keys}
+        self.keys_with_nans = [
             c for c in [self.time, *self.keys] if self.data[c].isna().astype(int).sum() > 0
         ]
-        assert not nans, f"The following keys {nans} have nan values. This is not allowed."
         if verbose:
             print(f"[CubeLogs.load] convert column {self.time!r} into date")
+            if self.keys_with_nans:
+                print(f"[CubeLogs.load] keys_with_nans={self.keys_with_nans}")
         self.data[self.time] = pandas.to_datetime(self.data[self.time])
         if verbose:
             print(f"[CubeLogs.load] done, shape={self.shape}")
@@ -303,7 +326,11 @@ class CubeLogs:
 
     def _preprocess(self):
         last = self.values[0]
-        gr = self.data[[self.time, *self.keys, last]].groupby([self.time, *self.keys]).count()
+        gr = (
+            self.data[[self.time, *self.keys, last]]
+            .groupby([self.time, *self.keys], dropna=False)
+            .count()
+        )
         gr = gr[gr[last] > 1]
         if self.recent:
             cp = self.data.copy()
@@ -313,8 +340,12 @@ class CubeLogs:
             cp["__index__"] = np.arange(cp.shape[0])
             gr = (
                 cp[[*self.keys, self.time, "__index__"]]
-                .groupby(self.keys, as_index=False)
+                .groupby(self.keys, as_index=False, dropna=False)
                 .max()
+            )
+            assert gr.shape[0] > 0, (
+                f"Something went wrong after the groupby.\n"
+                f"{cp[[*self.keys, self.time, '__index__']].head().T}"
             )
             filtered = pandas.merge(cp, gr, on=[self.time, "__index__", *self.keys])
             assert filtered.shape[0] <= self.data.shape[0], (
@@ -324,7 +355,7 @@ class CubeLogs:
             self.data = filtered.drop("__index__", axis=1)
         else:
             assert gr.shape[0] == 0, f"There are duplicated rows:\n{gr}"
-            gr = self.data[[*self.keys, self.time]].groupby(self.keys).count()
+            gr = self.data[[*self.keys, self.time]].groupby(self.keys, dropna=False).count()
             gr = gr[gr[self.time] > 1]
             assert (
                 gr.shape[0] == 0
@@ -334,8 +365,14 @@ class CubeLogs:
     def _filter_column(cls, filters, columns, can_be_empty=False):
         set_cols = set()
         for f in filters:
-            reg = re.compile(f)
-            cols = [c for c in columns if reg.search(c)]
+            if set(f) & {'"', "^", ".", "*", "+", "{", "}"}:
+                reg = re.compile(f)
+                cols = [c for c in columns if reg.search(c)]
+            elif f in columns:
+                # No regular expression.
+                cols = [f]
+            else:
+                continue
             set_cols |= set(cols)
         assert (
             can_be_empty or set_cols
@@ -348,7 +385,7 @@ class CubeLogs:
         self.ignored = self._filter_column(self._ignored, self.data.columns, True)
         assert (
             self._time in self.data.columns
-        ), f"Column {self._time} not found in {self.data.columns}"
+        ), f"Column {self._time} not found in {pprint.pformat(sorted(self.data.columns))}"
         ignored_keys = set(self.ignored) & set(self.keys)
         ignored_values = set(self.ignored) & set(self.values)
         self.keys = [c for c in self.keys if c not in ignored_keys]
@@ -371,16 +408,21 @@ class CubeLogs:
         :param view_def: view definition
         :return: dataframe
         """
+        assert isinstance(
+            view_def, CubeViewDef
+        ), f"view_def should be a CubeViewDef, got {type(view_def)}: {view_def!r}"
         key_agg = self._filter_column(view_def.key_agg, self.keys) if view_def.key_agg else []
         set_key_agg = set(key_agg)
-        assert set_key_agg <= set(
-            self.keys
-        ), f"Non existing keys in key_agg {set_key_agg - set(self.keys)}"
+        assert set_key_agg <= set(self.keys), (
+            f"Non existing keys in key_agg {set_key_agg - set(self.keys)}",
+            f"keys={sorted(self.keys)}",
+        )
 
         values = self._filter_column(view_def.values, self.values)
-        assert set(values) <= set(
-            self.values
-        ), f"Non existing columns in values {set(values) - set(self.values)}"
+        assert set(values) <= set(self.values), (
+            f"Non existing columns in values {set(values) - set(self.values)}, "
+            f"values={sorted(self.values)}"
+        )
 
         if key_agg:
             key_index = [
@@ -389,10 +431,16 @@ class CubeLogs:
                 if c not in set_key_agg
             ]
             keys_no_agg = [c for c in self.keys if c not in set_key_agg]
-            data = (
-                self.data[[*keys_no_agg, *values]]
-                .groupby(key_index, as_index=False)
-                .agg(*view_def.agg_args, **(view_def.agg_kwargs or {}))
+
+            data_red = self.data[[*keys_no_agg, *values]]
+            assert set(key_index) <= set(data_red.columns), (
+                f"Unable to find {set(key_index) - set(data_red.columns)}, "
+                f"key_agg={key_agg}, keys_no_agg={keys_no_agg},\n--\n"
+                f"selected={pprint.pformat(sorted(data_red.columns))},\n--\n"
+                f"keys={pprint.pformat(sorted(self.keys))}"
+            )
+            data = data_red.groupby(key_index, as_index=False, dropna=False).agg(
+                *view_def.agg_args, **(view_def.agg_kwargs or {})
             )
         else:
             key_index = self._filter_column(view_def.key_index, self.keys)
@@ -405,11 +453,21 @@ class CubeLogs:
         set_key_columns = {
             c for c in self.keys if c not in key_index and c not in set(key_agg)
         }
+        key_index0 = key_index
+        key_columns0 = sorted(set_key_columns)
         if view_def.ignore_unique:
             key_index = [k for k in key_index if len(self.values_for_key[k]) > 1]
             key_columns = [k for k in set_key_columns if len(self.values_for_key[k]) > 1]
         else:
             key_columns = sorted(set_key_columns)
+
+        _md = lambda s: {k: v for k, v in self.values_for_key.items() if k in s}  # noqa: E731
+        assert (
+            key_index
+        ), f"key_index should not be empty, got {key_index0!r}, unique={_md(key_index0)}"
+        assert (
+            key_columns
+        ), f"key_columns should not be empty, got {key_columns0!r}, unique={_md(key_columns0)}"
 
         if view_def.order:
             assert set(view_def.order) <= set_key_columns, (
@@ -435,16 +493,12 @@ class CubeLogs:
                 missing=len(values) - len(nonan),
             )
             if len(nonan) > 0:
-                obs.update(
-                    dict(
-                        min=nonan.min(),
-                        max=nonan.max(),
-                        count=len(nonan),
-                    )
-                )
+                obs.update(dict(count=len(nonan)))
                 if is_numeric_dtype(nonan):
                     obs.update(
                         dict(
+                            min=nonan.min(),
+                            max=nonan.max(),
                             mean=nonan.mean(),
                             sum=nonan.sum(),
                         )
@@ -483,12 +537,6 @@ class CubeLogs:
                     print(f"[CubeLogs.to_helper] add sheet {main!r} with shape {df.shape}")
                 df.to_excel(writer, sheet_name=main, freeze_panes=(1, 1))
                 self._apply_excel_style(main, writer, df)
-            if raw:
-                assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
-                if verbose:
-                    print(f"[CubeLogs.to_helper] add sheet {raw!r} with shape {self.shape}")
-                self.data.to_excel(writer, sheet_name=raw, freeze_panes=(1, 1), index=True)
-                self._apply_excel_style(raw, writer, self.data)
 
             for name, view in views.items():
                 df = self.view(view)
@@ -500,9 +548,18 @@ class CubeLogs:
                 df.to_excel(
                     writer,
                     sheet_name=name,
-                    freeze_panes=(df.index.nlevels, df.columns.nlevels),
+                    freeze_panes=(df.columns.nlevels + df.index.nlevels, df.index.nlevels),
                 )
                 self._apply_excel_style(name, writer, df)
+
+            if raw:
+                assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
+                if verbose:
+                    print(f"[CubeLogs.to_helper] add sheet {raw!r} with shape {self.shape}")
+                self.data.to_excel(writer, sheet_name=raw, freeze_panes=(1, 1), index=True)
+                # Too long.
+                # self._apply_excel_style(raw, writer, self.data)
+
         if verbose:
             print(f"[CubeLogs.to_helper] done with {len(views)} views")
 
@@ -538,7 +595,7 @@ class CubeLogs:
 
         for k, v in sizes.items():
             c = get_column_letter(k)
-            sheet.column_dimensions[c].width = max(15, v)
+            sheet.column_dimensions[c].width = min(max(8, v), 30)
         for k in cols:
             if k not in sizes:
                 c = get_column_letter(k)
@@ -583,3 +640,210 @@ class CubeLogs:
                         cell.number_format = "0.000E+00"
                 else:
                     cell.alignment = left
+
+
+class CubeLogsPerformance(CubeLogs):
+    """
+    Processes logs coming from experiments.
+    """
+
+    def __init__(
+        self,
+        data: Any,
+        time: str = "date",
+        keys: Sequence[str] = ("version_.*", "model_.*"),
+        values: Sequence[str] = ("time_.*", "disc_.*", "ERR_.*"),
+        ignored: Sequence[str] = (),
+        recent: bool = False,
+        formulas: Optional[
+            Dict[str, Union[str, Callable[[pandas.DataFrame], pandas.Series]]]
+        ] = None,
+    ):
+        self._data = data
+        self._time = time
+        self._keys = keys
+        self._values = values
+        self._ignored = ignored
+        self.recent = recent
+        self._formulas = formulas
+
+    def _process_formula(
+        self, formula: Union[str, Callable[[pandas.DataFrame], pandas.Series]]
+    ) -> Callable[[pandas.DataFrame], pandas.Series]:
+        """
+        Processes a formula, converting it into a function.
+
+        :param formula: a formula string
+        :return: a function
+        """
+        if callable(formula):
+            return formula
+        assert isinstance(
+            formula, str
+        ), f"Unexpected type for formula {type(formula)}: {formula!r}"
+
+        if formula == "speedup":
+            columns = set(self._filter_column(["^time_.*"], self.data.columns))
+            assert "time_latency" in columns and "time_latency_eager" in columns, (
+                f"Unable to apply formula {formula!r}, with columns\n"
+                f"{pprint.pformat(sorted(columns))}"
+            )
+            return lambda df: df["time_latency_eager"] / df["time_latency"]
+
+        if formula == "bucket[speedup]":
+            columns = set(self._filter_column(["^time_.*", "speedup"], self.data.columns))
+            assert "speedup" in columns, (
+                f"Unable to apply formula {formula!r}, with columns\n"
+                f"{pprint.pformat(sorted(columns))}"
+            )
+            # return lambda df: df["time_latency_eager"] / df["time_latency"]
+            BUCKET_SCALES = (
+                np.array(
+                    [
+                        -np.inf,
+                        -20,
+                        -10,
+                        -5,
+                        -2,
+                        0,
+                        2,
+                        5,
+                        10,
+                        20,
+                        100,
+                        200,
+                        300,
+                        400,
+                        np.inf,
+                    ]
+                )
+                / 100
+                + 1
+            )
+            return lambda df: pandas.cut(
+                df["speedup"], bins=BUCKET_SCALES, right=False, duplicates="raise"
+            )
+
+        if formula == "ERR1":
+            columns = set(self._filter_column(["^ERR_.*"], self.data.columns))
+            if not columns:
+                return lambda df: np.nan
+
+            def first_err(df: pandas.DataFrame) -> pandas.Series:
+                ordered = [
+                    c
+                    for c in [
+                        "ERR_timeout",
+                        "ERR_load",
+                        "ERR_feeds",
+                        "ERR_warmup_eager",
+                        "ERR_export",
+                        "ERR_ort",
+                        "ERR_warmup",
+                        # "ERR_std",
+                        # "ERR_crash",
+                        # "ERR_stdout",
+                    ]
+                    if c in df.columns
+                ]
+                dfo = df[ordered]
+                return dfo.bfill(axis=1).iloc[:, 0]
+
+            return first_err
+
+        raise ValueError(
+            f"Unexpected formula {formula!r}, available columns are\n"
+            f"{pprint.pformat(sorted(self.data.columns))}"
+        )
+
+    def view(self, view_def: Union[str, CubeViewDef]) -> pandas.DataFrame:
+        """
+        Returns a dataframe, a pivot view.
+
+        If view_def is a string, it is replaced by a prefined view.
+
+        :param view_def: view definition or a string
+        :return: dataframe
+        """
+        if isinstance(view_def, str):
+            view_def = self.make_view_def(view_def)
+        return super().view(view_def)
+
+    def make_view_def(self, name: str) -> CubeViewDef:
+        """
+        Returns a view definition.
+
+        :param name: name of the view
+        :return: a CubeViewDef
+        """
+        fs = ["suite", "model_suite", "task", "model_name"]
+        index_cols = self._filter_column(fs, self.keys)
+        assert (
+            index_cols
+        ), f"No index columns found for {fs!r} in {pprint.pformat(sorted(self.keys))}"
+        index_cols = [c for c in fs if c in set(index_cols)]
+        if name == "summary-suite":
+            assert self._filter_column(
+                ["model_name"], self.keys
+            ), f"No model_name found in {pprint.pformat(sorted(self.keys))}"
+            return CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(
+                    ["speedup", "time_latency", "time_latency_eager"], self.values
+                ),
+                ignore_unique=True,
+                key_agg=["model_name"],
+                agg_args="mean"
+            )
+        if name == "disc":
+            return CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(["discrepancies_abs"], self.values),
+                ignore_unique=True,
+            )
+        if name == "speedup":
+            return CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(["speedup"], self.values),
+                ignore_unique=True,
+            )
+        if name == "time":
+            return CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(
+                    ["time_latency", "time_latency_eager"], self.values
+                ),
+                ignore_unique=True,
+            )
+        if name == "time_export":
+            return CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(
+                    ["time_export", "time_export_2", "time_warmup_eager"], self.values
+                ),
+                ignore_unique=True,
+            )
+        if name == "err":
+            return CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(
+                    ["ERR1", "ERR_timeout", "ERR_export", "ERR_crash"], self.values
+                ),
+                ignore_unique=True,
+            )
+        if name == "bucket-speedup":
+            return CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(["bucket[speedup]"], self.values),
+                ignore_unique=True,
+            )
+        if name == "cmd":
+            return CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(["CMD"], self.values),
+                ignore_unique=True,
+            )
+        raise ValueError(
+            f"Unknown view {name!r},\n--\nkeys={pprint.pformat(sorted(self.keys))}, "
+            f"\n--\nvalues={pprint.pformat(sorted(self.values))}"
+        )

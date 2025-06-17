@@ -609,6 +609,111 @@ def _cmd_stats(argv: List[Any]):
         print("done.")
 
 
+def get_parser_agg() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="agg",
+        description=textwrap.dedent(
+            """
+            Aggregates statistics coming from benchmarks.
+            Every run is a row. Every row is indexed by some keys,
+            and produces values. Every row has a date.
+            """
+        ),
+        epilog="example\n  python -m onnx_diagnostic agg test_agg.xlsx raw/*.zip -v 1",
+        formatter_class=RawTextHelpFormatter,
+    )
+    parser.add_argument("output", help="output excel file")
+    parser.add_argument(
+        "inputs",
+        nargs="+",
+        help="input csv or zip files, at least 1, it can be a name, or search path",
+    )
+    parser.add_argument(
+        "--filter", default="rawdata_.*.csv", help="filter for input files inside zip files"
+    )
+    parser.add_argument(
+        "--recent",
+        default=True,
+        action=BooleanOptionalAction,
+        help="Keeps only the most recent experiment for the same of keys.",
+    )
+    parser.add_argument("-t", "--time", default="DATE", help="Date or time column")
+    parser.add_argument(
+        "-k",
+        "--keys",
+        default="^version_.*,^model_.*,providers,opt_patterns,suite,memory_peak,machine,exporter,dynamic,rtopt,dtype,device,architecture",
+        help="List of columns to consider as keys, "
+        "multiple values are separated by `,`\n"
+        "regular expressions are allowed",
+    )
+    parser.add_argument(
+        "-w",
+        "--values",
+        default="^time_.*,^disc.*,^ERR_.*,CMD,^ITER.*",
+        help="List of columns to consider as values, "
+        "multiple values are separated by `,`\n"
+        "regular expressions are allowed",
+    )
+    parser.add_argument(
+        "-i", "--ignored", default="version_python", help="List of columns to ignore"
+    )
+    parser.add_argument(
+        "-f",
+        "--formula",
+        default="speedup,bucket[speedup],ERR1",
+        help="Columns to compute after the aggregation was done.",
+    )
+    parser.add_argument(
+        "--views",
+        default="summary-suite,disc,speedup,time,time_export,err,cmd,bucket-speedup",
+        help="Views to add to the output files.",
+    )
+    parser.add_argument("-v", "--verbose", type=int, default=0, help="verbosity")
+    return parser
+
+
+def _cmd_agg(argv: List[Any]):
+    from .helpers.log_helper import CubeLogsPerformance, open_dataframe, enumerate_csv_files
+
+    parser = get_parser_agg()
+    args = parser.parse_args(argv[1:])
+    reg = re.compile(args.filter)
+
+    csv = list(
+        enumerate_csv_files(
+            args.inputs, verbose=args.verbose, filtering=lambda name: reg.search(name)
+        )
+    )
+    assert csv, f"No csv files in {args.inputs}"
+    if args.verbose:
+        from tqdm import tqdm
+
+        loop = tqdm(csv)
+    else:
+        loop = csv
+    dfs = []
+    for c in loop:
+        df = open_dataframe(c)
+        assert args.time in df.columns, f"Missing time column {args.time!r} in {c.head()!r}"
+        dfs.append(df)
+
+    cube = CubeLogsPerformance(
+        dfs,
+        time=args.time,
+        keys=[a for a in args.keys.split(",") if a],
+        values=[a for a in args.values.split(",") if a],
+        ignored=[a for a in args.ignored.split(",") if a],
+        recent=args.recent,
+        formulas={k: k for k in args.formula.split(",")},
+    )
+    cube.load(verbose=max(args.verbose - 1, 0))
+    if args.verbose:
+        print(f"Dumps final file into {args.output!r}")
+    cube.to_excel(args.output, {k: k for k in args.views.split(",")}, verbose=args.verbose)
+    if args.verbose:
+        print(f"Wrote {args.output!r}")
+
+
 def get_main_parser() -> ArgumentParser:
     parser = ArgumentParser(
         prog="onnx_diagnostic",
@@ -619,19 +724,29 @@ def get_main_parser() -> ArgumentParser:
             Type 'python -m onnx_diagnostic <cmd> --help'
             to get help for a specific command.
 
+            agg        - aggregates statistics from multiple files
             config     - prints a configuration for a model id
             find       - find node consuming or producing a result
             lighten    - makes an onnx model lighter by removing the weights,
-            unlighten  - restores an onnx model produces by the previous experiment
             print      - prints the model on standard output
-            validate   - validate a model
             stats      - produces statistics on a model
+            unlighten  - restores an onnx model produces by the previous experiment
+            validate   - validate a model
             """
         ),
     )
     parser.add_argument(
         "cmd",
-        choices=["config", "find", "lighten", "print", "stats", "unlighten", "validate"],
+        choices=[
+            "agg",
+            "config",
+            "find",
+            "lighten",
+            "print",
+            "stats",
+            "unlighten",
+            "validate",
+        ],
         help="Selects a command.",
     )
     return parser
@@ -646,6 +761,7 @@ def main(argv: Optional[List[Any]] = None):
         config=_cmd_config,
         validate=_cmd_validate,
         stats=_cmd_stats,
+        agg=_cmd_agg,
     )
 
     if argv is None:
@@ -667,6 +783,7 @@ def main(argv: Optional[List[Any]] = None):
                 config=get_parser_config,
                 validate=get_parser_validate,
                 stats=get_parser_stats,
+                agg=get_parser_agg,
             )
             cmd = argv[0]
             if cmd not in parsers:
