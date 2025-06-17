@@ -459,20 +459,27 @@ class CubeLogs:
             c for c in self.keys if c not in key_index and c not in set(key_agg)
         }
         key_index0 = key_index
-        key_columns0 = sorted(set_key_columns)
         if view_def.ignore_unique:
-            key_index = [k for k in key_index if len(self.values_for_key[k]) > 1]
-            key_columns = [k for k in set_key_columns if len(self.values_for_key[k]) > 1]
+            unique = {
+                k for k, v in self.values_for_key.items() if k in self.keys and len(v) <= 1
+            }
+            key_index = [k for k in key_index if k not in unique]
+            key_columns = [k for k in set_key_columns if k not in unique]
         else:
             key_columns = sorted(set_key_columns)
+            unique = set()
 
         _md = lambda s: {k: v for k, v in self.values_for_key.items() if k in s}  # noqa: E731
-        assert (
-            key_index
-        ), f"key_index should not be empty, got {key_index0!r}, unique={_md(key_index0)}"
-        assert (
-            key_columns
-        ), f"key_columns should not be empty, got {key_columns0!r}, unique={_md(key_columns0)}"
+        assert key_index, (
+            f"key_index should not be empty, got initially {key_index0!r}, "
+            f"unique={_md(key_index0)}"
+        )
+        assert set(key_columns) | set(key_index) | set(key_agg) | unique == set(self.keys), (
+            f"key_columns + key_index + key_agg + unique != keys, left="
+            f"{set(self.keys) - (set(key_columns) | set(key_index) | set(key_agg) | unique)}, "
+            f"unique={unique}, index={set(key_index)}, columns={set(key_columns)}, "
+            f"agg={set(key_agg)}, keys={set(self.keys)}, values={values}"
+        )
 
         if view_def.order:
             assert set(view_def.order) <= set_key_columns, (
