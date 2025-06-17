@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Set
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 
 
@@ -10,7 +10,7 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
     or ``torch.export.Dim.AUTO`` or ``torch.export.Dim.DYNAMIC``.
     """
     if isinstance(dim_prefix, str):
-        prefixes = set()
+        prefixes: Set[str] = set()
 
         def tensor_to_shape(tensor):
             n = len(prefixes)
