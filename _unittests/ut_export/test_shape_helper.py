@@ -6,7 +6,7 @@ from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 
 
 class TestShapeHelper(ExtTestCase):
-    @requires_transformers("4.42")
+    @requires_transformers("4.52")
     @requires_torch("2.7.99")
     def test_all_dynamic_shape_from_inputs(self):
         ds = all_dynamic_shape_from_inputs((torch.randn((5, 6)), torch.randn((1, 6))))
@@ -22,7 +22,7 @@ class TestShapeHelper(ExtTestCase):
             ds,
         )
 
-    @requires_transformers("4.42")
+    @requires_transformers("4.52")
     @requires_torch("2.7.99")
     def test_all_dynamic_shape_from_inputs_dynamic_cache(self):
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM")
