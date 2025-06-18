@@ -637,6 +637,12 @@ def get_parser_agg() -> ArgumentParser:
         action=BooleanOptionalAction,
         help="Keeps only the most recent experiment for the same of keys.",
     )
+    parser.add_argument(
+        "--raw",
+        default=True,
+        action=BooleanOptionalAction,
+        help="Keeps the raw data in a sheet.",
+    )
     parser.add_argument("-t", "--time", default="DATE", help="Date or time column")
     parser.add_argument(
         "-k",
@@ -719,6 +725,7 @@ def _cmd_agg(argv: List[Any]):
         {k: k for k in args.views.split(",")},
         verbose=args.verbose,
         csv=args.csv.split(","),
+        raw=args.raw,
     )
     if args.verbose:
         print(f"Wrote {args.output!r}")

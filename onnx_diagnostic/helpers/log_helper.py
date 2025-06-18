@@ -1,4 +1,5 @@
 import datetime
+import enum
 import glob
 import os
 import pprint
@@ -152,8 +153,17 @@ class CubeViewDef:
     :param agg_args: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
     :param agg_kwargs: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
     :param ignore_columns: ignore the following columns if known to overload the view
+    :param keep_columns_in_index: keeps the columns even if there is only one unique value
     :param dropna: drops rows with nan if not relevant
+    :param transpose: transpose
+    :param f_highlight: to highlights some values
+    :param name: name of the view, used mostly to debug
     """
+
+    class HighLightKind(enum.IntEnum):
+        NONE = 0
+        RED = 1
+        GREEN = 2
 
     def __init__(
         self,
@@ -165,7 +175,11 @@ class CubeViewDef:
         agg_args: Sequence[Any] = ("sum",),
         agg_kwargs: Optional[Dict[str, Any]] = None,
         ignore_columns: Optional[Sequence[str]] = None,
+        keep_columns_in_index: Optional[Sequence[str]] = None,
         dropna: bool = True,
+        transpose: bool = False,
+        f_highlight: Optional[Callable[[Any], "CubeViewDef.HighLightKind"]] = None,
+        name: Optional[str] = None,
     ):
         self.key_index = key_index
         self.values = values
@@ -176,6 +190,10 @@ class CubeViewDef:
         self.agg_kwargs = agg_kwargs
         self.dropna = dropna
         self.ignore_columns = ignore_columns
+        self.keep_columns_in_index = keep_columns_in_index
+        self.f_highlight = f_highlight
+        self.transpose = transpose
+        self.name = name
 
     def __repr__(self) -> str:
         "usual"
@@ -416,7 +434,9 @@ class CubeLogs:
         "usual"
         return str(self.data) if hasattr(self, "data") else str(self._data)
 
-    def view(self, view_def: Union[str, CubeViewDef]) -> pandas.DataFrame:
+    def view(
+        self, view_def: Union[str, CubeViewDef], return_view_def: bool = False
+    ) -> Union[pandas.DataFrame, Tuple[pandas.DataFrame, CubeViewDef]]:
         """
         Returns a dataframe, a pivot view.
         `key_index` determines the index, the other key columns determines
@@ -424,23 +444,26 @@ class CubeLogs:
         is removed.
 
         :param view_def: view definition
+        :param return_view_def: returns the view as well
         :return: dataframe
         """
         assert isinstance(
             view_def, CubeViewDef
-        ), f"view_def should be a CubeViewDef, got {type(view_def)}: {view_def!r}"
+        ), f"view_def should be a CubeViewDef, got {type(view_def)}: {view_def!r} instead"
         key_agg = (
             self._filter_column(view_def.key_agg, self.keys_time) if view_def.key_agg else []
         )
         set_key_agg = set(key_agg)
         assert set_key_agg <= set(self.keys_time), (
-            f"Non existing keys in key_agg {set_key_agg - set(self.keys_time)}",
+            f"view_def.name={view_def.name!r}, "
+            f"non existing keys in key_agg {set_key_agg - set(self.keys_time)}",
             f"keys={sorted(self.keys_time)}",
         )
 
         values = self._filter_column(view_def.values, self.values)
         assert set(values) <= set(self.values), (
-            f"Non existing columns in values {set(values) - set(self.values)}, "
+            f"view_def.name={view_def.name!r}, "
+            f"non existing columns in values {set(values) - set(self.values)}, "
             f"values={sorted(self.values)}"
         )
 
@@ -454,7 +477,8 @@ class CubeLogs:
 
             data_red = self.data[[*keys_no_agg, *values]]
             assert set(key_index) <= set(data_red.columns), (
-                f"Unable to find {set(key_index) - set(data_red.columns)}, "
+                f"view_def.name={view_def.name!r}, "
+                f"nnable to find {set(key_index) - set(data_red.columns)}, "
                 f"key_agg={key_agg}, keys_no_agg={keys_no_agg},\n--\n"
                 f"selected={pprint.pformat(sorted(data_red.columns))},\n--\n"
                 f"keys={pprint.pformat(sorted(self.keys_time))}"
@@ -468,9 +492,10 @@ class CubeLogs:
             data = self.data[[*self.keys_time, *values]]
             set_all_keys = set(self.keys_time)
 
-        assert (
-            set(key_index) <= set_all_keys
-        ), f"Non existing keys in key_index {set(key_index) - set_all_keys}"
+        assert set(key_index) <= set_all_keys, (
+            f"view_def.name={view_def.name!r}, "
+            f"Non existing keys in key_index {set(key_index) - set_all_keys}"
+        )
 
         set_key_columns = {
             c for c in self.keys_time if c not in key_index and c not in set(key_agg)
@@ -480,19 +505,26 @@ class CubeLogs:
             unique = {
                 k for k, v in self.values_for_key.items() if k in set_all_keys and len(v) <= 1
             }
-            key_index = [k for k in key_index if k not in unique]
-            key_columns = [k for k in set_key_columns if k not in unique]
+            keep_anyway = (
+                set(view_def.keep_columns_in_index)
+                if view_def.keep_columns_in_index
+                else set()
+            )
+            key_index = [k for k in key_index if k not in unique or k in keep_anyway]
+            key_columns = [k for k in set_key_columns if k not in unique or k in keep_anyway]
         else:
             key_columns = sorted(set_key_columns)
             unique = set()
 
         _md = lambda s: {k: v for k, v in self.values_for_key.items() if k in s}  # noqa: E731
         assert key_index, (
+            f"view_def.name={view_def.name!r}, "
             f"key_index should not be empty, got initially {key_index0!r}, "
             f"unique={_md(key_index0)}"
         )
         all_cols = set(key_columns) | set(key_index) | set(key_agg) | unique
         assert all_cols == set(self.keys_time), (
+            f"view_def.name={view_def.name!r}, "
             f"key_columns + key_index + key_agg + unique != keys, left="
             f"{set(self.keys_time) - all_cols}, "
             f"unique={unique}, index={set(key_index)}, columns={set(key_columns)}, "
@@ -501,7 +533,8 @@ class CubeLogs:
 
         if view_def.order:
             assert set(view_def.order) <= set_key_columns, (
-                f"Non existing columns from order in key_columns "
+                f"view_def.name={view_def.name!r}, "
+                f"non existing columns from order in key_columns "
                 f"{set(view_def.order) - set_key_columns}"
             )
             key_columns = [
@@ -510,14 +543,26 @@ class CubeLogs:
             ]
         if view_def.dropna:
             data, key_index, key_columns, values = self._dropna(  # type: ignore[assignment]
-                data, key_index, key_columns, values
+                data,
+                key_index,
+                key_columns,
+                values,
+                keep_columns_in_index=view_def.keep_columns_in_index,
             )
         if view_def.ignore_columns:
             data = data.drop(view_def.ignore_columns, axis=1)
             seti = set(view_def.ignore_columns)
+            if view_def.keep_columns_in_index:
+                seti -= set(view_def.keep_columns_in_index)
             key_index = [c for c in key_index if c not in seti]
             key_columns = [c for c in key_columns if c not in seti]
             values = [c for c in values if c not in seti]
+
+        assert key_index, (
+            f"view_def.name={view_def.name!r}, view_def={view_def}, "
+            f"key_index is empty, key_columns={key_columns}, value={values}, "
+            f"columns={data.columns},shape={data.shape}"
+        )
 
         # final verification
         g = data[[*key_index, *key_columns]].copy()
@@ -525,13 +570,19 @@ class CubeLogs:
         r = g.groupby([*key_index, *key_columns], dropna=False).sum()
         not_unique = r[r["count"] > 1]
         assert not_unique.shape[0] == 0, (
-            f"Unable to run the pivot with index={sorted(key_index)}, "
+            f"view_def.name={view_def.name!r}, "
+            f"unable to run the pivot with index={sorted(key_index)}, "
             f"key={sorted(key_columns)}, key_agg={key_agg}, values={sorted(values)}, "
             f"columns={sorted(data.columns)}, ignored={view_def.ignore_columns}, "
             f"not unique={set(data.columns) - unique}"
             f"\n--\n{not_unique.head()}"
         )
-        return data.pivot(index=key_index[::-1], columns=key_columns, values=values)
+        piv = data.pivot(index=key_index[::-1], columns=key_columns, values=values)
+        if isinstance(piv, pandas.Series):
+            piv = piv.to_frame(name="serie")
+        if view_def.transpose:
+            piv = piv.T
+        return (piv, view_def) if return_view_def else piv
 
     def _dropna(
         self,
@@ -539,7 +590,9 @@ class CubeLogs:
         key_index: Sequence[str],
         key_columns: Sequence[str],
         values: Sequence[str],
+        keep_columns_in_index: Optional[Sequence[str]] = None,
     ) -> Tuple[pandas.DataFrame, Sequence[str], Sequence[str], Sequence[str]]:
+        keep_columns_in_index = set(keep_columns_in_index) if keep_columns_in_index else set()
         v = data[values]
         new_data = data[~v.isnull().all(1)]
         if data.shape == new_data.shape:
@@ -547,12 +600,18 @@ class CubeLogs:
         new_data = new_data.copy()
         new_key_index = []
         for c in key_index:
+            if c in keep_columns_in_index:
+                new_key_index.append(c)
+                continue
             v = new_data[c]
             sv = set(v.dropna())
             if len(sv) > 1 or (v.isna().max() and len(sv) > 0):
                 new_key_index.append(c)
         new_key_columns = []
         for c in key_columns:
+            if c in keep_columns_in_index:
+                new_key_columns.append(c)
+                continue
             v = new_data[c]
             sv = set(v.dropna())
             if len(sv) > 1 or (v.isna().max() and len(sv) > 0):
@@ -644,7 +703,7 @@ class CubeLogs:
                 self._apply_excel_style(main, writer, df)
 
             for name, view in views.items():
-                df = self.view(view)
+                df, tview = self.view(view, return_view_def=True)
                 if verbose:
                     print(
                         f"[CubeLogs.to_helper] add sheet {name!r} with shape "
@@ -655,7 +714,7 @@ class CubeLogs:
                     sheet_name=name,
                     freeze_panes=(df.columns.nlevels + df.index.nlevels, df.index.nlevels),
                 )
-                self._apply_excel_style(name, writer, df)
+                self._apply_excel_style(name, writer, df, f_highlight=tview.f_highlight)
                 if csv and name in csv:
                     df.reset_index(drop=False).to_csv(f"{output}.{name}.csv", index=False)
             if raw:
@@ -671,23 +730,32 @@ class CubeLogs:
         if verbose:
             print(f"[CubeLogs.to_helper] done with {len(views)} views")
 
-    def _apply_excel_style(self, name: str, writer: pandas.ExcelWriter, df: pandas.DataFrame):
+    def _apply_excel_style(
+        self,
+        name: str,
+        writer: pandas.ExcelWriter,
+        df: pandas.DataFrame,
+        f_highlight: Optional[Callable[[Any], CubeViewDef.HighLightKind]] = None,
+    ):
         from openpyxl.styles import Alignment
         from openpyxl.utils import get_column_letter
-
-        # from openpyxl.styles import Font, PatternFill, numbers
+        from openpyxl.styles import Font  # , PatternFill, numbers
 
         left = Alignment(horizontal="left")
+        left_shrink = Alignment(horizontal="left", shrink_to_fit=True)
         right = Alignment(horizontal="right")
+        font_colors = {
+            CubeViewDef.HighLightKind.GREEN: Font(color="00AA00"),
+            CubeViewDef.HighLightKind.RED: Font(color="FF0000"),
+        }
         # center = Alignment(horizontal="center")
         # bold_font = Font(bold=True)
-        # red = Font(color="FF0000")
         # yellow = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
         # redf = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 
         sheet = writer.sheets[name]
-        n_rows = df.shape[0] + df.columns.nlevels + df.index.nlevels
-        n_cols = df.shape[1] + df.index.nlevels
+        n_rows = df.shape[0] + df.columns.nlevels + df.index.nlevels + 3
+        n_cols = df.shape[1] + df.index.nlevels + 3
         co: Dict[int, int] = {}
         sizes: Dict[int, int] = {}
         cols = set()
@@ -746,6 +814,12 @@ class CubeLogs:
                         cell.number_format = "0.00000"
                     else:
                         cell.number_format = "0.000E+00"
+                    if f_highlight:
+                        h = f_highlight(cell.value)
+                        if h in font_colors:
+                            cell.font = font_colors[h]
+                elif isinstance(cell.value, str) and len(cell.value) > 70:
+                    cell.alignment = left_shrink
                 else:
                     cell.alignment = left
 
@@ -881,18 +955,21 @@ class CubeLogsPerformance(CubeLogs):
             f"{pprint.pformat(sorted(self.data.columns))}"
         )
 
-    def view(self, view_def: Union[str, CubeViewDef]) -> pandas.DataFrame:
+    def view(
+        self, view_def: Union[str, CubeViewDef], return_view_def: bool = False
+    ) -> Union[pandas.DataFrame, Tuple[pandas.DataFrame, CubeViewDef]]:
         """
         Returns a dataframe, a pivot view.
 
         If view_def is a string, it is replaced by a prefined view.
 
         :param view_def: view definition or a string
+        :param return_view_def: returns the view definition as well
         :return: dataframe
         """
         if isinstance(view_def, str):
             view_def = self.make_view_def(view_def)
-        return super().view(view_def)
+        return super().view(view_def, return_view_def=return_view_def)
 
     def make_view_def(self, name: str) -> CubeViewDef:
         """
@@ -913,13 +990,28 @@ class CubeLogsPerformance(CubeLogs):
         * **cmd:** command lines
         * **raw-short:** raw data without all the unused columns
         """
-        fs = ["suite", "model_suite", "task", "model_name"]
+        fs = ["suite", "model_suite", "task", "model_name", "model_task"]
         index_cols = self._filter_column(fs, self.keys_time)
         assert index_cols, (
             f"No index columns found for {fs!r} in "
             f"{pprint.pformat(sorted(self.keys_time))}"
         )
         index_cols = [c for c in fs if c in set(index_cols)]
+
+        f_speedup = lambda x: (  # noqa: E731
+            CubeViewDef.HighLightKind.RED
+            if x < 0.9
+            else (
+                CubeViewDef.HighLightKind.GREEN if x > 1.1 else CubeViewDef.HighLightKind.NONE
+            )
+        )
+        f_disc = lambda x: (  # noqa: E731
+            CubeViewDef.HighLightKind.RED
+            if x > 0.1
+            else (
+                CubeViewDef.HighLightKind.GREEN if x < 0.01 else CubeViewDef.HighLightKind.NONE
+            )
+        )
 
         implemented_views = {
             "agg-suite": lambda: CubeViewDef(
@@ -928,18 +1020,26 @@ class CubeLogsPerformance(CubeLogs):
                     ["speedup", "time_latency", "time_latency_eager"], self.values
                 ),
                 ignore_unique=True,
-                key_agg=["model_name"],
+                key_agg=["model_name", "task", "model_task"],
                 agg_args=["mean"],
+                keep_columns_in_index=["suite"],
+                name="agg-suite",
             ),
             "disc": lambda: CubeViewDef(
                 key_index=index_cols,
                 values=self._filter_column(["discrepancies_abs"], self.values),
                 ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                f_highlight=f_disc,
+                name="disc",
             ),
             "speedup": lambda: CubeViewDef(
                 key_index=index_cols,
                 values=self._filter_column(["speedup"], self.values),
                 ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                f_highlight=f_speedup,
+                name="speedup",
             ),
             "time": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -947,6 +1047,8 @@ class CubeLogsPerformance(CubeLogs):
                     ["time_latency", "time_latency_eager"], self.values
                 ),
                 ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="time",
             ),
             "time_export": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -954,6 +1056,8 @@ class CubeLogsPerformance(CubeLogs):
                     ["time_export", "time_export_2", "time_warmup_eager"], self.values
                 ),
                 ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="time_export",
             ),
             "err": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -961,21 +1065,29 @@ class CubeLogsPerformance(CubeLogs):
                     ["ERR1", "ERR_timeout", "ERR_export", "ERR_crash"], self.values
                 ),
                 ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="err",
             ),
             "bucket-speedup": lambda: CubeViewDef(
                 key_index=index_cols,
                 values=self._filter_column(["bucket[speedup]"], self.values),
                 ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="bucket-speedup",
             ),
             "cmd": lambda: CubeViewDef(
                 key_index=index_cols,
                 values=self._filter_column(["CMD"], self.values),
                 ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="cmd",
             ),
             "raw-short": lambda: CubeViewDef(
                 key_index=self.keys_time,
                 values=[c for c in self.values if c not in {"ERR_std", "ERR_stdout", "CMD"}],
                 ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="raw-short",
             ),
         }
         assert name in implemented_views, (
