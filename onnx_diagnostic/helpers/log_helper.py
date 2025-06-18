@@ -152,6 +152,7 @@ class CubeViewDef:
         creating the view
     :param agg_args: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
     :param agg_kwargs: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
+    :param agg_multi: aggregation over multiple columns
     :param ignore_columns: ignore the following columns if known to overload the view
     :param keep_columns_in_index: keeps the columns even if there is only one unique value
     :param dropna: drops rows with nan if not relevant
@@ -174,6 +175,9 @@ class CubeViewDef:
         key_agg: Optional[Sequence[str]] = None,
         agg_args: Sequence[Any] = ("sum",),
         agg_kwargs: Optional[Dict[str, Any]] = None,
+        agg_multi: Optional[
+            Dict[str, Callable[[pandas.core.groupby.DataFrameGroupBy], pandas.Series]]
+        ] = None,
         ignore_columns: Optional[Sequence[str]] = None,
         keep_columns_in_index: Optional[Sequence[str]] = None,
         dropna: bool = True,
@@ -188,6 +192,7 @@ class CubeViewDef:
         self.key_agg = key_agg
         self.agg_args = agg_args
         self.agg_kwargs = agg_kwargs
+        self.agg_multi = agg_multi
         self.dropna = dropna
         self.ignore_columns = ignore_columns
         self.keep_columns_in_index = keep_columns_in_index
@@ -468,6 +473,7 @@ class CubeLogs:
         )
 
         if key_agg:
+            final_stack = True
             key_index = [
                 c
                 for c in self._filter_column(view_def.key_index, self.keys_time)
@@ -483,14 +489,22 @@ class CubeLogs:
                 f"selected={pprint.pformat(sorted(data_red.columns))},\n--\n"
                 f"keys={pprint.pformat(sorted(self.keys_time))}"
             )
-            data = data_red.groupby(keys_no_agg, as_index=False, dropna=False).agg(
-                *view_def.agg_args, **(view_def.agg_kwargs or {})
-            )
+            grouped_data = data_red.groupby(keys_no_agg, as_index=True, dropna=False)
+            data = grouped_data.agg(*view_def.agg_args, **(view_def.agg_kwargs or {}))
+            if view_def.agg_multi:
+                append = []
+                for k, f in view_def.agg_multi.items():
+                    cv = grouped_data.apply(f, include_groups=False)
+                    append.append(cv.to_frame(k))
+                data = pandas.concat([data, *append], axis=1)
             set_all_keys = set(keys_no_agg)
+            values = list(data.columns)
+            data = data.reset_index(drop=False)
         else:
             key_index = self._filter_column(view_def.key_index, self.keys_time)
             data = self.data[[*self.keys_time, *values]]
             set_all_keys = set(self.keys_time)
+            final_stack = False
 
         assert set(key_index) <= set_all_keys, (
             f"view_def.name={view_def.name!r}, "
@@ -580,8 +594,17 @@ class CubeLogs:
         piv = data.pivot(index=key_index[::-1], columns=key_columns, values=values)
         if isinstance(piv, pandas.Series):
             piv = piv.to_frame(name="series")
+        names = list(piv.columns.names)
+        assert (
+            "METRICS" not in names
+        ), f"Not implemented when a level METRICS already exists {names!r}"
+        names[0] = "METRICS"
+        piv.columns = piv.columns.set_names(names)
+        if final_stack:
+            piv = piv.stack("METRICS")
         if view_def.transpose:
             piv = piv.T
+
         return (piv, view_def) if return_view_def else piv
 
     def _dropna(
@@ -1015,6 +1038,18 @@ class CubeLogsPerformance(CubeLogs):
             )
         )
 
+        def mean_weight(gr):
+            weight = gr["time_latency_eager"]
+            x = gr["speedup"]
+            if x.shape[0] == 0:
+                return np.nan
+            div = weight.sum()
+            return (x * weight).sum() / div
+
+        def mean_geo(gr):
+            x = gr["speedup"]
+            return np.exp(np.log(x.dropna()).mean())
+
         implemented_views = {
             "agg-suite": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1024,6 +1059,7 @@ class CubeLogsPerformance(CubeLogs):
                 ignore_unique=True,
                 key_agg=["model_name", "task", "model_task"],
                 agg_args=["mean"],
+                agg_multi={"speedup_weighted": mean_weight, "speedup_geo": mean_geo},
                 keep_columns_in_index=["suite"],
                 name="agg-suite",
             ),
