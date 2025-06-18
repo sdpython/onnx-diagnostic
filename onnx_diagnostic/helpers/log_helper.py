@@ -579,7 +579,7 @@ class CubeLogs:
         )
         piv = data.pivot(index=key_index[::-1], columns=key_columns, values=values)
         if isinstance(piv, pandas.Series):
-            piv = piv.to_frame(name="serie")
+            piv = piv.to_frame(name="series")
         if view_def.transpose:
             piv = piv.T
         return (piv, view_def) if return_view_def else piv
@@ -592,7 +592,9 @@ class CubeLogs:
         values: Sequence[str],
         keep_columns_in_index: Optional[Sequence[str]] = None,
     ) -> Tuple[pandas.DataFrame, Sequence[str], Sequence[str], Sequence[str]]:
-        keep_columns_in_index = set(keep_columns_in_index) if keep_columns_in_index else set()
+        set_keep_columns_in_index = (
+            set(keep_columns_in_index) if keep_columns_in_index else set()
+        )
         v = data[values]
         new_data = data[~v.isnull().all(1)]
         if data.shape == new_data.shape:
@@ -600,7 +602,7 @@ class CubeLogs:
         new_data = new_data.copy()
         new_key_index = []
         for c in key_index:
-            if c in keep_columns_in_index:
+            if c in set_keep_columns_in_index:
                 new_key_index.append(c)
                 continue
             v = new_data[c]
@@ -609,7 +611,7 @@ class CubeLogs:
                 new_key_index.append(c)
         new_key_columns = []
         for c in key_columns:
-            if c in keep_columns_in_index:
+            if c in set_keep_columns_in_index:
                 new_key_columns.append(c)
                 continue
             v = new_data[c]
