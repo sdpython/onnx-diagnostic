@@ -19,7 +19,7 @@ def flatten_unflatten_for_dynamic_shapes(
         :func:`torch.export.export` only considers the values,
         the context gives the dictionary keys but it is not expressed
         in the dynamic shapes, these specifications seems to be different
-        for the strict and non strict mode.
+        for the strict and non strict mode. It also preserves tuple.
     :param change_function: to modifies the tensor in the structure itself,
         like replace them by a shape
     :return: the serialized object
@@ -38,9 +38,12 @@ def flatten_unflatten_for_dynamic_shapes(
         )
         subtrees.append(value)
         start = end
-    if use_dict and (spec.type is dict or spec.context):
-        # This a dictionary.
-        return dict(zip(spec.context, subtrees))
+    if use_dict:
+        if spec.type is dict or spec.context:
+            # This a dictionary.
+            return dict(zip(spec.context, subtrees))
+        if spec.type is tuple:
+            return tuple(subtrees)
     # This is a list.
     return subtrees
 
