@@ -2,8 +2,17 @@
 JSON returns list when the original dynamic shapes are list or tuple
 ====================================================================
 
+Dynamic shapes given to :func:`torch.export.export` must follow the
+same semantic. What if we confuse tuple and list when defining the dynamic shapes,
+how to restore the expected type assuming we know the inputs?
+Not often useful but maybe we will learn more about
+:epkg:`optree`.
+
 Dynamic Shapes After JSON
 +++++++++++++++++++++++++
+
+JSON format does not make the difference between a list and a tuple.
+So after serializing to json and restoring, both of them become lists.
 """
 
 import json
@@ -49,8 +58,8 @@ pprint.pprint(ds2)
 # %%
 # tuple are replaced by list.
 
-# The trick
-# +++++++++
+# The trick to restore tuple when expected
+# ++++++++++++++++++++++++++++++++++++++++
 
 
 def flatten_unflatten_like_dynamic_shapes(obj):

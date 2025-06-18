@@ -233,6 +233,7 @@ epkg_dictionary = {
     "onnx-script": "https://github.com/microsoft/onnxscript",
     "onnxscript": "https://github.com/microsoft/onnxscript",
     "onnxscript Tutorial": "https://microsoft.github.io/onnxscript/tutorial/index.html",
+    "optree": "https://github.com/metaopt/optree",
     "Pattern-based Rewrite Using Rules With onnxscript": "https://microsoft.github.io/onnxscript/tutorial/rewriter/rewrite_patterns.html",
     "opsets": "https://onnx.ai/onnx/intro/concepts.html#what-is-an-opset-version",
     "pyinstrument": "https://pyinstrument.readthedocs.io/en/latest/",
