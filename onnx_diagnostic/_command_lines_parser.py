@@ -686,7 +686,7 @@ def _cmd_agg(argv: List[Any]):
 
     csv = list(
         enumerate_csv_files(
-            args.inputs, verbose=args.verbose, filtering=lambda name: reg.search(name)
+            args.inputs, verbose=args.verbose, filtering=lambda name: bool(reg.search(name))
         )
     )
     assert csv, f"No csv files in {args.inputs}"
