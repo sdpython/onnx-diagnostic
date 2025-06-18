@@ -7,6 +7,7 @@ import pandas
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.helpers.log_helper import (
     CubeLogs,
+    CubeLogsPerformance,
     CubeViewDef,
     enumerate_csv_files,
     open_dataframe,
@@ -21,10 +22,10 @@ class TestLogHelper(ExtTestCase):
                 textwrap.dedent(
                     """
                     date,version_python,version_transformers,model_name,model_exporter,time_load,time_latency,time_baseline,disc_ort,disc_ort2
-                    2025/01/01,3.13.3,4.52.4,phi3,export,0.5,0.1,0.1,1e-5,1e-5
-                    2025/01/02,3.13.3,4.52.4,phi3,export,0.6,0.11,0.1,1e-5,1e-5
-                    2025/01/01,3.13.3,4.52.4,phi4,export,0.5,0.1,0.105,1e-5,1e-5
-                    2025/01/01,3.12.3,4.52.4,phi4,onnx-dynamo,0.5,0.1,0.999,1e-5,1e-5
+                    2025/01/01,3.13.3,4.52.4,phi3,export,0.51,0.1,0.1,1e-5,1e-5
+                    2025/01/02,3.13.3,4.52.4,phi3,export,0.62,0.11,0.11,1e-5,1e-5
+                    2025/01/01,3.13.3,4.52.4,phi4,export,0.53,0.1,0.105,1e-5,1e-5
+                    2025/01/01,3.12.3,4.52.4,phi4,onnx-dynamo,0.54,0.14,0.999,1e-5,1e-5
                     """
                 )
             )
@@ -98,7 +99,11 @@ class TestLogHelper(ExtTestCase):
     def test_cube_logs_view(self):
         cube = self.cube1(verbose=1)
         view = cube.view(
-            CubeViewDef(["version.*", "model_name"], ["time_latency", "time_baseline"])
+            CubeViewDef(
+                ["version.*", "model_name"],
+                ["time_latency", "time_baseline"],
+                ignore_columns=["date"],
+            )
         )
         self.assertEqual((3, 4), view.shape)
         self.assertEqual(
@@ -116,7 +121,10 @@ class TestLogHelper(ExtTestCase):
 
         view = cube.view(
             CubeViewDef(
-                ["version.*"], ["time_latency", "time_baseline"], order=["model_exporter"]
+                ["version.*"],
+                ["time_latency", "time_baseline"],
+                order=["model_exporter"],
+                ignore_columns=["date"],
             )
         )
         self.assertEqual((2, 6), view.shape)
@@ -139,12 +147,13 @@ class TestLogHelper(ExtTestCase):
             CubeViewDef(
                 ["version.*", "model.*"],
                 ["time_latency", "time_baseline"],
-                key_agg=["model_name"],
+                key_agg=["model_name", "date"],
+                ignore_columns=["version_python"],
             )
         )
         self.assertEqual((2, 2), view.shape)
         self.assertEqual(["time_baseline", "time_latency"], list(view.columns))
-        self.assertEqual([("3.13.3", "export"), ("3.12.3", "onnx-dynamo")], list(view.index))
+        self.assertEqual([("export",), ("onnx-dynamo",)], list(view.index))
 
     @hide_stdout()
     def test_cube_logs_excel(self):
@@ -166,6 +175,7 @@ class TestLogHelper(ExtTestCase):
         )
         self.assertExists(output)
 
+    @hide_stdout()
     def test_enumerate_csv_files(self):
         df = self.df1()
         filename = self.get_dump_file("test_enumerate_csv_files.csv")
@@ -185,6 +195,30 @@ class TestLogHelper(ExtTestCase):
         cube.load(verbose=1)
         self.assertEqual((3, 11), cube.shape)
         self.assertIn("RAWFILENAME", cube.data.columns)
+
+    def test_cube_logs_performance(self):
+        output = self.get_dump_file("test_cube_logs_performance.xlsx")
+        filename = os.path.join(os.path.dirname(__file__), "data", "data-agg.zip")
+        assert list(enumerate_csv_files(filename))
+        dfs = [open_dataframe(df) for df in enumerate_csv_files(filename)]
+        assert dfs, f"{filename!r} empty"
+        cube = CubeLogsPerformance(dfs)
+        cube.load()
+        cube.to_excel(
+            output,
+            views=[
+                "agg-suite",
+                "disc",
+                "speedup",
+                "time",
+                "time_export",
+                "err",
+                # "cmd",
+                "bucket-speedup",
+                "raw-short",
+            ],
+        )
+        self.assertExists(output)
 
 
 if __name__ == "__main__":

@@ -318,9 +318,9 @@ def unflatten_dynamic_cache(
     return cache
 
 
-##############
-# DynamicCache
-##############
+#############
+# StaticCache
+#############
 
 
 def flatten_static_cache(

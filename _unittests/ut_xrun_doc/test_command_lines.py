@@ -4,6 +4,7 @@ from io import StringIO
 from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic._command_lines_parser import (
     get_main_parser,
+    get_parser_agg,
     get_parser_config,
     get_parser_find,
     get_parser_lighten,
@@ -70,6 +71,13 @@ class TestCommandLines(ExtTestCase):
             get_parser_stats().print_help()
         text = st.getvalue()
         self.assertIn("input", text)
+
+    def test_parser_agg(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            get_parser_agg().print_help()
+        text = st.getvalue()
+        self.assertIn("--recent", text)
 
 
 if __name__ == "__main__":
