@@ -260,7 +260,7 @@ class CubeLogs:
         assert self.values, f"No values found with {self._values} from {self.data.columns}"
         assert not (
             set(self.keys_no_time) & set(self.values)
-        ), f"Columns {set(self.keys) & set(self.values)} cannot be keys and values"
+        ), f"Columns {set(self.keys_no_time) & set(self.values)} cannot be keys and values"
         assert not (
             set(self.keys_no_time) & set(self.ignored)
         ), f"Columns {set(self.keys_no_time) & set(self.ignored)} cannot be keys and ignored"
@@ -328,7 +328,8 @@ class CubeLogs:
 
     def _process_formula(
         self, formula: Union[str, Callable[[pandas.DataFrame], pandas.Series]]
-    ) -> Union[str, Callable[[pandas.DataFrame], pandas.Series]]:
+    ) -> Callable[[pandas.DataFrame], pandas.Series]:
+        assert callable(formula), f"formula={formula!r} is not supported."
         return formula
 
     @property
@@ -616,7 +617,7 @@ class CubeLogs:
     def to_excel(
         self,
         output: str,
-        views: Union[Sequence[str], Dict[str, CubeViewDef]],
+        views: Union[Sequence[str], Dict[str, Union[str, CubeViewDef]]],
         main: Optional[str] = "main",
         raw: Optional[str] = "raw",
         verbose: int = 0,
@@ -979,7 +980,7 @@ class CubeLogsPerformance(CubeLogs):
         }
         assert name in implemented_views, (
             f"Unknown view {name!r}, expected a name in {sorted(implemented_views)},"
-            f"\n--\nkeys={pprint.pformat(sorted(self.keys))}, "
+            f"\n--\nkeys={pprint.pformat(sorted(self.keys_time))}, "
             f"\n--\nvalues={pprint.pformat(sorted(self.values))}"
         )
         return implemented_views[name]()
