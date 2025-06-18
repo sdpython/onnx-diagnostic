@@ -7,6 +7,7 @@ import pandas
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.helpers.log_helper import (
     CubeLogs,
+    CubeLogsPerformance,
     CubeViewDef,
     enumerate_csv_files,
     open_dataframe,
@@ -166,6 +167,7 @@ class TestLogHelper(ExtTestCase):
         )
         self.assertExists(output)
 
+    @hide_stdout()
     def test_enumerate_csv_files(self):
         df = self.df1()
         filename = self.get_dump_file("test_enumerate_csv_files.csv")
@@ -185,6 +187,30 @@ class TestLogHelper(ExtTestCase):
         cube.load(verbose=1)
         self.assertEqual((3, 11), cube.shape)
         self.assertIn("RAWFILENAME", cube.data.columns)
+
+    def test_cube_logs_performance(self):
+        output = self.get_dump_file("test_cube_logs_performance.xlsx")
+        filename = os.path.join(os.path.dirname(__file__), "data", "data-agg.zip")
+        assert list(enumerate_csv_files(filename))
+        dfs = [open_dataframe(df) for df in enumerate_csv_files(filename)]
+        assert dfs, f"{filename!r} empty"
+        cube = CubeLogsPerformance(dfs)
+        cube.load()
+        cube.to_excel(
+            output,
+            views=[
+                "agg-suite",
+                "disc",
+                "speedup",
+                "time",
+                "time_export",
+                "err",
+                "cmd",
+                "bucket-speedup",
+                "raw-short",
+            ],
+        )
+        self.assertExists(output)
 
 
 if __name__ == "__main__":

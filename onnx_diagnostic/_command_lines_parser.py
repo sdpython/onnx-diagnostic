@@ -641,7 +641,7 @@ def get_parser_agg() -> ArgumentParser:
     parser.add_argument(
         "-k",
         "--keys",
-        default="^version_.*,^model_.*,providers,opt_patterns,suite,memory_peak,machine,exporter,dynamic,rtopt,dtype,device,architecture",
+        default="^version_.*,^model_.*,device,opt_patterns,suite,memory_peak,machine,exporter,dynamic,rtopt,dtype,device,architecture",
         help="List of columns to consider as keys, "
         "multiple values are separated by `,`\n"
         "regular expressions are allowed",
@@ -665,8 +665,13 @@ def get_parser_agg() -> ArgumentParser:
     )
     parser.add_argument(
         "--views",
-        default="summary-suite,disc,speedup,time,time_export,err,cmd,bucket-speedup",
+        default="agg-suite,disc,speedup,time,time_export,err,cmd,bucket-speedup,raw-short",
         help="Views to add to the output files.",
+    )
+    parser.add_argument(
+        "--csv",
+        default="raw-short",
+        help="Views to dump as csv files.",
     )
     parser.add_argument("-v", "--verbose", type=int, default=0, help="verbosity")
     return parser
@@ -709,7 +714,12 @@ def _cmd_agg(argv: List[Any]):
     cube.load(verbose=max(args.verbose - 1, 0))
     if args.verbose:
         print(f"Dumps final file into {args.output!r}")
-    cube.to_excel(args.output, {k: k for k in args.views.split(",")}, verbose=args.verbose)
+    cube.to_excel(
+        args.output,
+        {k: k for k in args.views.split(",")},
+        verbose=args.verbose,
+        csv=args.csv.split(","),
+    )
     if args.verbose:
         print(f"Wrote {args.output!r}")
 

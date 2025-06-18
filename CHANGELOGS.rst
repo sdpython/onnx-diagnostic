@@ -5,6 +5,7 @@ Change Logs
 +++++
 
 * :pr:`151`: adds command line ``agg``
+* :pr:`152`: add a function to compute fully dynamic shapes given any inputs
 
 0.7.0
 +++++
