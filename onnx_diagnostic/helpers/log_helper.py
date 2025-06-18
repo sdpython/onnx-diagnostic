@@ -416,7 +416,7 @@ class CubeLogs:
         "usual"
         return str(self.data) if hasattr(self, "data") else str(self._data)
 
-    def view(self, view_def: CubeViewDef) -> pandas.DataFrame:
+    def view(self, view_def: Union[str, CubeViewDef]) -> pandas.DataFrame:
         """
         Returns a dataframe, a pivot view.
         `key_index` determines the index, the other key columns determines
