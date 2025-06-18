@@ -630,9 +630,12 @@ class ModelInputs:
         method_name: str = "forward",
         name: str = "main",
     ):
-        assert isinstance(model, torch.nn.Module) or inspect.ismodule(
-            model
-        ), f"unexpected type for model={type(model)}, it must be a torch.nn.Module"
+        assert (
+            model is None or isinstance(model, torch.nn.Module) or inspect.ismodule(model)
+        ), (
+            f"unexpected type for model={type(model)}, "
+            f"it must be a torch.nn.Module or None"
+        )
         assert name, (
             f"name={name!r} cannot be empty this string is used to "
             f"display meaningful error messages"
@@ -641,26 +644,42 @@ class ModelInputs:
         self.model = model
         self.level = level
         self.method_name = method_name
-        self.forward = getattr(model, method_name)
-        self.signature = inspect.signature(self.forward)
+        self.forward = getattr(model, method_name) if model is not None else None
+        self.signature = inspect.signature(self.forward) if self.forward else None
 
         # information about the signature
-        self.forward_parameter_names = set(
-            p.name
-            for p in self.signature.parameters.values()
-            if p.kind not in {p.VAR_POSITIONAL, p.VAR_KEYWORD}
+        self.forward_parameter_names = (
+            set(
+                p.name
+                for p in self.signature.parameters.values()
+                if p.kind not in {p.VAR_POSITIONAL, p.VAR_KEYWORD}
+            )
+            if self.signature
+            else None
         )
-        self.forward_ordered_parameter_names = list(self.signature.parameters)
-        self.forward_positioned_parameter_names = [
-            p.name
-            for p in self.signature.parameters.values()
-            if p.kind in (p.VAR_POSITIONAL, p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
-        ]
-        names = [
-            p.name for p in self.signature.parameters.values() if p.kind == p.VAR_POSITIONAL
-        ]
+        self.forward_ordered_parameter_names = (
+            list(self.signature.parameters) if self.signature else None
+        )
+        self.forward_positioned_parameter_names = (
+            [
+                p.name
+                for p in self.signature.parameters.values()
+                if p.kind in (p.VAR_POSITIONAL, p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+            ]
+            if self.signature
+            else None
+        )
+        names = (
+            [p.name for p in self.signature.parameters.values() if p.kind == p.VAR_POSITIONAL]
+            if self.signature
+            else None
+        )
         self.forward_args = names[0] if names else None
-        names = [p.name for p in self.signature.parameters.values() if p.kind == p.VAR_KEYWORD]
+        names = (
+            [p.name for p in self.signature.parameters.values() if p.kind == p.VAR_KEYWORD]
+            if self.signature
+            else None
+        )
         self.forward_kwargs = names[0] if names else None
         self.forward_custom_op_schema = None
         self.forward_need_serialization = False
@@ -711,6 +730,7 @@ class ModelInputs:
     @property
     def true_model_name(self) -> str:
         "Returns class name or module name."
+        assert self.model is not None, "model was None when the class was initialized."
         return (
             self.model.__class__.__name__
             if isinstance(self.model, torch.nn.Module)
@@ -942,7 +962,7 @@ class ModelInputs:
                 )
             )
         names = s2.pop()
-        for name in names:
+        for i, name in enumerate(names):
             assert name not in {"_diag", "verbose"}, (
                 f"{self.full_name}: unexpected parameter {name!r}, names={names}"
                 f"\ninputs[0]={string_type(self.inputs[0], with_shape=True)}"
@@ -968,6 +988,14 @@ class ModelInputs:
         with the corresponding dynamic shapes.
         *kwargs*, *dynamic_shapes* are modified inplace.
         """
+        assert (
+            self.signature is not None
+            and self.forward_parameter_names is not None
+            and self.forward_ordered_parameter_names is not None
+        ), (
+            "model was None when the class was initialized, "
+            "cannot move args to kwargs without the signature."
+        )
         sig = self.signature
         arg_dyn, kw_dyn = dynamic_shapes
         for i, p in enumerate(sig.parameters):
