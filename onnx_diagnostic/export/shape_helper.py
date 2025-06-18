@@ -103,7 +103,7 @@ def guess_dynamic_shapes_from_inputs(
         ds = guess_dynamic_shapes_from_inputs([inputs1, inputs2], auto="d")
         pprint.pprint(ds)
 
-    This function returns sometihng equivalent to function
+    This function returns something equivalent to function
     :class:`torch.export.dynamic_shapes.AdditionalInputs` but this
     one needs a model.
 
@@ -120,7 +120,7 @@ def guess_dynamic_shapes_from_inputs(
         ds = torch.export.dynamic_shapes.AdditionalInputs()
         ds.add((), data["inputs"])
         ds.add((), data["inputs2"])
-        pprint.pprint(ds.dynamic_shapes(data["model"], (), inputs1))
+        pprint.pprint(ds.dynamic_shapes(data["model"], (), data["inputs"]))
     """
     mi = ModelInputs(None, inputs)
     return mi.guess_dynamic_shapes(auto=auto)

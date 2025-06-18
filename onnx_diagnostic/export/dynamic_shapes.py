@@ -730,6 +730,7 @@ class ModelInputs:
     @property
     def true_model_name(self) -> str:
         "Returns class name or module name."
+        assert self.model is not None, "model was None when the class was initialized."
         return (
             self.model.__class__.__name__
             if isinstance(self.model, torch.nn.Module)
@@ -987,6 +988,10 @@ class ModelInputs:
         with the corresponding dynamic shapes.
         *kwargs*, *dynamic_shapes* are modified inplace.
         """
+        assert self.signature is not None, (
+            "model was None when the class was initialized, "
+            "cannot move args to kwargs without the signature."
+        )
         sig = self.signature
         arg_dyn, kw_dyn = dynamic_shapes
         for i, p in enumerate(sig.parameters):
