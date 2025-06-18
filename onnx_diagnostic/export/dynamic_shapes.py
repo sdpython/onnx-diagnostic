@@ -988,7 +988,11 @@ class ModelInputs:
         with the corresponding dynamic shapes.
         *kwargs*, *dynamic_shapes* are modified inplace.
         """
-        assert self.signature is not None, (
+        assert (
+            self.signature is not None
+            and self.forward_parameter_names is not None
+            and self.forward_ordered_parameter_names is not None
+        ), (
             "model was None when the class was initialized, "
             "cannot move args to kwargs without the signature."
         )
