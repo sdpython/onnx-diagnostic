@@ -656,7 +656,7 @@ def get_parser_agg() -> ArgumentParser:
     parser.add_argument(
         "-w",
         "--values",
-        default="^time_.*,^disc.*,^ERR_.*,CMD,^ITER.*,^onnx_.*,^op_onnx_.*",
+        default="^time_.*,^disc.*,^ERR_.*,CMD,^ITER.*,^onnx_.*,^op_onnx_.*,^peak_gpu_.*",
         help="List of columns to consider as values, "
         "multiple values are separated by `,`\n"
         "regular expressions are allowed",
