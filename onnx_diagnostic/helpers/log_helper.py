@@ -876,7 +876,9 @@ class CubeLogs:
                         if h in font_colors:
                             cell.font = font_colors[h]
 
-    def post_load_process_piece(self, df: pandas.DataFrame) -> pandas.DataFrame:
+    def post_load_process_piece(
+        self, df: pandas.DataFrame, unique: bool = False
+    ) -> pandas.DataFrame:
         """
         Postprocesses a piece when a cube is made of multiple pieces
         before it gets merged.
@@ -1362,14 +1364,16 @@ class CubeLogsPerformance(CubeLogs):
     def post_load_process_piece(
         self, df: pandas.DataFrame, unique: bool = False
     ) -> pandas.DataFrame:
+        if unique:
+            return df
         cols = self._filter_column(self._keys, df)
         res = None
         for c in cols:
             if df[c].isna().any():
                 # Missing values for keys are not supposed to happen.
-                unique = set(df[c].dropna())
-                if len(unique) == 1:
+                uniq = set(df[c].dropna())
+                if len(uniq) == 1:
                     if res is None:
                         res = df.copy()
-                    res[c] = res[c].fillna(unique.pop())
+                    res[c] = res[c].fillna(uniq.pop())
         return df if res is None else res
