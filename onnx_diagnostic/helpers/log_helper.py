@@ -594,13 +594,14 @@ class CubeLogs:
 
         # reorder
         if view_def.order:
-            assert set(view_def.order) <= set_key_columns, (
+            corder = self._filter_column(view_def.order, all_cols)
+            assert set(corder) <= set_key_columns, (
                 f"view_def.name={view_def.name!r}, "
                 f"non existing columns from order in key_columns "
-                f"{set(view_def.order) - set_key_columns}"
+                f"{set(corder) - set_key_columns}"
             )
             key_columns = [
-                *[o for o in view_def.order if o in key_columns],
+                *[o for o in corder if o in key_columns],
                 *[c for c in key_columns if c not in view_def.order],
             ]
         if view_def.dropna:
