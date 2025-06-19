@@ -662,17 +662,19 @@ def get_parser_agg() -> ArgumentParser:
         "regular expressions are allowed",
     )
     parser.add_argument(
-        "-i", "--ignored", default="version_python", help="List of columns to ignore"
+        "-i", "--ignored", default="^version_.*", help="List of columns to ignore"
     )
     parser.add_argument(
         "-f",
         "--formula",
-        default="speedup,bucket[speedup],ERR1,n_models,n_eager,"
-        "n_running,n_acc01,n_acc001,n_dynamic,n_pass,n_faster,"
-        "n_faster2x,n_faster3x,n_faster4x,n_attention,"
-        "peak_gpu_torch,peak_gpu_nvidia,n_control_flow,"
-        "n_constant,n_shape,n_expand,"
-        "n_function,n_initializer,n_scatter,time_export_unbiased",
+        default="speedup,bucket[speedup],ERR1,n_models,n_model_eager,"
+        "n_model_running,n_model_acc01,n_model_acc001,n_model_dynamic,"
+        "n_model_pass,n_model_faster,"
+        "n_model_faster2x,n_model_faster3x,n_model_faster4x,n_node_attention,"
+        "peak_gpu_torch,peak_gpu_nvidia,n_node_control_flow,"
+        "n_node_constant,n_node_shape,n_node_expand,"
+        "n_node_function,n_node_initializer,n_node_scatter,"
+        "time_export_unbiased",
         help="Columns to compute after the aggregation was done.",
     )
     parser.add_argument(
@@ -702,7 +704,7 @@ def _cmd_agg(argv: List[Any]):
             args.inputs, verbose=args.verbose, filtering=lambda name: bool(reg.search(name))
         )
     )
-    assert csv, f"No csv files in {args.inputs}"
+    assert csv, f"No csv files in {args.inputs}, csv={csv}"
     if args.verbose:
         from tqdm import tqdm
 
@@ -712,7 +714,9 @@ def _cmd_agg(argv: List[Any]):
     dfs = []
     for c in loop:
         df = open_dataframe(c)
-        assert args.time in df.columns, f"Missing time column {args.time!r} in {c.head()!r}"
+        assert (
+            args.time in df.columns
+        ), f"Missing time column {args.time!r} in {c!r}\n{df.head()}\n{sorted(df.columns)}"
         dfs.append(df)
 
     cube = CubeLogsPerformance(
