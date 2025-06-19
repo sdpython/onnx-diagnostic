@@ -508,7 +508,7 @@ class CubeLogs:
                 agg_kwargs = view_def.agg_kwargs or {}
                 agg_args = ({c: view_def.agg_args(c) for c in values},)
             else:
-                agg_args = view_def.agg_args
+                agg_args = view_def.agg_args  # type: ignore[assignment]
                 agg_kwargs = view_def.agg_kwargs or {}
             data = grouped_data.agg(*agg_args, **agg_kwargs)
             if view_def.agg_multi:
