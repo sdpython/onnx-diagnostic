@@ -573,7 +573,7 @@ class CubeLogs:
                 )
         else:
             if verbose:
-                print("[CubeLogs.view] keep all colums")
+                print("[CubeLogs.view] keep all columns")
             key_columns = sorted(set_key_columns)
             unique = set()
 
