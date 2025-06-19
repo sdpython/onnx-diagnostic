@@ -647,7 +647,8 @@ def get_parser_agg() -> ArgumentParser:
     parser.add_argument(
         "-k",
         "--keys",
-        default="^version_.*,^model_.*,device,opt_patterns,suite,memory_peak,machine,exporter,dynamic,rtopt,dtype,device,architecture",
+        default="^version_.*,^model_.*,device,opt_patterns,suite,memory_peak,"
+        "machine,exporter,dynamic,rtopt,dtype,device,architecture",
         help="List of columns to consider as keys, "
         "multiple values are separated by `,`\n"
         "regular expressions are allowed",
@@ -655,7 +656,7 @@ def get_parser_agg() -> ArgumentParser:
     parser.add_argument(
         "-w",
         "--values",
-        default="^time_.*,^disc.*,^ERR_.*,CMD,^ITER.*",
+        default="^time_.*,^disc.*,^ERR_.*,CMD,^ITER.*,^onnx_.*,^op_onnx_.*",
         help="List of columns to consider as values, "
         "multiple values are separated by `,`\n"
         "regular expressions are allowed",
@@ -666,12 +667,18 @@ def get_parser_agg() -> ArgumentParser:
     parser.add_argument(
         "-f",
         "--formula",
-        default="speedup,bucket[speedup],ERR1",
+        default="speedup,bucket[speedup],ERR1,n_models,n_eager,"
+        "n_running,n_acc01,n_acc001,n_dynamic,n_pass,n_faster,"
+        "n_faster2x,n_faster3x,n_faster4x,n_attention,"
+        "peak_gpu_torch,peak_gpu_nvidia,n_control_flow,"
+        "n_constant,n_shape,n_expand,"
+        "n_function,n_initializer,n_scatter,time_export_unbiased",
         help="Columns to compute after the aggregation was done.",
     )
     parser.add_argument(
         "--views",
-        default="agg-suite,disc,speedup,time,time_export,err,cmd,bucket-speedup,raw-short",
+        default="agg-suite,disc,speedup,time,time_export,err,cmd,"
+        "bucket-speedup,raw-short,counts",
         help="Views to add to the output files.",
     )
     parser.add_argument(

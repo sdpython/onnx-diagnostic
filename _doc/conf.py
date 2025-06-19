@@ -121,6 +121,7 @@ nitpick_ignore = [
     ("py:class", "Module"),
     ("py:class", "np.ndarray"),
     ("py:class", "onnx_ir.Tuple"),
+    ("py:class", "pandas.core.groupby.generic.DataFrameGroupBy"),
     ("py:class", "pipeline.Pipeline"),
     ("py:class", "torch.fx.passes.operator_support.OperatorSupport"),
     ("py:class", "torch.fx.proxy.TracerBase"),
