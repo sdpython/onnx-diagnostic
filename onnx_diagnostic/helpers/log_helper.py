@@ -227,7 +227,12 @@ class CubeLogs:
         values: Sequence[str] = ("time_.*", "disc_.*"),
         ignored: Sequence[str] = (),
         recent: bool = False,
-        formulas: Optional[Dict[str, Callable[[pandas.DataFrame], pandas.Series]]] = None,
+        formulas: Optional[
+            Union[
+                Sequence[str],
+                Dict[str, Union[str, Callable[[pandas.DataFrame], pandas.Series]]],
+            ]
+        ] = None,
         fill_missing: Optional[Sequence[Tuple[str, Any]]] = None,
     ):
         self._data = data
