@@ -4,11 +4,12 @@ import glob
 import os
 import pprint
 import re
+import warnings
 import zipfile
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 import numpy as np
 import pandas
-from pandas.api.types import is_numeric_dtype
+from pandas.api.types import is_numeric_dtype, is_datetime64_any_dtype
 from .helper import string_sig
 
 BUCKET_SCALES_VALUES = np.array(
@@ -66,13 +67,9 @@ def enumerate_csv_files(
                 # We check the first line is ok.
                 if verbose:
                     print(f"[enumerate_csv_files] data[{itn}] is a csv file: {filename!r}]")
-                with open(filename, "r", encoding="utf-8") as f:
-                    line = f.readline()
-                    if "~help" in line or (",CMD" not in line and ",DATE" not in line):
-                        continue
-                    dt = datetime.datetime.fromtimestamp(os.stat(filename).st_mtime)
-                    du = dt.strftime("%Y-%m-%d %H:%M:%S")
-                    yield (os.path.split(filename)[-1], du, filename, "")
+                dt = datetime.datetime.fromtimestamp(os.stat(filename).st_mtime)
+                du = dt.strftime("%Y-%m-%d %H:%M:%S")
+                yield (os.path.split(filename)[-1], du, filename, "")
                 continue
 
             if ext == ".zip":
@@ -230,7 +227,13 @@ class CubeLogs:
         values: Sequence[str] = ("time_.*", "disc_.*"),
         ignored: Sequence[str] = (),
         recent: bool = False,
-        formulas: Optional[Dict[str, Callable[[pandas.DataFrame], pandas.Series]]] = None,
+        formulas: Optional[
+            Union[
+                Sequence[str],
+                Dict[str, Union[str, Callable[[pandas.DataFrame], pandas.Series]]],
+            ]
+        ] = None,
+        fill_missing: Optional[Sequence[Tuple[str, Any]]] = None,
     ):
         self._data = data
         self._time = time
@@ -239,6 +242,7 @@ class CubeLogs:
         self._ignored = ignored
         self.recent = recent
         self._formulas = formulas
+        self.fill_missing = fill_missing
 
     def load(self, verbose: int = 0):
         """Loads and preprocesses the data. Returns self."""
@@ -246,10 +250,14 @@ class CubeLogs:
             if verbose:
                 print(f"[CubeLogs.load] load from dataframe, shape={self._data.shape}")
             self.data = self.post_load_process_piece(self._data, unique=True)
+            if verbose:
+                print(f"[CubeLogs.load] after postprocessing shape={self.data.shape}")
         elif isinstance(self._data, list) and all(isinstance(r, dict) for r in self._data):
             if verbose:
                 print(f"[CubeLogs.load] load from list of dicts, n={len(self._data)}")
             self.data = pandas.DataFrame(self.post_load_process_piece(self._data, unique=True))
+            if verbose:
+                print(f"[CubeLogs.load] after postprocessing shape={self.data.shape}")
         elif isinstance(self._data, list) and all(
             isinstance(r, pandas.DataFrame) for r in self._data
         ):
@@ -258,7 +266,11 @@ class CubeLogs:
             self.data = pandas.concat(
                 [self.post_load_process_piece(c) for c in self._data], axis=0
             )
+            if verbose:
+                print(f"[CubeLogs.load] after postprocessing shape={self.data.shape}")
         elif isinstance(self._data, list):
+            if verbose:
+                print("[CubeLogs.load] load from list of Cubes")
             cubes = []
             for item in enumerate_csv_files(self._data, verbose=verbose):
                 df = open_dataframe(item)
@@ -273,6 +285,8 @@ class CubeLogs:
                 cube.load()
                 cubes.append(self.post_load_process_piece(cube.data))
             self.data = pandas.concat(cubes, axis=0)
+            if verbose:
+                print(f"[CubeLogs.load] after postprocessing shape={self.data.shape}")
         else:
             raise NotImplementedError(
                 f"Not implemented with the provided data (type={type(self._data)})"
@@ -321,7 +335,11 @@ class CubeLogs:
             print(f"[CubeLogs.load] data.shape={self.data.shape}")
 
         shape = self.data.shape
+        if verbose:
+            print(f"[CubeLogs.load] removed columns, shape={self.data.shape}")
         self._preprocess()
+        if verbose:
+            print(f"[CubeLogs.load] preprocess, shape={self.data.shape}")
         assert (
             self.data.shape[0] > 0
         ), f"The preprocessing reduced shape {shape} to {self.data.shape}."
@@ -408,11 +426,6 @@ class CubeLogs:
             self.data = filtered.drop("__index__", axis=1)
         else:
             assert gr.shape[0] == 0, f"There are duplicated rows:\n{gr}"
-            gr = self.data[self.keys_time].groupby(self.keys_no_time, dropna=False).count()
-            gr = gr[gr[self.time] > 1]
-            assert (
-                gr.shape[0] == 0
-            ), f"recent should be true to keep the most recent row:\n{gr}"
 
     @classmethod
     def _filter_column(cls, filters, columns, can_be_empty=False):
@@ -454,7 +467,10 @@ class CubeLogs:
         return str(self.data) if hasattr(self, "data") else str(self._data)
 
     def view(
-        self, view_def: Union[str, CubeViewDef], return_view_def: bool = False
+        self,
+        view_def: Union[str, CubeViewDef],
+        return_view_def: bool = False,
+        verbose: int = 0,
     ) -> Union[pandas.DataFrame, Tuple[pandas.DataFrame, CubeViewDef]]:
         """
         Returns a dataframe, a pivot view.
@@ -464,11 +480,14 @@ class CubeLogs:
 
         :param view_def: view definition
         :param return_view_def: returns the view as well
+        :param verbose: verbosity level
         :return: dataframe
         """
         assert isinstance(
             view_def, CubeViewDef
         ), f"view_def should be a CubeViewDef, got {type(view_def)}: {view_def!r} instead"
+        if verbose:
+            print(f"[CubeLogs.view] -- start view {view_def.name!r}: {view_def}")
         key_agg = (
             self._filter_column(view_def.key_agg, self.keys_time) if view_def.key_agg else []
         )
@@ -486,6 +505,7 @@ class CubeLogs:
             f"values={sorted(self.values)}"
         )
 
+        # aggregation
         if key_agg:
             final_stack = True
             key_index = [
@@ -494,6 +514,9 @@ class CubeLogs:
                 if c not in set_key_agg
             ]
             keys_no_agg = [c for c in self.keys_time if c not in set_key_agg]
+            if verbose:
+                print(f"[CubeLogs.view] aggregation of {set_key_agg}")
+                print(f"[CubeLogs.view] groupby {keys_no_agg}")
 
             data_red = self.data[[*keys_no_agg, *values]]
             assert set(key_index) <= set(data_red.columns), (
@@ -522,6 +545,8 @@ class CubeLogs:
             data = data.reset_index(drop=False)
         else:
             key_index = self._filter_column(view_def.key_index, self.keys_time)
+            if verbose:
+                print(f"[CubeLogs.view] no aggregation, index={key_index}")
             data = self.data[[*self.keys_time, *values]]
             set_all_keys = set(self.keys_time)
             final_stack = False
@@ -531,6 +556,7 @@ class CubeLogs:
             f"Non existing keys in key_index {set(key_index) - set_all_keys}"
         )
 
+        # remove unnecessary column
         set_key_columns = {
             c for c in self.keys_time if c not in key_index and c not in set(key_agg)
         }
@@ -546,7 +572,15 @@ class CubeLogs:
             )
             key_index = [k for k in key_index if k not in unique or k in keep_anyway]
             key_columns = [k for k in set_key_columns if k not in unique or k in keep_anyway]
+            if verbose:
+                print(f"[CubeLogs.view] unique={unique}, keep_anyway={keep_anyway}")
+                print(
+                    f"[CubeLogs.view] columns with unique values "
+                    f"{set(key_index0) - set(key_index)}"
+                )
         else:
+            if verbose:
+                print("[CubeLogs.view] keep all columns")
             key_columns = sorted(set_key_columns)
             unique = set()
 
@@ -565,16 +599,22 @@ class CubeLogs:
             f"agg={set(key_agg)}, keys={set(self.keys_time)}, values={values}"
         )
 
+        # reorder
         if view_def.order:
-            assert set(view_def.order) <= set_key_columns, (
+            subset = self._filter_column(view_def.order, all_cols | {self.time})
+            corder = [o for o in view_def.order if o in subset]
+            assert set(corder) <= set_key_columns, (
                 f"view_def.name={view_def.name!r}, "
                 f"non existing columns from order in key_columns "
-                f"{set(view_def.order) - set_key_columns}"
+                f"{set(corder) - set_key_columns}"
             )
             key_columns = [
-                *view_def.order,
+                *[o for o in corder if o in key_columns],
                 *[c for c in key_columns if c not in view_def.order],
             ]
+        else:
+            corder = None
+
         if view_def.dropna:
             data, key_index, key_columns, values = self._dropna(  # type: ignore[assignment]
                 data,
@@ -584,6 +624,8 @@ class CubeLogs:
                 keep_columns_in_index=view_def.keep_columns_in_index,
             )
         if view_def.ignore_columns:
+            if verbose:
+                print(f"[CubeLogs.view] ignore_columns {view_def.ignore_columns}")
             data = data.drop(view_def.ignore_columns, axis=1)
             seti = set(view_def.ignore_columns)
             if view_def.keep_columns_in_index:
@@ -599,6 +641,9 @@ class CubeLogs:
         )
 
         # final verification
+        if verbose:
+            print(f"[CubeLogs.view] key_index={key_index}")
+            print(f"[CubeLogs.view] key_columns={key_columns}")
         g = data[[*key_index, *key_columns]].copy()
         g["count"] = 1
         r = g.groupby([*key_index, *key_columns], dropna=False).sum()
@@ -611,6 +656,10 @@ class CubeLogs:
             f"not unique={set(data.columns) - unique}"
             f"\n--\n{not_unique.head()}"
         )
+
+        # pivot
+        if verbose:
+            print(f"[CubeLogs.view] values={values}")
         piv = data.pivot(index=key_index[::-1], columns=key_columns, values=values)
         if isinstance(piv, pandas.Series):
             piv = piv.to_frame(name="series")
@@ -627,8 +676,33 @@ class CubeLogs:
         if isinstance(piv, pandas.Series):
             piv = piv.to_frame("VALUE")
         piv.sort_index(inplace=True)
+
+        if isinstance(piv.columns, pandas.MultiIndex):
+            if corder:
+                # reorder the levels for the columns with the view definition
+                new_corder = [c for c in corder if c in piv.columns.names]
+                new_names = [
+                    *[c for c in piv.columns.names if c not in new_corder],
+                    *new_corder,
+                ]
+                piv.columns = piv.columns.reorder_levels(new_names)
+            elif self.time in piv.columns.names:
+                # put time at the end
+                new_names = list(piv.columns.names)
+                ind = new_names.index(self.time)
+                if ind < len(new_names) - 1:
+                    del new_names[ind]
+                    new_names.append(self.time)
+                    piv.columns = piv.columns.reorder_levels(new_names)
+
         if view_def.no_index:
             piv = piv.reset_index(drop=False)
+        else:
+            piv.sort_index(inplace=True, axis=1)
+
+        if verbose:
+            print(f"[CubeLogs.view] levels {piv.index.names}, {piv.columns.names}")
+            print(f"[CubeLogs.view] -- done view {view_def.name!r}")
         return (piv, view_def) if return_view_def else piv
 
     def _dropna(
@@ -712,8 +786,19 @@ class CubeLogs:
                             max=nonan.max(),
                             mean=nonan.mean(),
                             sum=nonan.sum(),
+                            n_values=len(set(nonan)),
                         )
                     )
+                elif obs["kind"] == "time":
+                    unique = set(nonan)
+                    obs["n_values"] = len(unique)
+                    o = dict(
+                        min=str(nonan.min()),
+                        max=str(nonan.max()),
+                        n_values=len(set(nonan)),
+                    )
+                    o["values"] = f"{o['min']} - {o['max']}"
+                    obs.update(o)
                 else:
                     unique = set(nonan)
                     obs["n_values"] = len(unique)
@@ -741,35 +826,66 @@ class CubeLogs:
         :param csv: views to dump as csv files (same name as outputs + view naw)
         :param verbose: verbosity
         """
+        if verbose:
+            print(f"[CubeLogs.to_excel] create Excel file {output}, shape={self.shape}")
         views = {k: k for k in views} if not isinstance(views, dict) else views
         with pandas.ExcelWriter(output, engine="openpyxl") as writer:
             if main:
                 assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
                 df = self.describe().sort_values("name")
                 if verbose:
-                    print(f"[CubeLogs.to_helper] add sheet {main!r} with shape {df.shape}")
+                    print(f"[CubeLogs.to_excel] add sheet {main!r} with shape {df.shape}")
                 df.to_excel(writer, sheet_name=main, freeze_panes=(1, 1))
                 self._apply_excel_style(main, writer, df)
 
             for name, view in views.items():
-                df, tview = self.view(view, return_view_def=True)
+                df, tview = self.view(view, return_view_def=True, verbose=max(verbose - 1, 0))
+                memory = df.memory_usage(deep=True).sum()
                 if verbose:
                     print(
-                        f"[CubeLogs.to_helper] add sheet {name!r} with shape "
-                        f"{df.shape}, index={df.index.names}, columns={df.columns.names}"
+                        f"[CubeLogs.to_excel] add sheet {name!r} with shape "
+                        f"{df.shape} ({memory} bytes), index={df.index.names}, "
+                        f"columns={df.columns.names}"
                     )
-                df.to_excel(
-                    writer,
-                    sheet_name=name,
-                    freeze_panes=(df.columns.nlevels + df.index.nlevels, df.index.nlevels),
-                )
-                self._apply_excel_style(name, writer, df, f_highlight=tview.f_highlight)
+                if self.time in df.columns.names:
+                    # Let's convert the time into str
+                    fr = df.columns.to_frame()
+                    if is_datetime64_any_dtype(fr[self.time]):
+                        dt = fr[self.time]
+                        has_time = (dt != dt.dt.normalize()).any()
+                        sdt = dt.apply(
+                            lambda t, has_time=has_time: t.strftime(
+                                "%Y-%m-%dT%H-%M-%S" if has_time else "%Y-%m-%d"
+                            )
+                        )
+                        fr[self.time] = sdt
+                        df.columns = pandas.MultiIndex.from_frame(fr)
                 if csv and name in csv:
+                    name_csv = f"{output}.{name}.csv"
+                    if verbose:
+                        print(f"[CubeLogs.to_excel] saving sheet {name!r} in {name_csv!r}")
                     df.reset_index(drop=False).to_csv(f"{output}.{name}.csv", index=False)
+
+                if memory > 2**22:
+                    msg = (
+                        f"[CubeLogs.to_excel] skipping {name!r}, "
+                        f"too big for excel {memory} bytes"
+                    )
+                    if verbose:
+                        print(msg)
+                    else:
+                        warnings.warn(msg, category=RuntimeWarning, stacklevel=0)
+                else:
+                    df.to_excel(
+                        writer,
+                        sheet_name=name,
+                        freeze_panes=(df.columns.nlevels + df.index.nlevels, df.index.nlevels),
+                    )
+                    self._apply_excel_style(name, writer, df, f_highlight=tview.f_highlight)
             if raw:
                 assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
                 if verbose:
-                    print(f"[CubeLogs.to_helper] add sheet {raw!r} with shape {self.shape}")
+                    print(f"[CubeLogs.to_excel] add sheet {raw!r} with shape {self.shape}")
                 self.data.to_excel(writer, sheet_name=raw, freeze_panes=(1, 1), index=True)
                 # Too long.
                 # self._apply_excel_style(raw, writer, self.data)
@@ -777,7 +893,7 @@ class CubeLogs:
                     df.reset_index(drop=False).to_csv(f"{output}.raw.csv", index=False)
 
         if verbose:
-            print(f"[CubeLogs.to_helper] done with {len(views)} views")
+            print(f"[CubeLogs.to_excel] done with {len(views)} views")
 
     def _apply_excel_style(
         self,
@@ -883,6 +999,12 @@ class CubeLogs:
         Postprocesses a piece when a cube is made of multiple pieces
         before it gets merged.
         """
+        if not self.fill_missing:
+            return df
+        missing = dict(self.fill_missing)
+        for k, v in missing.items():
+            if k not in df.columns:
+                df[k] = v
         return df
 
 
@@ -918,6 +1040,7 @@ class CubeLogsPerformance(CubeLogs):
             "^ITER",
             "^onnx_.*",
             "^op_onnx_.*",
+            "^peak_gpu_.*",
         ),
         ignored: Sequence[str] = ("version_python",),
         recent: bool = True,
@@ -931,36 +1054,40 @@ class CubeLogsPerformance(CubeLogs):
             "bucket[speedup]",
             "ERR1",
             "n_models",
-            "n_eager",
-            "n_running",
-            "n_acc01",
-            "n_acc001",
-            "n_dynamic",
-            "n_pass",
-            "n_faster",
-            "n_faster2x",
-            "n_faster3x",
-            "n_faster4x",
-            "n_attention",
-            "n_control_flow",
-            "n_scatter",
-            "n_function",
-            "n_initializer",
-            "n_constant",
-            "n_shape",
-            "n_expand",
+            "n_model_eager",
+            "n_model_running",
+            "n_model_acc01",
+            "n_model_acc001",
+            "n_model_dynamic",
+            "n_model_pass",
+            "n_model_faster",
+            "n_model_faster2x",
+            "n_model_faster3x",
+            "n_model_faster4x",
+            "n_node_attention",
+            "n_node_control_flow",
+            "n_node_scatter",
+            "n_node_function",
+            "n_node_initializer",
+            "n_node_constant",
+            "n_node_shape",
+            "n_node_expand",
             "peak_gpu_torch",
             "peak_gpu_nvidia",
             "time_export_unbiased",
         ),
+        fill_missing: Optional[Sequence[Tuple[str, Any]]] = (("model_attn_impl", "eager"),),
     ):
-        self._data = data
-        self._time = time
-        self._keys = keys
-        self._values = values
-        self._ignored = ignored
-        self.recent = recent
-        self._formulas = formulas  # type: ignore[assignment]
+        super().__init__(
+            data=data,
+            time=time,
+            keys=keys,
+            values=values,
+            ignored=ignored,
+            recent=recent,
+            formulas=formulas,
+            fill_missing=fill_missing,
+        )
 
     def _process_formula(
         self, formula: Union[str, Callable[[pandas.DataFrame], pandas.Series]]
@@ -1048,52 +1175,52 @@ class CubeLogsPerformance(CubeLogs):
         if formula.startswith("n_"):
             lambdas = dict(
                 n_models=lambda df: ghas_value(df, "model_name"),
-                n_eager=lambda df: ghas_value(df, "time_latency_eager"),
-                n_running=lambda df: ghas_value(df, "time_latency"),
-                n_acc01=lambda df: gpreserve(
+                n_model_eager=lambda df: ghas_value(df, "time_latency_eager"),
+                n_model_running=lambda df: ghas_value(df, "time_latency"),
+                n_model_acc01=lambda df: gpreserve(
                     df, "discrepancies_abs", (gdf(df, "discrepancies_abs") <= 0.1)
                 ),
-                n_acc001=lambda df: gpreserve(
+                n_model_acc001=lambda df: gpreserve(
                     df, "discrepancies_abs", gdf(df, "discrepancies_abs") <= 0.01
                 ),
-                n_dynamic=lambda df: gpreserve(
+                n_model_dynamic=lambda df: gpreserve(
                     df,
                     "discrepancies_dynamic_abs",
                     (gdf(df, "discrepancies_dynamic_abs") <= 0.1),
                 ),
-                n_pass=lambda df: gpreserve(
+                n_model_pass=lambda df: gpreserve(
                     df,
                     "time_latency",
                     (gdf(df, "discrepancies_abs", np.inf) < 0.1)
                     & (gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 0.98),
                 ),
-                n_faster=lambda df: gpreserve(
+                n_model_faster=lambda df: gpreserve(
                     df,
                     "time_latency",
                     gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 0.98,
                 ),
-                n_faster2x=lambda df: gpreserve(
+                n_model_faster2x=lambda df: gpreserve(
                     df,
                     "time_latency",
                     gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 1.98,
                 ),
-                n_faster3x=lambda df: gpreserve(
+                n_model_faster3x=lambda df: gpreserve(
                     df,
                     "time_latency",
                     gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 2.98,
                 ),
-                n_faster4x=lambda df: gpreserve(
+                n_model_faster4x=lambda df: gpreserve(
                     df,
                     "time_latency",
                     gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 3.98,
                 ),
-                n_attention=lambda df: gpreserve(
+                n_node_attention=lambda df: gpreserve(
                     df,
                     "op_onnx_com.microsoft_Attention",
                     gdf(df, "op_onnx_com.microsoft_Attention")
                     + gdf(df, "op_onnx_com.microsoft_MultiHeadAttention"),
                 ),
-                n_control_flow=lambda df: gpreserve(
+                n_node_control_flow=lambda df: gpreserve(
                     df,
                     "op_onnx__If",
                     (
@@ -1102,22 +1229,24 @@ class CubeLogsPerformance(CubeLogs):
                         + gdf(df, "op_onnx__Loop", 0)
                     ),
                 ),
-                n_scatter=lambda df: gpreserve(
+                n_node_scatter=lambda df: gpreserve(
                     df,
                     "op_onnx__ScatterND",
                     gdf(df, "op_onnx__ScatterND", 0) + gdf(df, "op_onnx__ScatterElements", 0),
                 ),
-                n_function=lambda df: gpreserve(
+                n_node_function=lambda df: gpreserve(
                     df, "onnx_n_functions", gdf(df, "onnx_n_functions")
                 ),
-                n_initializer=lambda df: gpreserve(
+                n_node_initializer=lambda df: gpreserve(
                     df, "onnx_n_initializer", gdf(df, "onnx_n_initializer")
                 ),
-                n_constant=lambda df: gpreserve(
+                n_node_constant=lambda df: gpreserve(
                     df, "op_onnx__Constant", gdf(df, "op_onnx__Constant")
                 ),
-                n_shape=lambda df: gpreserve(df, "op_onnx__Shape", gdf(df, "op_onnx__Shape")),
-                n_expand=lambda df: gpreserve(
+                n_node_shape=lambda df: gpreserve(
+                    df, "op_onnx__Shape", gdf(df, "op_onnx__Shape")
+                ),
+                n_node_expand=lambda df: gpreserve(
                     df, "op_onnx__Expand", gdf(df, "op_onnx__Expand")
                 ),
             )
@@ -1129,7 +1258,9 @@ class CubeLogsPerformance(CubeLogs):
         if formula == "peak_gpu_torch":
             return lambda df: gdf(df, "mema_gpu_5_after_export") - gdf(df, "mema_gpu_4_reset")
         if formula == "peak_gpu_nvidia":
-            return lambda df: gdf(df, "memory_gpu0_peak") - gdf(df, "memory_gpu0_begin")
+            return (
+                lambda df: (gdf(df, "memory_gpu0_peak") - gdf(df, "memory_gpu0_begin")) * 2**20
+            )
         if formula == "time_export_unbiased":
 
             def unbiased_export(df):
@@ -1152,7 +1283,10 @@ class CubeLogsPerformance(CubeLogs):
         )
 
     def view(
-        self, view_def: Union[str, CubeViewDef], return_view_def: bool = False
+        self,
+        view_def: Union[str, CubeViewDef],
+        return_view_def: bool = False,
+        verbose: int = 0,
     ) -> Union[pandas.DataFrame, Tuple[pandas.DataFrame, CubeViewDef]]:
         """
         Returns a dataframe, a pivot view.
@@ -1161,11 +1295,12 @@ class CubeLogsPerformance(CubeLogs):
 
         :param view_def: view definition or a string
         :param return_view_def: returns the view definition as well
+        :param verbose: verbosity level
         :return: dataframe
         """
         if isinstance(view_def, str):
             view_def = self.make_view_def(view_def)
-        return super().view(view_def, return_view_def=return_view_def)
+        return super().view(view_def, return_view_def=return_view_def, verbose=verbose)
 
     def make_view_def(self, name: str) -> CubeViewDef:
         """
@@ -1253,6 +1388,7 @@ class CubeLogsPerformance(CubeLogs):
             x = gr["speedup"]
             return np.exp(np.log(x.dropna()).mean())
 
+        order = ["model_attn_impl", "exporter", "opt_patterns", "DATE"]
         implemented_views = {
             "agg-suite": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1281,6 +1417,7 @@ class CubeLogsPerformance(CubeLogs):
                 agg_multi={"speedup_weighted": mean_weight, "speedup_geo": mean_geo},
                 keep_columns_in_index=["suite"],
                 name="agg-suite",
+                order=order,
             ),
             "disc": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1289,6 +1426,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 f_highlight=f_disc,
                 name="disc",
+                order=order,
             ),
             "speedup": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1297,6 +1435,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 f_highlight=f_speedup,
                 name="speedup",
+                order=order,
             ),
             "counts": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1304,6 +1443,15 @@ class CubeLogsPerformance(CubeLogs):
                 ignore_unique=True,
                 keep_columns_in_index=["suite"],
                 name="counts",
+                order=order,
+            ),
+            "peak-gpu": lambda: CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(["^peak_gpu_.*"], self.values),
+                ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="peak-gpu",
+                order=order,
             ),
             "time": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1313,6 +1461,7 @@ class CubeLogsPerformance(CubeLogs):
                 ignore_unique=True,
                 keep_columns_in_index=["suite"],
                 name="time",
+                order=order,
             ),
             "time_export": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1320,6 +1469,7 @@ class CubeLogsPerformance(CubeLogs):
                 ignore_unique=True,
                 keep_columns_in_index=["suite"],
                 name="time_export",
+                order=order,
             ),
             "err": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1329,6 +1479,7 @@ class CubeLogsPerformance(CubeLogs):
                 ignore_unique=True,
                 keep_columns_in_index=["suite"],
                 name="err",
+                order=order,
             ),
             "bucket-speedup": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1337,6 +1488,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="bucket-speedup",
                 f_highlight=f_bucket,
+                order=order,
             ),
             "cmd": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1344,11 +1496,12 @@ class CubeLogsPerformance(CubeLogs):
                 ignore_unique=True,
                 keep_columns_in_index=["suite"],
                 name="cmd",
+                order=order,
             ),
             "raw-short": lambda: CubeViewDef(
                 key_index=self.keys_time,
-                values=[c for c in self.values if c not in {"ERR_std", "ERR_stdout", "CMD"}],
-                ignore_unique=True,
+                values=[c for c in self.values if c not in {"ERR_std", "ERR_stdout"}],
+                ignore_unique=False,
                 keep_columns_in_index=["suite"],
                 name="raw-short",
                 no_index=True,
@@ -1364,6 +1517,7 @@ class CubeLogsPerformance(CubeLogs):
     def post_load_process_piece(
         self, df: pandas.DataFrame, unique: bool = False
     ) -> pandas.DataFrame:
+        df = super().post_load_process_piece(df, unique=unique)
         if unique:
             return df
         cols = self._filter_column(self._keys, df)

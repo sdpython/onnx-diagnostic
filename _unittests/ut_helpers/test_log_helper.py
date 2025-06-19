@@ -3,6 +3,7 @@ import os
 import textwrap
 import unittest
 import zipfile
+import numpy as np
 import pandas
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.helpers.log_helper import (
@@ -46,7 +47,6 @@ class TestLogHelper(ExtTestCase):
         cube = CubeLogs(df)
         text = str(cube)
         self.assertIsInstance(text, str)
-        self.assertRaise(lambda: cube.load(verbose=1), AssertionError)
         cube = CubeLogs(
             self.df1(),
             recent=True,
@@ -130,12 +130,12 @@ class TestLogHelper(ExtTestCase):
         self.assertEqual((2, 6), view.shape)
         self.assertEqual(
             [
-                ("time_baseline", "export", "phi3"),
-                ("time_baseline", "export", "phi4"),
-                ("time_baseline", "onnx-dynamo", "phi4"),
-                ("time_latency", "export", "phi3"),
-                ("time_latency", "export", "phi4"),
-                ("time_latency", "onnx-dynamo", "phi4"),
+                ("time_baseline", "phi3", "export"),
+                ("time_baseline", "phi4", "export"),
+                ("time_baseline", "phi4", "onnx-dynamo"),
+                ("time_latency", "phi3", "export"),
+                ("time_latency", "phi4", "export"),
+                ("time_latency", "phi4", "onnx-dynamo"),
             ],
             list(view.columns),
         )
@@ -228,6 +228,55 @@ class TestLogHelper(ExtTestCase):
             ],
         )
         self.assertExists(output)
+
+    def test_duplicate(self):
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/01", time_engine=0.5, model_name="A", version_engine="0.5"),
+                dict(date="2025/01/01", time_engine=0.5, model_name="A", version_engine="0.5"),
+            ]
+        )
+        cube = CubeLogs(df)
+        self.assertRaise(lambda: cube.load(), AssertionError)
+        CubeLogs(df, recent=True).load()
+
+    def test_historical(self):
+        # case 1
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/01", time_p=0.51, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.62, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/01", time_p=0.53, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.64, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/01", time_p=0.55, exporter="E2", m_name="B", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.66, exporter="E2", m_name="B", m_cls="CA"),
+            ]
+        )
+        cube = CubeLogs(df, keys=["^m_*", "exporter"]).load()
+        view, view_def = cube.view(CubeViewDef(["^m_.*"], ["^time_.*"]), return_view_def=True)
+        self.assertEqual(
+            "CubeViewDef(key_index=['^m_.*'], values=['^time_.*'])", repr(view_def)
+        )
+        self.assertEqual(["METRICS", "exporter", "date"], view.columns.names)
+        got = view.values.ravel()
+        self.assertEqual(
+            sorted([0.51, 0.62, 0.53, 0.64, -1, -1, 0.55, 0.66]),
+            sorted(np.where(np.isnan(got), -1, got).tolist()),
+        )
+
+        # case 2
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/02", time_p=0.62, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.64, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/01", time_p=0.51, exporter="E1", m_name="B", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.66, exporter="E2", m_name="B", m_cls="CA"),
+            ]
+        )
+        cube = CubeLogs(df, keys=["^m_*", "exporter"]).load()
+        view, view_def = cube.view(CubeViewDef(["^m_.*"], ["^time_.*"]), return_view_def=True)
+        self.assertEqual((2, 3), view.shape)
+        self.assertEqual(["METRICS", "exporter", "date"], view.columns.names)
 
 
 if __name__ == "__main__":

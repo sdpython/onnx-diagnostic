@@ -4,7 +4,8 @@ Change Logs
 0.7.1
 +++++
 
-* :pr:`151`: adds command line ``agg``, class CubeLogsPerformance to produce timeseries
+* :pr:`155`: better aggregation of historical data
+* :pr:`151`, :pr:`153`: adds command line ``agg``, class CubeLogsPerformance to produce timeseries
 * :pr:`152`: add a function to compute fully dynamic shapes given any inputs
 
 0.7.0
