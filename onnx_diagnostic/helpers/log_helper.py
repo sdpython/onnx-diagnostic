@@ -228,6 +228,7 @@ class CubeLogs:
         ignored: Sequence[str] = (),
         recent: bool = False,
         formulas: Optional[Dict[str, Callable[[pandas.DataFrame], pandas.Series]]] = None,
+        fill_missing: Optional[Sequence[Tuple[str, Any]]] = None,
     ):
         self._data = data
         self._time = time
@@ -236,6 +237,7 @@ class CubeLogs:
         self._ignored = ignored
         self.recent = recent
         self._formulas = formulas
+        self.fill_missing = fill_missing
 
     def load(self, verbose: int = 0):
         """Loads and preprocesses the data. Returns self."""
@@ -992,6 +994,12 @@ class CubeLogs:
         Postprocesses a piece when a cube is made of multiple pieces
         before it gets merged.
         """
+        if not self.fill_missing:
+            return df
+        missing = dict(self.fill_missing)
+        for k, v in missing.items():
+            if k not in df.columns:
+                df[k] = v
         return df
 
 
@@ -1027,6 +1035,7 @@ class CubeLogsPerformance(CubeLogs):
             "^ITER",
             "^onnx_.*",
             "^op_onnx_.*",
+            "^peak_gpu_.*",
         ),
         ignored: Sequence[str] = ("version_python",),
         recent: bool = True,
@@ -1062,14 +1071,18 @@ class CubeLogsPerformance(CubeLogs):
             "peak_gpu_nvidia",
             "time_export_unbiased",
         ),
+        fill_missing: Optional[Sequence[Tuple[str, Any]]] = (("model_attn_impl", "eager"),),
     ):
-        self._data = data
-        self._time = time
-        self._keys = keys
-        self._values = values
-        self._ignored = ignored
-        self.recent = recent
-        self._formulas = formulas  # type: ignore[assignment]
+        super().__init__(
+            data=data,
+            time=time,
+            keys=keys,
+            values=values,
+            ignored=ignored,
+            recent=recent,
+            formulas=formulas,
+            fill_missing=fill_missing,
+        )
 
     def _process_formula(
         self, formula: Union[str, Callable[[pandas.DataFrame], pandas.Series]]
@@ -1240,7 +1253,9 @@ class CubeLogsPerformance(CubeLogs):
         if formula == "peak_gpu_torch":
             return lambda df: gdf(df, "mema_gpu_5_after_export") - gdf(df, "mema_gpu_4_reset")
         if formula == "peak_gpu_nvidia":
-            return lambda df: gdf(df, "memory_gpu0_peak") - gdf(df, "memory_gpu0_begin")
+            return (
+                lambda df: (gdf(df, "memory_gpu0_peak") - gdf(df, "memory_gpu0_begin")) * 2**20
+            )
         if formula == "time_export_unbiased":
 
             def unbiased_export(df):
@@ -1425,6 +1440,14 @@ class CubeLogsPerformance(CubeLogs):
                 name="counts",
                 order=order,
             ),
+            "peak-gpu": lambda: CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(["^peak_gpu_.*"], self.values),
+                ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="peak-gpu",
+                order=order,
+            ),
             "time": lambda: CubeViewDef(
                 key_index=index_cols,
                 values=self._filter_column(
@@ -1489,6 +1512,7 @@ class CubeLogsPerformance(CubeLogs):
     def post_load_process_piece(
         self, df: pandas.DataFrame, unique: bool = False
     ) -> pandas.DataFrame:
+        df = super().post_load_process_piece(df, unique=unique)
         if unique:
             return df
         cols = self._filter_column(self._keys, df)

@@ -680,7 +680,7 @@ def get_parser_agg() -> ArgumentParser:
     parser.add_argument(
         "--views",
         default="agg-suite,disc,speedup,time,time_export,err,cmd,"
-        "bucket-speedup,raw-short,counts",
+        "bucket-speedup,raw-short,counts,peak-gpu",
         help="Views to add to the output files.",
     )
     parser.add_argument(
