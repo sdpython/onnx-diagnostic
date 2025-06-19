@@ -605,6 +605,9 @@ class CubeLogs:
                 *[o for o in corder if o in key_columns],
                 *[c for c in key_columns if c not in view_def.order],
             ]
+        else:
+            corder = None
+
         if view_def.dropna:
             data, key_index, key_columns, values = self._dropna(  # type: ignore[assignment]
                 data,
@@ -666,10 +669,30 @@ class CubeLogs:
         if isinstance(piv, pandas.Series):
             piv = piv.to_frame("VALUE")
         piv.sort_index(inplace=True)
+
+        if isinstance(piv.columns, pandas.MultiIndex):
+            if corder:
+                # reorder the levels for the columns with the view definition
+                new_corder = [c for c in corder if c in piv.columns.names]
+                new_names = [
+                    *[c for c in piv.columns.names if c not in new_corder],
+                    *new_corder,
+                ]
+                piv.columns = piv.columns.reorder_levels(new_names)
+            elif self.time in piv.columns.names:
+                # put time at the end
+                new_names = list(piv.columns.names)
+                ind = new_names.index(self.time)
+                if ind < len(new_names) - 1:
+                    del new_names[ind]
+                    new_names.append(self.time)
+                    piv.columns = piv.columns.reorder_levels(new_names)
+
         if view_def.no_index:
             piv = piv.reset_index(drop=False)
         else:
             piv.sort_index(inplace=True, axis=1)
+
         if verbose:
             print(f"[CubeLogs.view] levels {piv.index.names}, {piv.columns.names}")
             print(f"[CubeLogs.view] -- done view {view_def.name!r}")

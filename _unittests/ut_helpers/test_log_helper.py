@@ -130,12 +130,12 @@ class TestLogHelper(ExtTestCase):
         self.assertEqual((2, 6), view.shape)
         self.assertEqual(
             [
-                ("time_baseline", "export", "phi3"),
-                ("time_baseline", "export", "phi4"),
-                ("time_baseline", "onnx-dynamo", "phi4"),
-                ("time_latency", "export", "phi3"),
-                ("time_latency", "export", "phi4"),
-                ("time_latency", "onnx-dynamo", "phi4"),
+                ("time_baseline", "phi3", "export"),
+                ("time_baseline", "phi4", "export"),
+                ("time_baseline", "phi4", "onnx-dynamo"),
+                ("time_latency", "phi3", "export"),
+                ("time_latency", "phi4", "export"),
+                ("time_latency", "phi4", "onnx-dynamo"),
             ],
             list(view.columns),
         )
