@@ -594,7 +594,8 @@ class CubeLogs:
 
         # reorder
         if view_def.order:
-            corder = self._filter_column(view_def.order, all_cols)
+            subset = self._filter_column(view_def.order, all_cols | {self.time})
+            corder = [o for o in view_def.order if o in subset]
             assert set(corder) <= set_key_columns, (
                 f"view_def.name={view_def.name!r}, "
                 f"non existing columns from order in key_columns "
@@ -835,7 +836,7 @@ class CubeLogs:
                         print(f"[CubeLogs.to_excel] saving sheet {name!r} in {name_csv!r}")
                     df.reset_index(drop=False).to_csv(f"{output}.{name}.csv", index=False)
 
-                if memory > 2**21:
+                if memory > 2**22:
                     msg = (
                         f"[CubeLogs.to_excel] skipping {name!r}, "
                         f"too big for excel {memory} bytes"
