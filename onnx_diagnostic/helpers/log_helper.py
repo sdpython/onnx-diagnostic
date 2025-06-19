@@ -11,6 +11,13 @@ import pandas
 from pandas.api.types import is_numeric_dtype
 from .helper import string_sig
 
+BUCKET_SCALES_VALUES = np.array(
+    [-np.inf, -20, -10, -5, -2, 0, 2, 5, 10, 20, 100, 200, 300, 400, np.inf], dtype=float
+)
+
+
+BUCKET_SCALES = BUCKET_SCALES_VALUES / 100 + 1
+
 
 def enumerate_csv_files(
     data: Union[
@@ -150,7 +157,9 @@ class CubeViewDef:
     :param order: to reorder key in columns index
     :param key_agg: aggregate according to these columns before
         creating the view
-    :param agg_args: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
+    :param agg_args: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`,
+        it can be also a callable to return a different aggregation
+        method depending on the column name
     :param agg_kwargs: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
     :param agg_multi: aggregation over multiple columns
     :param ignore_columns: ignore the following columns if known to overload the view
@@ -159,6 +168,7 @@ class CubeViewDef:
     :param transpose: transpose
     :param f_highlight: to highlights some values
     :param name: name of the view, used mostly to debug
+    :param no_index: remove the index (but keeps the columns)
     """
 
     class HighLightKind(enum.IntEnum):
@@ -173,7 +183,7 @@ class CubeViewDef:
         ignore_unique: bool = True,
         order: Optional[Sequence[str]] = None,
         key_agg: Optional[Sequence[str]] = None,
-        agg_args: Sequence[Any] = ("sum",),
+        agg_args: Union[Sequence[Any], Callable[[str], Any]] = ("sum",),
         agg_kwargs: Optional[Dict[str, Any]] = None,
         agg_multi: Optional[
             Dict[str, Callable[[pandas.core.groupby.DataFrameGroupBy], pandas.Series]]
@@ -184,6 +194,7 @@ class CubeViewDef:
         transpose: bool = False,
         f_highlight: Optional[Callable[[Any], "CubeViewDef.HighLightKind"]] = None,
         name: Optional[str] = None,
+        no_index: bool = False,
     ):
         self.key_index = key_index
         self.values = values
@@ -199,6 +210,7 @@ class CubeViewDef:
         self.f_highlight = f_highlight
         self.transpose = transpose
         self.name = name
+        self.no_index = no_index
 
     def __repr__(self) -> str:
         "usual"
@@ -233,17 +245,19 @@ class CubeLogs:
         if isinstance(self._data, pandas.DataFrame):
             if verbose:
                 print(f"[CubeLogs.load] load from dataframe, shape={self._data.shape}")
-            self.data = self._data
+            self.data = self.post_load_process_piece(self._data, unique=True)
         elif isinstance(self._data, list) and all(isinstance(r, dict) for r in self._data):
             if verbose:
                 print(f"[CubeLogs.load] load from list of dicts, n={len(self._data)}")
-            self.data = pandas.DataFrame(self._data)
+            self.data = pandas.DataFrame(self.post_load_process_piece(self._data, unique=True))
         elif isinstance(self._data, list) and all(
             isinstance(r, pandas.DataFrame) for r in self._data
         ):
             if verbose:
                 print(f"[CubeLogs.load] load from list of DataFrame, n={len(self._data)}")
-            self.data = pandas.concat(self._data, axis=0)
+            self.data = pandas.concat(
+                [self.post_load_process_piece(c) for c in self._data], axis=0
+            )
         elif isinstance(self._data, list):
             cubes = []
             for item in enumerate_csv_files(self._data, verbose=verbose):
@@ -257,7 +271,7 @@ class CubeLogs:
                     recent=self.recent,
                 )
                 cube.load()
-                cubes.append(cube.data)
+                cubes.append(self.post_load_process_piece(cube.data))
             self.data = pandas.concat(cubes, axis=0)
         else:
             raise NotImplementedError(
@@ -324,7 +338,7 @@ class CubeLogs:
             cols = set(self.values)
             for k, ff in forms.items():
                 f = self._process_formula(ff)
-                if k in cols:
+                if k in cols or f is None:
                     if verbose:
                         print(f"[CubeLogs.load] skip formula {k!r}")
                 else:
@@ -490,7 +504,13 @@ class CubeLogs:
                 f"keys={pprint.pformat(sorted(self.keys_time))}"
             )
             grouped_data = data_red.groupby(keys_no_agg, as_index=True, dropna=False)
-            data = grouped_data.agg(*view_def.agg_args, **(view_def.agg_kwargs or {}))
+            if callable(view_def.agg_args):
+                agg_kwargs = view_def.agg_kwargs or {}
+                agg_args = ({c: view_def.agg_args(c) for c in values},)
+            else:
+                agg_args = view_def.agg_args
+                agg_kwargs = view_def.agg_kwargs or {}
+            data = grouped_data.agg(*agg_args, **agg_kwargs)
             if view_def.agg_multi:
                 append = []
                 for k, f in view_def.agg_multi.items():
@@ -601,10 +621,14 @@ class CubeLogs:
         names[0] = "METRICS"
         piv.columns = piv.columns.set_names(names)
         if final_stack:
-            piv = piv.stack("METRICS")
+            piv = piv.stack("METRICS", future_stack=True)
         if view_def.transpose:
             piv = piv.T
-
+        if isinstance(piv, pandas.Series):
+            piv = piv.to_frame("VALUE")
+        piv.sort_index(inplace=True)
+        if view_def.no_index:
+            piv = piv.reset_index(drop=False)
         return (piv, view_def) if return_view_def else piv
 
     def _dropna(
@@ -721,7 +745,7 @@ class CubeLogs:
         with pandas.ExcelWriter(output, engine="openpyxl") as writer:
             if main:
                 assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
-                df = self.describe()
+                df = self.describe().sort_values("name")
                 if verbose:
                     print(f"[CubeLogs.to_helper] add sheet {main!r} with shape {df.shape}")
                 df.to_excel(writer, sheet_name=main, freeze_panes=(1, 1))
@@ -847,6 +871,17 @@ class CubeLogs:
                     cell.alignment = left_shrink
                 else:
                     cell.alignment = left
+                    if f_highlight:
+                        h = f_highlight(cell.value)
+                        if h in font_colors:
+                            cell.font = font_colors[h]
+
+    def post_load_process_piece(self, df: pandas.DataFrame) -> pandas.DataFrame:
+        """
+        Postprocesses a piece when a cube is made of multiple pieces
+        before it gets merged.
+        """
+        return df
 
 
 class CubeLogsPerformance(CubeLogs):
@@ -873,7 +908,15 @@ class CubeLogsPerformance(CubeLogs):
             "device",
             "architecture",
         ),
-        values: Sequence[str] = ("^time_.*", "^disc.*", "^ERR_.*", "CMD", "^ITER"),
+        values: Sequence[str] = (
+            "^time_.*",
+            "^disc.*",
+            "^ERR_.*",
+            "CMD",
+            "^ITER",
+            "^onnx_.*",
+            "^op_onnx_.*",
+        ),
         ignored: Sequence[str] = ("version_python",),
         recent: bool = True,
         formulas: Optional[
@@ -881,7 +924,33 @@ class CubeLogsPerformance(CubeLogs):
                 Sequence[str],
                 Dict[str, Union[str, Callable[[pandas.DataFrame], pandas.Series]]],
             ]
-        ] = ("speedup", "bucket[speedup]", "ERR1"),
+        ] = (
+            "speedup",
+            "bucket[speedup]",
+            "ERR1",
+            "n_models",
+            "n_eager",
+            "n_running",
+            "n_acc01",
+            "n_acc001",
+            "n_dynamic",
+            "n_pass",
+            "n_faster",
+            "n_faster2x",
+            "n_faster3x",
+            "n_faster4x",
+            "n_attention",
+            "n_control_flow",
+            "n_scatter",
+            "n_function",
+            "n_initializer",
+            "n_constant",
+            "n_shape",
+            "n_expand",
+            "peak_gpu_torch",
+            "peak_gpu_nvidia",
+            "time_export_unbiased",
+        ),
     ):
         self._data = data
         self._time = time
@@ -906,6 +975,23 @@ class CubeLogsPerformance(CubeLogs):
             formula, str
         ), f"Unexpected type for formula {type(formula)}: {formula!r}"
 
+        def gdf(df, cname, default_value=np.nan):
+            if cname in df.columns:
+                return df[cname]
+            return pandas.Series(default_value, index=df.index)
+
+        def ghas_value(df, cname):
+            if cname not in df.columns:
+                return pandas.Series(np.nan, index=df.index)
+            isna = df[cname].isna()
+            return pandas.Series(np.where(isna, np.nan, 1.0), index=df.index)
+
+        def gpreserve(df, cname, series):
+            if cname not in df.columns:
+                return pandas.Series(np.nan, index=df.index)
+            isna = df[cname].isna()
+            return pandas.Series(np.where(isna, np.nan, series), index=df.index).astype(float)
+
         if formula == "speedup":
             columns = set(self._filter_column(["^time_.*"], self.data.columns))
             assert "time_latency" in columns and "time_latency_eager" in columns, (
@@ -921,29 +1007,6 @@ class CubeLogsPerformance(CubeLogs):
                 f"{pprint.pformat(sorted(columns))}"
             )
             # return lambda df: df["time_latency_eager"] / df["time_latency"]
-            BUCKET_SCALES = (
-                np.array(
-                    [
-                        -np.inf,
-                        -20,
-                        -10,
-                        -5,
-                        -2,
-                        0,
-                        2,
-                        5,
-                        10,
-                        20,
-                        100,
-                        200,
-                        300,
-                        400,
-                        np.inf,
-                    ]
-                )
-                / 100
-                + 1
-            )
             return lambda df: pandas.cut(
                 df["speedup"], bins=BUCKET_SCALES, right=False, duplicates="raise"
             )
@@ -970,10 +1033,116 @@ class CubeLogsPerformance(CubeLogs):
                     ]
                     if c in df.columns
                 ]
-                dfo = df[ordered]
-                return dfo.bfill(axis=1).iloc[:, 0]
+                res = None
+                for c in ordered:
+                    if res is None:
+                        res = df[c].fillna("")
+                    else:
+                        res = pandas.Series(np.where(res != "", res, df[c].fillna("")))
+                return res
 
             return first_err
+
+        if formula.startswith("n_"):
+            lambdas = dict(
+                n_models=lambda df: ghas_value(df, "model_name"),
+                n_eager=lambda df: ghas_value(df, "time_latency_eager"),
+                n_running=lambda df: ghas_value(df, "time_latency"),
+                n_acc01=lambda df: gpreserve(
+                    df, "discrepancies_abs", (gdf(df, "discrepancies_abs") <= 0.1)
+                ),
+                n_acc001=lambda df: gpreserve(
+                    df, "discrepancies_abs", gdf(df, "discrepancies_abs") <= 0.01
+                ),
+                n_dynamic=lambda df: gpreserve(
+                    df,
+                    "discrepancies_dynamic_abs",
+                    (gdf(df, "discrepancies_dynamic_abs") <= 0.1),
+                ),
+                n_pass=lambda df: gpreserve(
+                    df,
+                    "time_latency",
+                    (gdf(df, "discrepancies_abs", np.inf) < 0.1)
+                    & (gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 0.98),
+                ),
+                n_faster=lambda df: gpreserve(
+                    df,
+                    "time_latency",
+                    gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 0.98,
+                ),
+                n_faster2x=lambda df: gpreserve(
+                    df,
+                    "time_latency",
+                    gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 1.98,
+                ),
+                n_faster3x=lambda df: gpreserve(
+                    df,
+                    "time_latency",
+                    gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 2.98,
+                ),
+                n_faster4x=lambda df: gpreserve(
+                    df,
+                    "time_latency",
+                    gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 3.98,
+                ),
+                n_attention=lambda df: gpreserve(
+                    df,
+                    "op_onnx_com.microsoft_Attention",
+                    gdf(df, "op_onnx_com.microsoft_Attention")
+                    + gdf(df, "op_onnx_com.microsoft_MultiHeadAttention"),
+                ),
+                n_control_flow=lambda df: gpreserve(
+                    df,
+                    "op_onnx__If",
+                    (
+                        gdf(df, "op_onnx__If", 0)
+                        + gdf(df, "op_onnx__Scan", 0)
+                        + gdf(df, "op_onnx__Loop", 0)
+                    ),
+                ),
+                n_scatter=lambda df: gpreserve(
+                    df,
+                    "op_onnx__ScatterND",
+                    gdf(df, "op_onnx__ScatterND", 0) + gdf(df, "op_onnx__ScatterElements", 0),
+                ),
+                n_function=lambda df: gpreserve(
+                    df, "onnx_n_functions", gdf(df, "onnx_n_functions")
+                ),
+                n_initializer=lambda df: gpreserve(
+                    df, "onnx_n_initializer", gdf(df, "onnx_n_initializer")
+                ),
+                n_constant=lambda df: gpreserve(
+                    df, "op_onnx__Constant", gdf(df, "op_onnx__Constant")
+                ),
+                n_shape=lambda df: gpreserve(df, "op_onnx__Shape", gdf(df, "op_onnx__Shape")),
+                n_expand=lambda df: gpreserve(
+                    df, "op_onnx__Expand", gdf(df, "op_onnx__Expand")
+                ),
+            )
+            assert (
+                formula in lambdas
+            ), f"Unexpected formula={formula!r}, should be in {sorted(lambdas)}"
+            return lambdas[formula]
+
+        if formula == "peak_gpu_torch":
+            return lambda df: gdf(df, "mema_gpu_5_after_export") - gdf(df, "mema_gpu_4_reset")
+        if formula == "peak_gpu_nvidia":
+            return lambda df: gdf(df, "memory_gpu0_peak") - gdf(df, "memory_gpu0_begin")
+        if formula == "time_export_unbiased":
+
+            def unbiased_export(df):
+                if "time_warmup_first_iteration" not in df.columns:
+                    return pandas.Series(np.nan, index=df.index)
+                return pandas.Series(
+                    np.where(
+                        df["exporter"] == "inductor",
+                        df["time_warmup_first_iteration"] + df["time_export_success"],
+                        df["time_export_success"],
+                    ),
+                    index=df.index,
+                )
+
+            return lambda df: gpreserve(df, "time_warmup_first_iteration", unbiased_export(df))
 
         raise ValueError(
             f"Unexpected formula {formula!r}, available columns are\n"
@@ -1011,6 +1180,7 @@ class CubeLogsPerformance(CubeLogs):
         * **bucket_speedup:** speedup in buckets
         * **time:** latency
         * **time_export:** time to export
+        * **counts:** status, running, faster, has control flow, ...
         * **err:** important errors
         * **cmd:** command lines
         * **raw-short:** raw data without all the unused columns
@@ -1024,17 +1194,46 @@ class CubeLogsPerformance(CubeLogs):
         index_cols = [c for c in fs if c in set(index_cols)]
 
         f_speedup = lambda x: (  # noqa: E731
-            CubeViewDef.HighLightKind.RED
-            if x < 0.9
+            CubeViewDef.HighLightKind.NONE
+            if not isinstance(x, (float, int))
             else (
-                CubeViewDef.HighLightKind.GREEN if x > 1.1 else CubeViewDef.HighLightKind.NONE
+                CubeViewDef.HighLightKind.RED
+                if x < 0.9
+                else (
+                    CubeViewDef.HighLightKind.GREEN
+                    if x > 1.1
+                    else CubeViewDef.HighLightKind.NONE
+                )
             )
         )
         f_disc = lambda x: (  # noqa: E731
-            CubeViewDef.HighLightKind.RED
-            if x > 0.1
+            CubeViewDef.HighLightKind.NONE
+            if not isinstance(x, (float, int))
             else (
-                CubeViewDef.HighLightKind.GREEN if x < 0.01 else CubeViewDef.HighLightKind.NONE
+                CubeViewDef.HighLightKind.RED
+                if x > 0.1
+                else (
+                    CubeViewDef.HighLightKind.GREEN
+                    if x < 0.01
+                    else CubeViewDef.HighLightKind.NONE
+                )
+            )
+        )
+        f_bucket = lambda x: (  # noqa: E731
+            CubeViewDef.HighLightKind.NONE
+            if not isinstance(x, str)
+            else (
+                CubeViewDef.HighLightKind.RED
+                if x in {"[-inf, 0.8)", "[0.8, 0.9)", "[0.9, 0.95)"}
+                else (
+                    CubeViewDef.HighLightKind.NONE
+                    if x in {"[0.95, 0.98)", "[0.98, 1.02)", "[1.02, 1.05)"}
+                    else (
+                        CubeViewDef.HighLightKind.GREEN
+                        if "[" in x
+                        else CubeViewDef.HighLightKind.NONE
+                    )
+                )
             )
         )
 
@@ -1044,7 +1243,9 @@ class CubeLogsPerformance(CubeLogs):
             if x.shape[0] == 0:
                 return np.nan
             div = weight.sum()
-            return (x * weight).sum() / div
+            if div > 0:
+                return (x * weight).sum() / div
+            return np.nan
 
         def mean_geo(gr):
             x = gr["speedup"]
@@ -1054,11 +1255,27 @@ class CubeLogsPerformance(CubeLogs):
             "agg-suite": lambda: CubeViewDef(
                 key_index=index_cols,
                 values=self._filter_column(
-                    ["speedup", "time_latency", "time_latency_eager"], self.values
+                    [
+                        "TIME_ITER",
+                        "speedup",
+                        "time_latency",
+                        "time_latency_eager",
+                        "time_export_success",
+                        "time_export_unbiased",
+                        "^n_.*",
+                        "target_opset",
+                        "onnx_filesize",
+                        "onnx_weight_size_torch",
+                        "onnx_weight_size_proto",
+                        "onnx_n_nodes",
+                        "peak_gpu_torch",
+                        "peak_gpu_nvidia",
+                    ],
+                    self.values,
                 ),
                 ignore_unique=True,
                 key_agg=["model_name", "task", "model_task"],
-                agg_args=["mean"],
+                agg_args=lambda column_name: "sum" if column_name.startswith("n_") else "mean",
                 agg_multi={"speedup_weighted": mean_weight, "speedup_geo": mean_geo},
                 keep_columns_in_index=["suite"],
                 name="agg-suite",
@@ -1079,6 +1296,13 @@ class CubeLogsPerformance(CubeLogs):
                 f_highlight=f_speedup,
                 name="speedup",
             ),
+            "counts": lambda: CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(["^n_.*"], self.values),
+                ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="counts",
+            ),
             "time": lambda: CubeViewDef(
                 key_index=index_cols,
                 values=self._filter_column(
@@ -1090,9 +1314,7 @@ class CubeLogsPerformance(CubeLogs):
             ),
             "time_export": lambda: CubeViewDef(
                 key_index=index_cols,
-                values=self._filter_column(
-                    ["time_export", "time_export_2", "time_warmup_eager"], self.values
-                ),
+                values=self._filter_column(["time_export_unbiased"], self.values),
                 ignore_unique=True,
                 keep_columns_in_index=["suite"],
                 name="time_export",
@@ -1112,6 +1334,7 @@ class CubeLogsPerformance(CubeLogs):
                 ignore_unique=True,
                 keep_columns_in_index=["suite"],
                 name="bucket-speedup",
+                f_highlight=f_bucket,
             ),
             "cmd": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -1126,6 +1349,7 @@ class CubeLogsPerformance(CubeLogs):
                 ignore_unique=True,
                 keep_columns_in_index=["suite"],
                 name="raw-short",
+                no_index=True,
             ),
         }
         assert name in implemented_views, (
@@ -1134,3 +1358,18 @@ class CubeLogsPerformance(CubeLogs):
             f"\n--\nvalues={pprint.pformat(sorted(self.values))}"
         )
         return implemented_views[name]()
+
+    def post_load_process_piece(
+        self, df: pandas.DataFrame, unique: bool = False
+    ) -> pandas.DataFrame:
+        cols = self._filter_column(self._keys, df)
+        res = None
+        for c in cols:
+            if df[c].isna().any():
+                # Missing values for keys are not supposed to happen.
+                unique = set(df[c].dropna())
+                if len(unique) == 1:
+                    if res is None:
+                        res = df.copy()
+                    res[c] = res[c].fillna(unique.pop())
+        return df if res is None else res

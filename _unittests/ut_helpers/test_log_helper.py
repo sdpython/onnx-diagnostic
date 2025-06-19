@@ -151,9 +151,17 @@ class TestLogHelper(ExtTestCase):
                 ignore_columns=["version_python"],
             )
         )
-        self.assertEqual((2, 2), view.shape)
-        self.assertEqual(["time_baseline", "time_latency"], list(view.columns))
-        self.assertEqual([("export",), ("onnx-dynamo",)], list(view.index))
+        self.assertEqual((4, 1), view.shape)
+        self.assertEqual(["VALUE"], list(view.columns))
+        self.assertEqual(
+            [
+                ("export", "time_baseline"),
+                ("export", "time_latency"),
+                ("onnx-dynamo", "time_baseline"),
+                ("onnx-dynamo", "time_latency"),
+            ],
+            list(view.index),
+        )
 
     @hide_stdout()
     def test_cube_logs_excel(self):
@@ -210,6 +218,7 @@ class TestLogHelper(ExtTestCase):
                 "agg-suite",
                 "disc",
                 "speedup",
+                "counts",
                 "time",
                 "time_export",
                 "err",
