@@ -476,11 +476,11 @@ class CubeLogs:
         :param verbose: verbosity level
         :return: dataframe
         """
-        if verbose:
-            print(f"[CubeLogs.view] -- start view {view_def.name!r}: {view_def}")
         assert isinstance(
             view_def, CubeViewDef
         ), f"view_def should be a CubeViewDef, got {type(view_def)}: {view_def!r} instead"
+        if verbose:
+            print(f"[CubeLogs.view] -- start view {view_def.name!r}: {view_def}")
         key_agg = (
             self._filter_column(view_def.key_agg, self.keys_time) if view_def.key_agg else []
         )
