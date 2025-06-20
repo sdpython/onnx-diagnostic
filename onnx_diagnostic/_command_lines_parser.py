@@ -638,6 +638,14 @@ def get_parser_agg() -> ArgumentParser:
         help="Keeps only the most recent experiment for the same of keys.",
     )
     parser.add_argument(
+        "--keep-last-date",
+        default=False,
+        action=BooleanOptionalAction,
+        help="Rewrite all dates to the last one to simplifies the analysis, "
+        "this assume changing the date does not add ambiguity, if any, option "
+        "--recent should be added.",
+    )
+    parser.add_argument(
         "--raw",
         default=True,
         action=BooleanOptionalAction,
@@ -652,6 +660,12 @@ def get_parser_agg() -> ArgumentParser:
         help="List of columns to consider as keys, "
         "multiple values are separated by `,`\n"
         "regular expressions are allowed",
+    )
+    parser.add_argument(
+        "--drop-keys",
+        default="",
+        help="Drops keys from the given list. Something it is faster "
+        "to remove one than to select all the remaining ones.",
     )
     parser.add_argument(
         "-w",
@@ -679,7 +693,7 @@ def get_parser_agg() -> ArgumentParser:
     )
     parser.add_argument(
         "--views",
-        default="agg-suite,disc,speedup,time,time_export,err,cmd,"
+        default="agg-suite,agg-all,disc,speedup,time,time_export,err,cmd,"
         "bucket-speedup,raw-short,counts,peak-gpu",
         help="Views to add to the output files.",
     )
@@ -719,14 +733,16 @@ def _cmd_agg(argv: List[Any]):
         ), f"Missing time column {args.time!r} in {c!r}\n{df.head()}\n{sorted(df.columns)}"
         dfs.append(df)
 
+    drop_keys = set(args.drop_keys.split(","))
     cube = CubeLogsPerformance(
         dfs,
         time=args.time,
-        keys=[a for a in args.keys.split(",") if a],
+        keys=[a for a in args.keys.split(",") if a and a not in drop_keys],
         values=[a for a in args.values.split(",") if a],
         ignored=[a for a in args.ignored.split(",") if a],
         recent=args.recent,
         formulas={k: k for k in args.formula.split(",")},
+        keep_last_date=args.keep_last_date,
     )
     cube.load(verbose=max(args.verbose - 1, 0))
     if args.verbose:

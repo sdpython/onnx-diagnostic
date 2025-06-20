@@ -372,7 +372,7 @@ class CubePlot:
         if merge:
             nn = len(df.columns) // 2
             nn += nn % 2
-            fig, axs = plt.subplots(nn, 2, figsize=(12, 3 * nn))
+            fig, axs = plt.subplots(nn, 2, figsize=(12, 3 * nn * df.shape[0] / 12))
             pos = 0
             for c in loop:
                 ax = axs[pos // 2, pos % 2]
@@ -455,6 +455,7 @@ class CubeLogs:
             ]
         ] = None,
         fill_missing: Optional[Sequence[Tuple[str, Any]]] = None,
+        keep_last_date: bool = False,
     ):
         self._data = data
         self._time = time
@@ -464,6 +465,7 @@ class CubeLogs:
         self.recent = recent
         self._formulas = formulas
         self.fill_missing = fill_missing
+        self.keep_last_date = keep_last_date
 
     def post_load_process_piece(
         self, df: pandas.DataFrame, unique: bool = False
@@ -613,6 +615,16 @@ class CubeLogs:
             if self.keys_with_nans:
                 print(f"[CubeLogs.load] keys_with_nans={self.keys_with_nans}")
         self.data[self.time] = pandas.to_datetime(self.data[self.time])
+
+        if self.keep_last_date:
+            times = self.data[self.time].dropna()
+            mi, mx = times.min(), times.max()
+            if mi != mx:
+                print(f"[CubeLogs.load] setting all dates in column {self.time} to {mx!r}")
+                self.data.loc[~self.data[self.time].isna(), self.time] = mx
+                self.values_for_key[self.time] = {mx}
+                if self.data[self.time].isna().max():
+                    self.values_for_key[self.time].add(np.nan)
         if verbose:
             print(f"[CubeLogs.load] done, shape={self.shape}")
         return self
@@ -821,11 +833,6 @@ class CubeLogs:
             unique = set()
 
         _md = lambda s: {k: v for k, v in self.values_for_key.items() if k in s}  # noqa: E731
-        assert key_index, (
-            f"view_def.name={view_def.name!r}, "
-            f"key_index should not be empty, got initially {key_index0!r}, "
-            f"unique={_md(key_index0)}"
-        )
         all_cols = set(key_columns) | set(key_index) | set(key_agg) | unique
         assert all_cols == set(self.keys_time), (
             f"view_def.name={view_def.name!r}, "
@@ -870,12 +877,6 @@ class CubeLogs:
             key_columns = [c for c in key_columns if c not in seti]
             values = [c for c in values if c not in seti]
 
-        assert key_index, (
-            f"view_def.name={view_def.name!r}, view_def={view_def}, "
-            f"key_index is empty, key_columns={key_columns}, value={values}, "
-            f"columns={data.columns},shape={data.shape}"
-        )
-
         # final verification
         if verbose:
             print(f"[CubeLogs.view] key_index={key_index}")
@@ -896,7 +897,14 @@ class CubeLogs:
         # pivot
         if verbose:
             print(f"[CubeLogs.view] values={values}")
-        piv = data.pivot(index=key_index[::-1], columns=key_columns, values=values)
+        if key_index:
+            piv = data.pivot(index=key_index[::-1], columns=key_columns, values=values)
+        else:
+            # pivot does return the same rank with it is empty.
+            # Let's add arficially one
+            data = data.copy()
+            data["ALL"] = "ALL"
+            piv = data.pivot(index=["ALL"], columns=key_columns, values=values)
         if isinstance(piv, pandas.Series):
             piv = piv.to_frame(name="series")
         names = list(piv.columns.names)
@@ -1106,7 +1114,7 @@ class CubeLogs:
                 if memory > 2**22:
                     msg = (
                         f"[CubeLogs.to_excel] skipping {name!r}, "
-                        f"too big for excel {memory} bytes"
+                        f"too big for excel with {memory} bytes"
                     )
                     if verbose:
                         print(msg)
@@ -1123,13 +1131,26 @@ class CubeLogs:
                         plots.append(CubePlot(df, kind="barh", orientation="row", split=True))
             if raw:
                 assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
-                if verbose:
-                    print(f"[CubeLogs.to_excel] add sheet {raw!r} with shape {self.shape}")
-                self.data.to_excel(writer, sheet_name=raw, freeze_panes=(1, 1), index=True)
                 # Too long.
                 # self._apply_excel_style(raw, writer, self.data)
                 if csv and "raw" in csv:
                     df.reset_index(drop=False).to_csv(f"{output}.raw.csv", index=False)
+                memory = df.memory_usage(deep=True).sum()
+                if memory > 2**22:
+                    msg = (
+                        f"[CubeLogs.to_excel] skipping 'raw', "
+                        f"too big for excel with {memory} bytes"
+                    )
+                    if verbose:
+                        print(msg)
+                    else:
+                        warnings.warn(msg, category=RuntimeWarning, stacklevel=0)
+                else:
+                    if verbose:
+                        print(f"[CubeLogs.to_excel] add sheet 'raw' with shape {self.shape}")
+                    self.data.to_excel(
+                        writer, sheet_name="raw", freeze_panes=(1, 1), index=True
+                    )
 
             if plots:
                 from openpyxl.drawing.image import Image
@@ -1236,6 +1257,7 @@ class CubeLogsPerformance(CubeLogs):
             "time_export_unbiased",
         ),
         fill_missing: Optional[Sequence[Tuple[str, Any]]] = (("model_attn_impl", "eager"),),
+        keep_last_date: bool = False,
     ):
         super().__init__(
             data=data,
@@ -1246,6 +1268,7 @@ class CubeLogsPerformance(CubeLogs):
             recent=recent,
             formulas=formulas,
             fill_missing=fill_missing,
+            keep_last_date=keep_last_date,
         )
 
     def _process_formula(
@@ -1576,6 +1599,34 @@ class CubeLogsPerformance(CubeLogs):
                 agg_multi={"speedup_weighted": mean_weight, "speedup_geo": mean_geo},
                 keep_columns_in_index=["suite"],
                 name="agg-suite",
+                order=order,
+            ),
+            "agg-all": lambda: CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(
+                    [
+                        "TIME_ITER",
+                        "speedup",
+                        "time_latency",
+                        "time_latency_eager",
+                        "time_export_success",
+                        "time_export_unbiased",
+                        "^n_.*",
+                        "target_opset",
+                        "onnx_filesize",
+                        "onnx_weight_size_torch",
+                        "onnx_weight_size_proto",
+                        "onnx_n_nodes",
+                        "peak_gpu_torch",
+                        "peak_gpu_nvidia",
+                    ],
+                    self.values,
+                ),
+                ignore_unique=True,
+                key_agg=["model_name", "task", "model_task", "suite"],
+                agg_args=lambda column_name: "sum" if column_name.startswith("n_") else "mean",
+                agg_multi={"speedup_weighted": mean_weight, "speedup_geo": mean_geo},
+                name="agg-all",
                 order=order,
                 plots=True,
             ),
