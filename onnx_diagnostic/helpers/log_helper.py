@@ -1,6 +1,7 @@
 import datetime
 import enum
 import glob
+import io
 import os
 import pprint
 import re
@@ -165,6 +166,7 @@ class CubeViewDef:
     :param transpose: transpose
     :param f_highlight: to highlights some values
     :param name: name of the view, used mostly to debug
+    :param plots: adds plot to the Excel sheet
     :param no_index: remove the index (but keeps the columns)
     """
 
@@ -192,6 +194,7 @@ class CubeViewDef:
         f_highlight: Optional[Callable[[Any], "CubeViewDef.HighLightKind"]] = None,
         name: Optional[str] = None,
         no_index: bool = False,
+        plots: bool = False,
     ):
         self.key_index = key_index
         self.values = values
@@ -208,10 +211,228 @@ class CubeViewDef:
         self.transpose = transpose
         self.name = name
         self.no_index = no_index
+        self.plots = plots
 
     def __repr__(self) -> str:
         "usual"
         return string_sig(self)  # type: ignore[arg-type]
+
+
+def apply_excel_style(
+    filename_or_writer: Any,
+    f_highlights: Optional[Dict[str, Callable[[Any], CubeViewDef.HighLightKind]]] = None,
+):
+    """
+    Applies styles on all sheets in a file unless the sheet is too big.
+
+    :param filename_or_writer: filename, modified inplace
+    :param f_highlight: color function to apply, one per sheet
+    """
+    from openpyxl import load_workbook
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+    from openpyxl.styles import Font  # , PatternFill, numbers
+
+    if isinstance(filename_or_writer, str):
+        workbook = load_workbook(filename_or_writer)
+        save = True
+    else:
+        workbook = filename_or_writer.book
+        save = False
+
+    left = Alignment(horizontal="left")
+    left_shrink = Alignment(horizontal="left", shrink_to_fit=True)
+    right = Alignment(horizontal="right")
+    font_colors = {
+        CubeViewDef.HighLightKind.GREEN: Font(color="00AA00"),
+        CubeViewDef.HighLightKind.RED: Font(color="FF0000"),
+    }
+
+    for name in workbook.sheetnames:
+        f_highlight = f_highlights.get(name, None) if f_highlights else None
+        sheet = workbook[name]
+        n_rows = sheet.max_row
+        n_cols = sheet.max_column
+        if n_rows * n_cols > 2**18:
+            # Too big.
+            continue
+        co: Dict[int, int] = {}
+        sizes: Dict[int, int] = {}
+        cols = set()
+        for i in range(1, n_rows):
+            for j, cell in enumerate(sheet[i]):
+                if j > n_cols:
+                    break
+                cols.add(cell.column)
+                if isinstance(cell.value, float):
+                    co[j] = co.get(j, 0) + 1
+                elif isinstance(cell.value, str):
+                    sizes[cell.column] = max(sizes.get(cell.column, 0), len(cell.value))
+
+        for k, v in sizes.items():
+            c = get_column_letter(k)
+            sheet.column_dimensions[c].width = min(max(8, v), 30)
+        for k in cols:
+            if k not in sizes:
+                c = get_column_letter(k)
+                sheet.column_dimensions[c].width = 15
+
+        for i in range(1, n_rows):
+            for j, cell in enumerate(sheet[i]):
+                if j > n_cols:
+                    break
+                if isinstance(cell.value, pandas.Timestamp):
+                    cell.alignment = right
+                    dt = cell.value.to_pydatetime()
+                    cell.value = dt
+                    cell.number_format = (
+                        "YYYY-MM-DD"
+                        if (
+                            dt.hour == 0
+                            and dt.minute == 0
+                            and dt.second == 0
+                            and dt.microsecond == 0
+                        )
+                        else "YYYY-MM-DD 00:00:00"
+                    )
+                elif isinstance(cell.value, (float, int)):
+                    cell.alignment = right
+                    x = abs(cell.value)
+                    if int(x) == x:
+                        cell.number_format = "0"
+                    elif x > 5000:
+                        cell.number_format = "# ##0"
+                    elif x >= 500:
+                        cell.number_format = "0.0"
+                    elif x >= 50:
+                        cell.number_format = "0.00"
+                    elif x >= 5:
+                        cell.number_format = "0.000"
+                    elif x > 0.5:
+                        cell.number_format = "0.0000"
+                    elif x > 0.005:
+                        cell.number_format = "0.00000"
+                    else:
+                        cell.number_format = "0.000E+00"
+                    if f_highlight:
+                        h = f_highlight(cell.value)
+                        if h in font_colors:
+                            cell.font = font_colors[h]
+                elif isinstance(cell.value, str) and len(cell.value) > 70:
+                    cell.alignment = left_shrink
+                else:
+                    cell.alignment = left
+                    if f_highlight:
+                        h = f_highlight(cell.value)
+                        if h in font_colors:
+                            cell.font = font_colors[h]
+    if save:
+        workbook.save(filename_or_writer)
+
+
+class CubePlot:
+    """
+    Creates a plot.
+    """
+
+    def __init__(
+        self, df: pandas.DataFrame, kind: str = "bar", orientation="col", split: bool = True
+    ):
+        self.df = df.copy()
+        self.kind = kind
+        self.orientation = orientation
+        self.split = split
+
+        if isinstance(self.df.columns, pandas.MultiIndex):
+            self.df.columns = ["/".join(map(str, i)) for i in self.df.columns]
+        if isinstance(self.df.index, pandas.MultiIndex):
+            self.df.index = ["/".join(map(str, i)) for i in self.df.index]
+
+    def __repr__(self) -> str:
+        "usual"
+        return string_sig(self)  # type: ignore[arg-type]
+
+    def to_images(
+        self, verbose: int = 0, merge: bool = True, title_suffix: Optional[str] = None
+    ):
+        """
+        Converts data into plots and images.
+        """
+        import matplotlib.pyplot as plt
+
+        df = self.df.T if self.orientation == "row" else self.df
+        imgs = []
+        if verbose:
+            from tqdm import tqdm
+
+            loop = tqdm(df.columns)
+        else:
+            loop = df.columns
+        title_suffix = f"\n{title_suffix}" if title_suffix else ""
+        if merge:
+            nn = len(df.columns) // 2
+            nn += nn % 2
+            fig, axs = plt.subplots(nn, 2, figsize=(12, 3 * nn))
+            pos = 0
+            for c in loop:
+                ax = axs[pos // 2, pos % 2]
+                df[c].plot.barh(title=f"{c}{title_suffix}", ax=ax)
+                ax.tick_params(axis="both", which="major", labelsize=8)
+                ax.grid(True)
+                pos += 1  # noqa: SIM113
+            fig.tight_layout()
+            imgdata = io.BytesIO()
+            fig.savefig(imgdata, format="png")
+            imgs.append(imgdata.getvalue())
+            plt.close()
+        else:
+            for c in loop:
+                fig, ax = plt.subplots(1, 1, figsize=(3, 3))
+                df[c].plot.barh(title=c, ax=ax)
+                ax.tick_params(axis="both", which="major", labelsize=8)
+                ax.grid(True)
+                fig.tight_layout()
+                imgdata = io.BytesIO()
+                fig.savefig(imgdata, format="png")
+                imgs.append(imgdata.getvalue())
+                plt.close()
+        return imgs
+
+    def to_charts(self, writer: pandas.ExcelWriter, sheet, empty_row: int = 1):
+        """
+        Draws plots on a page.
+        The data is copied on this page.
+
+        :param name: sheet name
+        :param writer: writer (from pandas)
+        :param sheet_name: sheet
+        :param graph_index: graph index
+        :return: list of graph
+        """
+        assert self.split, f"Not implemented if split={self.split}"
+        assert self.orientation == "row", f"Not implemented if orientation={self.orientation}"
+        workbook = writer.book
+        labels = list(self.df.columns)
+        sheet.write_row(empty_row, 0, labels)
+
+        charts = []
+        pos = empty_row + 1
+        for i in self.df.index:
+            values = self.df.loc[i, :].tolist()
+            values = [("" if isinstance(v, float) and np.isnan(v) else v) for v in values]
+            sheet.write_row(pos, 0, values)
+            chart = workbook.add_chart({"type": "bar"})
+            chart.add_series(
+                {
+                    "name": i,
+                    "categories": [i, 1, empty_row, len(labels), empty_row],
+                    "values": [i, 1, pos, len(labels), pos],
+                }
+            )
+            chart.set_title({"name": i})
+            charts.append(chart)
+            pos += 1
+        return charts
 
 
 class CubeLogs:
@@ -243,6 +464,21 @@ class CubeLogs:
         self.recent = recent
         self._formulas = formulas
         self.fill_missing = fill_missing
+
+    def post_load_process_piece(
+        self, df: pandas.DataFrame, unique: bool = False
+    ) -> pandas.DataFrame:
+        """
+        Postprocesses a piece when a cube is made of multiple pieces
+        before it gets merged.
+        """
+        if not self.fill_missing:
+            return df
+        missing = dict(self.fill_missing)
+        for k, v in missing.items():
+            if k not in df.columns:
+                df[k] = v
+        return df
 
     def load(self, verbose: int = 0):
         """Loads and preprocesses the data. Returns self."""
@@ -829,6 +1065,8 @@ class CubeLogs:
         if verbose:
             print(f"[CubeLogs.to_excel] create Excel file {output}, shape={self.shape}")
         views = {k: k for k in views} if not isinstance(views, dict) else views
+        f_highlights = {}
+        plots = []
         with pandas.ExcelWriter(output, engine="openpyxl") as writer:
             if main:
                 assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
@@ -836,7 +1074,6 @@ class CubeLogs:
                 if verbose:
                     print(f"[CubeLogs.to_excel] add sheet {main!r} with shape {df.shape}")
                 df.to_excel(writer, sheet_name=main, freeze_panes=(1, 1))
-                self._apply_excel_style(main, writer, df)
 
             for name, view in views.items():
                 df, tview = self.view(view, return_view_def=True, verbose=max(verbose - 1, 0))
@@ -881,7 +1118,9 @@ class CubeLogs:
                         sheet_name=name,
                         freeze_panes=(df.columns.nlevels + df.index.nlevels, df.index.nlevels),
                     )
-                    self._apply_excel_style(name, writer, df, f_highlight=tview.f_highlight)
+                    f_highlights[name] = tview.f_highlight
+                    if tview.plots:
+                        plots.append(CubePlot(df, kind="barh", orientation="row", split=True))
             if raw:
                 assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
                 if verbose:
@@ -892,120 +1131,40 @@ class CubeLogs:
                 if csv and "raw" in csv:
                     df.reset_index(drop=False).to_csv(f"{output}.raw.csv", index=False)
 
-        if verbose:
-            print(f"[CubeLogs.to_excel] done with {len(views)} views")
+            if plots:
+                from openpyxl.drawing.image import Image
 
-    def _apply_excel_style(
-        self,
-        name: str,
-        writer: pandas.ExcelWriter,
-        df: pandas.DataFrame,
-        f_highlight: Optional[Callable[[Any], CubeViewDef.HighLightKind]] = None,
-    ):
-        from openpyxl.styles import Alignment
-        from openpyxl.utils import get_column_letter
-        from openpyxl.styles import Font  # , PatternFill, numbers
-
-        left = Alignment(horizontal="left")
-        left_shrink = Alignment(horizontal="left", shrink_to_fit=True)
-        right = Alignment(horizontal="right")
-        font_colors = {
-            CubeViewDef.HighLightKind.GREEN: Font(color="00AA00"),
-            CubeViewDef.HighLightKind.RED: Font(color="FF0000"),
-        }
-        # center = Alignment(horizontal="center")
-        # bold_font = Font(bold=True)
-        # yellow = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-        # redf = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
-
-        sheet = writer.sheets[name]
-        n_rows = df.shape[0] + df.columns.nlevels + df.index.nlevels + 3
-        n_cols = df.shape[1] + df.index.nlevels + 3
-        co: Dict[int, int] = {}
-        sizes: Dict[int, int] = {}
-        cols = set()
-        for i in range(1, n_rows):
-            for j, cell in enumerate(sheet[i]):
-                if j > n_cols:
-                    break
-                cols.add(cell.column)
-                if isinstance(cell.value, float):
-                    co[j] = co.get(j, 0) + 1
-                elif isinstance(cell.value, str):
-                    sizes[cell.column] = max(sizes.get(cell.column, 0), len(cell.value))
-
-        for k, v in sizes.items():
-            c = get_column_letter(k)
-            sheet.column_dimensions[c].width = min(max(8, v), 30)
-        for k in cols:
-            if k not in sizes:
-                c = get_column_letter(k)
-                sheet.column_dimensions[c].width = 15
-
-        for i in range(1, n_rows):
-            for j, cell in enumerate(sheet[i]):
-                if j > n_cols:
-                    break
-                if isinstance(cell.value, pandas.Timestamp):
-                    cell.alignment = right
-                    dt = cell.value.to_pydatetime()
-                    cell.value = dt
-                    cell.number_format = (
-                        "YYYY-MM-DD"
-                        if (
-                            dt.hour == 0
-                            and dt.minute == 0
-                            and dt.second == 0
-                            and dt.microsecond == 0
-                        )
-                        else "YYYY-MM-DD 00:00:00"
+                if verbose:
+                    print(f"[CubeLogs.to_excel] plots {len(plots)} plots")
+                sheet = writer.book.create_sheet("plots")
+                pos = 0
+                empty_row = 1
+                times = self.data[self.time].dropna()
+                mini, maxi = times.min(), times.max()
+                title_suffix = (str(mini) if mini == maxi else f"{mini}-{maxi}").replace(
+                    " 00:00:00", ""
+                )
+                for plot in plots:
+                    imgs = plot.to_images(
+                        verbose=verbose, merge=True, title_suffix=title_suffix
                     )
-                elif isinstance(cell.value, (float, int)):
-                    cell.alignment = right
-                    x = abs(cell.value)
-                    if int(x) == x:
-                        cell.number_format = "0"
-                    elif x > 5000:
-                        cell.number_format = "# ##0"
-                    elif x >= 500:
-                        cell.number_format = "0.0"
-                    elif x >= 50:
-                        cell.number_format = "0.00"
-                    elif x >= 5:
-                        cell.number_format = "0.000"
-                    elif x > 0.5:
-                        cell.number_format = "0.0000"
-                    elif x > 0.005:
-                        cell.number_format = "0.00000"
-                    else:
-                        cell.number_format = "0.000E+00"
-                    if f_highlight:
-                        h = f_highlight(cell.value)
-                        if h in font_colors:
-                            cell.font = font_colors[h]
-                elif isinstance(cell.value, str) and len(cell.value) > 70:
-                    cell.alignment = left_shrink
-                else:
-                    cell.alignment = left
-                    if f_highlight:
-                        h = f_highlight(cell.value)
-                        if h in font_colors:
-                            cell.font = font_colors[h]
+                    for img in imgs:
+                        y = (pos // 2) * 16
+                        loc = f"A{y}" if pos % 2 == 0 else f"M{y}"
+                        sheet.add_image(Image(io.BytesIO(img)), loc)
+                        if verbose:
+                            no = f"{output}.png"
+                            print(f"[CubeLogs.to_excel] dump graphs into {no!r}")
+                            with open(no, "wb") as f:
+                                f.write(img)
+                        pos += 1
+                    empty_row += len(plots) + 2
 
-    def post_load_process_piece(
-        self, df: pandas.DataFrame, unique: bool = False
-    ) -> pandas.DataFrame:
-        """
-        Postprocesses a piece when a cube is made of multiple pieces
-        before it gets merged.
-        """
-        if not self.fill_missing:
-            return df
-        missing = dict(self.fill_missing)
-        for k, v in missing.items():
-            if k not in df.columns:
-                df[k] = v
-        return df
+            if verbose:
+                print(f"[CubeLogs.to_excel] applies style to {output!r}")
+            apply_excel_style(writer, f_highlights)  # type: ignore[arg-type]
+            if verbose:
+                print(f"[CubeLogs.to_excel] done with {len(views)} views")
 
 
 class CubeLogsPerformance(CubeLogs):
@@ -1418,6 +1577,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="agg-suite",
                 order=order,
+                plots=True,
             ),
             "disc": lambda: CubeViewDef(
                 key_index=index_cols,
