@@ -404,7 +404,7 @@ class CubePlot:
         The data is copied on this page.
 
         :param name: sheet name
-        :param writer: writer (:epkg:`open_pyxl`)
+        :param writer: writer (from pandas)
         :param sheet_name: sheet
         :param graph_index: graph index
         :return: list of graph
