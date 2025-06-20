@@ -1162,7 +1162,7 @@ class CubeLogs:
 
             if verbose:
                 print(f"[CubeLogs.to_excel] applies style to {output!r}")
-            apply_excel_style(writer, f_highlights)
+            apply_excel_style(writer, f_highlights)  # type: ignore[arg-type]
             if verbose:
                 print(f"[CubeLogs.to_excel] done with {len(views)} views")
 
