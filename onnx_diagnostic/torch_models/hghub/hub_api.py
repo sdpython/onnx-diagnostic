@@ -186,7 +186,7 @@ def task_from_id(
         if the task cannot be determined
     :param pretrained: uses the config
     :param fall_back_to_pretrained: falls back to pretrained config
-    :param exc: raises an excpetion if True
+    :param exc: raises an exception if True
     :return: task
     """
     if not pretrained:
