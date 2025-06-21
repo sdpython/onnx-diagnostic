@@ -3,7 +3,7 @@ import functools
 import textwrap
 from typing import Dict, List
 
-__date__ = "2025-03-26"
+__date__ = "2025-06-21"
 
 __data_arch_values__ = {"ResNetForImageClassification": dict(image_size=224)}
 
@@ -52,6 +52,8 @@ __data_arch__ = textwrap.dedent(
     GPTNeoModel,feature-extraction
     GPTNeoXForCausalLM,text-generation
     GemmaForCausalLM,text-generation
+    Gemma2ForCausalLM,text-generation
+    Gemma3ForConditionalGeneration,image-text-to-text
     GraniteForCausalLM,text-generation
     GroupViTModel,feature-extraction
     HieraForImageClassification,image-classification
@@ -144,7 +146,8 @@ __data_arch__ = textwrap.dedent(
     XLMRobertaModel,sentence-similarity
     Wav2Vec2ForCTC,automatic-speech-recognition
     YolosForObjectDetection,object-detection
-    YolosModel,image-feature-extraction"""
+    YolosModel,image-feature-extraction
+    emilyalsentzer/Bio_ClinicalBERT,fill-mask"""
 )
 
 __data_tasks__ = [

@@ -259,7 +259,8 @@ def validate_model(
     verbose: int = 0,
     dtype: Optional[Union[str, torch.dtype]] = None,
     device: Optional[Union[str, torch.device]] = None,
-    trained: bool = False,
+    same_as_pretrained: bool = False,
+    use_pretrained: bool = False,
     optimization: Optional[str] = None,
     quiet: bool = False,
     patch: bool = False,
@@ -294,7 +295,9 @@ def validate_model(
     :param verbose: verbosity level
     :param dtype: uses this dtype to check the model
     :param device: do the verification on this device
-    :param trained: use the trained model, not the untrained one
+    :param same_as_pretrained: use a model equivalent to the trained,
+        this is not always possible
+    :param use_pretrained: use the trained model, not the untrained one
     :param optimization: optimization to apply to the exported model,
         depend on the the exporter
     :param quiet: if quiet, catches exception if any issue
@@ -353,7 +356,8 @@ def validate_model(
             version_do_run=str(do_run),
             version_dtype=str(dtype or ""),
             version_device=str(device or ""),
-            version_trained=str(trained),
+            version_same_as_pretrained=str(same_as_pretrained),
+            version_use_pretrained=str(use_pretrained),
             version_optimization=optimization or "",
             version_quiet=str(quiet),
             version_patch=str(patch),
@@ -408,11 +412,12 @@ def validate_model(
         summary,
         None,
         (
-            lambda mid=model_id, v=verbose, task=task, tr=trained, iop=iop, sub=subfolder, i2=inputs2: (  # noqa: E501
+            lambda mid=model_id, v=verbose, task=task, uptr=use_pretrained, tr=same_as_pretrained, iop=iop, sub=subfolder, i2=inputs2: (  # noqa: E501
                 get_untrained_model_with_inputs(
                     mid,
                     verbose=v,
                     task=task,
+                    use_pretrained=uptr,
                     same_as_pretrained=tr,
                     inputs_kwargs=iop,
                     model_kwargs=mop,
