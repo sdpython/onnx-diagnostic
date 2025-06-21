@@ -99,6 +99,7 @@ __data_arch__ = textwrap.dedent(
     PegasusModel,feature-extraction
     Phi3ForCausalLM,text-generation
     PhiForCausalLM,text-generation
+    PhiMoEForCausalLM,text-generation
     Pix2StructForConditionalGeneration,image-to-text
     PLBartForConditionalGeneration,text2text-generation
     PoolFormerModel,image-feature-extraction

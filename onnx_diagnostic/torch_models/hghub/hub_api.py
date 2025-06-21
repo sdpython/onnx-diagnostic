@@ -211,9 +211,7 @@ def task_from_id(
             f"The task can be added in "
             f"``onnx_diagnostic.torch_models.hghub.hub_data.__data_arch__``."
         )
-        return task_from_arch(
-            config.architectures[0], default_value=default_value, model_id=model_id
-        )
+        return task_from_arch(config.architectures[0], default_value=default_value)
 
 
 def task_from_tags(tags: Union[str, List[str]]) -> str:
