@@ -204,13 +204,38 @@ class TestLogHelper(ExtTestCase):
         self.assertEqual((3, 11), cube.shape)
         self.assertIn("RAWFILENAME", cube.data.columns)
 
-    def test_cube_logs_performance(self):
+    def test_cube_logs_performance1(self):
         output = self.get_dump_file("test_cube_logs_performance.xlsx")
         filename = os.path.join(os.path.dirname(__file__), "data", "data-agg.zip")
         assert list(enumerate_csv_files(filename))
         dfs = [open_dataframe(df) for df in enumerate_csv_files(filename)]
         assert dfs, f"{filename!r} empty"
         cube = CubeLogsPerformance(dfs)
+        cube.load()
+        cube.to_excel(
+            output,
+            views=[
+                "agg-suite",
+                "disc",
+                "speedup",
+                "counts",
+                "time",
+                "time_export",
+                "err",
+                # "cmd",
+                "bucket-speedup",
+                "raw-short",
+            ],
+        )
+        self.assertExists(output)
+
+    def test_cube_logs_performance2(self):
+        output = self.get_dump_file("test_cube_logs_performance.xlsx")
+        filename = os.path.join(os.path.dirname(__file__), "data", "data-agg.zip")
+        assert list(enumerate_csv_files(filename))
+        dfs = [open_dataframe(df) for df in enumerate_csv_files(filename)]
+        assert dfs, f"{filename!r} empty"
+        cube = CubeLogsPerformance(dfs, keep_last_date=True)
         cube.load()
         cube.to_excel(
             output,
