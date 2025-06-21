@@ -72,7 +72,7 @@ def get_untrained_model_with_inputs(
         print("-- configuration:", pprint.pformat(data['configuration']))
     """
     assert not use_preinstalled or not use_only_preinstalled, (
-        f"model_id={model_id!r}, pretinstalled model is only avaialble "
+        f"model_id={model_id!r}, pretinstalled model is only available "
         f"if use_only_preinstalled is False."
     )
     if verbose:

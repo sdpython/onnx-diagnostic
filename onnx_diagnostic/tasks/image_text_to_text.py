@@ -167,19 +167,18 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
             else getattr(
                 config,
                 "head_dim",
-                (config.text_config.hidden_size if text_config else config.config.hidden_size)
+                (config.text_config.hidden_size if text_config else config.hidden_size)
                 // (
                     config.text_config.num_attention_heads
                     if text_config
-                    else config.config.num_attention_heads
+                    else config.num_attention_heads
                 ),
             )
         ),
         dummy_max_token_id=(
             31999
             if config is None
-            else (config.text_config.vocab_size if text_config else config.config.vocab_size)
-            - 1
+            else (config.text_config.vocab_size if text_config else config.vocab_size) - 1
         ),
         num_hidden_layers=(
             4
@@ -187,7 +186,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
             else (
                 config.text_config.num_hidden_layers
                 if text_config
-                else config.config.num_hidden_layers
+                else config.num_hidden_layers
             )
         ),
         num_key_value_heads=(
@@ -205,7 +204,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
             else (
                 config.text_config.intermediate_size
                 if text_config
-                else config.config.intermediate_size
+                else config.intermediate_size
             )
         ),
         hidden_size=(
