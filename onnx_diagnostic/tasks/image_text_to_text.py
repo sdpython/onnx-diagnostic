@@ -96,10 +96,10 @@ def get_inputs(
                 for i in range(num_hidden_layers)
             ]
         ),
-        image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
+        pixel_values=torch.ones((batch_size, n_images, num_channels, width, height)).to(
             torch.int64
         ),
-        pixel_values=torch.ones((batch_size, n_images, num_channels, width, height)).to(
+        image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
             torch.int64
         ),
     )
