@@ -96,10 +96,10 @@ def get_inputs(
                 for i in range(num_hidden_layers)
             ]
         ),
-        image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
+        pixel_values=torch.ones((batch_size, n_images, num_channels, width, height)).to(
             torch.int64
         ),
-        pixel_values=torch.ones((batch_size, n_images, num_channels, width, height)).to(
+        image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
             torch.int64
         ),
     )
@@ -132,16 +132,30 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
     If the configuration is None, the function selects typical dimensions.
     """
     if config is not None:
-        check_hasattr(
-            config,
-            "vocab_size",
-            "hidden_size",
-            "num_attention_heads",
-            ("num_key_value_heads", "num_attention_heads"),
-            "intermediate_size",
-            "hidden_size",
-            "vision_config",
-        )
+        if hasattr(config, "text_config"):
+            check_hasattr(
+                config.text_config,
+                "vocab_size",
+                "hidden_size",
+                "num_attention_heads",
+                ("num_key_value_heads", "num_attention_heads"),
+                "intermediate_size",
+                "hidden_size",
+            )
+            check_hasattr(config, "vision_config")
+            text_config = True
+        else:
+            check_hasattr(
+                config,
+                "vocab_size",
+                "hidden_size",
+                "num_attention_heads",
+                ("num_key_value_heads", "num_attention_heads"),
+                "intermediate_size",
+                "hidden_size",
+                "vision_config",
+            )
+            text_config = False
         check_hasattr(config.vision_config, "image_size", "num_channels")
     kwargs = dict(
         batch_size=2,
@@ -150,17 +164,54 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
         head_dim=(
             16
             if config is None
-            else getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+            else getattr(
+                config,
+                "head_dim",
+                (config.text_config.hidden_size if text_config else config.hidden_size)
+                // (
+                    config.text_config.num_attention_heads
+                    if text_config
+                    else config.num_attention_heads
+                ),
+            )
         ),
-        dummy_max_token_id=31999 if config is None else config.vocab_size - 1,
-        num_hidden_layers=4 if config is None else config.num_hidden_layers,
+        dummy_max_token_id=(
+            31999
+            if config is None
+            else (config.text_config.vocab_size if text_config else config.vocab_size) - 1
+        ),
+        num_hidden_layers=(
+            4
+            if config is None
+            else (
+                config.text_config.num_hidden_layers
+                if text_config
+                else config.num_hidden_layers
+            )
+        ),
         num_key_value_heads=(
             8
             if config is None
-            else _pick(config, "num_key_value_heads", "num_attention_heads")
+            else (
+                _pick(config.text_config, "num_key_value_heads", "num_attention_heads")
+                if text_config
+                else _pick(config, "num_key_value_heads", "num_attention_heads")
+            )
         ),
-        intermediate_size=1024 if config is None else config.intermediate_size,
-        hidden_size=512 if config is None else config.hidden_size,
+        intermediate_size=(
+            1024
+            if config is None
+            else (
+                config.text_config.intermediate_size
+                if text_config
+                else config.intermediate_size
+            )
+        ),
+        hidden_size=(
+            512
+            if config is None
+            else (config.text_config.hidden_size if text_config else config.hidden_size)
+        ),
         width=224 if config is None else config.vision_config.image_size,
         height=224 if config is None else config.vision_config.image_size,
         num_channels=3 if config is None else config.vision_config.num_channels,

@@ -1,5 +1,6 @@
 import inspect
 import os
+import pprint
 from typing import Any, Dict, Optional, Tuple
 import torch
 import transformers
@@ -22,6 +23,7 @@ def get_untrained_model_with_inputs(
     model_kwargs: Optional[Dict[str, Any]] = None,
     verbose: int = 0,
     dynamic_rope: Optional[bool] = None,
+    use_pretrained: bool = False,
     same_as_pretrained: bool = False,
     use_preinstalled: bool = True,
     add_second_input: bool = False,
@@ -43,6 +45,7 @@ def get_untrained_model_with_inputs(
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :param same_as_pretrained: if True, do not change the default values
         to get a smaller model
+    :param use_pretrained: download the pretrained weights as well
     :param use_preinstalled: use preinstalled configurations
     :param add_second_input: provides a second inputs to check a model
         supports different shapes
@@ -68,6 +71,10 @@ def get_untrained_model_with_inputs(
         print("-- dynamic shapes:", pprint.pformat(data['dynamic_shapes']))
         print("-- configuration:", pprint.pformat(data['configuration']))
     """
+    assert not use_preinstalled or not use_only_preinstalled, (
+        f"model_id={model_id!r}, pretinstalled model is only available "
+        f"if use_only_preinstalled is False."
+    )
     if verbose:
         print(f"[get_untrained_model_with_inputs] model_id={model_id!r}")
         if use_preinstalled:
@@ -99,7 +106,7 @@ def get_untrained_model_with_inputs(
         print(f"[get_untrained_model_with_inputs] architectures={archs!r}")
         print(f"[get_untrained_model_with_inputs] cls={config.__class__.__name__!r}")
     if task is None:
-        task = task_from_arch(archs[0])
+        task = task_from_arch(archs[0], model_id=model_id)
     if verbose:
         print(f"[get_untrained_model_with_inputs] task={task!r}")
 
@@ -114,7 +121,6 @@ def get_untrained_model_with_inputs(
         )
 
     # updating the configuration
-
     mkwargs = reduce_model_config(config, task) if not same_as_pretrained else {}
     if model_kwargs:
         for k, v in model_kwargs.items():
@@ -139,26 +145,27 @@ def get_untrained_model_with_inputs(
                 f"{config._attn_implementation!r}"  # type: ignore[union-attr]
             )
 
+    if use_pretrained:
+        model = transformers.AutoModel.from_pretrained(model_id, **mkwargs)
+    else:
+        if archs is not None:
+            model = getattr(transformers, archs[0])(config)
+        else:
+            assert same_as_pretrained and use_pretrained, (
+                f"Model {model_id!r} cannot be built, the model cannot be built. "
+                f"It must be downloaded. Use same_as_pretrained=True "
+                f"and use_pretrained=True."
+            )
+
     # input kwargs
     kwargs, fct = random_input_kwargs(config, task)
     if verbose:
         print(f"[get_untrained_model_with_inputs] use fct={fct}")
         if os.environ.get("PRINT_CONFIG") in (1, "1"):
-            import pprint
-
             print(f"-- input kwargs for task {task!r}")
             pprint.pprint(kwargs)
     if inputs_kwargs:
         kwargs.update(inputs_kwargs)
-
-    if archs is not None:
-        model = getattr(transformers, archs[0])(config)
-    else:
-        assert same_as_pretrained, (
-            f"Model {model_id!r} cannot be built, the model cannot be built. "
-            f"It must be downloaded. Use same_as_pretrained=True."
-        )
-        model = None
 
     # This line is important. Some models may produce different
     # outputs even with the same inputs in training mode.

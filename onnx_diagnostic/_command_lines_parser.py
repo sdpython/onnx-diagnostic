@@ -333,7 +333,24 @@ def get_parser_validate() -> ArgumentParser:
             of supported tasks.
             """
         ),
-        epilog="If the model id is specified, one untrained version of it is instantiated.",
+        epilog=textwrap.dedent(
+            """
+            If the model id is specified, one untrained version of it is instantiated.
+            Examples:
+
+            python -m onnx_diagnostic validate -m microsoft/Phi-4-mini-reasoning \\
+                --run -v 1 -o dump_test --no-quiet --repeat 2 --warmup 2 \\
+                --dtype float16 --device cuda --patch --export onnx-dynamo --opt ir
+
+            python -m onnx_diagnostic validate -m microsoft/Phi-4-mini-reasoning \\
+                --run -v 1 -o dump_test --no-quiet --repeat 2 --warmup 2 \\
+                --dtype float16 --device cuda --patch --export custom --opt default
+
+            python -m onnx_diagnostic validate -m microsoft/Phi-4-mini-reasoning \\
+                --run -v 1 -o dump_test --no-quiet --repeat 2 --warmup 2 \\
+                --dtype float16 --device cuda --export modelbuilder
+            """
+        ),
         formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument("-m", "--mid", type=str, help="model id, usually <author>/<name>")
@@ -371,6 +388,12 @@ def get_parser_validate() -> ArgumentParser:
         default=0,
         type=int,
         help="Raises an exception if a dynamic dimension becomes static.",
+    )
+    parser.add_argument(
+        "--same-as-trained",
+        default=False,
+        action=BooleanOptionalAction,
+        help="Validates a model identical to the trained model but not trained.",
     )
     parser.add_argument(
         "--trained",
@@ -487,7 +510,8 @@ def _cmd_validate(argv: List[Any]):
             do_run=args.run,
             verbose=args.verbose,
             quiet=args.quiet,
-            trained=args.trained,
+            same_as_pretrained=args.same_as_trained,
+            use_pretrained=args.trained,
             dtype=args.dtype,
             device=args.device,
             patch=args.patch,
@@ -619,7 +643,13 @@ def get_parser_agg() -> ArgumentParser:
             and produces values. Every row has a date.
             """
         ),
-        epilog="example\n  python -m onnx_diagnostic agg test_agg.xlsx raw/*.zip -v 1",
+        epilog=textwrap.dedent(
+            """
+            examples:\n
+
+                python -m onnx_diagnostic agg test_agg.xlsx raw/*.zip -v 1
+            """
+        ),
         formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument("output", help="output excel file")

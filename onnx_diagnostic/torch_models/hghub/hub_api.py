@@ -138,12 +138,15 @@ def _guess_task_from_config(config: Any) -> Optional[str]:
 
 
 @functools.cache
-def task_from_arch(arch: str, default_value: Optional[str] = None) -> str:
+def task_from_arch(
+    arch: str, default_value: Optional[str] = None, model_id: Optional[str] = None
+) -> str:
     """
     This function relies on stored information. That information needs to be refresh.
 
     :param arch: architecture name
     :param default_value: default value in case the task cannot be determined
+    :param model_id: unused unless the architecture does not help.
     :return: task
 
     .. runpython::
@@ -156,9 +159,16 @@ def task_from_arch(arch: str, default_value: Optional[str] = None) -> str:
     <onnx_diagnostic.torch_models.hghub.hub_data.load_architecture_task>`.
     """
     data = load_architecture_task()
+    if arch not in data and model_id:
+        # Let's try with the model id.
+        return task_from_id(model_id)
     if default_value is not None:
         return data.get(arch, default_value)
-    assert arch in data, f"Architecture {arch!r} is unknown, last refresh in {__date__}"
+    assert arch in data, (
+        f"Architecture {arch!r} is unknown, last refresh in {__date__}. "
+        f"``onnx_diagnostic.torch_models.hghub.hub_data.__data_arch__`` "
+        f"needs to be updated (model_id={(model_id or '?')!r})."
+    )
     return data[arch]
 
 
@@ -176,6 +186,7 @@ def task_from_id(
         if the task cannot be determined
     :param pretrained: uses the config
     :param fall_back_to_pretrained: falls back to pretrained config
+    :param exc: raises an exception if True
     :return: task
     """
     if not pretrained:
@@ -191,9 +202,14 @@ def task_from_id(
         guess = _guess_task_from_config(config)
         if guess is not None:
             return guess
+        data = load_architecture_task()
+        if model_id in data:
+            return data[model_id]
         assert config.architectures is not None and len(config.architectures) == 1, (
             f"Cannot return the task of {model_id!r}, pipeline_tag is not setup, "
-            f"architectures={config.architectures} in config={config}"
+            f"architectures={config.architectures} in config={config}. "
+            f"The task can be added in "
+            f"``onnx_diagnostic.torch_models.hghub.hub_data.__data_arch__``."
         )
         return task_from_arch(config.architectures[0], default_value=default_value)
 
