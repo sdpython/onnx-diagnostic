@@ -156,8 +156,26 @@ def get_untrained_model_with_inputs(
                 # repository of the model. We need to download it.
                 pyfiles = download_code_modelid(model_id, verbose=verbose)
                 if pyfiles:
+                    if "." in archs[0]:
+                        cls_name = archs[0]
+                    else:
+                        modeling = [_ for _ in pyfiles if "/modeling_" in _]
+                        assert len(modeling) == 1, (
+                            f"Unable to guess the main file implemented class {archs[0]!r} "
+                            f"from {pyfiles}, found={modeling}."
+                        )
+                        last_name = os.path.splitext(os.path.split(modeling[0])[-1])[0]
+                        cls_name = f"{last_name}.{archs[0]}"
+                    if verbose:
+                        print(
+                            f"[get_untrained_model_with_inputs] custom code for {cls_name!r}"
+                        )
+                        print(
+                            f"[get_untrained_model_with_inputs] from folder "
+                            f"{os.path.split(pyfiles[0])[0]!r}"
+                        )
                     cls = transformers.dynamic_module_utils.get_class_from_dynamic_module(
-                        archs[0], pretrained_model_name_or_path=os.path.split(pyfiles[0])[0]
+                        cls_name, pretrained_model_name_or_path=os.path.split(pyfiles[0])[0]
                     )
                     model = cls(config)
                 else:
