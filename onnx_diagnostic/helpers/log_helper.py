@@ -21,6 +21,63 @@ BUCKET_SCALES_VALUES = np.array(
 BUCKET_SCALES = BUCKET_SCALES_VALUES / 100 + 1
 
 
+def filter_data(
+    df: pandas.DataFrame,
+    filter_in: Optional[str] = None,
+    filter_out: Optional[str] = None,
+    verbose: int = 0,
+) -> pandas.DataFrame:
+    """
+    Argument `filter` follows the syntax
+    ``<column1>:<fmt1>//<column2>:<fmt2>``.
+
+    The format is the following:
+
+    * a value or a set of values separated by ``;``
+    """
+    if not filter_in and not filter_out:
+        return df
+
+    def _f(fmt):
+        cond = {}
+        if isinstance(fmt, str):
+            cols = fmt.split("//")
+            for c in cols:
+                assert ":" in c, f"Unexpected value {c!r} in fmt={fmt!r}"
+                spl = c.split(":")
+                assert len(spl) == 2, f"Unexpected value {c!r} in fmt={fmt!r}"
+                name, fil = spl
+                cond[name] = set(fil.split(";"))
+        return cond
+
+    if filter_in:
+        cond = _f(filter_in)
+        assert isinstance(cond, dict), f"Unexpected type {type(cond)} for fmt={filter_in!r}"
+        for k, v in cond.items():
+            if k not in df.columns:
+                continue
+            if verbose:
+                print(
+                    f"[_filter_data] filter in column {k!r}, "
+                    f"values {v!r} among {set(df[k].astype(str))}"
+                )
+            df = df[df[k].astype(str).isin(v)]
+
+    if filter_out:
+        cond = _f(filter_out)
+        assert isinstance(cond, dict), f"Unexpected type {type(cond)} for fmt={filter_out!r}"
+        for k, v in cond.items():
+            if k not in df.columns:
+                continue
+            if verbose:
+                print(
+                    f"[_filter_data] filter out column {k!r}, "
+                    f"values {v!r} among {set(df[k].astype(str))}"
+                )
+            df = df[~df[k].astype(str).isin(v)]
+    return df
+
+
 def enumerate_csv_files(
     data: Union[
         pandas.DataFrame, List[Union[str, Tuple[str, str]]], str, Tuple[str, str, str, str]
@@ -118,7 +175,8 @@ def open_dataframe(
     data: Union[str, Tuple[str, str, str, str], pandas.DataFrame],
 ) -> pandas.DataFrame:
     """
-    Opens a filename.
+    Opens a filename defined by function
+    :func:`onnx_diagnostic.helpers.log_helper.enumerate_csv_files`.
 
     :param data: a dataframe, a filename, a tuple indicating the file is coming
         from a zip file
@@ -333,18 +391,85 @@ def apply_excel_style(
 class CubePlot:
     """
     Creates a plot.
+
+    :param df: dataframe
+    :param kind: kind of graph to plot, bar, barh, line
+    :param split: draw a graph per line in the dataframe
+    :param timeseries: this assumes the time is one level of the columns,
+        this argument indices the level name
     """
 
+    KINDS = {"bar", "barh", "line"}
+
+    @classmethod
+    def group_columns(
+        cls, columns: List[str], sep: str = "/", depth: int = 2
+    ) -> List[List[str]]:
+        """Groups columns to have nice display."""
+        res: Dict[str, List[str]] = {}
+        for c in columns:
+            p = c.split("/")
+            k = "/".join(p[:depth])
+            if k not in res:
+                res[k] = []
+            res[k].append(c)
+        new_res: Dict[str, List[str]] = {}
+        for k, v in res.items():
+            if len(v) >= 3:
+                new_res[k] = v
+            else:
+                if "0" not in new_res:
+                    new_res["0"] = []
+                new_res["0"].extend(v)
+        groups: List[List[str]] = [sorted(v) for k, v in sorted(new_res.items())]
+        if depth <= 1:
+            return groups
+        new_groups: List[List[str]] = []
+        for v in groups:
+            if len(v) >= 6:
+                new_groups.extend(cls.group_columns(v, depth=1, sep=sep))
+            else:
+                new_groups.append(v)
+        return new_groups
+
     def __init__(
-        self, df: pandas.DataFrame, kind: str = "bar", orientation="col", split: bool = True
+        self,
+        df: pandas.DataFrame,
+        kind: str = "bar",
+        orientation="col",
+        split: bool = True,
+        timeseries: Optional[str] = None,
     ):
+        assert (
+            not timeseries or timeseries in df.columns.names
+        ), f"Level {timeseries!r} is not part of the columns levels {df.columns.names}"
+        assert (
+            kind in self.__class__.KINDS
+        ), f"Unexpected kind={kind!r} not in {self.__class__.KINDS}"
+        assert split, f"split={split} not implemented"
+        assert (
+            not timeseries or orientation == "row"
+        ), f"orientation={orientation!r} must be 'row' for timeseries"
         self.df = df.copy()
         self.kind = kind
         self.orientation = orientation
         self.split = split
+        self.timeseries = timeseries
 
-        if isinstance(self.df.columns, pandas.MultiIndex):
-            self.df.columns = ["/".join(map(str, i)) for i in self.df.columns]
+        if timeseries:
+            if isinstance(self.df.columns, pandas.MultiIndex):
+                index_time = list(self.df.columns.names).index(self.timeseries)
+
+                def _drop(t, i=index_time):
+                    return (*t[:i], *t[i + 1 :])
+
+                self.df.columns = pandas.MultiIndex.from_tuples(
+                    [("/".join(map(str, _drop(i))), i[index_time]) for i in self.df.columns],
+                    names=["metric", timeseries],
+                )
+        else:
+            if isinstance(self.df.columns, pandas.MultiIndex):
+                self.df.columns = ["/".join(map(str, i)) for i in self.df.columns]
         if isinstance(self.df.index, pandas.MultiIndex):
             self.df.index = ["/".join(map(str, i)) for i in self.df.index]
 
@@ -354,85 +479,128 @@ class CubePlot:
 
     def to_images(
         self, verbose: int = 0, merge: bool = True, title_suffix: Optional[str] = None
-    ):
+    ) -> List[bytes]:
         """
         Converts data into plots and images.
-        """
-        import matplotlib.pyplot as plt
 
-        df = self.df.T if self.orientation == "row" else self.df
-        imgs = []
+        :param verbose: verbosity
+        :param merge: returns all graphs in a single image (True)
+            or an image for every graph (False)
+        :param title_suffix: prefix for the title of every graph
+        :return: list of binary images (format PNG)
+        """
+        if self.kind in ("barh", "bar"):
+            return self._to_images_bar(verbose=verbose, merge=merge, title_suffix=title_suffix)
+        if self.kind == "line":
+            return self._to_images_line(
+                verbose=verbose, merge=merge, title_suffix=title_suffix
+            )
+        raise AssertionError(f"self.kind={self.kind!r} not implemented")
+
+    @classmethod
+    def _make_loop(cls, ensemble, verbose):
         if verbose:
             from tqdm import tqdm
 
-            loop = tqdm(df.columns)
+            loop = tqdm(ensemble)
         else:
-            loop = df.columns
+            loop = ensemble
+        return loop
+
+    def _to_images_bar(
+        self, verbose: int = 0, merge: bool = True, title_suffix: Optional[str] = None
+    ) -> List[bytes]:
+        assert merge, f"merge={merge} not implemented yet"
+        import matplotlib.pyplot as plt
+
+        df = self.df.T if self.orientation == "row" else self.df
         title_suffix = f"\n{title_suffix}" if title_suffix else ""
-        if merge:
-            nn = len(df.columns) // 2
-            nn += nn % 2
-            fig, axs = plt.subplots(nn, 2, figsize=(12, 3 * nn * df.shape[0] / 12))
-            pos = 0
-            for c in loop:
-                ax = axs[pos // 2, pos % 2]
+
+        nn = len(df.columns) // 2
+        nn += nn % 2
+        fig, axs = plt.subplots(nn, 2, figsize=(12, nn * df.shape[0] / 4))
+        pos = 0
+        imgs = []
+        for c in self._make_loop(df.columns, verbose):
+            ax = axs[pos // 2, pos % 2]
+            (
                 df[c].plot.barh(title=f"{c}{title_suffix}", ax=ax)
-                ax.tick_params(axis="both", which="major", labelsize=8)
-                ax.grid(True)
-                pos += 1  # noqa: SIM113
-            fig.tight_layout()
-            imgdata = io.BytesIO()
-            fig.savefig(imgdata, format="png")
-            imgs.append(imgdata.getvalue())
-            plt.close()
-        else:
-            for c in loop:
-                fig, ax = plt.subplots(1, 1, figsize=(3, 3))
-                df[c].plot.barh(title=c, ax=ax)
-                ax.tick_params(axis="both", which="major", labelsize=8)
-                ax.grid(True)
-                fig.tight_layout()
-                imgdata = io.BytesIO()
-                fig.savefig(imgdata, format="png")
-                imgs.append(imgdata.getvalue())
-                plt.close()
+                if self.kind == "barh"
+                else df[c].plot.bar(title=f"{c}{title_suffix}", ax=ax)
+            )
+            ax.tick_params(axis="both", which="major", labelsize=8)
+            ax.grid(True)
+            pos += 1  # noqa: SIM113
+        fig.tight_layout()
+        imgdata = io.BytesIO()
+        fig.savefig(imgdata, format="png")
+        imgs.append(imgdata.getvalue())
+        plt.close()
         return imgs
 
-    def to_charts(self, writer: pandas.ExcelWriter, sheet, empty_row: int = 1):
-        """
-        Draws plots on a page.
-        The data is copied on this page.
+    def _to_images_line(
+        self, verbose: int = 0, merge: bool = True, title_suffix: Optional[str] = None
+    ) -> List[bytes]:
+        assert merge, f"merge={merge} not implemented yet"
+        assert (
+            self.orientation == "row"
+        ), f"self.orientation={self.orientation!r} not implemented for this kind of graph."
 
-        :param name: sheet name
-        :param writer: writer (from pandas)
-        :param sheet_name: sheet
-        :param graph_index: graph index
-        :return: list of graph
-        """
-        assert self.split, f"Not implemented if split={self.split}"
-        assert self.orientation == "row", f"Not implemented if orientation={self.orientation}"
-        workbook = writer.book
-        labels = list(self.df.columns)
-        sheet.write_row(empty_row, 0, labels)
+        def rotate_align(ax, angle=15, align="right"):
+            for label in ax.get_xticklabels():
+                label.set_rotation(angle)
+                label.set_horizontalalignment(align)
+            ax.tick_params(axis="both", which="major", labelsize=8)
+            ax.grid(True)
+            ax.legend()
+            ax.tick_params(labelleft=True)
+            return ax
 
-        charts = []
-        pos = empty_row + 1
-        for i in self.df.index:
-            values = self.df.loc[i, :].tolist()
-            values = [("" if isinstance(v, float) and np.isnan(v) else v) for v in values]
-            sheet.write_row(pos, 0, values)
-            chart = workbook.add_chart({"type": "bar"})
-            chart.add_series(
-                {
-                    "name": i,
-                    "categories": [i, 1, empty_row, len(labels), empty_row],
-                    "values": [i, 1, pos, len(labels), pos],
-                }
-            )
-            chart.set_title({"name": i})
-            charts.append(chart)
-            pos += 1
-        return charts
+        import matplotlib.pyplot as plt
+
+        df = self.df.T
+
+        confs = list(df.unstack(self.timeseries).index)
+        groups = self.group_columns(confs)
+        n_cols = len(groups)
+
+        title_suffix = f"\n{title_suffix}" if title_suffix else ""
+        fig, axs = plt.subplots(
+            df.shape[1],
+            n_cols,
+            figsize=(5 * n_cols, max(len(g) for g in groups) * df.shape[1] / 2),
+            sharex=True,
+            sharey="row" if n_cols > 1 else False,
+        )
+        imgs = []
+        row = 0
+        for c in self._make_loop(df.columns, verbose):
+            dfc = df[[c]]
+            dfc = dfc.unstack(self.timeseries).T.droplevel(0)
+            if n_cols == 1:
+                dfc.plot(title=f"{c}{title_suffix}", ax=axs[row], linewidth=3)
+                axs[row].grid(True)
+                rotate_align(axs[row])
+            else:
+                x = list(range(dfc.shape[0]))
+                ticks = list(dfc.index)
+                for ii, group in enumerate(groups):
+                    ddd = dfc.loc[:, group].copy()
+                    axs[row, ii].set_xticks(x)
+                    axs[row, ii].set_xticklabels(ticks)
+                    # This is very slow
+                    # ddd.plot(ax=axs[row, ii],linewidth=3)
+                    for jj in range(ddd.shape[1]):
+                        axs[row, ii].plot(x, ddd.iloc[:, jj], lw=3, label=ddd.columns[jj])
+                    axs[row, ii].set_title(f"{c}{title_suffix}")
+                    rotate_align(axs[row, ii])
+            row += 1  # noqa: SIM113
+        fig.tight_layout()
+        imgdata = io.BytesIO()
+        fig.savefig(imgdata, format="png")
+        imgs.append(imgdata.getvalue())
+        plt.close()
+        return imgs
 
 
 class CubeLogs:
@@ -1128,7 +1296,17 @@ class CubeLogs:
                     )
                     f_highlights[name] = tview.f_highlight
                     if tview.plots:
-                        plots.append(CubePlot(df, kind="barh", orientation="row", split=True))
+                        plots.append(
+                            CubePlot(
+                                df,
+                                kind="line",
+                                orientation="row",
+                                split=True,
+                                timeseries=self.time,
+                            )
+                            if self.time in df.columns.names
+                            else CubePlot(df, kind="barh", orientation="row", split=True)
+                        )
             if raw:
                 assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
                 # Too long.

@@ -9,9 +9,11 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.helpers.log_helper import (
     CubeLogs,
     CubeLogsPerformance,
+    CubePlot,
     CubeViewDef,
     enumerate_csv_files,
     open_dataframe,
+    filter_data,
 )
 
 
@@ -302,6 +304,103 @@ class TestLogHelper(ExtTestCase):
         view, view_def = cube.view(CubeViewDef(["^m_.*"], ["^time_.*"]), return_view_def=True)
         self.assertEqual((2, 3), view.shape)
         self.assertEqual(["METRICS", "exporter", "date"], view.columns.names)
+
+    def test_group_columns(self):
+        val = [
+            "eager/export-nostrict/none",
+            "eager/inductor/none",
+            "eager/modelbuilder/none",
+            "eager/olive-exporter/ir",
+            "eager/olive-exporter/none",
+            "eager/torch_script/default",
+            "eager/torch_script/none",
+            "sdpa/export-nostrict/none",
+            "sdpa/olive-exporter/ir",
+            "sdpa/olive-exporter/none",
+        ]
+        spl = CubePlot.group_columns(val, depth=1)
+        expected = [
+            [
+                "eager/export-nostrict/none",
+                "eager/inductor/none",
+                "eager/modelbuilder/none",
+                "eager/olive-exporter/ir",
+                "eager/olive-exporter/none",
+                "eager/torch_script/default",
+                "eager/torch_script/none",
+            ],
+            [
+                "sdpa/export-nostrict/none",
+                "sdpa/olive-exporter/ir",
+                "sdpa/olive-exporter/none",
+            ],
+        ]
+        self.assertEqual(expected, spl)
+
+        val = [
+            "eager/custom/default",
+            "eager/custom/default+onnxruntime",
+            "eager/custom/none",
+            "eager/export-nostrict/none",
+            "eager/inductor/none",
+            "eager/modelbuilder/none",
+            "eager/olive-exporter/ir",
+            "eager/olive-exporter/none",
+            "eager/onnx_dynamo-fallback/ir",
+            "eager/onnx_dynamo-fallback/none",
+            "eager/onnx_dynamo-fallback/os_ort",
+            "eager/onnx_dynamo/ir",
+            "eager/onnx_dynamo/none",
+            "eager/onnx_dynamo/os_ort",
+            "eager/torch_script/default",
+            "eager/torch_script/none",
+            "sdpa/custom/default",
+            "sdpa/custom/default+onnxruntime",
+            "sdpa/custom/none",
+            "sdpa/export-nostrict/none",
+            "sdpa/olive-exporter/ir",
+            "sdpa/olive-exporter/none",
+            "sdpa/onnx_dynamo/ir",
+            "sdpa/onnx_dynamo/none",
+            "sdpa/onnx_dynamo/os_ort",
+        ]
+        spl = CubePlot.group_columns(val)
+        expected = [
+            [
+                "eager/export-nostrict/none",
+                "eager/inductor/none",
+                "eager/modelbuilder/none",
+                "eager/olive-exporter/ir",
+                "eager/olive-exporter/none",
+                "eager/torch_script/default",
+                "eager/torch_script/none",
+            ],
+            [
+                "sdpa/export-nostrict/none",
+                "sdpa/olive-exporter/ir",
+                "sdpa/olive-exporter/none",
+            ],
+            ["eager/custom/default", "eager/custom/default+onnxruntime", "eager/custom/none"],
+            ["eager/onnx_dynamo/ir", "eager/onnx_dynamo/none", "eager/onnx_dynamo/os_ort"],
+            [
+                "eager/onnx_dynamo-fallback/ir",
+                "eager/onnx_dynamo-fallback/none",
+                "eager/onnx_dynamo-fallback/os_ort",
+            ],
+            ["sdpa/custom/default", "sdpa/custom/default+onnxruntime", "sdpa/custom/none"],
+            ["sdpa/onnx_dynamo/ir", "sdpa/onnx_dynamo/none", "sdpa/onnx_dynamo/os_ort"],
+        ]
+        self.assertEqual(expected, spl)
+
+    @hide_stdout()
+    def test_filter_data(self):
+        df = self.df1()
+        df2 = filter_data(df, "", "", verbose=1)
+        self.assertEqualDataFrame(df, df2)
+        df2 = filter_data(df, "model_exporter:onnx-dynamo;T", "", verbose=1)
+        self.assertEqualDataFrame(df[df.model_exporter == "onnx-dynamo"], df2)
+        df2 = filter_data(df, "", "model_exporter:onnx-dynamo;T", verbose=1)
+        self.assertEqualDataFrame(df[df.model_exporter != "onnx-dynamo"], df2)
 
 
 if __name__ == "__main__":

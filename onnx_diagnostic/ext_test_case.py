@@ -917,6 +917,15 @@ class ExtTestCase(unittest.TestCase):
             ]
             raise AssertionError("\n".join(rows))  # noqa: B904
 
+    def assertEqualDataFrame(self, d1, d2, **kwargs):
+        """
+        Checks that two dataframes are equal.
+        Calls :func:`pandas.testing.assert_frame_equal`.
+        """
+        from pandas.testing import assert_frame_equal
+
+        assert_frame_equal(d1, d2, **kwargs)
+
     def assertEqualTrue(self, value: Any, msg: str = ""):
         if value is True:
             return

@@ -733,11 +733,28 @@ def get_parser_agg() -> ArgumentParser:
         help="Views to dump as csv files.",
     )
     parser.add_argument("-v", "--verbose", type=int, default=0, help="verbosity")
+    parser.add_argument(
+        "--filter_in",
+        default="",
+        help="adds a filter to filter in data, syntax is\n"
+        '``"<column1>:<value1>;<value2>/<column2>:<value3>"`` ...',
+    )
+    parser.add_argument(
+        "--filter_out",
+        default="",
+        help="adds a filter to filter out data, syntax is\n"
+        '``"<column1>:<value1>;<value2>/<column2>:<value3>"`` ...',
+    )
     return parser
 
 
 def _cmd_agg(argv: List[Any]):
-    from .helpers.log_helper import CubeLogsPerformance, open_dataframe, enumerate_csv_files
+    from .helpers.log_helper import (
+        CubeLogsPerformance,
+        open_dataframe,
+        enumerate_csv_files,
+        filter_data,
+    )
 
     parser = get_parser_agg()
     args = parser.parse_args(argv[1:])
@@ -761,7 +778,7 @@ def _cmd_agg(argv: List[Any]):
         assert (
             args.time in df.columns
         ), f"Missing time column {args.time!r} in {c!r}\n{df.head()}\n{sorted(df.columns)}"
-        dfs.append(df)
+        dfs.append(filter_data(df, filter_in=args.filter_in, filter_out=args.filter_out))
 
     drop_keys = set(args.drop_keys.split(","))
     cube = CubeLogsPerformance(
