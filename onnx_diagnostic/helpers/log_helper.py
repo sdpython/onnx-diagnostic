@@ -406,14 +406,14 @@ class CubePlot:
         cls, columns: List[str], sep: str = "/", depth: int = 2
     ) -> List[List[str]]:
         """Groups columns to have nice display."""
-        res: Dict[str,List[str]] = {}
+        res: Dict[str, List[str]] = {}
         for c in columns:
             p = c.split("/")
             k = "/".join(p[:depth])
             if k not in res:
                 res[k] = []
             res[k].append(c)
-        new_res: Dict[str,List[str]] = {}
+        new_res: Dict[str, List[str]] = {}
         for k, v in res.items():
             if len(v) >= 3:
                 new_res[k] = v
@@ -427,8 +427,7 @@ class CubePlot:
         new_groups: List[List[str]] = []
         for v in groups:
             if len(v) >= 6:
-                v = cls.group_columns(v, depth=1, sep=sep)
-                new_groups.extend(v)
+                new_groups.extend(cls.group_columns(v, depth=1, sep=sep))
             else:
                 new_groups.append(v)
         return new_groups
