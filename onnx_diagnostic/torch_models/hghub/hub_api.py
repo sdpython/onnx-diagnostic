@@ -206,6 +206,10 @@ def task_from_id(
         data = load_architecture_task()
         if model_id in data:
             return data[model_id]
+        if not config.architectures or not config.architectures:
+            # Some hardcoded values until a better solution is found.
+            if model_id.startswith("google/bert_"):
+                return "fill-mask"
         assert config.architectures is not None and len(config.architectures) == 1, (
             f"Cannot return the task of {model_id!r}, pipeline_tag is not setup, "
             f"architectures={config.architectures} in config={config}. "
