@@ -6,7 +6,7 @@ import torch
 import transformers
 from ...helpers.config_helper import update_config
 from ...tasks import reduce_model_config, random_input_kwargs
-from .hub_api import task_from_arch, task_from_id, get_pretrained_config
+from .hub_api import task_from_arch, task_from_id, get_pretrained_config, download_code_modelid
 
 
 def _code_needing_rewriting(model: Any) -> Any:
@@ -149,7 +149,41 @@ def get_untrained_model_with_inputs(
         model = transformers.AutoModel.from_pretrained(model_id, **mkwargs)
     else:
         if archs is not None:
-            model = getattr(transformers, archs[0])(config)
+            try:
+                model = getattr(transformers, archs[0])(config)
+            except AttributeError as e:
+                # The code of the models is not in transformers but in the
+                # repository of the model. We need to download it.
+                pyfiles = download_code_modelid(model_id, verbose=verbose)
+                if pyfiles:
+                    if "." in archs[0]:
+                        cls_name = archs[0]
+                    else:
+                        modeling = [_ for _ in pyfiles if "/modeling_" in _]
+                        assert len(modeling) == 1, (
+                            f"Unable to guess the main file implemented class {archs[0]!r} "
+                            f"from {pyfiles}, found={modeling}."
+                        )
+                        last_name = os.path.splitext(os.path.split(modeling[0])[-1])[0]
+                        cls_name = f"{last_name}.{archs[0]}"
+                    if verbose:
+                        print(
+                            f"[get_untrained_model_with_inputs] custom code for {cls_name!r}"
+                        )
+                        print(
+                            f"[get_untrained_model_with_inputs] from folder "
+                            f"{os.path.split(pyfiles[0])[0]!r}"
+                        )
+                    cls = transformers.dynamic_module_utils.get_class_from_dynamic_module(
+                        cls_name, pretrained_model_name_or_path=os.path.split(pyfiles[0])[0]
+                    )
+                    model = cls(config)
+                else:
+                    raise AttributeError(
+                        f"Unable to find class 'tranformers.{archs[0]}'. "
+                        f"The code needs to be downloaded, config="
+                        f"\n{pprint.pformat(config)}."
+                    ) from e
         else:
             assert same_as_pretrained and use_pretrained, (
                 f"Model {model_id!r} cannot be built, the model cannot be built. "
