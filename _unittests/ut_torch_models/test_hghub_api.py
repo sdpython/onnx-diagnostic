@@ -162,10 +162,15 @@ class TestHuggingFaceHubApi(ExtTestCase):
         self.assertEqual(
             ["configuration_phimoe.py", "modeling_phimoe.py", "sample_finetune.py"], pyf
         )
-        cls = transformers.dynamic_module_utils.get_class_from_dynamic_module(
-            "modeling_phimoe.Phi4MMImageEmbedding",
-            pretrained_model_name_or_path=os.path.split(files[0])[0],
-        )
+        try:
+            cls = transformers.dynamic_module_utils.get_class_from_dynamic_module(
+                "modeling_phimoe.Phi4MMImageEmbedding",
+                pretrained_model_name_or_path=os.path.split(files[0])[0],
+            )
+        except ImportError as e:
+            if "flash_attn" in str(e):
+                raise unittest.SkipTest("missing package {e}")
+            raise
         self.assertEqual(cls.__name__, "Phi4MMImageEmbedding")
 
 
