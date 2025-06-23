@@ -3,9 +3,10 @@ import functools
 import json
 import os
 import pprint
+import sys
 from typing import Any, Dict, List, Optional, Union
 import transformers
-from huggingface_hub import HfApi, model_info, hf_hub_download
+from huggingface_hub import HfApi, model_info, hf_hub_download, list_repo_files
 from ...helpers.config_helper import update_config
 from . import hub_data_cached_configs
 from .hub_data import __date__, __data_tasks__, load_architecture_task, __data_arch_values__
@@ -327,3 +328,43 @@ def enumerate_model_list(
             n -= 1
             if n == 0:
                 break
+
+
+def download_code_modelid(
+    model_id: str, verbose: int = 0, add_path_to_sys_path: bool = True
+) -> List[str]:
+    """
+    Downloads the code for a given model id.
+
+    :param model_id: model id
+    :param verbose: verbosity
+    :param add_path_to_sys_path: add folder where the files are downloaded to sys.path
+    :return: list of downloaded files
+    """
+    if verbose:
+        print(f"[download_code_modelid] retrieve file list for {model_id!r}")
+    files = list_repo_files(model_id)
+    pyfiles = [name for name in files if os.path.splitext(name)[-1] == ".py"]
+    if verbose:
+        print(f"[download_code_modelid] python files {pyfiles}")
+    absfiles = []
+    pathes = set()
+    for i, name in enumerate(pyfiles):
+        if verbose:
+            print(f"[download_code_modelid] download file {i+1}/{len(pyfiles)}: {name!r}")
+        r = hf_hub_download(repo_id=model_id, filename=name)
+        p = os.path.split(r)[0]
+        pathes.add(p)
+        absfiles.append(r)
+    if add_path_to_sys_path:
+        for p in pathes:
+            init = os.path.join(p, "__init__.py")
+            if not os.path.exists(init):
+                with open(init, "w"):
+                    pass
+            if p in sys.path:
+                continue
+            if verbose:
+                print(f"[download_code_modelid] add {p!r} to 'sys.path'")
+            sys.path.insert(0, p)
+    return absfiles

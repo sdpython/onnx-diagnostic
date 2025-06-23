@@ -1,5 +1,7 @@
+import os
 import unittest
 import pandas
+import transformers
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     hide_stdout,
@@ -13,6 +15,7 @@ from onnx_diagnostic.torch_models.hghub.hub_api import (
     enumerate_model_list,
     get_model_info,
     get_pretrained_config,
+    download_code_modelid,
     task_from_id,
     task_from_arch,
     task_from_tags,
@@ -146,6 +149,24 @@ class TestHuggingFaceHubApi(ExtTestCase):
 
         conf = _ccached_hf_internal_testing_tiny_random_beitforimageclassification()
         self.assertEqual(conf.auxiliary_channels, 256)
+
+    @requires_transformers("4.50")
+    @requires_torch("2.7")
+    @ignore_errors(OSError)  # connectivity issues
+    @hide_stdout()
+    def test_download_code_modelid(self):
+        model_id = "microsoft/Phi-3.5-MoE-instruct"
+        files = download_code_modelid(model_id, verbose=1, add_path_to_sys_path=True)
+        self.assertTrue(all(os.path.exists(f) for f in files))
+        pyf = [os.path.split(name)[-1] for name in files]
+        self.assertEqual(
+            ["configuration_phimoe.py", "modeling_phimoe.py", "sample_finetune.py"], pyf
+        )
+        cls = transformers.dynamic_module_utils.get_class_from_dynamic_module(
+            "modeling_phimoe.Phi4MMImageEmbedding",
+            pretrained_model_name_or_path=os.path.split(files[0])[0],
+        )
+        self.assertEqual(cls.__name__, "Phi4MMImageEmbedding")
 
 
 if __name__ == "__main__":

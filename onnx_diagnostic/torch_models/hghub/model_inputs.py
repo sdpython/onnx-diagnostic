@@ -6,7 +6,7 @@ import torch
 import transformers
 from ...helpers.config_helper import update_config
 from ...tasks import reduce_model_config, random_input_kwargs
-from .hub_api import task_from_arch, task_from_id, get_pretrained_config
+from .hub_api import task_from_arch, task_from_id, get_pretrained_config, download_code_modelid
 
 
 def _code_needing_rewriting(model: Any) -> Any:
@@ -149,7 +149,23 @@ def get_untrained_model_with_inputs(
         model = transformers.AutoModel.from_pretrained(model_id, **mkwargs)
     else:
         if archs is not None:
-            model = getattr(transformers, archs[0])(config)
+            try:
+                model = getattr(transformers, archs[0])(config)
+            except AttributeError as e:
+                # The code of the models is not in transformers but in the
+                # repository of the model. We need to download it.
+                pyfiles = download_code_modelid(model_id, verbose=verbose)
+                if pyfiles:
+                    cls = transformers.dynamic_module_utils.get_class_from_dynamic_module(
+                        archs[0], pretrained_model_name_or_path=os.path.split(pyfiles[0])[0]
+                    )
+                    model = cls(config)
+                else:
+                    raise AttributeError(
+                        f"Unable to find class 'tranformers.{archs[0]}'. "
+                        f"The code needs to be downloaded, config="
+                        f"\n{pprint.pformat(config)}."
+                    ) from e
         else:
             assert same_as_pretrained and use_pretrained, (
                 f"Model {model_id!r} cannot be built, the model cannot be built. "
