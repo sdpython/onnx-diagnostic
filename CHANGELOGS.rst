@@ -4,6 +4,8 @@ Change Logs
 0.7.1
 +++++
 
+* :pr:`159`: supports for models with custom code in huggingface
+* :pr:`158`: fix uses of pretrained version
 * :pr:`156`, :pr:`157`: add plots and other options to deal with the unpredictable
 * :pr:`155`: better aggregation of historical data
 * :pr:`151`, :pr:`153`: adds command line ``agg``, class CubeLogsPerformance to produce timeseries

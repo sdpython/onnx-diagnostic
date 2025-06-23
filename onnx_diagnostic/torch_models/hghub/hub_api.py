@@ -348,16 +348,16 @@ def download_code_modelid(
     if verbose:
         print(f"[download_code_modelid] python files {pyfiles}")
     absfiles = []
-    pathes = set()
+    paths = set()
     for i, name in enumerate(pyfiles):
         if verbose:
             print(f"[download_code_modelid] download file {i+1}/{len(pyfiles)}: {name!r}")
         r = hf_hub_download(repo_id=model_id, filename=name)
         p = os.path.split(r)[0]
-        pathes.add(p)
+        paths.add(p)
         absfiles.append(r)
     if add_path_to_sys_path:
-        for p in pathes:
+        for p in paths:
             init = os.path.join(p, "__init__.py")
             if not os.path.exists(init):
                 with open(init, "w"):
