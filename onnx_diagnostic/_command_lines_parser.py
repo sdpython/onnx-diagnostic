@@ -734,13 +734,13 @@ def get_parser_agg() -> ArgumentParser:
     )
     parser.add_argument("-v", "--verbose", type=int, default=0, help="verbosity")
     parser.add_argument(
-        "--filter_in",
+        "--filter-in",
         default="",
         help="adds a filter to filter in data, syntax is\n"
         '``"<column1>:<value1>;<value2>/<column2>:<value3>"`` ...',
     )
     parser.add_argument(
-        "--filter_out",
+        "--filter-out",
         default="",
         help="adds a filter to filter out data, syntax is\n"
         '``"<column1>:<value1>;<value2>/<column2>:<value3>"`` ...',
