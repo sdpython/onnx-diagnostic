@@ -718,13 +718,13 @@ def get_parser_agg() -> ArgumentParser:
         "peak_gpu_torch,peak_gpu_nvidia,n_node_control_flow,"
         "n_node_constant,n_node_shape,n_node_expand,"
         "n_node_function,n_node_initializer,n_node_scatter,"
-        "time_export_unbiased",
+        "time_export_unbiased,onnx_n_nodes_no_cst,n_node_initializer_small",
         help="Columns to compute after the aggregation was done.",
     )
     parser.add_argument(
         "--views",
         default="agg-suite,agg-all,disc,speedup,time,time_export,err,cmd,"
-        "bucket-speedup,raw-short,counts,peak-gpu",
+        "bucket-speedup,raw-short,counts,peak-gpu,onnx",
         help="Views to add to the output files.",
     )
     parser.add_argument(
@@ -734,13 +734,13 @@ def get_parser_agg() -> ArgumentParser:
     )
     parser.add_argument("-v", "--verbose", type=int, default=0, help="verbosity")
     parser.add_argument(
-        "--filter_in",
+        "--filter-in",
         default="",
         help="adds a filter to filter in data, syntax is\n"
         '``"<column1>:<value1>;<value2>/<column2>:<value3>"`` ...',
     )
     parser.add_argument(
-        "--filter_out",
+        "--filter-out",
         default="",
         help="adds a filter to filter out data, syntax is\n"
         '``"<column1>:<value1>;<value2>/<column2>:<value3>"`` ...',

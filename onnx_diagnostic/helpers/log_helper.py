@@ -317,7 +317,7 @@ def apply_excel_style(
         co: Dict[int, int] = {}
         sizes: Dict[int, int] = {}
         cols = set()
-        for i in range(1, n_rows):
+        for i in range(1, n_rows + 1):
             for j, cell in enumerate(sheet[i]):
                 if j > n_cols:
                     break
@@ -335,7 +335,7 @@ def apply_excel_style(
                 c = get_column_letter(k)
                 sheet.column_dimensions[c].width = 15
 
-        for i in range(1, n_rows):
+        for i in range(1, n_rows + 1):
             for j, cell in enumerate(sheet[i]):
                 if j > n_cols:
                     break
@@ -516,13 +516,14 @@ class CubePlot:
         df = self.df.T if self.orientation == "row" else self.df
         title_suffix = f"\n{title_suffix}" if title_suffix else ""
 
-        nn = len(df.columns) // 2
-        nn += nn % 2
-        fig, axs = plt.subplots(nn, 2, figsize=(12, nn * df.shape[0] / 4))
+        n_cols = 3
+        nn = df.shape[1] // n_cols
+        nn += int(df.shape[1] % n_cols != 0)
+        fig, axs = plt.subplots(nn, n_cols, figsize=(6 * n_cols, nn * df.shape[0] / 5))
         pos = 0
         imgs = []
         for c in self._make_loop(df.columns, verbose):
-            ax = axs[pos // 2, pos % 2]
+            ax = axs[pos // n_cols, pos % n_cols]
             (
                 df[c].plot.barh(title=f"{c}{title_suffix}", ax=ax)
                 if self.kind == "barh"
@@ -1427,9 +1428,11 @@ class CubeLogsPerformance(CubeLogs):
             "n_node_scatter",
             "n_node_function",
             "n_node_initializer",
+            "n_node_initializer_small",
             "n_node_constant",
             "n_node_shape",
             "n_node_expand",
+            "onnx_n_nodes_no_cst",
             "peak_gpu_torch",
             "peak_gpu_nvidia",
             "time_export_unbiased",
@@ -1597,6 +1600,9 @@ class CubeLogsPerformance(CubeLogs):
                 n_node_function=lambda df: gpreserve(
                     df, "onnx_n_functions", gdf(df, "onnx_n_functions")
                 ),
+                n_node_initializer_small=lambda df: gpreserve(
+                    df, "op_onnx_initializer_small", gdf(df, "op_onnx_initializer_small")
+                ),
                 n_node_initializer=lambda df: gpreserve(
                     df, "onnx_n_initializer", gdf(df, "onnx_n_initializer")
                 ),
@@ -1615,6 +1621,10 @@ class CubeLogsPerformance(CubeLogs):
             ), f"Unexpected formula={formula!r}, should be in {sorted(lambdas)}"
             return lambdas[formula]
 
+        if formula == "onnx_n_nodes_no_cst":
+            return lambda df: gdf(df, "onnx_n_nodes", 0) - gdf(
+                df, "op_onnx__Constant", 0
+            ).fillna(0)
         if formula == "peak_gpu_torch":
             return lambda df: gdf(df, "mema_gpu_5_after_export") - gdf(df, "mema_gpu_4_reset")
         if formula == "peak_gpu_nvidia":
@@ -1766,6 +1776,8 @@ class CubeLogsPerformance(CubeLogs):
                         "onnx_weight_size_torch",
                         "onnx_weight_size_proto",
                         "onnx_n_nodes",
+                        "onnx_n_nodes_no_cst",
+                        "op_onnx__Constant",
                         "peak_gpu_torch",
                         "peak_gpu_nvidia",
                     ],
@@ -1795,6 +1807,7 @@ class CubeLogsPerformance(CubeLogs):
                         "onnx_weight_size_torch",
                         "onnx_weight_size_proto",
                         "onnx_n_nodes",
+                        "onnx_n_nodes_no_cst",
                         "peak_gpu_torch",
                         "peak_gpu_nvidia",
                     ],
@@ -1885,6 +1898,24 @@ class CubeLogsPerformance(CubeLogs):
                 ignore_unique=True,
                 keep_columns_in_index=["suite"],
                 name="cmd",
+                order=order,
+            ),
+            "onnx": lambda: CubeViewDef(
+                key_index=index_cols,
+                values=self._filter_column(
+                    [
+                        "onnx_filesize",
+                        "onnx_n_nodes",
+                        "onnx_n_nodes_no_cst",
+                        "onnx_weight_size_proto",
+                        "onnx_weight_size_torch",
+                        "op_onnx_initializer_small",
+                    ],
+                    self.values,
+                ),
+                ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="onnx",
                 order=order,
             ),
             "raw-short": lambda: CubeViewDef(
