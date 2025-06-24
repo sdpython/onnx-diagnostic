@@ -46,6 +46,7 @@ Or:
     summarization
     text_classification
     text_generation
+    text_to_image
     text2text_generation
     zero_shot_image_classification
     

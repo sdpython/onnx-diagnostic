@@ -41,7 +41,7 @@ def get_inputs(
     assert (
         "cls_cache" not in kwargs
     ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
-    batch = torch.export.Dim("batch", min=1, max=1024)
+    batch = "batch"
     shapes = {
         "sample": {0: batch},
         "timestep": {},
