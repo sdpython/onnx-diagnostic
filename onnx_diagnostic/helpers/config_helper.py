@@ -43,7 +43,10 @@ def update_config(config: Any, mkwargs: Dict[str, Any]):
             else:
                 update_config(getattr(config, k), v)
             continue
-        setattr(config, k, v)
+        if type(config) is dict:
+            config[k] = v
+        else:
+            setattr(config, k, v)
 
 
 def _pick(config, *atts, exceptions: Optional[Dict[str, Callable]] = None):

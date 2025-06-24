@@ -145,12 +145,19 @@ def get_untrained_model_with_inputs(
                 f"{config._attn_implementation!r}"  # type: ignore[union-attr]
             )
 
+    if type(config) is dict and "_diffusers_version" in config:
+        import diffusers
+
+        package_source = diffusers
+    else:
+        package_source = transformers
+
     if use_pretrained:
         model = transformers.AutoModel.from_pretrained(model_id, **mkwargs)
     else:
         if archs is not None:
             try:
-                model = getattr(transformers, archs[0])(config)
+                cls_model = getattr(package_source, archs[0])
             except AttributeError as e:
                 # The code of the models is not in transformers but in the
                 # repository of the model. We need to download it.
@@ -174,10 +181,12 @@ def get_untrained_model_with_inputs(
                             f"[get_untrained_model_with_inputs] from folder "
                             f"{os.path.split(pyfiles[0])[0]!r}"
                         )
-                    cls = transformers.dynamic_module_utils.get_class_from_dynamic_module(
-                        cls_name, pretrained_model_name_or_path=os.path.split(pyfiles[0])[0]
+                    cls_model = (
+                        transformers.dynamic_module_utils.get_class_from_dynamic_module(
+                            cls_name,
+                            pretrained_model_name_or_path=os.path.split(pyfiles[0])[0],
+                        )
                     )
-                    model = cls(config)
                 else:
                     raise AttributeError(
                         f"Unable to find class 'tranformers.{archs[0]}'. "
@@ -190,6 +199,11 @@ def get_untrained_model_with_inputs(
                 f"It must be downloaded. Use same_as_pretrained=True "
                 f"and use_pretrained=True."
             )
+
+        if type(config) is dict:
+            model = cls_model(**config)
+        else:
+            model = cls_model(config)
 
     # input kwargs
     kwargs, fct = random_input_kwargs(config, task)

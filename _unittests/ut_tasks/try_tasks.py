@@ -569,6 +569,27 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 f"{round(score.item(), 3)} at location {box}"
             )
 
+    @never_test()
+    def test_text_to_image(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k test_text_to_image
+        import torch
+        from diffusers import StableDiffusionPipeline
+
+        model_id = "diffusers/tiny-torch-full-checker"  # "stabilityai/stable-diffusion-2"
+        pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16).to(
+            "cuda"
+        )
+
+        prompt = "a photo of an astronaut riding a horse on mars and on jupyter"
+        print()
+        with steal_forward(pipe.unet, with_min_max=True):
+            image = pipe(prompt).images[0]
+        print("-- output", self.string_type(image, with_shape=True, with_min_max=True))
+        # stolen forward for class UNet2DConditionModel -- iteration 44
+        # sample=T10s2x4x96x96[-3.7734375,4.359375:A-0.043463995395642184]
+        # time_step=T7s=101
+        # encoder_hidden_states:T10s2x77x1024[-6.58203125,13.0234375:A-0.16780663634440257]
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -11,19 +11,21 @@ from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
-class TestTasksImageTextToText(ExtTestCase):
+class TestTasksTextToTimage(ExtTestCase):
     @hide_stdout()
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
-    def test_image_text_to_text(self):
-        mid = "HuggingFaceM4/tiny-random-idefics"
-        data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
-        self.assertEqual(data["task"], "image-text-to-text")
-        self.assertIn((data["size"], data["n_weights"]), [(12742888, 3185722)])
+    def test_text_to_image(self):
+        mid = "diffusers/tiny-torch-full-checker"
+        data = get_untrained_model_with_inputs(
+            mid, verbose=1, add_second_input=True, subfolder="unet"
+        )
+        self.assertEqual(data["task"], "text-to-image")
+        self.assertIn((data["size"], data["n_weights"]), [(5708048, 1427012)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         model(**data["inputs2"])
-        with torch_export_patches(patch_transformers=True, verbose=10):
+        with torch_export_patches(patch_transformers=True, verbose=10, stop_if_static=1):
             torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
