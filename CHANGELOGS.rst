@@ -4,6 +4,8 @@ Change Logs
 0.7.2
 +++++
 
+* :pr:`162`: improves graphs rendering for historical data
+
 0.7.1
 +++++
 
