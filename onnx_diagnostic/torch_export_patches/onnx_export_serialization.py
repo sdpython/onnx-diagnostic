@@ -206,7 +206,7 @@ def serialization_functions(
                 verbose=verbose,
             ),
         }
-        classes.update(patch_transformers)
+        classes.update(transformers_classes)
 
     if patch_diffusers:
         from .serialization.diffusers_impl import SUPPORTED_DATACLASSES, __dict__ as dfu
@@ -218,8 +218,8 @@ def serialization_functions(
         lname = _lower_name_with_(cls.__name__)
         assert (
             f"flatten_{lname}" in all_functions
-        ), f"Unable to find function 'flatten_{lname}' in {sorted(all_functions)}"
-        transformers_classes[cls] = (
+        ), f"Unable to find function 'flatten_{lname}' in {list(all_functions)}"
+        classes[cls] = (
             lambda verbose=verbose, _ln=lname, cls=cls, _al=all_functions: register_class_serialization(  # noqa: E501
                 cls,
                 _al[f"flatten_{_ln}"],
@@ -228,7 +228,7 @@ def serialization_functions(
                 verbose=verbose,
             )
         )
-    return transformers_classes
+    return classes
 
 
 def unregister_class_serialization(cls: type, verbose: int = 0):
