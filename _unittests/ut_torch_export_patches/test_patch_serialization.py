@@ -10,6 +10,7 @@ from onnx_diagnostic.ext_test_case import (
 from onnx_diagnostic.helpers.cache_helper import (
     make_encoder_decoder_cache,
     make_dynamic_cache,
+    make_static_cache,
     make_sliding_window_cache,
     flatten_unflatten_for_dynamic_shapes,
 )
@@ -180,7 +181,7 @@ class TestPatchSerialization(ExtTestCase):
             self.assertEqualAny([cache], cache2)
 
     @ignore_warnings(UserWarning)
-    @requires_torch("2.8")
+    @requires_torch("2.7.99")
     def test_sliding_window_cache_export(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
@@ -272,6 +273,69 @@ class TestPatchSerialization(ExtTestCase):
         ds = [{0: DYN}]
 
         with torch_export_patches():
+            torch.export.export(model, (bo,), dynamic_shapes=(ds,))
+
+    @ignore_warnings(UserWarning)
+    @requires_torch("2.7.99")
+    def test_static_cache(self):
+        bo = make_static_cache(
+            [
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+            ],
+            max_cache_len=15,
+        )
+        self.assertEqual(bo.__class__.__name__, "StaticCache")
+        bo2 = torch_deepcopy([bo])
+        self.assertIsInstance(bo2, list)
+        self.assertEqual(
+            "StaticCache(key_cache=#3[T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7], "
+            "value_cache=#3[T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7])",
+            self.string_type(bo, with_shape=True),
+        )
+
+        with torch_export_patches():
+            # internal function
+            bo2 = torch_deepcopy([bo])
+            self.assertIsInstance(bo2, list)
+            self.assertEqual(bo2[0].__class__.__name__, "StaticCache")
+            self.assertEqualAny([bo], bo2)
+            self.assertEqual(
+                "StaticCache(key_cache=#3[T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7], "
+                "value_cache=#3[T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7])",
+                self.string_type(bo, with_shape=True),
+            )
+
+            # serialization
+            flat, _spec = torch.utils._pytree.tree_flatten(bo)
+            self.assertEqual(
+                "#6[T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7]",
+                self.string_type(flat, with_shape=True),
+            )
+            bo2 = torch.utils._pytree.tree_unflatten(flat, _spec)
+            self.assertEqual(
+                self.string_type(bo, with_shape=True, with_min_max=True),
+                self.string_type(bo2, with_shape=True, with_min_max=True),
+            )
+
+            # flatten_unflatten
+            flat, _spec = torch.utils._pytree.tree_flatten(bo)
+            unflat = flatten_unflatten_for_dynamic_shapes(bo, use_dict=True)
+            self.assertIsInstance(unflat, dict)
+            self.assertEqual(list(unflat), ["key_cache", "value_cache"])
+
+        # export
+        class Model(torch.nn.Module):
+            def forward(self, cache):
+                return cache.key_cache[0]
+
+        model = Model()
+        model(bo)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = [[{0: DYN}, {0: DYN}, {0: DYN}], [{0: DYN}, {0: DYN}, {0: DYN}]]
+
+        with torch_export_patches(patch_transformers=True, stop_if_static=1):
             torch.export.export(model, (bo,), dynamic_shapes=(ds,))
 
 

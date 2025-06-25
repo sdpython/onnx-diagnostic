@@ -4,6 +4,7 @@ Change Logs
 0.7.2
 +++++
 
+* :pr:`166`: improves handling of StaticCache
 * :pr:`165`: support for task text-to-image
 * :pr:`162`: improves graphs rendering for historical data
 
