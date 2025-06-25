@@ -35,7 +35,7 @@ from ..helpers.cache_helper import make_static_cache
 
 
 PATCH_OF_PATCHES: Set[Any] = set()
-WRONG_REGISTRATIONS: Dict[str, str] = {
+WRONG_REGISTRATIONS: Dict[str, Optional[str]] = {
     DynamicCache: "4.50",
     BaseModelOutput: None,
     UNet2DConditionOutput: None,
@@ -125,7 +125,7 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
         ):
             assert cls in registration_functions, (
                 f"{cls} has no registration functions mapped to it, "
-                f"available {sorted(registration_functions)}"
+                f"available options are {list(registration_functions)}"
             )
             if verbose:
                 print(
@@ -146,7 +146,7 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     return done
 
 
-def serialization_functions(verbose: int = 0) -> Dict[type, Union[Callable[[], bool], int]]:
+def serialization_functions(verbose: int = 0) -> Dict[type, Union[Callable[[int], bool], int]]:
     """Returns the list of serialization functions."""
     transformers_classes = {
         DynamicCache: lambda verbose=verbose: register_class_serialization(

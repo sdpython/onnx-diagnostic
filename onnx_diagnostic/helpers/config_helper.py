@@ -71,7 +71,7 @@ def _pick(config, *atts, exceptions: Optional[Dict[str, Callable]] = None):
 
 def pick(config, name: str, default_value: Any) -> Any:
     """
-    Returns the vlaue of a attribute if config has it
+    Returns the value of a attribute if config has it
     otherwise the default value.
     """
     if not config:
