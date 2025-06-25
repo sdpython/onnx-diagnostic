@@ -12,11 +12,34 @@ from transformers.cache_utils import (
     StaticCache,
 )
 from transformers.modeling_outputs import BaseModelOutput
+
+try:
+    from diffusers.models.autoencoders.vae import DecoderOutput, EncoderOutput
+    from diffusers.models.unets.unet_1d import UNet1DOutput
+    from diffusers.models.unets.unet_2d import UNet2DOutput
+    from diffusers.models.unets.unet_2d_condition import UNet2DConditionOutput
+    from diffusers.models.unets.unet_3d_condition import UNet3DConditionOutput
+except ImportError as e:
+    try:
+        import diffusers
+    except ImportError:
+        diffusers = None
+        DecoderOutput, EncoderOutput = None, None
+        UNet1DOutput, UNet2DOutput = None, None
+        UNet2DConditionOutput, UNet3DConditionOutput = None, None
+    if diffusers:
+        raise e
+
 from ..helpers import string_type
 from ..helpers.cache_helper import make_static_cache
 
 
 PATCH_OF_PATCHES: Set[Any] = set()
+WRONG_REGISTRATIONS: Dict[str, str] = {
+    DynamicCache: "4.50",
+    BaseModelOutput: None,
+    UNet2DConditionOutput: None,
+}
 
 
 def register_class_serialization(
@@ -40,10 +63,12 @@ def register_class_serialization(
     :return: registered or not
     """
     if cls is not None and cls in torch.utils._pytree.SUPPORTED_NODES:
+        if verbose and cls is not None:
+            print(f"[register_class_serialization] already registered {cls.__name__}")
         return False
 
     if verbose:
-        print(f"[register_cache_serialization] register {cls}")
+        print(f"[register_class_serialization] ---------- register {cls.__name__}")
     torch.utils._pytree.register_pytree_node(
         cls,
         f_flatten,
@@ -54,8 +79,8 @@ def register_class_serialization(
     if pv.Version(torch.__version__) < pv.Version("2.7"):
         if verbose:
             print(
-                f"[register_cache_serialization] "
-                f"register {cls} for torch=={torch.__version__}"
+                f"[register_class_serialization] "
+                f"---------- register {cls.__name__} for torch=={torch.__version__}"
             )
         torch.fx._pytree.register_pytree_flatten_spec(cls, lambda x, _: f_flatten(x)[0])
 
@@ -77,6 +102,8 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     Registers many classes with :func:`register_class_serialization`.
     Returns information needed to undo the registration.
     """
+    registration_functions = serialization_functions(verbose=verbose)
+
     # DynamicCache serialization is different in transformers and does not
     # play way with torch.export.export.
     # see test test_export_dynamic_cache_cat with NOBYPASS=1
@@ -85,63 +112,44 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     # torch.fx._pytree.register_pytree_flatten_spec(
     #           DynamicCache, _flatten_dynamic_cache_for_fx)
     # so we remove it anyway
-    if (
-        DynamicCache in torch.utils._pytree.SUPPORTED_NODES
-        and DynamicCache not in PATCH_OF_PATCHES
-        # and pv.Version(torch.__version__) < pv.Version("2.7")
-        and pv.Version(transformers.__version__) >= pv.Version("4.50")
-    ):
-        if verbose:
-            print(
-                f"[_fix_registration] DynamicCache is unregistered and "
-                f"registered first for transformers=={transformers.__version__}"
-            )
-        unregister(DynamicCache, verbose=verbose)
-        register_class_serialization(
-            DynamicCache,
-            flatten_dynamic_cache,
-            unflatten_dynamic_cache,
-            flatten_with_keys_dynamic_cache,
-            # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
-            verbose=verbose,
-        )
-        if verbose:
-            print("[_fix_registration] DynamicCache done.")
-        # To avoid doing it multiple times.
-        PATCH_OF_PATCHES.add(DynamicCache)
-
     # BaseModelOutput serialization is incomplete.
     # It does not include dynamic shapes mapping.
-    if (
-        BaseModelOutput in torch.utils._pytree.SUPPORTED_NODES
-        and BaseModelOutput not in PATCH_OF_PATCHES
-    ):
-        if verbose:
-            print(
-                f"[_fix_registration] BaseModelOutput is unregistered and "
-                f"registered first for transformers=={transformers.__version__}"
+    for cls, version in WRONG_REGISTRATIONS.items():
+        if (
+            cls in torch.utils._pytree.SUPPORTED_NODES
+            and cls not in PATCH_OF_PATCHES
+            # and pv.Version(torch.__version__) < pv.Version("2.7")
+            and (
+                version is None or pv.Version(transformers.__version__) >= pv.Version(version)
             )
-        unregister(BaseModelOutput, verbose=verbose)
-        register_class_serialization(
-            BaseModelOutput,
-            flatten_base_model_output,
-            unflatten_base_model_output,
-            flatten_with_keys_base_model_output,
-            verbose=verbose,
-        )
-        if verbose:
-            print("[_fix_registration] BaseModelOutput done.")
+        ):
+            assert cls in registration_functions, (
+                f"{cls} has no registration functions mapped to it, "
+                f"available {sorted(registration_functions)}"
+            )
+            if verbose:
+                print(
+                    f"[_fix_registration] {cls.__name__} is unregistered and "
+                    f"registered first"
+                )
+            unregister_class_serialization(cls, verbose=verbose)
+            registration_functions[cls](verbose=verbose)
+            if verbose:
+                print(f"[_fix_registration] {cls.__name__} done.")
+            # To avoid doing it multiple times.
+            PATCH_OF_PATCHES.add(cls)
 
-        # To avoid doing it multiple times.
-        PATCH_OF_PATCHES.add(BaseModelOutput)
+    # classes with no registration at all.
+    done = {}
+    for k, v in registration_functions.items():
+        done[k] = v(verbose=verbose)
+    return done
 
-    return serialization_functions(verbose=verbose)
 
-
-def serialization_functions(verbose: int = 0) -> Dict[str, Union[Callable, int]]:
+def serialization_functions(verbose: int = 0) -> Dict[type, Union[Callable[[], bool], int]]:
     """Returns the list of serialization functions."""
-    return dict(
-        DynamicCache=register_class_serialization(
+    transformers_classes = {
+        DynamicCache: lambda verbose=verbose: register_class_serialization(
             DynamicCache,
             flatten_dynamic_cache,
             unflatten_dynamic_cache,
@@ -149,45 +157,57 @@ def serialization_functions(verbose: int = 0) -> Dict[str, Union[Callable, int]]
             # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
             verbose=verbose,
         ),
-        MambaCache=register_class_serialization(
+        MambaCache: lambda verbose=verbose: register_class_serialization(
             MambaCache,
             flatten_mamba_cache,
             unflatten_mamba_cache,
             flatten_with_keys_mamba_cache,
             verbose=verbose,
         ),
-        EncoderDecoderCache=register_class_serialization(
+        EncoderDecoderCache: lambda verbose=verbose: register_class_serialization(
             EncoderDecoderCache,
             flatten_encoder_decoder_cache,
             unflatten_encoder_decoder_cache,
             flatten_with_keys_encoder_decoder_cache,
             verbose=verbose,
         ),
-        BaseModelOutput=register_class_serialization(
+        BaseModelOutput: lambda verbose=verbose: register_class_serialization(
             BaseModelOutput,
             flatten_base_model_output,
             unflatten_base_model_output,
             flatten_with_keys_base_model_output,
             verbose=verbose,
         ),
-        SlidingWindowCache=register_class_serialization(
+        SlidingWindowCache: lambda verbose=verbose: register_class_serialization(
             SlidingWindowCache,
             flatten_sliding_window_cache,
             unflatten_sliding_window_cache,
             flatten_with_keys_sliding_window_cache,
             verbose=verbose,
         ),
-        StaticCache=register_class_serialization(
+        StaticCache: lambda verbose=verbose: register_class_serialization(
             StaticCache,
             flatten_static_cache,
             unflatten_static_cache,
             flatten_with_keys_static_cache,
             verbose=verbose,
         ),
-    )
+    }
+    if UNet2DConditionOutput:
+        diffusers_classes = {
+            UNet2DConditionOutput: lambda verbose=verbose: register_class_serialization(
+                UNet2DConditionOutput,
+                flatten_unet_2d_condition_output,
+                unflatten_unet_2d_condition_output,
+                flatten_with_keys_unet_2d_condition_output,
+                verbose=verbose,
+            )
+        }
+        transformers_classes.update(diffusers_classes)
+    return transformers_classes
 
 
-def unregister(cls: type, verbose: int = 0):
+def unregister_class_serialization(cls: type, verbose: int = 0):
     """Undo the registration."""
     # torch.utils._pytree._deregister_pytree_flatten_spec(cls)
     if cls in torch.fx._pytree.SUPPORTED_NODES:
@@ -217,9 +237,10 @@ def unregister(cls: type, verbose: int = 0):
 
 def unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
     """Undo all registrations."""
-    for cls in [MambaCache, DynamicCache, EncoderDecoderCache, BaseModelOutput]:
+    cls_ensemble = {MambaCache, DynamicCache, EncoderDecoderCache, BaseModelOutput} | set(undo)
+    for cls in cls_ensemble:
         if undo.get(cls.__name__, False):
-            unregister(cls, verbose)
+            unregister_class_serialization(cls, verbose)
 
 
 ############
@@ -478,3 +499,41 @@ def unflatten_base_model_output(
     from python objects.
     """
     return BaseModelOutput(**dict(zip(context, values)))
+
+
+#######################
+# UNet2DConditionOutput
+#######################
+
+
+def flatten_unet_2d_condition_output(
+    obj: UNet2DConditionOutput,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    """
+    Serializes a :class:`diffusers.models.unets.unet_2d_condition.UNet2DConditionOutput`
+    with python objects.
+    """
+    return list(obj.values()), list(obj.keys())
+
+
+def flatten_with_keys_unet_2d_condition_output(
+    obj: UNet2DConditionOutput,
+) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
+    """
+    Serializes a :class:`diffusers.models.unets.unet_2d_condition.UNet2DConditionOutput`
+    with python objects.
+    """
+    values, context = flatten_unet_2d_condition_output(obj)
+    return [(torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)], context
+
+
+def unflatten_unet_2d_condition_output(
+    values: List[Any],
+    context: torch.utils._pytree.Context,
+    output_type=None,
+) -> UNet2DConditionOutput:
+    """
+    Restores a :class:`diffusers.models.unets.unet_2d_condition.UNet2DConditionOutput`
+    from python objects.
+    """
+    return UNet2DConditionOutput(**dict(zip(context, values)))

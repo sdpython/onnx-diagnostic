@@ -90,6 +90,7 @@ intersphinx_mapping = {
         "https://sdpython.github.io/doc/experimental-experiment/dev/",
         None,
     ),
+    "diffusers": ("https://huggingface.co/docs/diffusers/index", None),
     "matplotlib": ("https://matplotlib.org/stable/", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "onnx": ("https://onnx.ai/onnx/", None),
@@ -104,6 +105,7 @@ intersphinx_mapping = {
     "sklearn": ("https://scikit-learn.org/stable/", None),
     "skl2onnx": ("https://onnx.ai/sklearn-onnx/", None),
     "torch": ("https://pytorch.org/docs/main/", None),
+    "transformers": ("https://huggingface.co/docs/transformers/index", None),
 }
 
 # Check intersphinx reference targets exist
