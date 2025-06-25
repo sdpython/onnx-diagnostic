@@ -134,11 +134,17 @@ def unpatch_module_or_classes(mod, info: Dict[type, Dict[type, Callable]], verbo
 
 @contextlib.contextmanager
 def register_additional_serialization_functions(
-    patch_transformers: bool = False, verbose: int = 0
+    patch_transformers: bool = False, patch_diffusers: bool = False, verbose: int = 0
 ) -> Callable:
     """The necessary modifications to run the fx Graph."""
-    fct_callable = replacement_before_exporting if patch_transformers else (lambda x: x)
-    done = register_cache_serialization(verbose=verbose)
+    fct_callable = (
+        replacement_before_exporting
+        if patch_transformers or patch_diffusers
+        else (lambda x: x)
+    )
+    done = register_cache_serialization(
+        patch_transformers=patch_transformers, patch_diffusers=patch_diffusers, verbose=verbose
+    )
     try:
         yield fct_callable
     finally:
@@ -150,6 +156,7 @@ def torch_export_patches(
     patch_sympy: bool = True,
     patch_torch: bool = True,
     patch_transformers: bool = False,
+    patch_diffusers: bool = False,
     catch_constraints: bool = True,
     stop_if_static: int = 0,
     verbose: int = 0,
@@ -165,6 +172,7 @@ def torch_export_patches(
     :param patch_sympy: fix missing method ``name`` for IntegerConstant
     :param patch_torch: patches :epkg:`torch` with supported implementation
     :param patch_transformers: patches :epkg:`transformers` with supported implementation
+    :param patch_diffusers: patches :epkg:`diffusers` with supported implementation
     :param catch_constraints: catch constraints related to dynamic shapes,
         as a result, some dynamic dimension may turn into static ones,
         the environment variable ``SKIP_SOLVE_CONSTRAINTS=0``
@@ -249,6 +257,7 @@ def torch_export_patches(
             patch_sympy=patch_sympy,
             patch_torch=patch_torch,
             patch_transformers=patch_transformers,
+            patch_diffusers=patch_diffusers,
             catch_constraints=catch_constraints,
             stop_if_static=stop_if_static,
             verbose=verbose,
@@ -281,7 +290,11 @@ def torch_export_patches(
         # caches
         ########
 
-        cache_done = register_cache_serialization(verbose=verbose)
+        cache_done = register_cache_serialization(
+            patch_transformers=patch_transformers,
+            patch_diffusers=patch_diffusers,
+            verbose=verbose,
+        )
 
         #############
         # patch sympy

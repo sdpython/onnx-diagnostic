@@ -1,5 +1,4 @@
-import re
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, List, Tuple
 import torch
 import transformers
 from transformers.cache_utils import (
@@ -10,40 +9,15 @@ from transformers.cache_utils import (
     StaticCache,
 )
 from transformers.modeling_outputs import BaseModelOutput
-
-try:
-    from diffusers.models.autoencoders.vae import DecoderOutput, EncoderOutput
-    from diffusers.models.unets.unet_1d import UNet1DOutput
-    from diffusers.models.unets.unet_2d import UNet2DOutput
-    from diffusers.models.unets.unet_2d_condition import UNet2DConditionOutput
-    from diffusers.models.unets.unet_3d_condition import UNet3DConditionOutput
-except ImportError as e:
-    try:
-        import diffusers
-    except ImportError:
-        diffusers = None
-        DecoderOutput, EncoderOutput = None, None
-        UNet1DOutput, UNet2DOutput = None, None
-        UNet2DConditionOutput, UNet3DConditionOutput = None, None
-    if diffusers:
-        raise e
-
 from ..helpers.cache_helper import make_static_cache
-
-
-def _make_wrong_registrations() -> Dict[str, Optional[str]]:
-    res = {
-        DynamicCache: "4.50",
-        BaseModelOutput: None,
-    }
-    for c in [UNet2DConditionOutput]:
-        if c is not None:
-            res[c] = None
-    return res
+from . import make_serialization_function_for_dataclass
 
 
 SUPPORTED_DATACLASSES = set()
-WRONG_REGISTRATIONS = _make_wrong_registrations()
+WRONG_REGISTRATIONS = {
+    DynamicCache: "4.50",
+    BaseModelOutput: None,
+}
 
 
 ############
@@ -278,57 +252,8 @@ def unflatten_encoder_decoder_cache(
 #############
 
 
-def _lower_name_with_(name):
-    s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
-    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
-
-
-def make_serialization_function_for_dataclass(cls) -> Tuple[Callable, Callable, Callable]:
-    """
-    Automatically creates serialization function for a class decorated with
-    ``dataclasses.dataclass``.
-    """
-
-    def flatten_cls(obj: cls) -> Tuple[List[Any], torch.utils._pytree.Context]:
-        """Serializes a ``%s`` with python objects."""
-        return list(obj.values()), list(obj.keys())
-
-    def flatten_with_keys_cls(
-        obj: cls,
-    ) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
-        """Serializes a ``%s`` with python objects with keys."""
-        values, context = list(obj.values()), list(obj.keys())
-        return [
-            (torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)
-        ], context
-
-    def unflatten_cls(
-        values: List[Any], context: torch.utils._pytree.Context, output_type=None
-    ) -> cls:
-        """Restores an instance of ``%s`` from python objects."""
-        return cls(**dict(zip(context, values)))
-
-    name = _lower_name_with_(cls.__name__)
-    flatten_cls.__name__ = f"flatten_{name}"
-    flatten_with_keys_cls.__name__ = f"flatten_with_keys_{name}"
-    unflatten_cls.__name__ = f"unflatten_{name}"
-    flatten_cls.__doc__ = flatten_cls.__doc__ % cls.__name__
-    flatten_with_keys_cls.__doc__ = flatten_with_keys_cls.__doc__ % cls.__name__
-    unflatten_cls.__doc__ = unflatten_cls.__doc__ % cls.__name__
-    SUPPORTED_DATACLASSES.add(cls)
-    return flatten_cls, flatten_with_keys_cls, unflatten_cls
-
-
 (
     flatten_base_model_output,
     flatten_with_keys_base_model_output,
     unflatten_base_model_output,
-) = make_serialization_function_for_dataclass(BaseModelOutput)
-
-
-if UNet2DConditionOutput is not None:
-    (
-        flatten_u_net2_d_condition_output,
-        flatten_with_keys_u_net2_d_condition_output,
-        unflatten_u_net2_d_condition_output,
-    ) = make_serialization_function_for_dataclass(UNet2DConditionOutput)
+) = make_serialization_function_for_dataclass(BaseModelOutput, SUPPORTED_DATACLASSES)
