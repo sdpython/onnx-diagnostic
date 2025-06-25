@@ -11,34 +11,11 @@ from transformers.cache_utils import (
     SlidingWindowCache,
     StaticCache,
 )
-from transformers.modeling_outputs import BaseModelOutput
-
-try:
-    from diffusers.models.autoencoders.vae import DecoderOutput, EncoderOutput
-    from diffusers.models.unets.unet_1d import UNet1DOutput
-    from diffusers.models.unets.unet_2d import UNet2DOutput
-    from diffusers.models.unets.unet_2d_condition import UNet2DConditionOutput
-    from diffusers.models.unets.unet_3d_condition import UNet3DConditionOutput
-except ImportError as e:
-    try:
-        import diffusers
-    except ImportError:
-        diffusers = None
-        DecoderOutput, EncoderOutput = None, None
-        UNet1DOutput, UNet2DOutput = None, None
-        UNet2DConditionOutput, UNet3DConditionOutput = None, None
-    if diffusers:
-        raise e
 
 from ..helpers import string_type
 
 
 PATCH_OF_PATCHES: Set[Any] = set()
-WRONG_REGISTRATIONS: Dict[str, Optional[str]] = {
-    DynamicCache: "4.50",
-    BaseModelOutput: None,
-    UNet2DConditionOutput: None,
-}
 
 
 def register_class_serialization(
@@ -101,6 +78,8 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     Registers many classes with :func:`register_class_serialization`.
     Returns information needed to undo the registration.
     """
+    from .onnx_export_serialization_impl import WRONG_REGISTRATIONS
+
     registration_functions = serialization_functions(verbose=verbose)
 
     # DynamicCache serialization is different in transformers and does not
@@ -212,7 +191,7 @@ def serialization_functions(verbose: int = 0) -> Dict[type, Callable[[int], bool
             f"flatten_{lname}" in all_functions
         ), f"Unable to find function 'flatten_{lname}' in {sorted(all_functions)}"
         transformers_classes[cls] = (
-            lambda verbose=verbose, _ln=lname, cls=cls, _al=all_functions: register_class_serialization(
+            lambda verbose=verbose, _ln=lname, cls=cls, _al=all_functions: register_class_serialization(  # noqa: E501
                 cls,
                 _al[f"flatten_{_ln}"],
                 _al[f"unflatten_{_ln}"],
@@ -253,7 +232,7 @@ def unregister_class_serialization(cls: type, verbose: int = 0):
 
 def unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
     """Undo all registrations."""
-    cls_ensemble = {MambaCache, DynamicCache, EncoderDecoderCache, BaseModelOutput} | set(undo)
+    cls_ensemble = {MambaCache, DynamicCache, EncoderDecoderCache} | set(undo)
     for cls in cls_ensemble:
         if undo.get(cls.__name__, False):
             unregister_class_serialization(cls, verbose)

@@ -1,5 +1,5 @@
 import re
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import torch
 import transformers
 from transformers.cache_utils import (
@@ -31,7 +31,20 @@ except ImportError as e:
 from ..helpers.cache_helper import make_static_cache
 
 
+def _make_wrong_registrations() -> Dict[str, Optional[str]]:
+    res = {
+        DynamicCache: "4.50",
+        BaseModelOutput: None,
+    }
+    for c in [UNet2DConditionOutput]:
+        if c is not None:
+            res[c] = None
+    return res
+
+
 SUPPORTED_DATACLASSES = set()
+WRONG_REGISTRATIONS = _make_wrong_registrations()
+
 
 ############
 # MambaCache
