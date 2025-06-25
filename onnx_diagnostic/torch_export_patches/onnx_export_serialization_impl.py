@@ -151,6 +151,11 @@ def flatten_static_cache(
     cache: StaticCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.StaticCache` with python objects."""
+    assert not cache.key_cache or cache.max_cache_len == cache.key_cache[0].shape[2], (
+        f"Serialization doet not work when "
+        f"cache.max_cache_len={cache.max_cache_len} != "
+        f"cache.key_cache[0].shape[2]={cache.key_cache[0].shape[2]}"
+    )
     flat = [("key_cache", cache.key_cache), ("value_cache", cache.value_cache)]
     return [f[1] for f in flat], [f[0] for f in flat]
 
@@ -167,7 +172,9 @@ def unflatten_static_cache(
     values: List[Any], context: torch.utils._pytree.Context, output_type=None
 ) -> StaticCache:
     """Restores a :class:`transformers.cache_utils.StaticCache` from python objects."""
-    return make_static_cache(list(zip(values[0], values[1])))
+    return make_static_cache(
+        list(zip(values[0], values[1])), max_cache_len=values[0][0].shape[2]
+    )
 
 
 ####################

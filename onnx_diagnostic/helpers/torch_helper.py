@@ -735,7 +735,8 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
                     [t.to(to_value) for t in value.key_cache],
                     [t.to(to_value) for t in value.value_cache],
                 )
-            )
+            ),
+            max_cache_len=value.max_cache_len,
         )
     if value.__class__.__name__ == "EncoderDecoderCache":
         return make_encoder_decoder_cache(
@@ -784,7 +785,10 @@ def torch_deepcopy(value: Any) -> Any:
             torch_deepcopy(list(zip(value.key_cache, value.value_cache)))
         )
     if value.__class__.__name__ == "StaticCache":
-        return make_static_cache(torch_deepcopy(list(zip(value.key_cache, value.value_cache))))
+        return make_static_cache(
+            torch_deepcopy(list(zip(value.key_cache, value.value_cache))),
+            max_cache_len=value.max_cache_len,
+        )
     if value.__class__.__name__ == "SlidingWindowCache":
         return make_sliding_window_cache(
             torch_deepcopy(list(zip(value.key_cache, value.value_cache)))

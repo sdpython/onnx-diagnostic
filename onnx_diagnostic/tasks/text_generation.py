@@ -109,7 +109,7 @@ def get_inputs(
         sequence_length2 = seq_length_multiple
 
         shapes = {
-            "input_ids": {0: batch, 1: torch.export.Dim.DYNAMIC},
+            "input_ids": {0: batch, 1: "sequence_length"},
             "attention_mask": {
                 0: batch,
                 1: "cache+seq",  # cache_length + seq_length
@@ -188,18 +188,25 @@ def get_inputs(
                     (batch_size, num_key_value_heads, sequence_length2, head_dim)
                 ).to(torch.bool),
                 cache_position=torch.arange(sequence_length2).to(torch.int64),
-                past_key_values=make_cache(
+                past_key_values=make_static_cache(
                     [
                         (
                             torch.randn(
-                                batch_size, num_key_value_heads, sequence_length, head_dim
+                                batch_size,
+                                num_key_value_heads,
+                                sequence_length + sequence_length2,
+                                head_dim,
                             ),
                             torch.randn(
-                                batch_size, num_key_value_heads, sequence_length, head_dim
+                                batch_size,
+                                num_key_value_heads,
+                                sequence_length + sequence_length2,
+                                head_dim,
                             ),
                         )
                         for i in range(num_hidden_layers)
-                    ]
+                    ],
+                    max_cache_len=max(sequence_length + sequence_length2, head_dim),
                 ),
             )
         else:
@@ -230,7 +237,7 @@ def get_inputs(
                 position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
                 .to(torch.int64)
                 .expand((batch_size, -1)),
-                past_key_values=make_cache(
+                past_key_values=make_cache(  # type: ignore[operator]
                     [
                         (
                             torch.randn(
