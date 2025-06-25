@@ -133,7 +133,7 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
                     f"registered first"
                 )
             unregister_class_serialization(cls, verbose=verbose)
-            registration_functions[cls](verbose=verbose)  # type: ignore[arg-type]
+            registration_functions[cls](verbose=verbose)  # type: ignore[arg-type, call-arg]
             if verbose:
                 print(f"[_fix_registration] {cls.__name__} done.")
             # To avoid doing it multiple times.
@@ -142,7 +142,7 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     # classes with no registration at all.
     done = {}
     for k, v in registration_functions.items():
-        done[k] = v(verbose=verbose)  # type: ignore[arg-type]
+        done[k] = v(verbose=verbose)  # type: ignore[arg-type, call-arg]
     return done
 
 
