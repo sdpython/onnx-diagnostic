@@ -276,6 +276,7 @@ class TestPatchSerialization(ExtTestCase):
             torch.export.export(model, (bo,), dynamic_shapes=(ds,))
 
     @ignore_warnings(UserWarning)
+    @requires_torch("2.8")
     def test_static_cache(self):
         bo = make_static_cache(
             [
