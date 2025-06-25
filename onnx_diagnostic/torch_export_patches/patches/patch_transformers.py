@@ -45,11 +45,11 @@ def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) ->
             ), f"Expected a tensor with 1 dimension not {string_type(a, with_shape=True)}"
             torch._check(a.shape[0] > 0)
 
-        # new_args = [a.reshape(shape) for a, shape in zip(args, dimensions)]
-        new_args = [
-            a.unsqueeze(dims[0]).unsqueeze(dims[1]).unsqueeze(dims[2])
-            for a, dims in zip(args, udimensions)
-        ]
+        new_args = [a.reshape(shape) for a, shape in zip(args, dimensions)]
+        # new_args = [
+        #    a.unsqueeze(dims[0]).unsqueeze(dims[1]).unsqueeze(dims[2])
+        #    for a, dims in zip(args, udimensions)
+        # ]
         max_shape = tuple(args[i].shape[0] for i in indices)
         # if is_torchdynamo_exporting():
         #     for a in args:
