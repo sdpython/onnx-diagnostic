@@ -204,6 +204,18 @@ class TestPatchPatchTorch(ExtTestCase):
         ep = torch.export.export(Model(), inputs, dynamic_shapes=ds)
         self.assertEqualArray(causal_mask, ep.module()(*inputs))
 
+    @requires_torch("2.7")
+    def test_export_unsqueeze(self):
+        class Model(torch.nn.Module):
+            def forward(self, x):
+                return x.unsqueeze(0).unsqueeze(2).unsqueeze(3)
+
+        x = torch.tensor([7.0, 8.0])
+        Model()(x)
+        DYN = torch.export.Dim.DYNAMIC
+        ep = torch.export.export(Model(), (x,), dynamic_shapes=({0: DYN},))
+        self.assertEqualArray(Model()(x), ep.module()(x))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

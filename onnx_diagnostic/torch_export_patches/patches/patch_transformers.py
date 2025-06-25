@@ -31,16 +31,30 @@ def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) ->
     def vector_mask_function(
         *args, mask_function=mask_function, dimensions=dimensions, indices=indices
     ):
-        assert len(args) == len(dimensions) == len(udimensions) + 1, (
+        assert len(args) == len(dimensions) == len(udimensions), (
             f"Mismatch between args={string_type(args)} and dimensions={dimensions} "
-            f"and udimensions={udimensions}"
+            f"and udimensions={udimensions}."
         )
+        assert len(indices) == len(args), (
+            f"Mismatch between args={string_type(args)} and indices={indices}, "
+            f"they should have the same length."
+        )
+        for a in args:
+            assert (
+                a.ndim == 1
+            ), f"Expected a tensor with 1 dimension not {string_type(a, with_shape=True)}"
+            torch._check(a.shape[0] > 0)
+
         # new_args = [a.reshape(shape) for a, shape in zip(args, dimensions)]
         new_args = [
-            a.reshape((-1,)).unsqueeze(shape[0]).unsqueeze(shape[1]).unsqueeze(shape[2])
-            for a, shape in zip(args, udimensions)
+            a.unsqueeze(dims[0]).unsqueeze(dims[1]).unsqueeze(dims[2])
+            for a, dims in zip(args, udimensions)
         ]
         max_shape = tuple(args[i].shape[0] for i in indices)
+        if is_torchdynamo_exporting():
+            for a in args:
+                # The exporter should export with a dimension > 1 to make sure it is dynamic.
+                torch._check(a.shape[0] > 1)
         expanded_args = [a.expand(max_shape) for a in new_args]
         return mask_function(*expanded_args)
 
