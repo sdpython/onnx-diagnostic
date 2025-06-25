@@ -175,12 +175,13 @@ class TestCacheHelpers(ExtTestCase):
                 (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
                 (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
                 (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
-            ]
+            ],
+            max_cache_len=15,
         )
         text = self.string_type(cache, with_shape=True)
         self.assertEqual(
-            "StaticCache(key_cache=#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7], "
-            "value_cache=#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7])",
+            "StaticCache(key_cache=#3[T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7], "
+            "value_cache=#3[T1s4x5x15x7,T1s4x5x15x7,T1s4x5x15x7])",
             text,
         )
         self.assertEqual(0, max_diff(cache, cache)["abs"])
@@ -192,7 +193,8 @@ class TestCacheHelpers(ExtTestCase):
                     (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
                     (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
                     (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
-                ]
+                ],
+                max_cache_len=6,
             )
             self.assertEqual(0, max_diff(c2, c2)["abs"])
             self.assertIsInstance(c2, transformers.cache_utils.StaticCache)

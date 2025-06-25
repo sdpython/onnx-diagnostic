@@ -154,10 +154,12 @@ else:
 
 def make_static_cache(
     key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    max_cache_len: Optional[int] = None,
 ) -> transformers.cache_utils.DynamicCache:
     """
     Creates an instance of :class:`transformers.cache_utils.StaticCache`.
     :param key_value_pairs: list of pairs of (key, values)
+    :param max_cache_len: max_cache_length or something inferred from the vector
     :return: :class:`transformers.cache_utils.StaticCache`
 
     Example:
@@ -190,24 +192,32 @@ def make_static_cache(
             self.num_attention_heads = key_value_pairs[0][0].shape[1]
             self.num_hidden_layers = len(key_value_pairs)
 
+    assert max_cache_len is not None, (
+        f"max_cache_len={max_cache_len} cannot be setup "
+        f"automatically yet from shape {key_value_pairs[0][0].shape}"
+    )
+    torch._check(
+        max_cache_len >= key_value_pairs[0][0].shape[2],
+        (
+            f"max_cache_len={max_cache_len} cannot be smaller "
+            f"shape[2]={key_value_pairs[0][0].shape[2]} in shape "
+            f"{key_value_pairs[0][0].shape}"
+        ),
+    )
     cache = transformers.cache_utils.StaticCache(
         _config(),
         max_batch_size=key_value_pairs[0][0].shape[0],
         device=key_value_pairs[0][0].device,
         dtype=key_value_pairs[0][0].dtype,
-        max_cache_len=key_value_pairs[0][0].shape[2],
+        max_cache_len=max_cache_len,
     )
     for i in range(len(key_value_pairs)):
-        assert cache.key_cache[i].shape == key_value_pairs[i][0].shape, (
-            f"Shape mismatch, expected {cache.key_cache[i].shape}, "
-            f"got {key_value_pairs[i][0].shape}"
-        )
-        cache.key_cache[i][:, :, :, :] = key_value_pairs[i][0]
-        assert cache.value_cache[i].shape == key_value_pairs[i][1].shape, (
-            f"Shape mismatch, expected {cache.value_cache[i].shape}, "
-            f"got {key_value_pairs[i][1].shape}"
-        )
-        cache.value_cache[i][:, :, :, :] = key_value_pairs[i][1]
+        assert (
+            key_value_pairs[i][0].shape == key_value_pairs[i][1].shape
+        ), f"Shape mismatch {key_value_pairs[i][0].shape} != {key_value_pairs[i][1].shape}"
+        d = key_value_pairs[i][1].shape[2]
+        cache.key_cache[i][:, :, :d, :] = key_value_pairs[i][0]
+        cache.value_cache[i][:, :, :d, :] = key_value_pairs[i][1]
     return cache
 
 

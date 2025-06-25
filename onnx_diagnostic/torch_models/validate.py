@@ -346,9 +346,10 @@ def validate_model(
     exported model returns the same outputs as the original one, otherwise,
     :class:`onnx_diagnostic.reference.TorchOnnxEvaluator` is used.
     """
-    assert (
-        not rewrite or patch
-    ), f"rewrite={rewrite}, patch={patch}, patch must be True to enable rewriting"
+    assert not rewrite or patch, (
+        f"rewrite={rewrite}, patch={patch}, patch must be True to enable rewriting, "
+        f"if --no-patch was specified on the command line, --no-rewrite must be added."
+    )
     summary = version_summary()
     summary.update(
         dict(

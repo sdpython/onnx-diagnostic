@@ -109,7 +109,7 @@ def get_inputs(
         sequence_length2 = seq_length_multiple
 
         shapes = {
-            "input_ids": {0: batch, 1: torch.export.Dim.DYNAMIC},
+            "input_ids": {0: batch, 1: "sequence_length"},
             "attention_mask": {
                 0: batch,
                 1: "cache+seq",  # cache_length + seq_length
@@ -192,14 +192,21 @@ def get_inputs(
                     [
                         (
                             torch.randn(
-                                batch_size, num_key_value_heads, sequence_length, head_dim
+                                batch_size,
+                                num_key_value_heads,
+                                sequence_length + sequence_length2,
+                                head_dim,
                             ),
                             torch.randn(
-                                batch_size, num_key_value_heads, sequence_length, head_dim
+                                batch_size,
+                                num_key_value_heads,
+                                sequence_length + sequence_length2,
+                                head_dim,
                             ),
                         )
                         for i in range(num_hidden_layers)
-                    ]
+                    ],
+                    max_cache_len=max(sequence_length + sequence_length2 * 2, 100),
                 ),
             )
         else:

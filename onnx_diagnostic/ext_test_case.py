@@ -976,6 +976,16 @@ class ExtTestCase(unittest.TestCase):
                 atol=atol,
                 rtol=rtol,
             )
+        elif expected.__class__.__name__ == "StaticCache":
+            self.assertEqual(type(expected), type(value), msg=msg)
+            self.assertEqual(expected.max_cache_len, value.max_cache_len)
+            atts = ["key_cache", "value_cache"]
+            self.assertEqualAny(
+                {k: expected.__dict__.get(k, None) for k in atts},
+                {k: value.__dict__.get(k, None) for k in atts},
+                atol=atol,
+                rtol=rtol,
+            )
         elif expected.__class__.__name__ == "EncoderDecoderCache":
             self.assertEqual(type(expected), type(value), msg=msg)
             atts = ["self_attention_cache", "cross_attention_cache"]

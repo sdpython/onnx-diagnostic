@@ -20,17 +20,26 @@ def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) ->
     ]
     if bh_indices:
         dimensions.extend([(None, 0, None, None), (0, None, None, None)])
+    # reshape
     dimensions = [tuple(1 if d is None else -1 for d in shape) for shape in dimensions]
     dimensions = tuple(reversed(dimensions))
     indices = tuple(shape.index(-1) for shape in dimensions)
 
+    # unsqueeze
+    udimensions = [tuple(di for di, d in enumerate(shape) if d == 1) for shape in dimensions]
+
     def vector_mask_function(
         *args, mask_function=mask_function, dimensions=dimensions, indices=indices
     ):
-        assert len(args) == len(
-            dimensions
-        ), f"Mismatch between args={string_type(args)} and dimensions={dimensions}"
-        new_args = [a.reshape(shape) for a, shape in zip(args, dimensions)]
+        assert len(args) == len(dimensions) == len(udimensions) + 1, (
+            f"Mismatch between args={string_type(args)} and dimensions={dimensions} "
+            f"and udimensions={udimensions}"
+        )
+        # new_args = [a.reshape(shape) for a, shape in zip(args, dimensions)]
+        new_args = [
+            a.reshape((-1,)).unsqueeze(shape[0]).unsqueeze(shape[1]).unsqueeze(shape[2])
+            for a, shape in zip(args, udimensions)
+        ]
         max_shape = tuple(args[i].shape[0] for i in indices)
         expanded_args = [a.expand(max_shape) for a in new_args]
         return mask_function(*expanded_args)
