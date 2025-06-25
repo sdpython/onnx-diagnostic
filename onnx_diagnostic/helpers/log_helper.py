@@ -1658,7 +1658,7 @@ class CubeLogsPerformance(CubeLogs):
 
     def view(
         self,
-        view_def: Union[str, CubeViewDef],
+        view_def: Optional[Union[str, CubeViewDef]],
         return_view_def: bool = False,
         verbose: int = 0,
     ) -> Union[
@@ -1672,7 +1672,8 @@ class CubeLogsPerformance(CubeLogs):
         :param view_def: view definition or a string
         :param return_view_def: returns the view definition as well
         :param verbose: verbosity level
-        :return: dataframe
+        :return: dataframe or a couple (dataframe, view definition),
+            both of them can be one if view_def cannot be interpreted
         """
         assert view_def is not None, "view_def is None, this is not allowed."
         if isinstance(view_def, str):
