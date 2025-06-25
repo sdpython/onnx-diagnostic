@@ -188,7 +188,7 @@ def get_inputs(
                     (batch_size, num_key_value_heads, sequence_length2, head_dim)
                 ).to(torch.bool),
                 cache_position=torch.arange(sequence_length2).to(torch.int64),
-                past_key_values=make_cache(
+                past_key_values=make_dynamic_cache(
                     [
                         (
                             torch.randn(
@@ -237,7 +237,7 @@ def get_inputs(
                 position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
                 .to(torch.int64)
                 .expand((batch_size, -1)),
-                past_key_values=make_cache(
+                past_key_values=make_cache(  # type: ignore[operator]
                     [
                         (
                             torch.randn(
