@@ -538,9 +538,13 @@ def validate_model(
     if summary["model_module"] in sys.modules:
         summary["model_file"] = str(sys.modules[summary["model_module"]].__file__)  # type: ignore[index]
     summary["model_config_class"] = data["configuration"].__class__.__name__
-    summary["model_config"] = str(shrink_config(data["configuration"].to_dict())).replace(
-        " ", ""
-    )
+    summary["model_config"] = str(
+        shrink_config(
+            data["configuration"]
+            if type(data["configuration"]) is dict
+            else data["configuration"].to_dict()
+        )
+    ).replace(" ", "")
     summary["model_id"] = model_id
 
     if verbose:

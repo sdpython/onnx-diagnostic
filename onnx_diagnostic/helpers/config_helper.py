@@ -43,7 +43,10 @@ def update_config(config: Any, mkwargs: Dict[str, Any]):
             else:
                 update_config(getattr(config, k), v)
             continue
-        setattr(config, k, v)
+        if type(config) is dict:
+            config[k] = v
+        else:
+            setattr(config, k, v)
 
 
 def _pick(config, *atts, exceptions: Optional[Dict[str, Callable]] = None):
@@ -64,6 +67,18 @@ def _pick(config, *atts, exceptions: Optional[Dict[str, Callable]] = None):
             if all(hasattr(config, _) for _ in a[1:]):
                 return a[0]([getattr(config, _) for _ in a[1:]])
     raise AssertionError(f"Unable to find any of these {atts!r} in {config}")
+
+
+def pick(config, name: str, default_value: Any) -> Any:
+    """
+    Returns the value of a attribute if config has it
+    otherwise the default value.
+    """
+    if not config:
+        return default_value
+    if type(config) is dict:
+        return config.get(name, default_value)
+    return getattr(config, name, default_value)
 
 
 @functools.cache

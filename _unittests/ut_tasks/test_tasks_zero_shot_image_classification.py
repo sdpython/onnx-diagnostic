@@ -6,7 +6,7 @@ from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
-class TestTasks(ExtTestCase):
+class TestTasksZeroShotImageClassification(ExtTestCase):
     @requires_torch("2.7.99")
     @hide_stdout()
     def test_zero_shot_image_classification(self):

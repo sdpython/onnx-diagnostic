@@ -6,7 +6,7 @@ from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
-class TestTasks(ExtTestCase):
+class TestTasksObjectDetection(ExtTestCase):
     @hide_stdout()
     def test_object_detection(self):
         mid = "hustvl/yolos-tiny"

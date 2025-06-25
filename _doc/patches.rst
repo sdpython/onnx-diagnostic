@@ -113,7 +113,7 @@ Here is the list of supported caches:
 
     import onnx_diagnostic.torch_export_patches.onnx_export_serialization as p
 
-    print("\n".join(sorted(p.serialization_functions())))
+    print("\n".join(sorted(t.__name__ for t in p.serialization_functions())))
 
 .. _l-control-flow-rewriting:
 

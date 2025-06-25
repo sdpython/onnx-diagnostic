@@ -4302,3 +4302,31 @@ def _ccached_microsoft_phi_35_mini_instruct():
             "vocab_size": 32064,
         }
     )
+
+
+def _ccached_diffusers_tiny_torch_full_checker_unet():
+    "diffusers/tiny-torch-full-checker/unet"
+    return {
+        "_class_name": "UNet2DConditionModel",
+        "_diffusers_version": "0.8.0",
+        "_name_or_path": "https://huggingface.co/diffusers/tiny-torch-full-checker/blob/main/unet/config.json",
+        "act_fn": "silu",
+        "attention_head_dim": 8,
+        "block_out_channels": [32, 64],
+        "center_input_sample": false,
+        "cross_attention_dim": 32,
+        "down_block_types": ["DownBlock2D", "CrossAttnDownBlock2D"],
+        "downsample_padding": 1,
+        "dual_cross_attention": false,
+        "flip_sin_to_cos": true,
+        "freq_shift": 0,
+        "in_channels": 4,
+        "layers_per_block": 2,
+        "mid_block_scale_factor": 1,
+        "norm_eps": 1e-05,
+        "norm_num_groups": 32,
+        "out_channels": 4,
+        "sample_size": 32,
+        "up_block_types": ["CrossAttnUpBlock2D", "UpBlock2D"],
+        "use_linear_projection": false,
+    }
