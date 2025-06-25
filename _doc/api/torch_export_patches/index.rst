@@ -8,6 +8,7 @@ onnx_diagnostic.torch_export_patches
     eval/index
     onnx_export_errors
     onnx_export_serialization
+    onnx_export_serialization_impl
     patches/index
     patch_expressions
     patch_inputs

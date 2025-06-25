@@ -224,6 +224,13 @@ class TestPatchSerialization(ExtTestCase):
 
         bo = UNet2DConditionOutput(sample=torch.rand((4, 4, 4)))
         self.assertEqual(bo.__class__.__name__, "UNet2DConditionOutput")
+        bo2 = torch_deepcopy([bo])
+        self.assertIsInstance(bo2, list)
+        self.assertEqual(
+            "UNet2DConditionOutput(sample:T1s4x4x4)",
+            self.string_type(bo, with_shape=True),
+        )
+
         with torch_export_patches():
             # internal function
             bo2 = torch_deepcopy([bo])
