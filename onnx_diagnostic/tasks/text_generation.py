@@ -206,7 +206,7 @@ def get_inputs(
                         )
                         for i in range(num_hidden_layers)
                     ],
-                    max_cache_len=max(sequence_length + sequence_length2 * 2, 100),
+                    max_cache_len=max(sequence_length + sequence_length2, head_dim),
                 ),
             )
         else:
