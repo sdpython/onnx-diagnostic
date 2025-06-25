@@ -1661,7 +1661,9 @@ class CubeLogsPerformance(CubeLogs):
         view_def: Union[str, CubeViewDef],
         return_view_def: bool = False,
         verbose: int = 0,
-    ) -> Union[pandas.DataFrame, Tuple[pandas.DataFrame, CubeViewDef]]:
+    ) -> Union[
+        Optional[pandas.DataFrame], Tuple[Optional[pandas.DataFrame], Optional[CubeViewDef]]
+    ]:
         """
         Returns a dataframe, a pivot view.
 
@@ -1679,12 +1681,12 @@ class CubeLogsPerformance(CubeLogs):
                 return (None, None) if return_view_def else None
         return super().view(view_def, return_view_def=return_view_def, verbose=verbose)
 
-    def make_view_def(self, name: str) -> CubeViewDef:
+    def make_view_def(self, name: str) -> Optional[CubeViewDef]:
         """
         Returns a view definition.
 
         :param name: name of the view
-        :return: a CubeViewDef
+        :return: a CubeViewDef or None if name does not make sense
 
         Available views:
 
