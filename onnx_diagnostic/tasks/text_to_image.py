@@ -1,6 +1,6 @@
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.config_helper import update_config, check_hasattr
+from ..helpers.config_helper import update_config, check_hasattr, pick
 
 __TASK__ = "text-to-image"
 
@@ -82,10 +82,10 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
         check_hasattr(config, "sample_size", "cross_attention_dim", "in_channels")
     kwargs = dict(
         batch_size=2,
-        sequence_length=config["in_channels"],
+        sequence_length=pick(config, "in_channels", 4),
         cache_length=77,
-        in_channels=config["in_channels"],
-        sample_size=config["sample_size"],
-        cross_attention_dim=config["cross_attention_dim"],
+        in_channels=pick(config, "in_channels", 4),
+        sample_size=pick(config, "sample_size", 32),
+        cross_attention_dim=pick(config, "cross_attention_dim", 64),
     )
     return kwargs, get_inputs

@@ -200,10 +200,15 @@ def get_untrained_model_with_inputs(
                 f"and use_pretrained=True."
             )
 
-        if type(config) is dict:
-            model = cls_model(**config)
-        else:
-            model = cls_model(config)
+        try:
+            if type(config) is dict:
+                model = cls_model(**config)
+            else:
+                model = cls_model(config)
+        except RuntimeError as e:
+            raise RuntimeError(
+                f"Unable to instantiate class {cls_model.__name__} with\n{config}"
+            ) from e
 
     # input kwargs
     kwargs, fct = random_input_kwargs(config, task)

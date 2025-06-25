@@ -69,6 +69,18 @@ def _pick(config, *atts, exceptions: Optional[Dict[str, Callable]] = None):
     raise AssertionError(f"Unable to find any of these {atts!r} in {config}")
 
 
+def pick(config, name: str, default_value: Any) -> Any:
+    """
+    Returns the vlaue of a attribute if config has it
+    otherwise the default value.
+    """
+    if not config:
+        return default_value
+    if type(config) is dict:
+        return config.get(name, default_value)
+    return getattr(config, name, default_value)
+
+
 @functools.cache
 def config_class_from_architecture(arch: str, exc: bool = False) -> Optional[type]:
     """
