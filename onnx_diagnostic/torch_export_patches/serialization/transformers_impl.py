@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple
+from typing import Any, List, Set, Tuple
 import torch
 import transformers
 from transformers.cache_utils import (
@@ -13,7 +13,7 @@ from ..helpers.cache_helper import make_static_cache
 from . import make_serialization_function_for_dataclass
 
 
-SUPPORTED_DATACLASSES = set()
+SUPPORTED_DATACLASSES: Set[type] = set()
 WRONG_REGISTRATIONS = {
     DynamicCache: "4.50",
     BaseModelOutput: None,

@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 try:
     from diffusers.models.unets.unet_2d_condition import UNet2DConditionOutput
@@ -14,15 +14,15 @@ except ImportError as e:
 from . import make_serialization_function_for_dataclass
 
 
-def _make_wrong_registrations() -> Dict[str, Optional[str]]:
-    res = {}
+def _make_wrong_registrations() -> Dict[type, Optional[str]]:
+    res: Dict[type, Optional[str]] = {}
     for c in [UNet2DConditionOutput]:
         if c is not None:
             res[c] = None
     return res
 
 
-SUPPORTED_DATACLASSES = set()
+SUPPORTED_DATACLASSES: Set[type] = set()
 WRONG_REGISTRATIONS = _make_wrong_registrations()
 
 

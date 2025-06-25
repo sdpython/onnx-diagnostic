@@ -140,9 +140,9 @@ def serialization_functions(
 ) -> Dict[type, Callable[[int], bool]]:
     """Returns the list of serialization functions."""
 
-    supported_classes = set()
-    classes = {}
-    all_functions = {}
+    supported_classes: Set[type] = set()
+    classes: Dict[type, Callable[[int], bool]] = {}
+    all_functions: Dict[type, Optional[str]] = {}
 
     if patch_transformers:
         from .serialization.transformers_impl import (

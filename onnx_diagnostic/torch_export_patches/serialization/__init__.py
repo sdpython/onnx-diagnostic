@@ -16,12 +16,12 @@ def make_serialization_function_for_dataclass(
     ``dataclasses.dataclass``.
     """
 
-    def flatten_cls(obj: cls) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    def flatten_cls(obj: cls) -> Tuple[List[Any], torch.utils._pytree.Context]:  # type: ignore[valid-type]
         """Serializes a ``%s`` with python objects."""
         return list(obj.values()), list(obj.keys())
 
     def flatten_with_keys_cls(
-        obj: cls,
+        obj: cls,  # type: ignore[valid-type]
     ) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
         """Serializes a ``%s`` with python objects with keys."""
         values, context = list(obj.values()), list(obj.keys())
@@ -31,7 +31,7 @@ def make_serialization_function_for_dataclass(
 
     def unflatten_cls(
         values: List[Any], context: torch.utils._pytree.Context, output_type=None
-    ) -> cls:
+    ) -> cls:  # type: ignore[valid-type]
         """Restores an instance of ``%s`` from python objects."""
         return cls(**dict(zip(context, values)))
 
