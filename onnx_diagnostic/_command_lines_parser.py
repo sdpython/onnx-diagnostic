@@ -765,7 +765,7 @@ def _cmd_agg(argv: List[Any]):
             args.inputs, verbose=args.verbose, filtering=lambda name: bool(reg.search(name))
         )
     )
-    assert csv, f"No csv files in {args.inputs}, csv={csv}"
+    assert csv, f"No csv files in {args.inputs}, args.filter={args.filter!r}, csv={csv}"
     if args.verbose:
         from tqdm import tqdm
 

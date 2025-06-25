@@ -2,8 +2,9 @@ import os
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
 from onnx_diagnostic._command_lines_parser import main
+from onnx_diagnostic.helpers.log_helper import enumerate_csv_files
 
 
 class TestCommandLines(ExtTestCase):
@@ -65,6 +66,20 @@ class TestCommandLines(ExtTestCase):
             main(["validate", "-m", "arnir0/Tiny-LLM", "--run", "-v", "1"])
         text = st.getvalue()
         self.assertIn("model_clas", text)
+
+    @ignore_warnings(UserWarning)
+    def test_parser_agg(self):
+        path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "ut_helpers", "data")
+        )
+        assert list(enumerate_csv_files([f"{path}/*.zip"]))
+        output = self.get_dump_file("test_parser_agg.xlsx")
+        st = StringIO()
+        with redirect_stdout(st):
+            main(["agg", output, f"{path}/*.zip", "--filter", ".*.csv", "-v", "1"])
+        text = st.getvalue()
+        self.assertIn("[CubeLogs.to_excel] plots 1 plots", text)
+        self.assertExists(output)
 
 
 if __name__ == "__main__":
