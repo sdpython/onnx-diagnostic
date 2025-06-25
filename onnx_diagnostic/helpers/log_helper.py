@@ -1253,7 +1253,11 @@ class CubeLogs:
                 df.to_excel(writer, sheet_name=main, freeze_panes=(1, 1))
 
             for name, view in views.items():
+                if view is None:
+                    continue
                 df, tview = self.view(view, return_view_def=True, verbose=max(verbose - 1, 0))
+                if tview is None:
+                    continue
                 memory = df.memory_usage(deep=True).sum()
                 if verbose:
                     print(
@@ -1654,10 +1658,12 @@ class CubeLogsPerformance(CubeLogs):
 
     def view(
         self,
-        view_def: Union[str, CubeViewDef],
+        view_def: Optional[Union[str, CubeViewDef]],
         return_view_def: bool = False,
         verbose: int = 0,
-    ) -> Union[pandas.DataFrame, Tuple[pandas.DataFrame, CubeViewDef]]:
+    ) -> Union[
+        Optional[pandas.DataFrame], Tuple[Optional[pandas.DataFrame], Optional[CubeViewDef]]
+    ]:
         """
         Returns a dataframe, a pivot view.
 
@@ -1666,18 +1672,22 @@ class CubeLogsPerformance(CubeLogs):
         :param view_def: view definition or a string
         :param return_view_def: returns the view definition as well
         :param verbose: verbosity level
-        :return: dataframe
+        :return: dataframe or a couple (dataframe, view definition),
+            both of them can be one if view_def cannot be interpreted
         """
+        assert view_def is not None, "view_def is None, this is not allowed."
         if isinstance(view_def, str):
             view_def = self.make_view_def(view_def)
+            if view_def is None:
+                return (None, None) if return_view_def else None
         return super().view(view_def, return_view_def=return_view_def, verbose=verbose)
 
-    def make_view_def(self, name: str) -> CubeViewDef:
+    def make_view_def(self, name: str) -> Optional[CubeViewDef]:
         """
         Returns a view definition.
 
         :param name: name of the view
-        :return: a CubeViewDef
+        :return: a CubeViewDef or None if name does not make sense
 
         Available views:
 
@@ -1892,14 +1902,6 @@ class CubeLogsPerformance(CubeLogs):
                 f_highlight=f_bucket,
                 order=order,
             ),
-            "cmd": lambda: CubeViewDef(
-                key_index=index_cols,
-                values=self._filter_column(["CMD"], self.values),
-                ignore_unique=True,
-                keep_columns_in_index=["suite"],
-                name="cmd",
-                order=order,
-            ),
             "onnx": lambda: CubeViewDef(
                 key_index=index_cols,
                 values=self._filter_column(
@@ -1927,11 +1929,25 @@ class CubeLogsPerformance(CubeLogs):
                 no_index=True,
             ),
         }
-        assert name in implemented_views, (
+
+        cmd_col = self._filter_column(["CMD"], self.values, can_be_empty=True)
+        if cmd_col:
+            implemented_views["cmd"] = lambda: CubeViewDef(
+                key_index=index_cols,
+                values=cmd_col,
+                ignore_unique=True,
+                keep_columns_in_index=["suite"],
+                name="cmd",
+                order=order,
+            )
+
+        assert name in implemented_views or name in {"cmd"}, (
             f"Unknown view {name!r}, expected a name in {sorted(implemented_views)},"
             f"\n--\nkeys={pprint.pformat(sorted(self.keys_time))}, "
             f"\n--\nvalues={pprint.pformat(sorted(self.values))}"
         )
+        if name not in implemented_views:
+            return None
         return implemented_views[name]()
 
     def post_load_process_piece(
