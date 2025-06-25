@@ -1,5 +1,5 @@
 import pprint
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 import packaging.version as pv
 import optree
 import torch
@@ -133,7 +133,7 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
                     f"registered first"
                 )
             unregister_class_serialization(cls, verbose=verbose)
-            registration_functions[cls](verbose=verbose)
+            registration_functions[cls](verbose=verbose)  # type: ignore[arg-type]
             if verbose:
                 print(f"[_fix_registration] {cls.__name__} done.")
             # To avoid doing it multiple times.
@@ -142,11 +142,11 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     # classes with no registration at all.
     done = {}
     for k, v in registration_functions.items():
-        done[k] = v(verbose=verbose)
+        done[k] = v(verbose=verbose)  # type: ignore[arg-type]
     return done
 
 
-def serialization_functions(verbose: int = 0) -> Dict[type, Union[Callable[[int], bool], int]]:
+def serialization_functions(verbose: int = 0) -> Dict[type, Callable[[int], bool]]:
     """Returns the list of serialization functions."""
     transformers_classes = {
         DynamicCache: lambda verbose=verbose: register_class_serialization(
