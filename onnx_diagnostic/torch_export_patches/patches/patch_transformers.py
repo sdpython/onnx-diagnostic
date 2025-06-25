@@ -51,10 +51,10 @@ def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) ->
             for a, dims in zip(args, udimensions)
         ]
         max_shape = tuple(args[i].shape[0] for i in indices)
-        if is_torchdynamo_exporting():
-            for a in args:
-                # The exporter should export with a dimension > 1 to make sure it is dynamic.
-                torch._check(a.shape[0] > 1)
+        # if is_torchdynamo_exporting():
+        #     for a in args:
+        #         # The exporter should export with a dimension > 1 to make sure it is dynamic.
+        #         torch._check(a.shape[0] > 1)
         expanded_args = [a.expand(max_shape) for a in new_args]
         return mask_function(*expanded_args)
 
