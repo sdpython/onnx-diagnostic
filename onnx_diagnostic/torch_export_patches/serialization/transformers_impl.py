@@ -9,7 +9,7 @@ from transformers.cache_utils import (
     StaticCache,
 )
 from transformers.modeling_outputs import BaseModelOutput
-from ..helpers.cache_helper import make_static_cache
+from ...helpers.cache_helper import make_static_cache
 from . import make_serialization_function_for_dataclass
 
 

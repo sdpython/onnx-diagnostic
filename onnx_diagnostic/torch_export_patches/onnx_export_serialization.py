@@ -87,7 +87,15 @@ def register_cache_serialization(
     :param verbosity: verbosity level
     :return: information to unpatch
     """
-    from .onnx_export_serialization_impl import WRONG_REGISTRATIONS
+    wrong: Dict[type, Optional[str]] = {}
+    if patch_transformers:
+        from .serialization.transformers_impl import WRONG_REGISTRATIONS
+
+        wrong |= WRONG_REGISTRATIONS
+    if patch_diffusers:
+        from .serialization.diffusers_impl import WRONG_REGISTRATIONS
+
+        wrong |= WRONG_REGISTRATIONS
 
     registration_functions = serialization_functions(
         patch_transformers=patch_transformers, patch_diffusers=patch_diffusers, verbose=verbose
@@ -103,7 +111,7 @@ def register_cache_serialization(
     # so we remove it anyway
     # BaseModelOutput serialization is incomplete.
     # It does not include dynamic shapes mapping.
-    for cls, version in WRONG_REGISTRATIONS.items():
+    for cls, version in wrong.items():
         if (
             cls in torch.utils._pytree.SUPPORTED_NODES
             and cls not in PATCH_OF_PATCHES
