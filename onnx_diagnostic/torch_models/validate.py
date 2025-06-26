@@ -349,11 +349,19 @@ def validate_model(
     :class:`onnx_diagnostic.reference.TorchOnnxEvaluator` is used.
     """
     if isinstance(patch, bool):
-        patch = dict(patch_transformers=True, patch_diffusers=True) if patch else {}
+        patch = (
+            dict(patch_transformers=True, patch_diffusers=True, patch=True)
+            if patch
+            else dict(patch=False)
+        )
     elif isinstance(patch, str):
-        patch = {p: True for p in patch.split(",")}  # noqa: C420
+        patch = {"patch": True, **{p: True for p in patch.split(",")}}  # noqa: C420
     else:
         assert isinstance(patch, dict), f"Unable to interpret patch={patch!r}"
+        patch = patch.copy()
+        if "patch" not in patch:
+            if any(patch.values):
+                patch["patch"] = True
 
     assert not rewrite or patch, (
         f"rewrite={rewrite}, patch={patch}, patch must be True to enable rewriting, "

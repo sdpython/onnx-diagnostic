@@ -182,8 +182,8 @@ def torch_export_patches(
         and show a stack trace indicating the exact location of the issue,
         ``if stop_if_static > 1``, more methods are replace to catch more
         issues
-    :param patch: if False, disable all patches except the registration of
-        serialization function
+    :param patch: if False, disable all patches but keeps the registration of
+        serialization functions if other patch functions are enabled
     :param custom_patches: to apply custom patches,
         every patched class must define static attributes
         ``_PATCHES_``, ``_PATCHED_CLASS_``
@@ -270,7 +270,11 @@ def torch_export_patches(
                 pass
     elif not patch:
         fct_callable = lambda x: x  # noqa: E731
-        done = register_cache_serialization(verbose=verbose)
+        done = register_cache_serialization(
+            patch_transformers=patch_transformers,
+            patch_diffusers=patch_diffusers,
+            verbose=verbose,
+        )
         try:
             yield fct_callable
         finally:
