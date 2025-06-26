@@ -106,7 +106,7 @@ def get_untrained_model_with_inputs(
         print(f"[get_untrained_model_with_inputs] architectures={archs!r}")
         print(f"[get_untrained_model_with_inputs] cls={config.__class__.__name__!r}")
     if task is None:
-        task = task_from_arch(archs[0], model_id=model_id)
+        task = task_from_arch(archs[0], model_id=model_id, subfolder=subfolder)
     if verbose:
         print(f"[get_untrained_model_with_inputs] task={task!r}")
 

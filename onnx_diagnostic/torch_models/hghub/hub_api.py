@@ -140,7 +140,10 @@ def _guess_task_from_config(config: Any) -> Optional[str]:
 
 @functools.cache
 def task_from_arch(
-    arch: str, default_value: Optional[str] = None, model_id: Optional[str] = None
+    arch: str,
+    default_value: Optional[str] = None,
+    model_id: Optional[str] = None,
+    subfolder: Optional[str] = None,
 ) -> str:
     """
     This function relies on stored information. That information needs to be refresh.
@@ -148,6 +151,7 @@ def task_from_arch(
     :param arch: architecture name
     :param default_value: default value in case the task cannot be determined
     :param model_id: unused unless the architecture does not help.
+    :param subfolder: subfolder
     :return: task
 
     .. runpython::
@@ -162,7 +166,7 @@ def task_from_arch(
     data = load_architecture_task()
     if arch not in data and model_id:
         # Let's try with the model id.
-        return task_from_id(model_id)
+        return task_from_id(model_id, subfolder=subfolder)
     if default_value is not None:
         return data.get(arch, default_value)
     assert arch in data, (
@@ -178,6 +182,7 @@ def task_from_id(
     default_value: Optional[str] = None,
     pretrained: bool = False,
     fall_back_to_pretrained: bool = True,
+    subfolder: Optional[str] = None,
 ) -> str:
     """
     Returns the task attached to a model id.
@@ -187,7 +192,7 @@ def task_from_id(
         if the task cannot be determined
     :param pretrained: uses the config
     :param fall_back_to_pretrained: falls back to pretrained config
-    :param exc: raises an exception if True
+    :param subfolder: subfolder
     :return: task
     """
     if not pretrained:
@@ -196,7 +201,7 @@ def task_from_id(
         except RuntimeError:
             if not fall_back_to_pretrained:
                 raise
-    config = get_pretrained_config(model_id)
+    config = get_pretrained_config(model_id, subfolder=subfolder)
     try:
         return config.pipeline_tag
     except AttributeError:
@@ -206,6 +211,8 @@ def task_from_id(
         data = load_architecture_task()
         if model_id in data:
             return data[model_id]
+        if type(config) is dict and "_class_name" in config:
+            return task_from_arch(config["_class_name"], default_value=default_value)
         if not config.architectures or not config.architectures:
             # Some hardcoded values until a better solution is found.
             if model_id.startswith("google/bert_"):

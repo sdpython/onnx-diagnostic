@@ -22,6 +22,7 @@ __data_arch__ = textwrap.dedent(
     BlenderbotModel,feature-extraction
     BloomModel,feature-extraction
     CLIPModel,zero-shot-image-classification
+    CLIPTextModel,feature-extraction
     CLIPVisionModel,feature-extraction
     CamembertModel,feature-extraction
     CodeGenModel,feature-extraction
