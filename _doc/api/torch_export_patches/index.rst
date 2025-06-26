@@ -8,12 +8,12 @@ onnx_diagnostic.torch_export_patches
     eval/index
     onnx_export_errors
     onnx_export_serialization
-    onnx_export_serialization_impl
     patches/index
     patch_expressions
     patch_inputs
     patch_module
     patch_module_helper
+    serialization/index
 
 .. automodule:: onnx_diagnostic.torch_export_patches
     :members:

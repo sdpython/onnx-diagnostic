@@ -13,7 +13,7 @@ from transformers.cache_utils import (
 )
 
 from ..helpers import string_type
-
+from .serialization import _lower_name_with_
 
 PATCH_OF_PATCHES: Set[Any] = set()
 
@@ -73,14 +73,33 @@ def register_class_serialization(
     return True
 
 
-def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
+def register_cache_serialization(
+    patch_transformers: bool = False, patch_diffusers: bool = True, verbose: int = 0
+) -> Dict[str, bool]:
     """
     Registers many classes with :func:`register_class_serialization`.
     Returns information needed to undo the registration.
-    """
-    from .onnx_export_serialization_impl import WRONG_REGISTRATIONS
 
-    registration_functions = serialization_functions(verbose=verbose)
+    :param patch_transformers: add serialization function for
+        :epkg:`transformers` package
+    :param patch_diffusers: add serialization function for
+        :epkg:`diffusers` package
+    :param verbosity: verbosity level
+    :return: information to unpatch
+    """
+    wrong: Dict[type, Optional[str]] = {}
+    if patch_transformers:
+        from .serialization.transformers_impl import WRONG_REGISTRATIONS
+
+        wrong |= WRONG_REGISTRATIONS
+    if patch_diffusers:
+        from .serialization.diffusers_impl import WRONG_REGISTRATIONS
+
+        wrong |= WRONG_REGISTRATIONS
+
+    registration_functions = serialization_functions(
+        patch_transformers=patch_transformers, patch_diffusers=patch_diffusers, verbose=verbose
+    )
 
     # DynamicCache serialization is different in transformers and does not
     # play way with torch.export.export.
@@ -92,7 +111,7 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     # so we remove it anyway
     # BaseModelOutput serialization is incomplete.
     # It does not include dynamic shapes mapping.
-    for cls, version in WRONG_REGISTRATIONS.items():
+    for cls, version in wrong.items():
         if (
             cls in torch.utils._pytree.SUPPORTED_NODES
             and cls not in PATCH_OF_PATCHES
@@ -124,73 +143,91 @@ def register_cache_serialization(verbose: int = 0) -> Dict[str, bool]:
     return done
 
 
-def serialization_functions(verbose: int = 0) -> Dict[type, Callable[[int], bool]]:
+def serialization_functions(
+    patch_transformers: bool = False, patch_diffusers: bool = False, verbose: int = 0
+) -> Dict[type, Callable[[int], bool]]:
     """Returns the list of serialization functions."""
-    from .onnx_export_serialization_impl import (
-        SUPPORTED_DATACLASSES,
-        _lower_name_with_,
-        __dict__ as all_functions,
-        flatten_dynamic_cache,
-        unflatten_dynamic_cache,
-        flatten_with_keys_dynamic_cache,
-        flatten_mamba_cache,
-        unflatten_mamba_cache,
-        flatten_with_keys_mamba_cache,
-        flatten_encoder_decoder_cache,
-        unflatten_encoder_decoder_cache,
-        flatten_with_keys_encoder_decoder_cache,
-        flatten_sliding_window_cache,
-        unflatten_sliding_window_cache,
-        flatten_with_keys_sliding_window_cache,
-        flatten_static_cache,
-        unflatten_static_cache,
-        flatten_with_keys_static_cache,
-    )
 
-    transformers_classes = {
-        DynamicCache: lambda verbose=verbose: register_class_serialization(
-            DynamicCache,
+    supported_classes: Set[type] = set()
+    classes: Dict[type, Callable[[int], bool]] = {}
+    all_functions: Dict[type, Optional[str]] = {}
+
+    if patch_transformers:
+        from .serialization.transformers_impl import (
+            __dict__ as dtr,
+            SUPPORTED_DATACLASSES,
             flatten_dynamic_cache,
             unflatten_dynamic_cache,
             flatten_with_keys_dynamic_cache,
-            # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
-            verbose=verbose,
-        ),
-        MambaCache: lambda verbose=verbose: register_class_serialization(
-            MambaCache,
             flatten_mamba_cache,
             unflatten_mamba_cache,
             flatten_with_keys_mamba_cache,
-            verbose=verbose,
-        ),
-        EncoderDecoderCache: lambda verbose=verbose: register_class_serialization(
-            EncoderDecoderCache,
             flatten_encoder_decoder_cache,
             unflatten_encoder_decoder_cache,
             flatten_with_keys_encoder_decoder_cache,
-            verbose=verbose,
-        ),
-        SlidingWindowCache: lambda verbose=verbose: register_class_serialization(
-            SlidingWindowCache,
             flatten_sliding_window_cache,
             unflatten_sliding_window_cache,
             flatten_with_keys_sliding_window_cache,
-            verbose=verbose,
-        ),
-        StaticCache: lambda verbose=verbose: register_class_serialization(
-            StaticCache,
             flatten_static_cache,
             unflatten_static_cache,
             flatten_with_keys_static_cache,
-            verbose=verbose,
-        ),
-    }
-    for cls in SUPPORTED_DATACLASSES:
+        )
+
+        all_functions.update(dtr)
+        supported_classes |= SUPPORTED_DATACLASSES
+
+        transformers_classes = {
+            DynamicCache: lambda verbose=verbose: register_class_serialization(
+                DynamicCache,
+                flatten_dynamic_cache,
+                unflatten_dynamic_cache,
+                flatten_with_keys_dynamic_cache,
+                # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
+                verbose=verbose,
+            ),
+            MambaCache: lambda verbose=verbose: register_class_serialization(
+                MambaCache,
+                flatten_mamba_cache,
+                unflatten_mamba_cache,
+                flatten_with_keys_mamba_cache,
+                verbose=verbose,
+            ),
+            EncoderDecoderCache: lambda verbose=verbose: register_class_serialization(
+                EncoderDecoderCache,
+                flatten_encoder_decoder_cache,
+                unflatten_encoder_decoder_cache,
+                flatten_with_keys_encoder_decoder_cache,
+                verbose=verbose,
+            ),
+            SlidingWindowCache: lambda verbose=verbose: register_class_serialization(
+                SlidingWindowCache,
+                flatten_sliding_window_cache,
+                unflatten_sliding_window_cache,
+                flatten_with_keys_sliding_window_cache,
+                verbose=verbose,
+            ),
+            StaticCache: lambda verbose=verbose: register_class_serialization(
+                StaticCache,
+                flatten_static_cache,
+                unflatten_static_cache,
+                flatten_with_keys_static_cache,
+                verbose=verbose,
+            ),
+        }
+        classes.update(transformers_classes)
+
+    if patch_diffusers:
+        from .serialization.diffusers_impl import SUPPORTED_DATACLASSES, __dict__ as dfu
+
+        all_functions.update(dfu)
+        supported_classes |= SUPPORTED_DATACLASSES
+
+    for cls in supported_classes:
         lname = _lower_name_with_(cls.__name__)
         assert (
             f"flatten_{lname}" in all_functions
-        ), f"Unable to find function 'flatten_{lname}' in {sorted(all_functions)}"
-        transformers_classes[cls] = (
+        ), f"Unable to find function 'flatten_{lname}' in {list(all_functions)}"
+        classes[cls] = (
             lambda verbose=verbose, _ln=lname, cls=cls, _al=all_functions: register_class_serialization(  # noqa: E501
                 cls,
                 _al[f"flatten_{_ln}"],
@@ -199,7 +236,7 @@ def serialization_functions(verbose: int = 0) -> Dict[type, Callable[[int], bool
                 verbose=verbose,
             )
         )
-    return transformers_classes
+    return classes
 
 
 def unregister_class_serialization(cls: type, verbose: int = 0):
