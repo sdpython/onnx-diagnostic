@@ -349,22 +349,23 @@ def validate_model(
     :class:`onnx_diagnostic.reference.TorchOnnxEvaluator` is used.
     """
     if isinstance(patch, bool):
-        patch = (
+        patch_kwargs = (
             dict(patch_transformers=True, patch_diffusers=True, patch=True)
             if patch
             else dict(patch=False)
         )
     elif isinstance(patch, str):
-        patch = {"patch": True, **{p: True for p in patch.split(",")}}  # noqa: C420
+        patch_kwargs = {"patch": True, **{p: True for p in patch.split(",")}}  # noqa: C420
     else:
         assert isinstance(patch, dict), f"Unable to interpret patch={patch!r}"
-        patch = patch.copy()
-        if "patch" not in patch:
-            if any(patch.values):
-                patch["patch"] = True
+        patch_kwargs = patch.copy()
+        if "patch" not in patch_kwargs:
+            if any(patch_kwargs.values()):
+                patch_kwargs["patch"] = True
 
-    assert not rewrite or patch, (
-        f"rewrite={rewrite}, patch={patch}, patch must be True to enable rewriting, "
+    assert not rewrite or patch_kwargs.get("patch", False), (
+        f"rewrite={rewrite}, patch={patch}, patch_kwargs={patch_kwargs} "
+        f"patch must be True to enable rewriting, "
         f"if --no-patch was specified on the command line, --no-rewrite must be added."
     )
     summary = version_summary()
@@ -379,6 +380,7 @@ def validate_model(
             version_optimization=optimization or "",
             version_quiet=str(quiet),
             version_patch=str(patch),
+            version_patch_kwargs=str(patch_kwargs).replace(" ", ""),
             version_rewrite=str(rewrite),
             version_dump_folder=dump_folder or "",
             version_drop_inputs=str(list(drop_inputs or "")),
@@ -414,7 +416,7 @@ def validate_model(
             print(f"[validate_model] model_options={model_options!r}")
         print(f"[validate_model] get dummy inputs with input_options={input_options}...")
         print(
-            f"[validate_model] rewrite={rewrite}, patch={patch}, "
+            f"[validate_model] rewrite={rewrite}, patch_kwargs={patch_kwargs}, "
             f"stop_if_static={stop_if_static}"
         )
         print(f"[validate_model] exporter={exporter!r}, optimization={optimization!r}")
@@ -590,7 +592,7 @@ def validate_model(
             f"[validate_model] -- export the model with {exporter!r}, "
             f"optimization={optimization!r}"
         )
-        if patch:
+        if patch_kwargs:
             if verbose:
                 print(
                     f"[validate_model] applies patches before exporting "
@@ -601,7 +603,7 @@ def validate_model(
                 verbose=max(0, verbose - 1),
                 rewrite=data.get("rewrite", None),
                 dump_rewriting=(os.path.join(dump_folder, "rewrite") if dump_folder else None),
-                **patch,
+                **patch_kwargs,
             ) as modificator:
                 data["inputs_export"] = modificator(data["inputs"])  # type: ignore
 

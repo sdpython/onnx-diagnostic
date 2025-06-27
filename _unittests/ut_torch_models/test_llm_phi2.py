@@ -4,7 +4,7 @@ from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     ignore_warnings,
     requires_transformers,
-    requires_pytorch,
+    requires_torch,
 )
 from onnx_diagnostic.torch_models.llms import get_phi2
 from onnx_diagnostic.helpers import string_type
@@ -19,7 +19,7 @@ class TestLlmPhi(ExtTestCase):
 
     @ignore_warnings(UserWarning)
     @requires_transformers("4.54")
-    @requires_pytorch("2.9.99")
+    @requires_torch("2.9.99")
     def test_export_phi2_1(self):
         # exporting vmap does not work
         data = get_phi2(num_hidden_layers=2)
