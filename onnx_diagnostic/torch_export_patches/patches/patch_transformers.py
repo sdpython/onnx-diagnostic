@@ -889,7 +889,7 @@ class patched_Phi4MultimodalRotaryEmbedding(common_RotaryEmbedding):
 
 class patched_SmolLM3RotaryEmbedding(common_RotaryEmbedding):
     _PATCHES_ = ["forward"]
-    _PATCHED_CLASS_ = transformers.models.smallm3.modeling_smallm3.SmolLM3RotaryEmbedding
+    _PATCHED_CLASS_ = transformers.models.smollm3.modeling_smollm3.SmolLM3RotaryEmbedding
 
 
 class patched_IdeficsEmbedding(torch.nn.Module):
