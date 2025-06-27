@@ -889,6 +889,9 @@ if pv.Version(transformers.__version__) >= pv.Version("4.52"):
             transformers.models.phi4_multimodal.modeling_phi4_multimodal.Phi4MultimodalRotaryEmbedding
         )
 
+
+if pv.Version(transformers.__version__) >= pv.Version("4.53"):
+
     class patched_SmolLM3RotaryEmbedding(common_RotaryEmbedding):
         _PATCHES_ = ["forward"]
         _PATCHED_CLASS_ = transformers.models.smollm3.modeling_smollm3.SmolLM3RotaryEmbedding
