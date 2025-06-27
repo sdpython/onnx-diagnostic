@@ -877,11 +877,14 @@ class patched_PhiRotaryEmbedding(common_RotaryEmbedding):
     _PATCHED_CLASS_ = transformers.models.phi.modeling_phi.PhiRotaryEmbedding
 
 
-if pv.Version(transformers.__version__) >= pv.Version("4.52"):
+if pv.Version(transformers.__version__) >= pv.Version("4.51"):
 
     class patched_Phi3RotaryEmbedding(common_RotaryEmbedding):
         _PATCHES_ = ["forward"]
         _PATCHED_CLASS_ = transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding
+
+
+if pv.Version(transformers.__version__) >= pv.Version("4.52"):
 
     class patched_Phi4MultimodalRotaryEmbedding(common_RotaryEmbedding):
         _PATCHES_ = ["forward"]
