@@ -603,7 +603,7 @@ def validate_model(
                 verbose=max(0, verbose - 1),
                 rewrite=data.get("rewrite", None),
                 dump_rewriting=(os.path.join(dump_folder, "rewrite") if dump_folder else None),
-                **patch_kwargs,
+                **patch_kwargs,  # type: ignore[arg-type]
             ) as modificator:
                 data["inputs_export"] = modificator(data["inputs"])  # type: ignore
 
