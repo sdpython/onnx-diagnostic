@@ -2,6 +2,7 @@ import inspect
 from dataclasses import dataclass
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple
+import packaging.version as pv
 import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
@@ -887,9 +888,11 @@ class patched_Phi4MultimodalRotaryEmbedding(common_RotaryEmbedding):
     )
 
 
-class patched_SmolLM3RotaryEmbedding(common_RotaryEmbedding):
-    _PATCHES_ = ["forward"]
-    _PATCHED_CLASS_ = transformers.models.smollm3.modeling_smollm3.SmolLM3RotaryEmbedding
+if pv.Version(transformers.__version__) >= pv.Version("4.53"):
+
+    class patched_SmolLM3RotaryEmbedding(common_RotaryEmbedding):
+        _PATCHES_ = ["forward"]
+        _PATCHED_CLASS_ = transformers.models.smollm3.modeling_smollm3.SmolLM3RotaryEmbedding
 
 
 class patched_IdeficsEmbedding(torch.nn.Module):
