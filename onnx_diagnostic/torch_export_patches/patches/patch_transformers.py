@@ -846,7 +846,7 @@ class patched_GemmaRotaryEmbedding(common_RotaryEmbedding):
     _PATCHED_CLASS_ = transformers.models.gemma.modeling_gemma.GemmaRotaryEmbedding
 
 
-if pv.Version(transformers.__version__) >= pv.Version("4.53"):
+if pv.Version(transformers.__version__) >= pv.Version("4.52"):
 
     class patched_Gemma2RotaryEmbedding(common_RotaryEmbedding):
         _PATCHES_ = ["forward"]
@@ -877,19 +877,17 @@ class patched_PhiRotaryEmbedding(common_RotaryEmbedding):
     _PATCHED_CLASS_ = transformers.models.phi.modeling_phi.PhiRotaryEmbedding
 
 
-class patched_Phi3RotaryEmbedding(common_RotaryEmbedding):
-    _PATCHES_ = ["forward"]
-    _PATCHED_CLASS_ = transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding
+if pv.Version(transformers.__version__) >= pv.Version("4.52"):
 
+    class patched_Phi3RotaryEmbedding(common_RotaryEmbedding):
+        _PATCHES_ = ["forward"]
+        _PATCHED_CLASS_ = transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding
 
-class patched_Phi4MultimodalRotaryEmbedding(common_RotaryEmbedding):
-    _PATCHES_ = ["forward"]
-    _PATCHED_CLASS_ = (
-        transformers.models.phi4_multimodal.modeling_phi4_multimodal.Phi4MultimodalRotaryEmbedding
-    )
-
-
-if pv.Version(transformers.__version__) >= pv.Version("4.53"):
+    class patched_Phi4MultimodalRotaryEmbedding(common_RotaryEmbedding):
+        _PATCHES_ = ["forward"]
+        _PATCHED_CLASS_ = (
+            transformers.models.phi4_multimodal.modeling_phi4_multimodal.Phi4MultimodalRotaryEmbedding
+        )
 
     class patched_SmolLM3RotaryEmbedding(common_RotaryEmbedding):
         _PATCHES_ = ["forward"]
