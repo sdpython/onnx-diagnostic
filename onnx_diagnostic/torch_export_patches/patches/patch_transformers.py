@@ -814,10 +814,7 @@ def patched_dynamic_rope_update(rope_forward):
     return wrapper
 
 
-class patched_Phi3RotaryEmbedding(torch.nn.Module):
-    _PATCHES_ = ["forward"]
-    _PATCHED_CLASS_ = transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding
-
+class common_RotaryEmbedding(torch.nn.Module):
     @torch.no_grad()
     @patched_dynamic_rope_update
     def forward(self, x, position_ids):
@@ -841,6 +838,16 @@ class patched_Phi3RotaryEmbedding(torch.nn.Module):
             sin = emb.sin() * self.attention_scaling
 
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
+
+
+class patched_LlamaRotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.llama.modeling_llama.LlamaRotaryEmbedding
+
+
+class patched_Phi3RotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding
 
 
 class patched_IdeficsEmbedding(torch.nn.Module):
