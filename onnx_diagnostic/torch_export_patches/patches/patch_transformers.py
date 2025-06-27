@@ -852,7 +852,6 @@ if pv.Version(transformers.__version__) >= pv.Version("4.53"):
         _PATCHES_ = ["forward"]
         _PATCHED_CLASS_ = transformers.models.gemma2.modeling_gemma2.Gemma2RotaryEmbedding
 
-
     class patched_Gemma3RotaryEmbedding(common_RotaryEmbedding):
         _PATCHES_ = ["forward"]
         _PATCHED_CLASS_ = transformers.models.gemma3.modeling_gemma3.Gemma3RotaryEmbedding
