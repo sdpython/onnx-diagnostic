@@ -846,14 +846,16 @@ class patched_GemmaRotaryEmbedding(common_RotaryEmbedding):
     _PATCHED_CLASS_ = transformers.models.gemma.modeling_gemma.GemmaRotaryEmbedding
 
 
-class patched_Gemma2RotaryEmbedding(common_RotaryEmbedding):
-    _PATCHES_ = ["forward"]
-    _PATCHED_CLASS_ = transformers.models.gemma2.modeling_gemma2.Gemma2RotaryEmbedding
+if pv.Version(transformers.__version__) >= pv.Version("4.53"):
+
+    class patched_Gemma2RotaryEmbedding(common_RotaryEmbedding):
+        _PATCHES_ = ["forward"]
+        _PATCHED_CLASS_ = transformers.models.gemma2.modeling_gemma2.Gemma2RotaryEmbedding
 
 
-class patched_Gemma3RotaryEmbedding(common_RotaryEmbedding):
-    _PATCHES_ = ["forward"]
-    _PATCHED_CLASS_ = transformers.models.gemma3.modeling_gemma3.Gemma3RotaryEmbedding
+    class patched_Gemma3RotaryEmbedding(common_RotaryEmbedding):
+        _PATCHES_ = ["forward"]
+        _PATCHED_CLASS_ = transformers.models.gemma3.modeling_gemma3.Gemma3RotaryEmbedding
 
 
 class patched_LlamaRotaryEmbedding(common_RotaryEmbedding):
