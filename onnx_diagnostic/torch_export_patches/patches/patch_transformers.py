@@ -840,14 +840,56 @@ class common_RotaryEmbedding(torch.nn.Module):
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
 
 
+class patched_GemmaRotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.gemma.modeling_gemma.GemmaRotaryEmbedding
+
+
+class patched_Gemma2RotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.gemma2.modeling_gemma2.Gemma2RotaryEmbedding
+
+
+class patched_Gemma3RotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.gemma3.modeling_gemma3.Gemma3RotaryEmbedding
+
+
 class patched_LlamaRotaryEmbedding(common_RotaryEmbedding):
     _PATCHES_ = ["forward"]
     _PATCHED_CLASS_ = transformers.models.llama.modeling_llama.LlamaRotaryEmbedding
 
 
+class patched_MistralRotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.mistral.modeling_mistral.MistralRotaryEmbedding
+
+
+class patched_MixtralRotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.mixtral.modeling_mixtral.MixtralRotaryEmbedding
+
+
+class patched_PhiRotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.phi.modeling_phi.PhiRotaryEmbedding
+
+
 class patched_Phi3RotaryEmbedding(common_RotaryEmbedding):
     _PATCHES_ = ["forward"]
     _PATCHED_CLASS_ = transformers.models.phi3.modeling_phi3.Phi3RotaryEmbedding
+
+
+class patched_Phi4MultimodalRotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = (
+        transformers.models.phi4_multimodal.modeling_phi4_multimodal.Phi4MultimodalRotaryEmbedding
+    )
+
+
+class patched_SmolLM3RotaryEmbedding(common_RotaryEmbedding):
+    _PATCHES_ = ["forward"]
+    _PATCHED_CLASS_ = transformers.models.smallm3.modeling_smallm3.SmolLM3RotaryEmbedding
 
 
 class patched_IdeficsEmbedding(torch.nn.Module):
