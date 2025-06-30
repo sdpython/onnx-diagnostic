@@ -176,8 +176,10 @@ def get_inputs(
                 "attention_mask": {0: batch, 2: "seq"},
                 "cache_position": {0: "seq"},
                 "past_key_values": [
-                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                    # [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                    # [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                    [{0: batch} for _ in range(num_hidden_layers)],
+                    [{0: batch} for _ in range(num_hidden_layers)],
                 ],
             }
             inputs = dict(

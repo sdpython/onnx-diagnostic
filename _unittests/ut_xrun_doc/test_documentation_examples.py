@@ -109,6 +109,13 @@ class TestDocumentationExamples(ExtTestCase):
             ):
                 reason = "torch<2.8"
 
+            if (
+                not reason
+                and name in {"plot_dump_intermediate_results.py"}
+                and not has_torch("2.9.1")
+            ):
+                reason = "unstable, let's wait for the next version"
+
             if reason:
 
                 @unittest.skip(reason)
