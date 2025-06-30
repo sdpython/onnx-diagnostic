@@ -181,7 +181,8 @@ def make_static_cache(
                     torch.randn(bsize, nheads, slen, dim),
                 )
                 for i in range(n_layers)
-            ]
+            ],
+            max_cache_len=10,
         )
         print(string_type(past_key_values, with_shape=True))
     """
