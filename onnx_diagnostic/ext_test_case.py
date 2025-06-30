@@ -756,6 +756,18 @@ class ExtTestCase(unittest.TestCase):
         "Adds a todo printed when all test are run."
         cls._todos.append((f, msg))
 
+    @classmethod
+    def ort(cls):
+        import onnxruntime
+
+        return onnxruntime
+
+    @classmethod
+    def to_onnx(self, *args, **kwargs):
+        from experimental_experiment.torch_interpreter import to_onnx
+
+        return to_onnx(*args, **kwargs)
+
     def print_model(self, model: "ModelProto"):  # noqa: F821
         "Prints a ModelProto"
         from onnx_diagnostic.helpers.onnx_helper import pretty_onnx
