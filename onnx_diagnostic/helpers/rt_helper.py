@@ -115,9 +115,11 @@ def make_feeds(
     # bool, int, float, onnxruntime does not support float, bool, int
     new_flat = []
     for i in flat:
-        if isinstance(i, (bool, int)):
-            i = np.array([i], dtype=np.int64)
+        if isinstance(i, bool):
+            i = np.array(i, dtype=np.bool_)
+        elif isinstance(i, int):
+            i = np.array(i, dtype=np.int64)
         elif isinstance(i, float):
-            i = np.array([i], dtype=np.float32)
+            i = np.array(i, dtype=np.float32)
         new_flat.append(i)
     return dict(zip(names, new_flat))
