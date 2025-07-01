@@ -104,7 +104,7 @@ and triggered by ``with torch_export_patches(patch_transformers=True)``.
 This function does one class, 
 :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.register_cache_serialization`
 does all known classes.
-It can be undone with :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.unregister`
+It can be undone with :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.unregister_class_serialization`
 or :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.unregister_cache_serialization`.
 Here is the list of supported caches:
 
@@ -113,7 +113,10 @@ Here is the list of supported caches:
 
     import onnx_diagnostic.torch_export_patches.onnx_export_serialization as p
 
-    print("\n".join(sorted(t.__name__ for t in p.serialization_functions())))
+    print(
+        "\n".join(sorted(t.__name__ for t in p.serialization_functions(
+            patch_transformers=True, patch_diffusers=True)))
+    )
 
 .. _l-control-flow-rewriting:
 
