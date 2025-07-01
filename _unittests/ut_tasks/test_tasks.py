@@ -6,6 +6,7 @@ from onnx_diagnostic.ext_test_case import (
     has_transformers,
     requires_transformers,
 )
+from onnx_diagnostic.helpers.torch_helper import to_any
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
@@ -42,12 +43,13 @@ class TestTasks(ExtTestCase):
             )
 
     @hide_stdout()
-    def test_automatic_speech_recognition(self):
+    def test_automatic_speech_recognition_float32(self):
         mid = "openai/whisper-tiny"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "automatic-speech-recognition")
         self.assertIn((data["size"], data["n_weights"]), [(132115968, 33028992)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        model(**data["inputs"])
         model(**data["inputs2"])
         Dim = torch.export.Dim
         self.maxDiff = None
@@ -107,6 +109,83 @@ class TestTasks(ExtTestCase):
             self.assertIsInstance(flat[0], torch.Tensor)
             self.assertEqual(
                 "#8[T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4,T1r4]",
+                self.string_type(flat),
+            )
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
+
+    @hide_stdout()
+    def test_automatic_speech_recognition_float16(self):
+        mid = "openai/whisper-tiny"
+        data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
+        self.assertEqual(data["task"], "automatic-speech-recognition")
+        self.assertIn((data["size"], data["n_weights"]), [(132115968, 33028992)])
+        self.assertIn("encoder_outputs:BaseModelOutput", self.string_type(data["inputs"]))
+        data["inputs"] = to_any(data["inputs"], torch.float16)
+        self.assertIn("encoder_outputs:BaseModelOutput", self.string_type(data["inputs"]))
+        data["inputs2"] = to_any(data["inputs2"], torch.float16)
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        model = to_any(model, torch.float16)
+        model(**data["inputs2"])
+        Dim = torch.export.Dim
+        self.maxDiff = None
+        self.assertIn("{0:Dim(batch),1:DYN(seq_length)}", self.string_type(ds))
+        self.assertEqualAny(
+            {
+                "decoder_input_ids": {
+                    0: Dim("batch", min=1, max=1024),
+                    1: "seq_length",
+                },
+                "cache_position": {0: "seq_length"},
+                "encoder_outputs": [{0: Dim("batch", min=1, max=1024)}],
+                "past_key_values": [
+                    [
+                        [
+                            {0: Dim("batch", min=1, max=1024)},
+                            {0: Dim("batch", min=1, max=1024)},
+                        ],
+                        [
+                            {0: Dim("batch", min=1, max=1024)},
+                            {0: Dim("batch", min=1, max=1024)},
+                        ],
+                    ],
+                    [
+                        [
+                            {0: Dim("batch", min=1, max=1024)},
+                            {0: Dim("batch", min=1, max=1024)},
+                        ],
+                        [
+                            {0: Dim("batch", min=1, max=1024)},
+                            {0: Dim("batch", min=1, max=1024)},
+                        ],
+                    ],
+                ],
+            },
+            ds,
+        )
+        self.assertEqual(
+            "#1[T10r3]",
+            self.string_type(torch.utils._pytree.tree_flatten(inputs["encoder_outputs"])[0]),
+        )
+        with torch_export_patches(patch_transformers=True, verbose=10):
+            model(**inputs)
+            flat = torch.utils._pytree.tree_flatten(inputs["past_key_values"])[0]
+            self.assertIsInstance(flat, list)
+            self.assertIsInstance(flat[0], torch.Tensor)
+            self.assertEqual(
+                "#8[T10r4,T10r4,T10r4,T10r4,T10r4,T10r4,T10r4,T10r4]",
+                self.string_type(flat),
+            )
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
+        with torch_export_patches(patch_transformers=True, verbose=10):
+            flat = torch.utils._pytree.tree_flatten(inputs["past_key_values"])[0]
+            self.assertIsInstance(flat, list)
+            self.assertIsInstance(flat[0], torch.Tensor)
+            self.assertEqual(
+                "#8[T10r4,T10r4,T10r4,T10r4,T10r4,T10r4,T10r4,T10r4]",
                 self.string_type(flat),
             )
             torch.export.export(

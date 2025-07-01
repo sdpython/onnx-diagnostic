@@ -214,8 +214,8 @@ class patched_DynamicCache:
             if len(self.key_cache) <= layer_idx:
                 # There may be skipped layers, fill them with empty lists
                 for _ in range(len(self.key_cache), layer_idx):
-                    self.key_cache.append(torch.tensor([]))
-                    self.value_cache.append(torch.tensor([]))
+                    self.key_cache.append(torch.tensor([], dtype=key_states.dtype))
+                    self.value_cache.append(torch.tensor([], dtype=key_states.dtype))
                 self.key_cache.append(key_states)
                 self.value_cache.append(value_states)
             elif not self.key_cache[
@@ -231,7 +231,6 @@ class patched_DynamicCache:
                 self.value_cache[layer_idx] = torch.cat(
                     [self.value_cache[layer_idx], value_states], dim=-2
                 )
-
         return self.key_cache[layer_idx], self.value_cache[layer_idx]
 
     def crop(self, max_length: int):

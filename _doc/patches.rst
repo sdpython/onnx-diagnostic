@@ -104,7 +104,8 @@ and triggered by ``with torch_export_patches(patch_transformers=True)``.
 This function does one class, 
 :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.register_cache_serialization`
 does all known classes.
-It can be undone with :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.unregister_class_serialization`
+It can be undone with
+:func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.unregister_class_serialization`
 or :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.unregister_cache_serialization`.
 Here is the list of supported caches:
 
