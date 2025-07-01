@@ -1,6 +1,12 @@
 Change Logs
 ===========
 
+0.7.3
++++++
+
+* :pr:`172`: fixes function to_any for BaseModelOutput
+
+
 0.7.2
 +++++
 

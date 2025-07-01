@@ -717,7 +717,7 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
         return tuple(to_any(t, to_value) for t in value)
     if isinstance(value, set):
         return {to_any(t, to_value) for t in value}
-    if isinstance(value, dict):
+    if type(value) is dict:
         return {k: to_any(t, to_value) for k, t in value.items()}
     if value.__class__.__name__ == "DynamicCache":
         return make_dynamic_cache(
