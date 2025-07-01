@@ -28,7 +28,7 @@ def register_class_serialization(
 ) -> bool:
     """
     Registers a class.
-    It can be undone with :func:`unregister`.
+    It can be undone with :func:`unregister_class_serialization`.
 
     :param cls: class to register
     :param f_flatten: see ``torch.utils._pytree.register_pytree_node``
