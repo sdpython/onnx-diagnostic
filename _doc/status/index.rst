@@ -9,6 +9,7 @@ what works and what does not with :func:`torch.export.export`.
     :maxdepth: 1
 
     exported_program_dynamic
+    exporter_dynamic
     patches_coverage
 
 Some PRs in :epkg:`transformers` to keep in mind when it comes to export

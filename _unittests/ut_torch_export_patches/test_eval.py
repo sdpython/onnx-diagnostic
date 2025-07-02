@@ -35,16 +35,56 @@ class TestEval(ExtTestCase):
         self.assertIsInstance(ev, list)
         self.assertIsInstance(ev[0], dict)
 
-    def test_run_exporter(self):
+    def test_run_exporter_custom(self):
         evaluation(
             cases="SignatureListFixedLength",
-            exporters="custom-strict",
+            exporters="custom",
+            quiet=False,
+            dynamic=False,
+        )
+
+    def test_run_exporter_dynamo(self):
+        evaluation(
+            cases="SignatureListFixedLength",
+            exporters="dynamo",
+            quiet=False,
+            dynamic=False,
+        )
+
+    def test_run_exporter_dynamo_ir(self):
+        evaluation(
+            cases="SignatureListFixedLength",
+            exporters="dynamo-ir",
+            quiet=False,
+            dynamic=False,
+        )
+
+    def test_run_exporter_nostrict(self):
+        evaluation(
+            cases="SignatureListFixedLength",
+            exporters="export-nostrict",
+            quiet=False,
+            dynamic=False,
+        )
+
+    def test_run_exporter_tracing(self):
+        evaluation(
+            cases="SignatureListFixedLength",
+            exporters="export-tracing",
             quiet=False,
             dynamic=False,
         )
 
     def test_run_exporter_regex(self):
         evaluation(cases=".*Aten.*", exporters="custom-strict", quiet=False, dynamic=False)
+
+    def test_run_exporter_custom_nested_cond(self):
+        evaluation(
+            cases="ControlFlowNestCond",
+            exporters="custom",
+            quiet=False,
+            dynamic=False,
+        )
 
 
 if __name__ == "__main__":
