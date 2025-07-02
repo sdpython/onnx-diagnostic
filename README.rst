@@ -27,12 +27,25 @@ onnx-diagnostic: investigate onnx models
 
 The main feature is about `patches <https://github.com/sdpython/onnx-diagnostic/tree/main/onnx_diagnostic/torch_export_patches>`_:
 it helps exporting **pytorch models into ONNX**, mostly designed for LLMs using dynamic caches.
+Patches can be enabled as follows:
 
 .. code-block:: python
+
+  from onnx_diagnostic.torch_export_patches import torch_export_patches
 
   with torch_export_patches(patch_transformers=True) as f:
       ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
       # ...
+
+Dynamic shapes are difficult to guess for caches, one function
+returns a structure defining all dimensions as dynamic.
+You need then to remove those which are not dynamic in your model.
+
+.. code-block:: python
+
+  from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+
+  dynamic_shapes = all_dynamic_shape_from_inputs(cache)
 
 It also implements tools to investigate, validate exported models (ExportedProgramm, ONNXProgram, ...).
 See `documentation of onnx-diagnostic <https://sdpython.github.io/doc/onnx-diagnostic/dev/>`_ and
@@ -90,13 +103,25 @@ Snapshot of usefuls tools
 
 .. code-block:: python
 
+  from onnx_diagnostic.torch_export_patches import torch_export_patches
+
   with torch_export_patches(patch_transformers=True) as f:
       ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
       # ...
 
+**all_dynamic_shape_from_inputs**
+
+.. code-block:: python
+
+  from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+
+  dynamic_shapes = all_dynamic_shape_from_inputs(cache)
+
 **torch_export_rewrite**
 
 .. code-block:: python
+
+  from onnx_diagnostic.torch_export_patches import torch_export_rewrite
 
   with torch_export_rewrite(rewrite=[Model.forward]) as f:
       ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
