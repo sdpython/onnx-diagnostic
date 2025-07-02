@@ -337,7 +337,7 @@ def _make_exporter_onnx(
         from experimental_experiment.torch_interpreter import to_onnx, ExportOptions
 
         opts = {}
-        opts["strict"] = "-nostrict" not in exporter
+        opts["strict"] = "-strict" in exporter
         opts["fallback"] = "-fallback" in exporter
         opts["tracing"] = "-tracing" in exporter
         opts["jit"] = "-jit" in exporter
@@ -520,6 +520,8 @@ def run_exporter(
             return res
 
         onx, builder = res
+        base["onx"] = onx
+        base["builder"] = builder
         if verbose >= 9:
             print("[run_exporter] onnx model")
             print(

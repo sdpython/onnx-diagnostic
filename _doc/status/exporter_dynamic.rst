@@ -1,9 +1,10 @@
-=====================================
-Exported Programs with Dynamic Shapes
-=====================================
+=================================
+Exported ONNX with Dynamic Shapes
+=================================
 
-The following script shows the exported program for many short cases exported
-with different options. This steps happens before converting into ONNX.
+The following script shows the exported program for many short cases
+and various l-plot-export-with-dynamic-shape to retrieve an ONNX model equivalent
+to the original model.
 
 .. runpython::
     :showcode:
@@ -15,25 +16,26 @@ with different options. This steps happens before converting into ONNX.
     import textwrap
     import pandas
     from onnx_diagnostic.helpers import string_type
+    from onnx_diagnostic.helpers.onnx_helper import pretty_onnx
     from onnx_diagnostic.torch_export_patches.eval import discover, run_exporter
     from onnx_diagnostic.ext_test_case import unit_test_going
 
     cases = discover()
     print()
-    print(":ref:`Summary <led-summary-exported-program>`")
+    print(":ref:`Summary <ledx-summary-exported-program>`")
     print()
     sorted_cases = sorted(cases.items())
     if unit_test_going():
         sorted_cases = sorted_cases[:3]
     for name, cls_model in sorted_cases:
-        print(f"* :ref:`{name} <led-model-case-export-{name}>`")
+        print(f"* :ref:`{name} <ledx-model-case-export-{name}>`")
     print()
     print()
 
     obs = []
     for name, cls_model in sorted(cases.items()):
         print()
-        print(f".. _led-model-case-export-{name}:")
+        print(f".. _ledx-model-case-export-{name}:")
         print()
         print(name)
         print("=" * len(name))
@@ -50,19 +52,14 @@ with different options. This steps happens before converting into ONNX.
             print("    # code is missing")
         print()
         print()
-        for exporter in (
-            "export-strict",
-            "export-nostrict",
-            "export-nostrict-decall",
-            "export-tracing",
-        ):
+        for exporter in ("custom", "dynamo-ir"):
             expname = exporter.replace("export-", "")
             print()
             print(expname)
             print("+" * len(expname))
             print()
             res = run_exporter(exporter, cls_model, True, quiet=True)
-            case_ref = f":ref:`{name} <led-model-case-export-{name}>`"
+            case_ref = f":ref:`{name} <ledx-model-case-export-{name}>`"
             expo = exporter.split("-", maxsplit=1)[-1]
             if "inputs" in res:
                 print(f"* **inputs:** ``{string_type(res['inputs'], with_shape=True)}``")
@@ -70,14 +67,15 @@ with different options. This steps happens before converting into ONNX.
                 print(f"* **shapes:** ``{string_type(res['dynamic_shapes'])}``")
             print()
             print()
-            if "exported" in res:
+            if "onx" in res:
                 print(".. code-block:: text")
                 print()
-                print(textwrap.indent(str(res["exported"].graph), "    "))
+                print(textwrap.indent(pretty_onnx(res["onx"]), "    "))
                 print()
                 print()
-                obs.append(dict(case=case_ref, error="", exporter=expo))
-            else:
+                if "error" not in res:
+                    obs.append(dict(case=case_ref, error="", exporter=expo))
+            if "error" in res:
                 print("**FAILED**")
                 print()
                 print(".. code-block:: text")
@@ -92,7 +90,7 @@ with different options. This steps happens before converting into ONNX.
                 obs.append(dict(case=case_ref, error="FAIL", exporter=expo))
 
     print()
-    print(".. _led-summary-exported-program:")
+    print(".. _ledx-summary-exported-program:")
     print()
     print("Summary")
     print("+++++++")
