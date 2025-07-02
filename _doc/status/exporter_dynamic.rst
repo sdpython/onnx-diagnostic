@@ -73,7 +73,8 @@ to the original model.
                 print(textwrap.indent(pretty_onnx(res["onx"]), "    "))
                 print()
                 print()
-                obs.append(dict(case=case_ref, error="", exporter=expo))
+                if "error" not in res:
+                    obs.append(dict(case=case_ref, error="", exporter=expo))
             if "error" in res:
                 print("**FAILED**")
                 print()
