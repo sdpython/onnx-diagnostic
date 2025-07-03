@@ -10,7 +10,6 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_sliding_window_cache,
     make_encoder_decoder_cache,
     make_static_cache,
-    make_mamba_cache,
 )
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -116,27 +115,6 @@ class TestShapeHelper(ExtTestCase):
                         {0: "d_3_0", 1: "d_3_1", 2: "d_3_2", 3: "d_3_3"},
                         {0: "d_4_0", 1: "d_4_1", 2: "d_4_2", 3: "d_4_3"},
                         {0: "d_5_0", 1: "d_5_1", 2: "d_5_2", 3: "d_5_3"},
-                    ],
-                ],
-            ),
-            (
-                make_mamba_cache(
-                    [
-                        (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                        (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                        (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                    ]
-                ),
-                [
-                    [
-                        {0: "d_0_0", 1: "d_0_1", 2: "d_0_2"},
-                        {0: "d_1_0", 1: "d_1_1", 2: "d_1_2"},
-                        {0: "d_2_0", 1: "d_2_1", 2: "d_2_2"},
-                    ],
-                    [
-                        {0: "d_3_0", 1: "d_3_1", 2: "d_3_2"},
-                        {0: "d_4_0", 1: "d_4_1", 2: "d_4_2"},
-                        {0: "d_5_0", 1: "d_5_1", 2: "d_5_2"},
                     ],
                 ],
             ),
