@@ -30,6 +30,77 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
         )
         ds = all_dynamic_shape_from_inputs(inputs)
         pprint.pprint(ds)
+
+    For this function to work, patches must be enabled if :epkg:`transformers`
+    does not implement the serialization functions.
+
+    .. runpython::
+        :showcode:
+
+        import pprint
+        import torch
+        from onnx_diagnostic.helpers.cache_helper import (
+            make_dynamic_cache,
+            make_encoder_decoder_cache,
+            make_mamba_cache,
+            make_sliding_window_cache,
+            make_static_cache,
+        )
+        from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+        from onnx_diagnostic.torch_export_patches import torch_export_patches
+
+        caches = [
+            make_dynamic_cache(
+                [
+                    (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                    (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                    (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                ]
+            ),
+            make_encoder_decoder_cache(
+                make_dynamic_cache(
+                    [
+                        (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                        (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                        (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                    ]
+                ),
+                make_dynamic_cache(
+                    [
+                        (torch.rand((5, 5, 5)), torch.rand((5, 5, 5))),
+                        (torch.rand((5, 5, 5)), torch.rand((5, 5, 5))),
+                        (torch.rand((5, 5, 5)), torch.rand((5, 5, 5))),
+                    ]
+                ),
+            ),
+            make_sliding_window_cache(
+                [
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                ]
+            ),
+            make_static_cache(
+                [
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                ],
+                max_cache_len=15,
+            ),
+            make_mamba_cache(
+                [
+                    (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                    (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                    (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
+                ]
+            ),
+        ]
+
+        with torch_export_patches(patch_transformers=True):
+            for cache in caches:
+                print(f"-- {cache.__class__.__name__}")
+                pprint.pprint(all_dynamic_shape_from_inputs(cache))
     """
     if isinstance(dim_prefix, str):
         prefixes: Set[str] = set()

@@ -56,7 +56,7 @@ class OnnxruntimeBackend(onnx.backend.base.Backend):
         d = Device(device)
         if d == DeviceType.CPU:
             return True
-        if d == DeviceType.GPU:
+        if d == DeviceType.CUDA:
             import torch
 
             return torch.cuda.is_available()
@@ -65,7 +65,7 @@ class OnnxruntimeBackend(onnx.backend.base.Backend):
     @classmethod
     def create_inference_session(cls, model, device):
         d = Device(device)
-        if d == DeviceType.GPU:
+        if d == DeviceType.CUDA:
             providers = ["CUDAExecutionProvider"]
         elif d == DeviceType.CPU:
             providers = ["CPUExecutionProvider"]

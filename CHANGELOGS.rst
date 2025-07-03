@@ -4,7 +4,7 @@ Change Logs
 0.7.4
 +++++
 
-* :pr:`174`: changes for the next version of onnx
+* :pr:`174`: changes for the next version of onnx, fixes all_dynamic_shape_from_inputs
 
 0.7.3
 +++++
