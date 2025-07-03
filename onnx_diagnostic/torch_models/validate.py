@@ -18,7 +18,6 @@ from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 from ..tasks import random_input_kwargs
 from ..torch_export_patches import torch_export_patches
 from ..torch_export_patches.patch_inputs import use_dyn_not_str
-from ..reference import TorchOnnxEvaluator
 from .hghub import get_untrained_model_with_inputs
 
 
@@ -1112,6 +1111,9 @@ def validate_onnx_model(
             f"[validate_onnx_model] verify onnx model with providers "
             f"{providers}..., flavour={flavour!r}"
         )
+
+    if runtime == "onnxruntime":
+        from ..reference import TorchOnnxEvaluator
 
     cls_runtime = (
         (

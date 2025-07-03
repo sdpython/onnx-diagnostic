@@ -37,10 +37,10 @@ class TestShapeHelper(ExtTestCase):
                 "input_ids": {0: "d_0_0", 1: "d_0_1"},
                 "attention_mask": {0: "d_1_0", 1: "d_1_1"},
                 "position_ids": {0: "d_2_0", 1: "d_2_1"},
-                "past_key_values": {
-                    "key_cache": [{0: "d_3_0", 1: "d_3_1", 2: "d_3_2", 3: "d_3_3"}],
-                    "value_cache": [{0: "d_4_0", 1: "d_4_1", 2: "d_4_2", 3: "d_4_3"}],
-                },
+                "past_key_values": [
+                    [{0: "d_3_0", 1: "d_3_1", 2: "d_3_2", 3: "d_3_3"}],
+                    [{0: "d_4_0", 1: "d_4_1", 2: "d_4_2", 3: "d_4_3"}],
+                ],
             },
             ds,
         )

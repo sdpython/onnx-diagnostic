@@ -1,11 +1,15 @@
 Change Logs
 ===========
 
+0.7.4
++++++
+
+* :pr:`174`: changes for the next version of onnx
+
 0.7.3
 +++++
 
 * :pr:`173`: fixes function to_any for BaseModelOutput
-
 
 0.7.2
 +++++
