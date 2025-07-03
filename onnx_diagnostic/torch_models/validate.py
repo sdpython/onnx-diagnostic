@@ -1112,7 +1112,7 @@ def validate_onnx_model(
             f"{providers}..., flavour={flavour!r}"
         )
 
-    if runtime == "onnxruntime":
+    if runtime != "onnxruntime":
         from ..reference import TorchOnnxEvaluator
 
     cls_runtime = (
@@ -1124,7 +1124,7 @@ def validate_onnx_model(
         )
         if runtime == "onnxruntime"
         else (
-            lambda model, providers: TorchOnnxEvaluator(
+            lambda model, providers, _cls_=TorchOnnxEvaluator: _cls_(
                 model, providers=providers, verbose=max(verbose - 1, 0)
             )
         )
