@@ -163,8 +163,8 @@ class TestPatchSerialization(ExtTestCase):
         with torch_export_patches(patch_transformers=True):
             flat, _spec = torch.utils._pytree.tree_flatten(bo)
             unflat = flatten_unflatten_for_dynamic_shapes(bo, use_dict=True)
-            self.assertIsInstance(unflat, dict)
-            self.assertEqual(list(unflat), ["last_hidden_state"])
+            self.assertIsInstance(unflat, list)
+            self.assertEqual("#1[T1r3]", self.string_type(unflat))
 
     @ignore_warnings(UserWarning)
     def test_base_sliding_window_cache_unflatten_flatten(self):
@@ -260,8 +260,10 @@ class TestPatchSerialization(ExtTestCase):
             # flatten_unflatten
             flat, _spec = torch.utils._pytree.tree_flatten(bo)
             unflat = flatten_unflatten_for_dynamic_shapes(bo, use_dict=True)
-            self.assertIsInstance(unflat, dict)
-            self.assertEqual(list(unflat), ["key_cache", "value_cache"])
+            self.assertIsInstance(unflat, list)
+            self.assertEqual(
+                "#2[#3[T1r4,T1r4,T1r4],#3[T1r4,T1r4,T1r4]]", self.string_type(unflat)
+            )
 
         # export
         class Model(torch.nn.Module):

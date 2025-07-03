@@ -25,7 +25,6 @@ class TestShapeHelper(ExtTestCase):
         ds = all_dynamic_shape_from_inputs(cache)
         self.assertEqual([[{0: "d_0_0", 1: "d_0_1"}], [{0: "d_1_0", 1: "d_1_1"}]], ds)
 
-    @requires_transformers("4.52")
     @requires_torch("2.7.99")
     def test_all_dynamic_shape_all_transformers_cache(self):
         caches = [

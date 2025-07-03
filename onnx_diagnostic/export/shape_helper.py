@@ -9,7 +9,6 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
     All dimensions are considered as dynamic.
     ``dim_prefix`` can be a string (the function uses it as a prefix),
     or ``torch.export.Dim.AUTO`` or ``torch.export.Dim.DYNAMIC``.
-    For caches, ``transformers>=4.52```is better.
 
     .. runpython::
         :showcode:
