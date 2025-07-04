@@ -154,7 +154,7 @@ class TestPatchPatchTorch(ExtTestCase):
             self.assertEqualArray(causal_mask, ep.moule(*inputs))
 
     @requires_torch("2.8")
-    @requires_transformers("4.52")
+    @requires_transformers("4.53")
     def test_vmap_transformers_scenario_novmap(self):
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
             patched__vmap_for_bhqkv as _vmap_for_bhqkv2,

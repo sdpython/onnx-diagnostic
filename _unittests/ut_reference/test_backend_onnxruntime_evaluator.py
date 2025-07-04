@@ -50,9 +50,9 @@ class OnnxruntimeEvaluatorBackend(onnx.backend.base.Backend):
     @classmethod
     def supports_device(cls, device: str) -> bool:
         d = Device(device)
-        if d == DeviceType.CPU:
+        if d.type == DeviceType.CPU:
             return True
-        if d == DeviceType.CUDA:
+        if d.type == DeviceType.CUDA:
             import torch
 
             return torch.cuda.is_available()
