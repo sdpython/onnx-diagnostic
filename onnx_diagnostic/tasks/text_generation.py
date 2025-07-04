@@ -72,7 +72,7 @@ def get_inputs(
     num_key_value_heads: Optional[int] = None,
     head_dim: Optional[int] = None,
     cls_cache: Optional[Union[type, str]] = None,
-    add_second_input: bool = False,
+    add_second_input: int = 1,
     **kwargs,  # unused
 ):
     """
@@ -261,8 +261,8 @@ def get_inputs(
             dummy_max_token_id=dummy_max_token_id,
             num_hidden_layers=num_hidden_layers,
             batch_size=batch_size + 1,
-            sequence_length=sequence_length + 1,
-            sequence_length2=sequence_length2 + 1,
+            sequence_length=sequence_length + add_second_input,
+            sequence_length2=sequence_length2 + add_second_input,
             dynamic_rope=dynamic_rope,
             num_key_value_heads=num_key_value_heads,
             head_dim=head_dim,

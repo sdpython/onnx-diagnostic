@@ -22,7 +22,7 @@ def get_inputs(
     batch_size: int,
     sequence_length: int,
     dummy_max_token_id: int,
-    add_second_input: bool = False,
+    add_second_input: int = 1,
     **kwargs,  # unused
 ):
     """
@@ -56,7 +56,7 @@ def get_inputs(
             model=model,
             config=config,
             batch_size=batch_size + 1,
-            sequence_length=sequence_length + 1,
+            sequence_length=sequence_length + add_second_input,
             dummy_max_token_id=dummy_max_token_id,
             **kwargs,
         )["inputs"]

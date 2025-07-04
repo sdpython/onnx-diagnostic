@@ -157,6 +157,12 @@ def version_summary() -> Dict[str, Union[int, float, str]]:
         "version_numpy": numpy.__version__,
     }
     try:
+        import scipy
+
+        summary["version_scipy"] = getattr(scipy, "__version__", "?")
+    except ImportError:
+        pass
+    try:
         import transformers
 
         summary["version_transformers"] = getattr(transformers, "__version__", "?")
@@ -178,6 +184,12 @@ def version_summary() -> Dict[str, Union[int, float, str]]:
         import onnxruntime
 
         summary["version_onnxruntime"] = getattr(onnxruntime, "__version__", "?")
+    except ImportError:
+        pass
+    try:
+        import onnx_ir
+
+        summary["version_onnx_ir"] = getattr(onnx_ir, "__version__", "?")
     except ImportError:
         pass
     import onnx_diagnostic
@@ -275,7 +287,7 @@ def validate_model(
     runtime: str = "onnxruntime",
     repeat: int = 1,
     warmup: int = 0,
-    inputs2: bool = True,
+    inputs2: int = 1,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -324,7 +336,8 @@ def validate_model(
     :param repeat: number of time to measure the model
     :param warmup: warmup the model first
     :param inputs2: checks that the second set of inputs is reunning as well,
-        this ensures that the model does support dynamism
+        this ensures that the model does support dynamism, the value is used
+        as an increment to the first set of values (added to dimensions)
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -1053,7 +1066,7 @@ def validate_onnx_model(
     runtime: str = "onnxruntime",
     repeat: int = 1,
     warmup: int = 0,
-    inputs2: bool = True,
+    inputs2: int = 1,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Verifies that an onnx model produces the same
@@ -1069,8 +1082,9 @@ def validate_onnx_model(
     :param runtime: onnx runtime to use, onnxruntime or torch
     :param repeat: run that number of times the model
     :param warmup: warmup the model
-    :param inputs: to validate the model on the second input set
-        to make sure the exported model supports dynamism
+    :param inputs2: to validate the model on the second input set
+        to make sure the exported model supports dynamism, the value is
+        used as an increment added to the first set of inputs (added to dimensions)
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """

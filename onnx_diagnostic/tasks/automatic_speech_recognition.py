@@ -33,7 +33,7 @@ def get_inputs(
     head_dim: int,
     batch_size: int = 2,
     sequence_length: int = 30,
-    add_second_input: bool = False,
+    add_second_input: int = 1,
     **kwargs,  # unused
 ):
     """
@@ -144,7 +144,7 @@ def get_inputs(
             decoder_layers=decoder_layers,
             head_dim=head_dim,
             batch_size=batch_size + 1,
-            sequence_length=sequence_length + 1,
+            sequence_length=sequence_length + add_second_input,
             **kwargs,
         )["inputs"]
     return res

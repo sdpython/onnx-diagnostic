@@ -349,6 +349,15 @@ def get_parser_validate() -> ArgumentParser:
             python -m onnx_diagnostic validate -m microsoft/Phi-4-mini-reasoning \\
                 --run -v 1 -o dump_test --no-quiet --repeat 2 --warmup 2 \\
                 --dtype float16 --device cuda --export modelbuilder
+
+            position_ids is usually not needed, they can be removed by adding:
+
+            --drop position_ids
+
+            The behaviour may be modified compare the original configuration,
+            the following argument can be rope_scaling to dynamic:
+
+            --mop \"rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}\""
             """
         ),
         formatter_class=RawTextHelpFormatter,
@@ -403,10 +412,12 @@ def get_parser_validate() -> ArgumentParser:
     )
     parser.add_argument(
         "--inputs2",
-        default=True,
-        action=BooleanOptionalAction,
+        default=1,
+        type=int,
         help="Validates the model on a second set of inputs\n"
-        "to check the exported model supports dynamism.",
+        "to check the exported model supports dynamism. The values is used "
+        "as an increment to the first set of inputs. A high value may trick "
+        "a different behavior in the model and missed by the exporter.",
     )
     parser.add_argument(
         "--runtime",
@@ -422,7 +433,8 @@ def get_parser_validate() -> ArgumentParser:
     parser.add_argument(
         "--drop",
         help="Drops the following inputs names, it should be a list\n"
-        "with comma separated values.",
+        "with comma separated values, example:\n"
+        "--drop position_ids",
     )
     parser.add_argument(
         "--opset",

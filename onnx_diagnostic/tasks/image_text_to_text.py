@@ -32,7 +32,7 @@ def get_inputs(
     sequence_length2: int = 3,
     n_images: int = 2,
     dynamic_rope: bool = False,
-    add_second_input: bool = False,
+    add_second_input: int = 1,
     **kwargs,  # unused
 ):
     """
@@ -116,8 +116,8 @@ def get_inputs(
             height=height,
             num_channels=num_channels,
             batch_size=batch_size + 1,
-            sequence_length=sequence_length + 1,
-            sequence_length2=sequence_length2 + 1,
+            sequence_length=sequence_length + add_second_input,
+            sequence_length2=sequence_length2 + add_second_input,
             n_images=n_images + 1,
             dynamic_rope=dynamic_rope,
             **kwargs,
