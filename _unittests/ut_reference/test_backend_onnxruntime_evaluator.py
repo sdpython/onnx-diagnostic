@@ -61,9 +61,9 @@ class OnnxruntimeEvaluatorBackend(onnx.backend.base.Backend):
     @classmethod
     def create_inference_session(cls, model, device):
         d = Device(device)
-        if d == DeviceType.CUDA:
+        if d.type == DeviceType.CUDA:
             providers = ["CUDAExecutionProvider"]
-        elif d == DeviceType.CPU:
+        elif d.type == DeviceType.CPU:
             providers = ["CPUExecutionProvider"]
         else:
             raise ValueError(f"Unrecognized device {device!r} or {d!r}")
