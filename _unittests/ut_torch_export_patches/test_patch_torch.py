@@ -2,15 +2,14 @@ import unittest
 from typing import Callable
 import torch
 from torch._dynamo._trace_wrapped_higher_order_op import TransformGetItemToIndex
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
-from onnx_diagnostic.torch_export_patches.patches.patch_torch import patched_vmap
-from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
-    patched__vmap_for_bhqkv as _vmap_for_bhqkv2,
-)
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch, requires_transformers
 
 
 class TestPatchPatchTorch(ExtTestCase):
+    @requires_transformers("4.52")
     def test_vmap(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_torch import patched_vmap
+
         f = lambda x, y: x * y + 1  # noqa: E731
         x = torch.tensor([1.0, 2.0, 3.0])
         y = torch.tensor([0.1, 0.2, 0.3])
@@ -32,7 +31,10 @@ class TestPatchPatchTorch(ExtTestCase):
         self.assertEqualArray(Model()(x, y), ep.module()(x, y))
 
     @requires_torch("2.8")
+    @requires_transformers("4.52")
     def test_export_patched_vmap(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_torch import patched_vmap
+
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 f = lambda x, y: x * y + 1  # noqa: E731
@@ -43,14 +45,20 @@ class TestPatchPatchTorch(ExtTestCase):
         ep = torch.export.export(Model(), (x, y))
         self.assertEqualArray(Model()(x, y), ep.module()(x, y))
 
+    @requires_transformers("4.52")
     def test_vmap_outdim(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_torch import patched_vmap
+
         f = lambda x: x**2  # noqa: E731
         x = torch.randn(2, 5)
         expected = torch.vmap(f, out_dims=1)(x)
         got = patched_vmap(f, out_dims=1)(x)
         self.assertEqualArray(expected, got)
 
+    @requires_transformers("4.52")
     def test_vmap_dict(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_torch import patched_vmap
+
         f = lambda d: torch.dot(d["x"], d["y"])  # noqa: E731
         x, y = torch.randn(2, 5), torch.randn(5)
         input = {"x": x, "y": y}
@@ -60,13 +68,19 @@ class TestPatchPatchTorch(ExtTestCase):
         )
         # self.assertEqualArray(_expected, got)
 
+    @requires_transformers("4.52")
     def test_vmap_tuple(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_torch import patched_vmap
+
         x, y = torch.randn(2, 5), torch.randn(5)
         expected = torch.vmap(torch.dot, in_dims=(0, None))(x, y)
         got = patched_vmap(torch.dot, in_dims=(0, None))(x, y)
         self.assertEqualArray(expected, got, atol=1e-5)
 
+    @requires_transformers("4.52")
     def test_vmap_transformers_scenario_vmap(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_torch import patched_vmap
+
         def padding_mask_function(padding_mask: torch.Tensor) -> Callable:
             def inner_mask(batch_idx, head_idx, q_idx, kv_idx):
                 return padding_mask[batch_idx, kv_idx]
@@ -140,7 +154,12 @@ class TestPatchPatchTorch(ExtTestCase):
             self.assertEqualArray(causal_mask, ep.moule(*inputs))
 
     @requires_torch("2.8")
+    @requires_transformers("4.52")
     def test_vmap_transformers_scenario_novmap(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+            patched__vmap_for_bhqkv as _vmap_for_bhqkv2,
+        )
+
         def padding_mask_function(padding_mask: torch.Tensor) -> Callable:
             def inner_mask(batch_idx, head_idx, q_idx, kv_idx):
                 return padding_mask[batch_idx, kv_idx]
