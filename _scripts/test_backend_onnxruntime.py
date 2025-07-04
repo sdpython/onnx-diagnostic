@@ -26,12 +26,13 @@ class OnnxruntimeBackendRep(onnx.backend.base.BackendRep):
         if isinstance(inputs, numpy.ndarray):
             inputs = [inputs]
         if isinstance(inputs, list):
-            if len(inputs) == len(self._session.input_names):
-                feeds = dict(zip(self._session.input_names, inputs))
+            if len(inputs) == len(self._session.get_inputs()):
+                feeds = dict(zip([i.name for i in self._session.get_inputs()], inputs))
             else:
+                input_names = [i.name for i in self._session.get_inputs()]
                 feeds = {}
                 pos_inputs = 0
-                for inp, tshape in zip(self._session.input_names, self._session.input_types):
+                for inp, tshape in zip(input_names, self._session.input_types):
                     shape = tuple(d.dim_value for d in tshape.tensor_type.shape.dim)
                     if shape == inputs[pos_inputs].shape:
                         feeds[inp] = inputs[pos_inputs]
@@ -54,20 +55,20 @@ class OnnxruntimeBackend(onnx.backend.base.Backend):
     @classmethod
     def supports_device(cls, device: str) -> bool:
         d = Device(device)
-        if d == DeviceType.CPU:
+        if d.type == DeviceType.CPU:
             return True
-        if d == DeviceType.CUDA:
-            import torch
-
-            return torch.cuda.is_available()
+        # if d.type == DeviceType.CUDA:
+        #     import torch
+        #
+        #     return torch.cuda.is_available()
         return False
 
     @classmethod
     def create_inference_session(cls, model, device):
         d = Device(device)
-        if d == DeviceType.CUDA:
+        if d.type == DeviceType.CUDA:
             providers = ["CUDAExecutionProvider"]
-        elif d == DeviceType.CPU:
+        elif d.type == DeviceType.CPU:
             providers = ["CPUExecutionProvider"]
         else:
             raise ValueError(f"Unrecognized device {device!r} or {d!r}")

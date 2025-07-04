@@ -420,7 +420,11 @@ def torch_export_patches(
                 patch_transformers_list, verbose=verbose
             )
 
-            if masking_utils and hasattr(masking_utils, "_vmap_for_bhqkv"):
+            if (
+                masking_utils
+                and patch_transformers_list.patch_masking_utils
+                and hasattr(masking_utils, "_vmap_for_bhqkv")
+            ):
                 if verbose:
                     print(
                         "[torch_export_patches] patches "
@@ -428,6 +432,27 @@ def torch_export_patches(
                     )
                 f_transformers__vmap_for_bhqkv = masking_utils._vmap_for_bhqkv
                 masking_utils._vmap_for_bhqkv = patch_transformers_list.patched__vmap_for_bhqkv
+
+            if (
+                masking_utils
+                and patch_transformers_list.patch_masking_utils
+                and hasattr(masking_utils, "eager_mask")
+            ):
+                if verbose:
+                    print(
+                        "[torch_export_patches] patches "
+                        "transformers.masking_utils.eager_mask"
+                    )
+                f_transformers_eager_mask = masking_utils.eager_mask
+                masking_utils.eager_mask = patch_transformers_list.patched_eager_mask
+                if (
+                    "eager" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
+                    and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"]
+                    == f_transformers_eager_mask
+                ):
+                    masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"] = (
+                        patch_transformers_list.patched_eager_mask
+                    )
 
         if custom_patches:
             if verbose:
@@ -511,7 +536,7 @@ def torch_export_patches(
 
             if custom_patches:
                 if verbose:
-                    print("[torch_export_patches] unpatch custom patches")
+                    print("[torch_export_patches] unpatches custom patches")
                 unpatch_module_or_classes(
                     custom_patches, revert_custom_patches_info, verbose=verbose
                 )
@@ -526,18 +551,43 @@ def torch_export_patches(
                 except ImportError:
                     masking_utils = None
                 if verbose:
-                    print("[torch_export_patches] unpatch transformers")
+                    print("[torch_export_patches] unpatches transformers")
                 unpatch_module_or_classes(
                     patch_transformers_list, revert_patches_info, verbose=verbose
                 )
 
-                if masking_utils and hasattr(masking_utils, "_vmap_for_bhqkv"):
+                if (
+                    masking_utils
+                    and patch_transformers_list.patch_masking_utils
+                    and hasattr(masking_utils, "_vmap_for_bhqkv")
+                ):
+                    masking_utils._vmap_for_bhqkv = f_transformers__vmap_for_bhqkv
                     if verbose:
                         print(
-                            "[torch_export_patches] unpatch "
+                            "[torch_export_patches] restored "
                             "transformers.masking_utils._vmap_for_bhqkv"
                         )
-                    masking_utils._vmap_for_bhqkv = f_transformers__vmap_for_bhqkv
+
+                if (
+                    masking_utils
+                    and patch_transformers_list.patch_masking_utils
+                    and hasattr(masking_utils, "eager_mask")
+                ):
+                    f_transformers_eager_mask = masking_utils.eager_mask
+                    masking_utils.eager_mask = f_transformers_eager_mask
+                    if (
+                        "eager" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
+                        and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"]
+                        == patch_transformers_list.patched_eager_mask
+                    ):
+                        masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"] = (
+                            f_transformers_eager_mask
+                        )
+                    if verbose:
+                        print(
+                            "[torch_export_patches] restored "
+                            "transformers.masking_utils.eager_mask"
+                        )
 
             ########
             # caches

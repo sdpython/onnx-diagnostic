@@ -4,7 +4,8 @@ Change Logs
 0.7.4
 +++++
 
-* :pr:`174`: changes for the next version of onnx, fixes all_dynamic_shape_from_inputs
+* :pr:`178`: add a patch for eager_mask to handle ``assert len(flat_dynamic_shapes) == num_placeholders - num_lifted_inputs``
+* :pr:`177`: changes for the next version of onnx, fixes all_dynamic_shape_from_inputs
 
 0.7.3
 +++++
