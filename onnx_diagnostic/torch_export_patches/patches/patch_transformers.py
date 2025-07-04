@@ -7,6 +7,7 @@ import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.cache_utils import StaticCache, Cache, DynamicCache
+from transformers.masking_utils import causal_mask_function, sdpa_mask
 from ...ext_test_case import has_transformers
 from ...helpers.torch_helper import is_torchdynamo_exporting
 
@@ -1046,3 +1047,36 @@ class patched_IdeficsAttention(torch.nn.Module):
             attn_weights = None
 
         return attn_output, attn_weights, past_key_value
+
+
+def patched_eager_mask(
+    batch_size: int,
+    cache_position: torch.Tensor,
+    kv_length: int,
+    kv_offset: int = 0,
+    mask_function: Callable = causal_mask_function,
+    attention_mask: Optional[torch.Tensor] = None,
+    dtype: torch.dtype = torch.float32,
+    **kwargs,
+) -> torch.Tensor:
+    """manual patch for function ``transformers.masking_utils.eager_mask``."""
+    # The masks for eager attention are simply boolean mask from sdpa, casted to 0 and -inf
+    _ = kwargs.pop("allow_is_causal_skip", None)
+    mask = sdpa_mask(
+        batch_size=batch_size,
+        cache_position=cache_position,
+        kv_length=kv_length,
+        kv_offset=kv_offset,
+        mask_function=mask_function,
+        attention_mask=attention_mask,
+        allow_is_causal_skip=False,
+        allow_torch_fix=False,
+        **kwargs,
+    )
+    min_dtype = torch.finfo(dtype).min
+    # The patched line.
+    # we need 0s where the tokens should be taken into account,
+    # and -inf otherwise (mask is already of boolean type)
+    # mask = torch.where(mask, torch.tensor(0.0, device=mask.device, dtype=dtype), min_dtype)
+    mask = (~mask).to(dtype) * min_dtype
+    return mask
