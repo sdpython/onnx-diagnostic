@@ -21,7 +21,8 @@ onnx-diagnostic: investigate onnx models
 The main feature is about `patches <https://github.com/sdpython/onnx-diagnostic/tree/main/onnx_diagnostic/torch_export_patches>`_:
 it helps exporting **pytorch models into ONNX**, mostly designed for LLMs using dynamic caches.
 Sources available at `github/onnx-diagnostic <https://github.com/sdpython/onnx-diagnostic/>`_.
-Patches can be enabled as follows:
+Patches can be enabled as follows with function
+:func:`onnx_diagnostic.torch_export_patches.torch_export_patches`:
 
 .. code-block:: python
 
@@ -31,7 +32,8 @@ Patches can be enabled as follows:
       ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
       # ...
 
-Dynamic shapes are difficult to guess for caches, one function
+Dynamic shapes are difficult to guess for caches, function
+:func:`onnx_diagnostic.export.shape_helper.all_dynamic_shape_from_inputs`
 returns a structure defining all dimensions as dynamic.
 You need then to remove those which are not dynamic in your model.
 
@@ -237,7 +239,7 @@ The function replaces dynamic dimensions defined as strings by
 Older versions
 ==============
 
-* `0.7.3 <../v0.7.3/index.html>`_
+* `0.7.4 <../v0.7.4/index.html>`_
 * `0.6.3 <../v0.6.3/index.html>`_
 * `0.5.0 <../v0.5.0/index.html>`_
 * `0.4.4 <../v0.4.4/index.html>`_

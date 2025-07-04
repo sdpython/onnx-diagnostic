@@ -75,11 +75,21 @@ def flatten_unflatten_like_dynamic_shapes(obj):
         value = flatten_unflatten_like_dynamic_shapes(value)
         subtrees.append(value)
         start = end
-    if spec.type is dict or spec.context:
+    if spec.type is dict:
+        # This a dictionary.
         return dict(zip(spec.context, subtrees))
     if spec.type is tuple:
         return tuple(subtrees)
-    return subtrees
+    if spec.type is list:
+        return list(subtrees)
+    if spec.context:
+        # This is a custom class with attributes.
+        # It is returned as a list.
+        return list(subtrees)
+    raise ValueError(
+        f"Unable to interpret spec type {spec.type} "
+        f"(type is {type(spec.type)}, context is {spec.context})."
+    )
 
 
 def _align(inputs, ds):

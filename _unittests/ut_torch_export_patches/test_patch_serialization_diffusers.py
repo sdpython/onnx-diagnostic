@@ -49,8 +49,8 @@ class TestPatchSerializationDiffusers(ExtTestCase):
             # flatten_unflatten
             flat, _spec = torch.utils._pytree.tree_flatten(bo)
             unflat = flatten_unflatten_for_dynamic_shapes(bo, use_dict=True)
-            self.assertIsInstance(unflat, dict)
-            self.assertEqual(list(unflat), ["sample"])
+            self.assertIsInstance(unflat, list)
+            self.assertEqual("#1[T1r3]", self.string_type(unflat))
 
         # export
         class Model(torch.nn.Module):
