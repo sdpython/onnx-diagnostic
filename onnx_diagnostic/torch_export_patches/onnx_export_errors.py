@@ -420,7 +420,11 @@ def torch_export_patches(
                 patch_transformers_list, verbose=verbose
             )
 
-            if masking_utils and hasattr(masking_utils, "_vmap_for_bhqkv"):
+            if (
+                masking_utils
+                and patch_transformers_list.patch_masking_utils
+                and hasattr(masking_utils, "_vmap_for_bhqkv")
+            ):
                 if verbose:
                     print(
                         "[torch_export_patches] patches "
@@ -429,7 +433,11 @@ def torch_export_patches(
                 f_transformers__vmap_for_bhqkv = masking_utils._vmap_for_bhqkv
                 masking_utils._vmap_for_bhqkv = patch_transformers_list.patched__vmap_for_bhqkv
 
-            if masking_utils and hasattr(masking_utils, "eager_mask"):
+            if (
+                masking_utils
+                and patch_transformers_list.patch_masking_utils
+                and hasattr(masking_utils, "eager_mask")
+            ):
                 if verbose:
                     print(
                         "[torch_export_patches] patches "
@@ -548,7 +556,11 @@ def torch_export_patches(
                     patch_transformers_list, revert_patches_info, verbose=verbose
                 )
 
-                if masking_utils and hasattr(masking_utils, "_vmap_for_bhqkv"):
+                if (
+                    masking_utils
+                    and patch_transformers_list.patch_masking_utils
+                    and hasattr(masking_utils, "_vmap_for_bhqkv")
+                ):
                     masking_utils._vmap_for_bhqkv = f_transformers__vmap_for_bhqkv
                     if verbose:
                         print(
@@ -556,7 +568,11 @@ def torch_export_patches(
                             "transformers.masking_utils._vmap_for_bhqkv"
                         )
 
-                if masking_utils and hasattr(masking_utils, "eager_mask"):
+                if (
+                    masking_utils
+                    and patch_transformers_list.patch_masking_utils
+                    and hasattr(masking_utils, "eager_mask")
+                ):
                     f_transformers_eager_mask = masking_utils.eager_mask
                     masking_utils.eager_mask = f_transformers_eager_mask
                     if (

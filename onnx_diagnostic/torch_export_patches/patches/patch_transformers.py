@@ -7,60 +7,107 @@ import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.cache_utils import StaticCache, Cache, DynamicCache
-from transformers.masking_utils import causal_mask_function, sdpa_mask
+
+try:
+    import transformers.masking_utils
+
+    patch_masking_utils = True
+except ImportError:
+    patch_masking_utils = False
+
 from ...ext_test_case import has_transformers
 from ...helpers.torch_helper import is_torchdynamo_exporting
 
 
-def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) -> Callable:
-    """manual patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""
-    from ...helpers import string_type
+if patch_masking_utils:
+    # Introduced in 4.52
+    from transformers.masking_utils import causal_mask_function, sdpa_mask
 
-    dimensions: List[Tuple[Optional[int], ...]] = [
-        (None, None, None, 0),
-        (None, None, 0, None),
-    ]
-    if bh_indices:
-        dimensions.extend([(None, 0, None, None), (0, None, None, None)])
-    # reshape
-    dimensions = [tuple(1 if d is None else -1 for d in shape) for shape in dimensions]
-    dimensions = tuple(reversed(dimensions))
-    indices = tuple(shape.index(-1) for shape in dimensions)
+    def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) -> Callable:
+        """manual patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""
+        from ...helpers import string_type
 
-    # unsqueeze
-    udimensions = [tuple(di for di, d in enumerate(shape) if d == 1) for shape in dimensions]
+        dimensions: List[Tuple[Optional[int], ...]] = [
+            (None, None, None, 0),
+            (None, None, 0, None),
+        ]
+        if bh_indices:
+            dimensions.extend([(None, 0, None, None), (0, None, None, None)])
+        # reshape
+        dimensions = [tuple(1 if d is None else -1 for d in shape) for shape in dimensions]
+        dimensions = tuple(reversed(dimensions))
+        indices = tuple(shape.index(-1) for shape in dimensions)
 
-    def vector_mask_function(
-        *args, mask_function=mask_function, dimensions=dimensions, indices=indices
-    ):
-        assert len(args) == len(dimensions) == len(udimensions), (
-            f"Mismatch between args={string_type(args)} and dimensions={dimensions} "
-            f"and udimensions={udimensions}."
+        # unsqueeze
+        udimensions = [
+            tuple(di for di, d in enumerate(shape) if d == 1) for shape in dimensions
+        ]
+
+        def vector_mask_function(
+            *args, mask_function=mask_function, dimensions=dimensions, indices=indices
+        ):
+            assert len(args) == len(dimensions) == len(udimensions), (
+                f"Mismatch between args={string_type(args)} and dimensions={dimensions} "
+                f"and udimensions={udimensions}."
+            )
+            assert len(indices) == len(args), (
+                f"Mismatch between args={string_type(args)} and indices={indices}, "
+                f"they should have the same length."
+            )
+            for a in args:
+                assert (
+                    a.ndim == 1
+                ), f"Expected a tensor with 1 dimension not {string_type(a, with_shape=True)}"
+                torch._check(a.shape[0] > 0)
+
+            new_args = [a.reshape(shape) for a, shape in zip(args, dimensions)]
+            # new_args = [
+            #    a.unsqueeze(dims[0]).unsqueeze(dims[1]).unsqueeze(dims[2])
+            #    for a, dims in zip(args, udimensions)
+            # ]
+            max_shape = tuple(args[i].shape[0] for i in indices)
+            # if is_torchdynamo_exporting():
+            #     for a in args:
+            #         # The exporter should export with a dimension > 1
+            #         # to make sure it is dynamic.
+            #         torch._check(a.shape[0] > 1)
+            expanded_args = [a.expand(max_shape) for a in new_args]
+            return mask_function(*expanded_args)
+
+        return vector_mask_function
+
+    def patched_eager_mask(
+        batch_size: int,
+        cache_position: torch.Tensor,
+        kv_length: int,
+        kv_offset: int = 0,
+        mask_function: Callable = causal_mask_function,
+        attention_mask: Optional[torch.Tensor] = None,
+        dtype: torch.dtype = torch.float32,
+        **kwargs,
+    ) -> torch.Tensor:
+        """manual patch for function ``transformers.masking_utils.eager_mask``."""
+        # The masks for eager attention are simply boolean mask from sdpa, casted to 0 and -inf
+        _ = kwargs.pop("allow_is_causal_skip", None)
+        mask = sdpa_mask(
+            batch_size=batch_size,
+            cache_position=cache_position,
+            kv_length=kv_length,
+            kv_offset=kv_offset,
+            mask_function=mask_function,
+            attention_mask=attention_mask,
+            allow_is_causal_skip=False,
+            allow_torch_fix=False,
+            **kwargs,
         )
-        assert len(indices) == len(args), (
-            f"Mismatch between args={string_type(args)} and indices={indices}, "
-            f"they should have the same length."
-        )
-        for a in args:
-            assert (
-                a.ndim == 1
-            ), f"Expected a tensor with 1 dimension not {string_type(a, with_shape=True)}"
-            torch._check(a.shape[0] > 0)
-
-        new_args = [a.reshape(shape) for a, shape in zip(args, dimensions)]
-        # new_args = [
-        #    a.unsqueeze(dims[0]).unsqueeze(dims[1]).unsqueeze(dims[2])
-        #    for a, dims in zip(args, udimensions)
-        # ]
-        max_shape = tuple(args[i].shape[0] for i in indices)
-        # if is_torchdynamo_exporting():
-        #     for a in args:
-        #         # The exporter should export with a dimension > 1 to make sure it is dynamic.
-        #         torch._check(a.shape[0] > 1)
-        expanded_args = [a.expand(max_shape) for a in new_args]
-        return mask_function(*expanded_args)
-
-    return vector_mask_function
+        min_dtype = torch.finfo(dtype).min
+        # The patched line.
+        # we need 0s where the tokens should be taken into account,
+        # and -inf otherwise (mask is already of boolean type)
+        # mask =
+        #   torch.where(mask, torch.tensor(0.0, device=mask.device, dtype=dtype), min_dtype)
+        mask = (~mask).to(dtype) * min_dtype
+        return mask
 
 
 def _patch_make_causal_mask(
@@ -1047,36 +1094,3 @@ class patched_IdeficsAttention(torch.nn.Module):
             attn_weights = None
 
         return attn_output, attn_weights, past_key_value
-
-
-def patched_eager_mask(
-    batch_size: int,
-    cache_position: torch.Tensor,
-    kv_length: int,
-    kv_offset: int = 0,
-    mask_function: Callable = causal_mask_function,
-    attention_mask: Optional[torch.Tensor] = None,
-    dtype: torch.dtype = torch.float32,
-    **kwargs,
-) -> torch.Tensor:
-    """manual patch for function ``transformers.masking_utils.eager_mask``."""
-    # The masks for eager attention are simply boolean mask from sdpa, casted to 0 and -inf
-    _ = kwargs.pop("allow_is_causal_skip", None)
-    mask = sdpa_mask(
-        batch_size=batch_size,
-        cache_position=cache_position,
-        kv_length=kv_length,
-        kv_offset=kv_offset,
-        mask_function=mask_function,
-        attention_mask=attention_mask,
-        allow_is_causal_skip=False,
-        allow_torch_fix=False,
-        **kwargs,
-    )
-    min_dtype = torch.finfo(dtype).min
-    # The patched line.
-    # we need 0s where the tokens should be taken into account,
-    # and -inf otherwise (mask is already of boolean type)
-    # mask = torch.where(mask, torch.tensor(0.0, device=mask.device, dtype=dtype), min_dtype)
-    mask = (~mask).to(dtype) * min_dtype
-    return mask
