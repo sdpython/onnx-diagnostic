@@ -52,12 +52,16 @@ def get_inputs(
     )
     res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
+        assert (
+            add_second_input > 0
+        ), f"Not implemented for add_second_input={add_second_input}."
         res["inputs2"] = get_inputs(
             model=model,
             config=config,
             batch_size=batch_size + 1,
             sequence_length=sequence_length + add_second_input,
             dummy_max_token_id=dummy_max_token_id,
+            add_second_input=0,
             **kwargs,
         )["inputs"]
     return res

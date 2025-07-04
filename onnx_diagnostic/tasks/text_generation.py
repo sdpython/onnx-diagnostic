@@ -260,13 +260,15 @@ def get_inputs(
             config=config,
             dummy_max_token_id=dummy_max_token_id,
             num_hidden_layers=num_hidden_layers,
-            batch_size=batch_size + 1,
-            sequence_length=sequence_length + add_second_input,
-            sequence_length2=sequence_length2 + add_second_input,
+            batch_size=(batch_size + 1) if add_second_input > 0 else 1,
+            sequence_length=sequence_length + 1,
+            sequence_length2=sequence_length2
+            + (add_second_input if add_second_input > 0 else -add_second_input),
             dynamic_rope=dynamic_rope,
             num_key_value_heads=num_key_value_heads,
             head_dim=head_dim,
             cls_cache=cls_cache,
+            add_second_input=0,
             **kwargs,
         )["inputs"]
     return res

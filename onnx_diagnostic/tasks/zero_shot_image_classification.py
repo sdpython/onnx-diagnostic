@@ -87,6 +87,9 @@ def get_inputs(
     )
     res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
+        assert (
+            add_second_input > 0
+        ), f"Not implemented for add_second_input={add_second_input}."
         res["inputs2"] = get_inputs(
             model=model,
             config=config,
@@ -97,6 +100,7 @@ def get_inputs(
             input_height=input_height,
             input_channels=input_channels,
             batch_size_image=batch_size_image + 1,
+            add_second_input=0,
             **kwargs,
         )["inputs"]
     return res
