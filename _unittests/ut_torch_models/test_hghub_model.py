@@ -17,7 +17,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
     @hide_stdout()
     def test_get_untrained_model_with_inputs_tiny_llm(self):
         mid = "arnir0/Tiny-LLM"
-        data = get_untrained_model_with_inputs(mid, verbose=1)
+        data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=0)
         self.assertEqual(
             set(data),
             {
