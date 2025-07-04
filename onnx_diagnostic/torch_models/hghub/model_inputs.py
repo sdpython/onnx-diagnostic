@@ -26,7 +26,7 @@ def get_untrained_model_with_inputs(
     use_pretrained: bool = False,
     same_as_pretrained: bool = False,
     use_preinstalled: bool = True,
-    add_second_input: bool = False,
+    add_second_input: int = 1,
     subfolder: Optional[str] = None,
     use_only_preinstalled: bool = False,
 ) -> Dict[str, Any]:

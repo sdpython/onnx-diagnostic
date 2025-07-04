@@ -34,7 +34,7 @@ def get_inputs(
     input_channels: int,
     batch_size: int = 2,
     dynamic_rope: bool = False,
-    add_second_input: bool = False,
+    add_second_input: int = 1,
     **kwargs,  # unused
 ):
     """
@@ -75,14 +75,18 @@ def get_inputs(
         shapes["interpolate_pos_encoding"] = None  # type: ignore[assignment]
     res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
+        assert (
+            add_second_input > 0
+        ), f"Not implemented for add_second_input={add_second_input}."
         res["inputs2"] = get_inputs(
             model=model,
             config=config,
-            input_width=input_width + 1,
-            input_height=input_height + 1,
+            input_width=input_width + add_second_input,
+            input_height=input_height + add_second_input,
             input_channels=input_channels,
             batch_size=batch_size + 1,
             dynamic_rope=dynamic_rope,
+            add_second_input=0,
             **kwargs,
         )["inputs"]
     return res

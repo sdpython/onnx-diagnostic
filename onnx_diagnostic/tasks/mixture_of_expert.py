@@ -41,7 +41,7 @@ def get_inputs(
     sequence_length2: int = 3,
     n_images: int = 2,
     dynamic_rope: bool = False,
-    add_second_input: bool = False,
+    add_second_input: int = 1,
     **kwargs,  # unused
 ):
     """

@@ -25,7 +25,7 @@ def get_inputs(
     in_channels: int,
     sample_size: int,
     cross_attention_dim: int,
-    add_second_input: bool = False,
+    add_second_input: int = 1,
     **kwargs,  # unused
 ):
     """
@@ -58,15 +58,19 @@ def get_inputs(
     )
     res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
+        assert (
+            add_second_input > 0
+        ), f"Not implemented for add_second_input={add_second_input}."
         res["inputs2"] = get_inputs(
             model=model,
             config=config,
             batch_size=batch_size + 1,
             sequence_length=sequence_length,
-            cache_length=cache_length + 1,
+            cache_length=cache_length + add_second_input,
             in_channels=in_channels,
             sample_size=sample_size,
             cross_attention_dim=cross_attention_dim,
+            add_second_input=0,
             **kwargs,
         )["inputs"]
     return res
