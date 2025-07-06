@@ -780,7 +780,7 @@ class CubeLogs:
         self.fill_missing = fill_missing
         self.keep_last_date = keep_last_date
 
-    def clone(self, data: Optional[pandas.DataFrame]) -> "CubeLogs":
+    def clone(self, data: Optional[pandas.DataFrame] = None) -> "CubeLogs":
         """
         Makes a copy of the dataframe.
         It copies the processed data not the original one.
@@ -1041,6 +1041,18 @@ class CubeLogs:
         "usual"
         return str(self.data) if hasattr(self, "data") else str(self._data)
 
+    def make_view_def(self, name: str) -> Optional[CubeViewDef]:
+        """
+        Returns a view definition.
+
+        :param name: name of a value
+        :return: a CubeViewDef or None if name does not make sense
+        """
+        assert name in self.values, f"{name!r} is not one of the values {self.values}"
+        keys = sorted(self.keys_no_time)
+        index = len(keys) // 2 + (len(keys) % 2)
+        return CubeViewDef(key_index=keys[:index], values=[name], name=name)
+
     def view(
         self,
         view_def: Union[str, CubeViewDef],
@@ -1058,6 +1070,10 @@ class CubeLogs:
         :param verbose: verbosity level
         :return: dataframe
         """
+        if isinstance(view_def, str):
+            # We automatically create a view for a metric
+            view_def = self.make_view_def(view_def)
+
         assert isinstance(
             view_def, CubeViewDef
         ), f"view_def should be a CubeViewDef, got {type(view_def)}: {view_def!r} instead"
@@ -1386,9 +1402,10 @@ class CubeLogs:
         raw: Optional[str] = "raw",
         verbose: int = 0,
         csv: Optional[Sequence[str]] = None,
+        time_mask: bool = True,
     ):
         """
-        Creates an excel file with a list of view.
+        Creates an excel file with a list of views.
 
         :param output: output file to create
         :param views: sequence or dictionary of views to append
@@ -1396,9 +1413,13 @@ class CubeLogs:
         :param raw: add a page with the raw data
         :param csv: views to dump as csv files (same name as outputs + view naw)
         :param verbose: verbosity
+        :param time_mask: color the background of the cells if one
+            of the value for the last date is unexpected,
+            assuming they should remain stale
         """
         if verbose:
             print(f"[CubeLogs.to_excel] create Excel file {output}, shape={self.shape}")
+        cube_time = self.cube_time(fill_other_dates=True) if time_mask else None
         views = {k: k for k in views} if not isinstance(views, dict) else views
         f_highlights = {}
         plots = []
@@ -1410,10 +1431,18 @@ class CubeLogs:
                     print(f"[CubeLogs.to_excel] add sheet {main!r} with shape {df.shape}")
                 df.to_excel(writer, sheet_name=main, freeze_panes=(1, 1))
 
+            time_mask_view = {}
             for name, view in views.items():
                 if view is None:
                     continue
                 df, tview = self.view(view, return_view_def=True, verbose=max(verbose - 1, 0))
+                if cube_time is not None:
+                    time_mask_view[name] = cube_time.view(view)
+                    if verbose:
+                        print(
+                            f"[CubeLogs.to_excel] compute mask for view {name!r} with shape "
+                            f"{time_mask_view[name].shape}"
+                        )
                 if tview is None:
                     continue
                 memory = df.memory_usage(deep=True).sum()
@@ -1528,15 +1557,29 @@ class CubeLogs:
             if verbose:
                 print(f"[CubeLogs.to_excel] done with {len(views)} views")
 
-    def cube_time(self):
+    def cube_time(self, fill_other_dates: bool = False) -> "CubeLogs":
         """
         Aggregates the data over time to detect changes on the last value.
+        If *fill_other_dates* is True, all dates are kept, but values
+        are filled with 0.
         """
         unique_time = self.data[self.time].unique()
         assert len(unique_time) > 2, f"Not enough dates to proceed: unique_time={unique_time}"
         gr = self.data[[*self.keys_no_time, *self.values]].groupby(self.keys_no_time)
         dgr = gr.agg(lambda series: int(breaking_last_point(series)[0]))
-        dgr[self.time] = unique_time.max()
+        tm = unique_time.max()
+        dgr[self.time] = tm
+        if fill_other_dates:
+            other_df = []
+            other_dates = [t for t in unique_time if t != tm]
+            for t in other_dates:
+                df = dgr.copy()
+                df[self.time] = t
+                for c in df.columns:
+                    if c != self.time:
+                        df[c] = 0
+                other_df.append(df)
+            dgr = pandas.concat([dgr, *other_df], axis=0)
         return self.clone(data=dgr.reset_index(drop=False))
 
 
@@ -1624,6 +1667,20 @@ class CubeLogsPerformance(CubeLogs):
             fill_missing=fill_missing,
             keep_last_date=keep_last_date,
         )
+
+    def clone(self, data: Optional[pandas.DataFrame] = None) -> "CubeLogs":
+        """
+        Makes a copy of the dataframe.
+        It copies the processed data not the original one.
+        """
+        cube = self.__class__(
+            data if data is not None else self.data.copy(),
+            time=self.time,
+            keys=self.keys_no_time,
+            values=self.values,
+        )
+        cube.load()
+        return cube
 
     def _process_formula(
         self, formula: Union[str, Callable[[pandas.DataFrame], pandas.Series]]
