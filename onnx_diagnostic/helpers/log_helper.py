@@ -226,9 +226,46 @@ class CubeViewDef:
     :param name: name of the view, used mostly to debug
     :param plots: adds plot to the Excel sheet
     :param no_index: remove the index (but keeps the columns)
+
+    Some examples of views. First example is an aggregated view
+    for many metrics.
+
+    .. code-block:: python
+
+        cube = CubeLogs(...)
+
+        CubeViewDef(
+            key_index=cube._filter_column(fs, cube.keys_time),
+            values=cube._filter_column(
+                ["TIME_ITER", "speedup", "time_latency.*", "onnx_n_nodes"],
+                cube.values,
+            ),
+            ignore_unique=True,
+            key_agg=["model_name", "task", "model_task", "suite"],
+            agg_args=lambda column_name: "sum" if column_name.startswith("n_") else "mean",
+            agg_multi={"speedup_weighted": mean_weight, "speedup_geo": mean_geo},
+            name="agg-all",
+            plots=True,
+        )
+
+    Next one focuses on a couple of metrics.
+
+    .. code-block:: python
+
+        cube = CubeLogs(...)
+
+        CubeViewDef(
+            key_index=cube._filter_column(fs, cube.keys_time),
+            values=cube._filter_column(["speedup"], cube.values),
+            ignore_unique=True,
+            keep_columns_in_index=["suite"],
+            name="speedup",
+        )
     """
 
     class HighLightKind(enum.IntEnum):
+        "Codes to highlight values."
+
         NONE = 0
         RED = 1
         GREEN = 2
@@ -397,6 +434,26 @@ class CubePlot:
     :param split: draw a graph per line in the dataframe
     :param timeseries: this assumes the time is one level of the columns,
         this argument indices the level name
+
+    It defines a graph. Usually *bar* or *barh* is used to
+    compare experiments for every metric, a subplot by metric.
+
+    .. code-block:: python
+
+        CubePlot(df, kind="barh", orientation="row", split=True)
+
+    *line* is usually used to plot timeseries showing the
+    evolution of metrics over time.
+
+    .. code-block:: python
+
+        CubePlot(
+            df,
+            kind="line",
+            orientation="row",
+            split=True,
+            timeseries="time",
+        )
     """
 
     KINDS = {"bar", "barh", "line"}
@@ -607,6 +664,35 @@ class CubePlot:
 class CubeLogs:
     """
     Processes logs coming from experiments.
+    A cube is basically a database with certain columns
+    playing specific roles.
+
+    * time: only one column, it is not mandatory but it is recommended
+      to have one
+    * keys: they are somehow coordinates, they cannot be aggregated,
+      they are not numbers, more like categories, `(time, *keys)`
+      identifies an element of the database in an unique way,
+      there cannot be more than one row sharing the same key and time
+      values
+    * values: they are not necessary numerical, but if they are,
+      they can be aggregated
+
+    Every other columns is ignored. More columns can be added
+    by using formulas.
+
+    :param data: the raw data
+    :param time: the time column
+    :param keys: the keys, can include regular expressions
+    :param values: the values, can include regular expressions
+    :param ignored: ignores some column, acts as negative regular
+        expressions for the other two
+    :param recent: if more than one rows share the same keys,
+        the cube only keeps the most recent one
+    :param formulas: columns to add, defined with formulas
+    :param fill_missing: a dictionary, defines values replacing missing one
+        for some columns
+    :param keep_last_date: overwrites all the times with the most recent
+        one, it makes things easier for timeseries
     """
 
     def __init__(
