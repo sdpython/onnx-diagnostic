@@ -21,6 +21,64 @@ BUCKET_SCALES_VALUES = np.array(
 BUCKET_SCALES = BUCKET_SCALES_VALUES / 100 + 1
 
 
+def mann_kendall(series: Sequence[float], threshold: float = 0.5):
+    """
+    Computes the test of Mann-Kendall.
+
+    :param series: series
+    :param threshold: 1.96 is the usual value, 0.5 means a short timeseries
+        ``(0, 1, 2, 3, 4)`` has a significant trend
+    :return: trend (-1, 0, +1), test value
+
+    .. math::
+
+        S =\\sum_{i=1}^{n}\\sum_{j=i+1}^{n} sign(x_j - x_i)
+
+    where the function *sign* is:
+
+    .. math::
+
+        sign(x) = \\left\\{ \\begin{array}{l} -1 if x < 0 \\\\ 0 if x = 0 \\\\ +1 otherwise
+        \\right.
+
+    And:
+
+    .. math::
+
+        Var(S)= \\frac{n(n-1)(2n+5)} - \\sum_t t(t-1)(2t+5)}{18}
+    """
+    series = np.asarray(series)
+    stat = 0
+    n = len(series)
+    var = n * (n - 1) * (2 * n + 5)
+    for i in range(n - 1):
+        stat += np.sign(series[i + 1 :] - series[i]).sum()
+    var = var**0.5
+    test = (stat + (1 if stat < 0 else (0 if stat == 0 else -1))) / var
+    trend = np.sign(test) if np.abs(test) > threshold else 0
+    return trend, test
+
+
+def breaking_last_point(signal: Sequence[float], threshold: float = 1.1):
+    """
+    Assuming a timeseries is constant, we check the last value
+    is not an outlier.
+
+    :param signal: series
+    :return: significant change (-1, 0, +1), test value
+    """
+    signal = np.asarray(signal)
+    m = np.mean(signal[:-1])
+    v = np.std(signal[:-1])
+    if v == 0:
+        test = signal[-1] - m
+        trend = np.sign(test)
+        return trend, trend
+    test = (signal[-1] - m) / v
+    trend = np.sign(test) if np.abs(test) > threshold else 0
+    return trend, test
+
+
 def filter_data(
     df: pandas.DataFrame,
     filter_in: Optional[str] = None,

@@ -14,6 +14,8 @@ from onnx_diagnostic.helpers.log_helper import (
     enumerate_csv_files,
     open_dataframe,
     filter_data,
+    mann_kendall,
+    breaking_last_point,
 )
 
 
@@ -401,6 +403,24 @@ class TestLogHelper(ExtTestCase):
         self.assertEqualDataFrame(df[df.model_exporter == "onnx-dynamo"], df2)
         df2 = filter_data(df, "", "model_exporter:onnx-dynamo;T", verbose=1)
         self.assertEqualDataFrame(df[df.model_exporter != "onnx-dynamo"], df2)
+
+    def test_mann_kendall(self):
+        test = mann_kendall(list(range(5)))
+        self.assertEqual((np.float64(1.0), np.float64(0.5196152422706631)), test)
+        test = mann_kendall(list(range(3)))
+        self.assertEqual((0, np.float64(0.24618298195866545)), test)
+        test = mann_kendall(list(range(5, 0, -1)))
+        self.assertEqual((np.float64(-1.0), np.float64(-0.5196152422706631)), test)
+
+    def test_breaking_last_point(self):
+        test = breaking_last_point([1, 1, 1, 2])
+        self.assertEqual((1, np.float64(1.0)), test)
+        test = breaking_last_point([1, 1, 1.1, 2])
+        self.assertEqual((np.float64(1.0), np.float64(20.50609665440986)), test)
+        test = breaking_last_point([-1, -1, -1.1, -2])
+        self.assertEqual((np.float64(-1.0), np.float64(-20.50609665440986)), test)
+        test = breaking_last_point([1, 1, 1.1, 1])
+        self.assertEqual((np.float64(0.0), np.float64(-0.7071067811865491)), test)
 
 
 if __name__ == "__main__":
