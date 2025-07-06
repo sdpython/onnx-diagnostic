@@ -422,6 +422,23 @@ class TestLogHelper(ExtTestCase):
         test = breaking_last_point([1, 1, 1.1, 1])
         self.assertEqual((np.float64(0.0), np.float64(-0.7071067811865491)), test)
 
+    def test_historical_cube_time(self):
+        # case 1
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/01", time_p=0.51, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.62, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/03", time_p=0.62, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/01", time_p=0.51, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.62, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/03", time_p=0.50, exporter="E2", m_name="A", m_cls="CA"),
+            ]
+        )
+        cube = CubeLogs(df, keys=["^m_*", "exporter"], time="date").load()
+        cube_time = cube.cube_time()
+        v = cube_time.data["time_p"].tolist()
+        self.assertEqual([0, -1], v)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

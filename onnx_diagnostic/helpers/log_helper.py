@@ -780,6 +780,20 @@ class CubeLogs:
         self.fill_missing = fill_missing
         self.keep_last_date = keep_last_date
 
+    def clone(self, data: Optional[pandas.DataFrame]) -> "CubeLogs":
+        """
+        Makes a copy of the dataframe.
+        It copies the processed data not the original one.
+        """
+        cube = self.__class__(
+            data if data is not None else self.data.copy(),
+            time=self.time,
+            keys=self.keys_no_time,
+            values=self.values,
+        )
+        cube.load()
+        return cube
+
     def post_load_process_piece(
         self, df: pandas.DataFrame, unique: bool = False
     ) -> pandas.DataFrame:
@@ -1513,6 +1527,17 @@ class CubeLogs:
             apply_excel_style(writer, f_highlights)  # type: ignore[arg-type]
             if verbose:
                 print(f"[CubeLogs.to_excel] done with {len(views)} views")
+
+    def cube_time(self):
+        """
+        Aggregates the data over time to detect changes on the last value.
+        """
+        unique_time = self.data[self.time].unique()
+        assert len(unique_time) > 2, f"Not enough dates to proceed: unique_time={unique_time}"
+        gr = self.data[[*self.keys_no_time, *self.values]].groupby(self.keys_no_time)
+        dgr = gr.agg(lambda series: int(breaking_last_point(series)[0]))
+        dgr[self.time] = unique_time.max()
+        return self.clone(data=dgr.reset_index(drop=False))
 
 
 class CubeLogsPerformance(CubeLogs):
