@@ -47,12 +47,12 @@ def mann_kendall(series: Sequence[float], threshold: float = 0.5):
 
         Var(S)= \\frac{n(n-1)(2n+5)} - \\sum_t t(t-1)(2t+5)}{18}
     """
-    series = np.asarray(series)
+    aseries = np.asarray(series)
     stat = 0
-    n = len(series)
+    n = len(aseries)
     var = n * (n - 1) * (2 * n + 5)
     for i in range(n - 1):
-        stat += np.sign(series[i + 1 :] - series[i]).sum()
+        stat += np.sign(aseries[i + 1 :] - aseries[i]).sum()
     var = var**0.5
     test = (stat + (1 if stat < 0 else (0 if stat == 0 else -1))) / var
     trend = np.sign(test) if np.abs(test) > threshold else 0
