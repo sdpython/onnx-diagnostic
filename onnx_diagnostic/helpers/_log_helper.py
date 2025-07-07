@@ -316,7 +316,7 @@ def align_dataframe_with(
 
 def apply_excel_style(
     filename_or_writer: Any,
-    f_highlights: Optional[
+    f_highlights: Optional[  # type: ignore[name-defined]
         Dict[str, Callable[[Any], "CubeViewDef.HighLightKind"]]  # noqa: F821
     ] = None,
     time_mask_view: Optional[Dict[str, pandas.DataFrame]] = None,
