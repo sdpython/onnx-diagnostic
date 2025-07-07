@@ -68,13 +68,36 @@ def breaking_last_point(signal: Sequence[float], threshold: float = 1.2):
     :return: significant change (-1, 0, +1), test value
     """
     signal = np.asarray(signal)
-    m = np.mean(signal[:-1])
+    if not np.issubdtype(signal.dtype, np.number):
+        return 0, np.nan
+    assert len(signal.shape) == 1, f"Unexpected signal shape={signal.shape}, signal={signal}"
+    if signal.shape[0] <= 2:
+        return 0, 0
+
+    has_value = ~(np.isnan(signal).all()) and ~(np.isinf(signal).all())
+    if np.isnan(signal[-1]) or np.isinf(signal[-1]):
+        return (-1, np.inf) if has_value else (0, 0)
+
+    try:
+        m = np.mean(signal[:-1])
+    except (TypeError, ValueError):
+        # Not a numerical type
+        return 0, np.nan
+
+    if np.isnan(m) or np.isinf(m):
+        return (1, np.inf) if np.isinf(signal[-2]) or np.isnan(signal[-2]) else (0, 0)
     v = np.std(signal[:-1])
     if v == 0:
         test = signal[-1] - m
+        assert not np.isnan(
+            test
+        ), f"Unexpected test value, test={test}, signal={signal}, m={m}, v={v}"
         trend = np.sign(test)
         return trend, trend
     test = (signal[-1] - m) / v
+    assert not np.isnan(
+        test
+    ), f"Unexpected test value, test={test}, signal={signal}, m={m}, v={v}"
     trend = np.sign(test) if np.abs(test) > threshold else 0
     return trend, test
 
@@ -261,6 +284,42 @@ def open_dataframe(
     raise ValueError(f"Unexpected value for data: {data!r}")
 
 
+def align_dataframe_with(
+    df: pandas.DataFrame, baseline: pandas.DataFrame, fill_value: float = 0
+) -> Optional[pandas.DataFrame]:
+    """
+    Modifies the first dataframe *df* to get the exact same number of columns and rows.
+    They must share the same levels on both axes. Empty cells are filled with 0.
+    We only keep the numerical columns. The function return None if the output is empty.
+    """
+    df = df.select_dtypes(include="number")
+    if df.shape[1] == 0:
+        return None
+    bool_cols = list(df.select_dtypes(include="bool").columns)
+    if bool_cols:
+        df[bool_cols] = df[bool_cols].astype(int)
+    assert (
+        df.columns.names == baseline.columns.names or df.index.names == baseline.index.names
+    ), (
+        f"Levels mismatch, expected index.names={baseline.index.names}, "
+        f"expected columns.names={baseline.columns.names}, "
+        f"got index.names={df.index.names}, "
+        f"got columns.names={df.columns.names}"
+    )
+    dtypes = set(df[c].dtype for c in df.columns)
+    assert all(np.issubdtype(dt, np.number) for dt in dtypes), (
+        f"All columns in the first dataframe are expected to share "
+        f"the same type or be at least numerical but got {dtypes}\n{df}"
+    )
+    common_index = df.index.intersection(baseline.index)
+    cp = pandas.DataFrame(float(fill_value), index=baseline.index, columns=baseline.columns)
+    for c in df.columns:
+        if c not in cp.columns or not np.issubdtype(df[c].dtype, np.number):
+            continue
+        cp.loc[common_index, c] = df.loc[common_index, c].astype(cp[c].dtype)
+    return cp
+
+
 class CubeViewDef:
     """
     Defines how to compute a view.
@@ -397,8 +456,8 @@ def apply_excel_style(
         workbook = filename_or_writer.book
         save = False
 
-    mask_low = PatternFill(fgColor="8888DD", fill_type="solid")
-    mask_high = PatternFill(fgColor="DD8888", fill_type="solid")
+    mask_low = PatternFill(fgColor="AAAAF0", fill_type="solid")
+    mask_high = PatternFill(fgColor="F0AAAA", fill_type="solid")
 
     left = Alignment(horizontal="left")
     left_shrink = Alignment(horizontal="left", shrink_to_fit=True)
@@ -927,12 +986,17 @@ class CubeLogs:
         shape = self.data.shape
         if verbose:
             print(f"[CubeLogs.load] removed columns, shape={self.data.shape}")
+        assert self.data.shape[0] > 0 or self._data.shape[0] == 0, (
+            f"The preprocessing reduced shape {shape} to {self.data.shape}, "
+            f"initial shape={self._data.shape}."
+        )
         self._preprocess()
         if verbose:
             print(f"[CubeLogs.load] preprocess, shape={self.data.shape}")
-        assert (
-            self.data.shape[0] > 0
-        ), f"The preprocessing reduced shape {shape} to {self.data.shape}."
+        assert self.data.shape[0] > 0 or self._data.shape[0] == 0, (
+            f"The preprocessing reduced shape {shape} to {self.data.shape}, "
+            f"initial shape={self._data.shape}."
+        )
         if self.recent and verbose:
             print(f"[CubeLogs.load] keep most recent data.shape={self.data.shape}")
 
@@ -1462,29 +1526,19 @@ class CubeLogs:
                     continue
                 df, tview = self.view(view, return_view_def=True, verbose=max(verbose - 1, 0))
                 if cube_time is not None:
-                    time_mask_view[name] = cube_time.view(view)
-                    print("----")
-                    print(df)
-                    print("-")
-                    print(time_mask_view[name])
-                    assert time_mask_view[name].shape == df.shape, (
-                        f"Shape mismatch between the view {df.shape} and the mask "
-                        f"{time_mask_view[name].shape}"
-                    )
-                    assert (
-                        time_mask_view[name].columns.names == df.columns.names
-                        or time_mask_view[name].index.names == df.index.names
-                    ), (
-                        f"Levels mismatch, index.names={df.index.names}, "
-                        f"columns.names={df.columns.names}, "
-                        f"mask.index.names={time_mask_view[name].index.names}, "
-                        f"mask.columns.names={time_mask_view[name].columns.names}"
-                    )
-                    if verbose:
-                        print(
-                            f"[CubeLogs.to_excel] compute mask for view {name!r} with shape "
+                    cube_mask = cube_time.view(view)
+                    aligned = align_dataframe_with(cube_mask, df)
+                    if aligned is not None:
+                        assert aligned.shape == df.shape, (
+                            f"Shape mismatch between the view {df.shape} and the mask "
                             f"{time_mask_view[name].shape}"
                         )
+                        time_mask_view[name] = aligned
+                        if verbose:
+                            print(
+                                f"[CubeLogs.to_excel] compute mask for view {name!r} "
+                                f"with shape {aligned.shape}"
+                            )
                 if tview is None:
                     continue
                 memory = df.memory_usage(deep=True).sum()
@@ -1609,11 +1663,17 @@ class CubeLogs:
         """
         unique_time = self.data[self.time].unique()
         assert len(unique_time) > 2, f"Not enough dates to proceed: unique_time={unique_time}"
-        gr = self.data[[*self.keys_no_time, *self.values]].groupby(self.keys_no_time)
+        gr = self.data[[*self.keys_no_time, *self.values]].groupby(
+            self.keys_no_time, dropna=False
+        )
         dgr = gr.agg(
             lambda series, th=threshold: int(breaking_last_point(series, threshold=th)[0])
         )
         tm = unique_time.max()
+        assert dgr.shape[0] > 0, (
+            f"Unexpected output shape={dgr.shape}, unique_time={unique_time}, "
+            f"data.shape={self.data.shape}"
+        )
         dgr[self.time] = tm
         if fill_other_dates:
             other_df = []
@@ -1626,6 +1686,11 @@ class CubeLogs:
                         df[c] = 0
                 other_df.append(df)
             dgr = pandas.concat([dgr, *other_df], axis=0)
+            assert dgr.shape[0] > 0, (
+                f"Unexpected output shape={dgr.shape}, unique_time={unique_time}, "
+                f"data.shape={self.data.shape}, "
+                f"other_df shapes={[df.shape for df in other_df]}"
+            )
         return self.clone(data=dgr.reset_index(drop=False))
 
 
@@ -1724,6 +1789,7 @@ class CubeLogsPerformance(CubeLogs):
             time=self.time,
             keys=self.keys_no_time,
             values=self.values,
+            recent=False,
         )
         cube.load()
         return cube

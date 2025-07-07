@@ -819,6 +819,7 @@ def _cmd_agg(argv: List[Any]):
         verbose=args.verbose,
         csv=args.csv.split(","),
         raw=args.raw,
+        time_mask=True,
     )
     if args.verbose:
         print(f"Wrote {args.output!r}")
