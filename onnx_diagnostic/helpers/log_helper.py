@@ -59,7 +59,7 @@ def mann_kendall(series: Sequence[float], threshold: float = 0.5):
     return trend, test
 
 
-def breaking_last_point(signal: Sequence[float], threshold: float = 1.1):
+def breaking_last_point(signal: Sequence[float], threshold: float = 1.2):
     """
     Assuming a timeseries is constant, we check the last value
     is not an outlier.
@@ -374,17 +374,21 @@ class CubeViewDef:
 def apply_excel_style(
     filename_or_writer: Any,
     f_highlights: Optional[Dict[str, Callable[[Any], CubeViewDef.HighLightKind]]] = None,
+    time_mask_view: Optional[Dict[str, pandas.DataFrame]] = None,
 ):
     """
     Applies styles on all sheets in a file unless the sheet is too big.
 
     :param filename_or_writer: filename, modified inplace
     :param f_highlight: color function to apply, one per sheet
+    :param time_mask_view: if specified, it contains dataframe with the same shape
+        and values in {-1, 0, +1} which indicates if a value is unexpectedly lower (-1)
+        or higher (+1), it changes the color of the background then.
     """
     from openpyxl import load_workbook
     from openpyxl.styles import Alignment
     from openpyxl.utils import get_column_letter
-    from openpyxl.styles import Font  # , PatternFill, numbers
+    from openpyxl.styles import Font, PatternFill
 
     if isinstance(filename_or_writer, str):
         workbook = load_workbook(filename_or_writer)
@@ -392,6 +396,9 @@ def apply_excel_style(
     else:
         workbook = filename_or_writer.book
         save = False
+
+    mask_low = PatternFill(fgColor="8888DD", fill_type="solid")
+    mask_high = PatternFill(fgColor="DD8888", fill_type="solid")
 
     left = Alignment(horizontal="left")
     left_shrink = Alignment(horizontal="left", shrink_to_fit=True)
@@ -402,6 +409,14 @@ def apply_excel_style(
     }
 
     for name in workbook.sheetnames:
+        if time_mask_view and name in time_mask_view:
+            mask = time_mask_view[name]
+            with pandas.ExcelWriter(io.BytesIO(), engine="openpyxl") as mask_writer:
+                mask.to_excel(mask_writer, sheet_name=name)
+                sheet_mask = mask_writer.sheets[name]
+        else:
+            sheet_mask = None
+
         f_highlight = f_highlights.get(name, None) if f_highlights else None
         sheet = workbook[name]
         n_rows = sheet.max_row
@@ -479,6 +494,16 @@ def apply_excel_style(
                         h = f_highlight(cell.value)
                         if h in font_colors:
                             cell.font = font_colors[h]
+
+        if sheet_mask is not None:
+            for i in range(1, n_rows + 1):
+                for j, (cell, cell_mask) in enumerate(zip(sheet[i], sheet_mask[i])):
+                    if j > n_cols:
+                        break
+                    if cell_mask.value not in (1, -1):
+                        continue
+                    cell.fill = mask_low if cell_mask.value < 0 else mask_high
+
     if save:
         workbook.save(filename_or_writer)
 
@@ -1402,7 +1427,7 @@ class CubeLogs:
         raw: Optional[str] = "raw",
         verbose: int = 0,
         csv: Optional[Sequence[str]] = None,
-        time_mask: bool = True,
+        time_mask: bool = False,
     ):
         """
         Creates an excel file with a list of views.
@@ -1438,6 +1463,23 @@ class CubeLogs:
                 df, tview = self.view(view, return_view_def=True, verbose=max(verbose - 1, 0))
                 if cube_time is not None:
                     time_mask_view[name] = cube_time.view(view)
+                    print("----")
+                    print(df)
+                    print("-")
+                    print(time_mask_view[name])
+                    assert time_mask_view[name].shape == df.shape, (
+                        f"Shape mismatch between the view {df.shape} and the mask "
+                        f"{time_mask_view[name].shape}"
+                    )
+                    assert (
+                        time_mask_view[name].columns.names == df.columns.names
+                        or time_mask_view[name].index.names == df.index.names
+                    ), (
+                        f"Levels mismatch, index.names={df.index.names}, "
+                        f"columns.names={df.columns.names}, "
+                        f"mask.index.names={time_mask_view[name].index.names}, "
+                        f"mask.columns.names={time_mask_view[name].columns.names}"
+                    )
                     if verbose:
                         print(
                             f"[CubeLogs.to_excel] compute mask for view {name!r} with shape "
@@ -1553,20 +1595,24 @@ class CubeLogs:
 
             if verbose:
                 print(f"[CubeLogs.to_excel] applies style to {output!r}")
-            apply_excel_style(writer, f_highlights)  # type: ignore[arg-type]
+            apply_excel_style(writer, f_highlights, time_mask_view=time_mask_view)  # type: ignore[arg-type]
             if verbose:
                 print(f"[CubeLogs.to_excel] done with {len(views)} views")
 
-    def cube_time(self, fill_other_dates: bool = False) -> "CubeLogs":
+    def cube_time(self, fill_other_dates: bool = False, threshold: float = 1.2) -> "CubeLogs":
         """
         Aggregates the data over time to detect changes on the last value.
         If *fill_other_dates* is True, all dates are kept, but values
         are filled with 0.
+        *threshold* determines the bandwith within the values are expected,
+        should be a factor of the standard deviation.
         """
         unique_time = self.data[self.time].unique()
         assert len(unique_time) > 2, f"Not enough dates to proceed: unique_time={unique_time}"
         gr = self.data[[*self.keys_no_time, *self.values]].groupby(self.keys_no_time)
-        dgr = gr.agg(lambda series: int(breaking_last_point(series)[0]))
+        dgr = gr.agg(
+            lambda series, th=threshold: int(breaking_last_point(series, threshold=th)[0])
+        )
         tm = unique_time.max()
         dgr[self.time] = tm
         if fill_other_dates:

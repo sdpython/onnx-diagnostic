@@ -445,7 +445,7 @@ class TestLogHelper(ExtTestCase):
             ]
         )
         cube = CubeLogs(df, keys=["^m_*", "exporter"], time="date").load()
-        cube_time = cube.cube_time()
+        cube_time = cube.cube_time(threshold=1.1)
         v = cube_time.data["time_p"].tolist()
         self.assertEqual([0, -1], v)
 
