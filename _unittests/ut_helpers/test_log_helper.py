@@ -6,16 +6,18 @@ import zipfile
 import numpy as np
 import pandas
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
-from onnx_diagnostic.helpers.log_helper import (
-    CubeLogs,
-    CubeLogsPerformance,
-    CubePlot,
-    CubeViewDef,
+from onnx_diagnostic.helpers._log_helper import (
     enumerate_csv_files,
     open_dataframe,
     filter_data,
     mann_kendall,
     breaking_last_point,
+)
+from onnx_diagnostic.helpers.log_helper import (
+    CubeLogs,
+    CubeLogsPerformance,
+    CubePlot,
+    CubeViewDef,
 )
 
 
