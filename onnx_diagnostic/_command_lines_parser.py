@@ -657,9 +657,16 @@ def get_parser_agg() -> ArgumentParser:
         ),
         epilog=textwrap.dedent(
             """
-            examples:\n
+            examples:
 
                 python -m onnx_diagnostic agg test_agg.xlsx raw/*.zip -v 1
+                python -m onnx_diagnostic agg agg.xlsx raw/*.zip raw/*.csv -v 1 \\
+                    --no-raw  --keep-last-date --filter-out "exporter:test-exporter"
+
+            Another to create timeseries:
+
+                python -m onnx_diagnostic agg history.xlsx raw/*.csv -v 1 --no-raw \\
+                    --no-recent
             """
         ),
         formatter_class=RawTextHelpFormatter,
@@ -812,6 +819,7 @@ def _cmd_agg(argv: List[Any]):
         verbose=args.verbose,
         csv=args.csv.split(","),
         raw=args.raw,
+        time_mask=True,
     )
     if args.verbose:
         print(f"Wrote {args.output!r}")

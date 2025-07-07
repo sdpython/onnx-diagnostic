@@ -14,6 +14,8 @@ from onnx_diagnostic.helpers.log_helper import (
     enumerate_csv_files,
     open_dataframe,
     filter_data,
+    mann_kendall,
+    breaking_last_point,
 )
 
 
@@ -207,7 +209,7 @@ class TestLogHelper(ExtTestCase):
         self.assertIn("RAWFILENAME", cube.data.columns)
 
     def test_cube_logs_performance1(self):
-        output = self.get_dump_file("test_cube_logs_performance.xlsx")
+        output = self.get_dump_file("test_cube_logs_performance1.xlsx")
         filename = os.path.join(os.path.dirname(__file__), "data", "data-agg.zip")
         assert list(enumerate_csv_files(filename))
         dfs = [open_dataframe(df) for df in enumerate_csv_files(filename)]
@@ -232,7 +234,7 @@ class TestLogHelper(ExtTestCase):
         self.assertExists(output)
 
     def test_cube_logs_performance2(self):
-        output = self.get_dump_file("test_cube_logs_performance.xlsx")
+        output = self.get_dump_file("test_cube_logs_performance2.xlsx")
         filename = os.path.join(os.path.dirname(__file__), "data", "data-agg.zip")
         assert list(enumerate_csv_files(filename))
         dfs = [open_dataframe(df) for df in enumerate_csv_files(filename)]
@@ -255,6 +257,16 @@ class TestLogHelper(ExtTestCase):
             ],
         )
         self.assertExists(output)
+
+    def test_cube_logs_performance_cube_time(self):
+        filename = os.path.join(os.path.dirname(__file__), "data", "data-agg.zip")
+        assert list(enumerate_csv_files(filename))
+        dfs = [open_dataframe(df) for df in enumerate_csv_files(filename)]
+        assert dfs, f"{filename!r} empty"
+        cube = CubeLogsPerformance(dfs, keep_last_date=True)
+        cube.load()
+        ct = cube.clone()
+        self.assertEqual((52, 106), ct.shape)
 
     def test_duplicate(self):
         df = pandas.DataFrame(
@@ -401,6 +413,60 @@ class TestLogHelper(ExtTestCase):
         self.assertEqualDataFrame(df[df.model_exporter == "onnx-dynamo"], df2)
         df2 = filter_data(df, "", "model_exporter:onnx-dynamo;T", verbose=1)
         self.assertEqualDataFrame(df[df.model_exporter != "onnx-dynamo"], df2)
+
+    def test_mann_kendall(self):
+        test = mann_kendall(list(range(5)))
+        self.assertEqual((np.float64(1.0), np.float64(0.5196152422706631)), test)
+        test = mann_kendall(list(range(3)))
+        self.assertEqual((0, np.float64(0.24618298195866545)), test)
+        test = mann_kendall(list(range(5, 0, -1)))
+        self.assertEqual((np.float64(-1.0), np.float64(-0.5196152422706631)), test)
+
+    def test_breaking_last_point(self):
+        test = breaking_last_point([1, 1, 1, 2])
+        self.assertEqual((1, np.float64(1.0)), test)
+        test = breaking_last_point([1, 1, 1.1, 2])
+        self.assertEqual((np.float64(1.0), np.float64(20.50609665440986)), test)
+        test = breaking_last_point([-1, -1, -1.1, -2])
+        self.assertEqual((np.float64(-1.0), np.float64(-20.50609665440986)), test)
+        test = breaking_last_point([1, 1, 1.1, 1])
+        self.assertEqual((np.float64(0.0), np.float64(-0.7071067811865491)), test)
+
+    def test_historical_cube_time(self):
+        # case 1
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/01", time_p=0.51, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.62, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/03", time_p=0.62, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/01", time_p=0.51, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.62, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/03", time_p=0.50, exporter="E2", m_name="A", m_cls="CA"),
+            ]
+        )
+        cube = CubeLogs(df, keys=["^m_*", "exporter"], time="date").load()
+        cube_time = cube.cube_time(threshold=1.1)
+        v = cube_time.data["time_p"].tolist()
+        self.assertEqual([0, -1], v)
+
+    @hide_stdout()
+    def test_historical_cube_time_mask(self):
+        output = self.get_dump_file("test_historical_cube_time_mask.xlsx")
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/01", time_p=0.51, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.62, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/03", time_p=0.62, exporter="E1", m_name="A", m_cls="CA"),
+                dict(date="2025/01/01", time_p=0.51, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.62, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/03", time_p=0.50, exporter="E2", m_name="A", m_cls="CA"),
+                dict(date="2025/01/01", time_p=0.71, exporter="E2", m_name="B", m_cls="CA"),
+                dict(date="2025/01/02", time_p=0.72, exporter="E2", m_name="B", m_cls="CA"),
+                dict(date="2025/01/03", time_p=0.70, exporter="E2", m_name="B", m_cls="CA"),
+            ]
+        )
+        cube = CubeLogs(df, keys=["^m_*", "exporter"], time="date").load()
+        cube.to_excel(output, views=["time_p"], time_mask=True, verbose=1)
 
 
 if __name__ == "__main__":
