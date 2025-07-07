@@ -59,15 +59,15 @@ def mann_kendall(series: Sequence[float], threshold: float = 0.5):
     return trend, test
 
 
-def breaking_last_point(signal: Sequence[float], threshold: float = 1.2):
+def breaking_last_point(series: Sequence[float], threshold: float = 1.2):
     """
     Assuming a timeseries is constant, we check the last value
     is not an outlier.
 
-    :param signal: series
+    :param series: series
     :return: significant change (-1, 0, +1), test value
     """
-    signal = np.asarray(signal)
+    signal = np.asarray(series)
     if not np.issubdtype(signal.dtype, np.number):
         return 0, np.nan
     assert len(signal.shape) == 1, f"Unexpected signal shape={signal.shape}, signal={signal}"
@@ -986,10 +986,6 @@ class CubeLogs:
         shape = self.data.shape
         if verbose:
             print(f"[CubeLogs.load] removed columns, shape={self.data.shape}")
-        assert self.data.shape[0] > 0 or self._data.shape[0] == 0, (
-            f"The preprocessing reduced shape {shape} to {self.data.shape}, "
-            f"initial shape={self._data.shape}."
-        )
         self._preprocess()
         if verbose:
             print(f"[CubeLogs.load] preprocess, shape={self.data.shape}")
@@ -1520,7 +1516,7 @@ class CubeLogs:
                     print(f"[CubeLogs.to_excel] add sheet {main!r} with shape {df.shape}")
                 df.to_excel(writer, sheet_name=main, freeze_panes=(1, 1))
 
-            time_mask_view = {}
+            time_mask_view: Dict[str, pandas.DataFrame] = {}
             for name, view in views.items():
                 if view is None:
                     continue
@@ -1658,7 +1654,7 @@ class CubeLogs:
         Aggregates the data over time to detect changes on the last value.
         If *fill_other_dates* is True, all dates are kept, but values
         are filled with 0.
-        *threshold* determines the bandwith within the values are expected,
+        *threshold* determines the bandwidth within the values are expected,
         should be a factor of the standard deviation.
         """
         unique_time = self.data[self.time].unique()
