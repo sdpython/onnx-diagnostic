@@ -768,8 +768,8 @@ def get_parser_agg() -> ArgumentParser:
 
 
 def _cmd_agg(argv: List[Any]):
-    from .helpers._log_helper import CubeLogsPerformance
-    from .helpers.log_helper import open_dataframe, enumerate_csv_files, filter_data
+    from .helpers._log_helper import open_dataframe, enumerate_csv_files, filter_data
+    from .helpers.log_helper import CubeLogsPerformance
 
     parser = get_parser_agg()
     args = parser.parse_args(argv[1:])
