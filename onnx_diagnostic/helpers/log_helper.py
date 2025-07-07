@@ -983,18 +983,13 @@ class CubeLogs:
             print(f"[CubeLogs.load] dropped={self.dropped}")
             print(f"[CubeLogs.load] data.shape={self.data.shape}")
 
-        shape = self.data.shape
         if verbose:
             print(f"[CubeLogs.load] removed columns, shape={self.data.shape}")
         self._preprocess()
         if verbose:
             print(f"[CubeLogs.load] preprocess, shape={self.data.shape}")
-        assert self.data.shape[0] > 0 or self._data.shape[0] == 0, (
-            f"The preprocessing reduced shape {shape} to {self.data.shape}, "
-            f"initial shape={self._data.shape}."
-        )
-        if self.recent and verbose:
-            print(f"[CubeLogs.load] keep most recent data.shape={self.data.shape}")
+            if self.recent:
+                print(f"[CubeLogs.load] keep most recent data.shape={self.data.shape}")
 
         # Let's apply the formulas
         if self._formulas:
@@ -1157,7 +1152,9 @@ class CubeLogs:
         """
         if isinstance(view_def, str):
             # We automatically create a view for a metric
-            view_def = self.make_view_def(view_def)
+            view_def_ = self.make_view_def(view_def)
+            assert view_def_ is not None, f"Unable to create a view from {view_def!r}"
+            view_def = view_def_
 
         assert isinstance(
             view_def, CubeViewDef
@@ -1504,6 +1501,7 @@ class CubeLogs:
         """
         if verbose:
             print(f"[CubeLogs.to_excel] create Excel file {output}, shape={self.shape}")
+        time_mask &= len(self.data[self.time].unique()) > 2
         cube_time = self.cube_time(fill_other_dates=True) if time_mask else None
         views = {k: k for k in views} if not isinstance(views, dict) else views
         f_highlights = {}
