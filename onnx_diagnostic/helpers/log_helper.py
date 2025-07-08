@@ -1292,8 +1292,8 @@ class CubeLogs:
 
         new_data = pandas.concat(datas, axis=0)
         cube = self.clone(new_data, keys=[*self.keys_no_time, column_name])
-        key_index = {c for c in self.keys_time if c not in {*columns_index, column_name}}
-        view = CubeViewDef(key_index=key_index, name="sbs", values=cube.values)
+        key_index = set(self.keys_time) - {*columns_index, column_name}
+        view = CubeViewDef(key_index=set(key_index), name="sbs", values=cube.values)
         res = cube.view(view)
         res = res.stack("METRICS", future_stack=True)  # type: ignore[union-attr]
         res = res.reorder_levels(
