@@ -1276,10 +1276,10 @@ class CubeLogs:
 
         new_data = pandas.concat([d[1] for d in datas], axis=0)
         cube = self.clone(new_data)
-        key_index = [c for c in self.keys_time if c not in set(columns_index)]
+        key_index = {c for c in self.keys_time if c not in set(columns_index)}
         view = CubeViewDef(key_index=key_index, name="sbs", values=cube.values)
         res = cube.view(view)
-        res = res.stack("METRICS", future_stack=True)
+        res = res.stack("METRICS", future_stack=True)  # type: ignore[union-attr]
         res = res.reorder_levels(
             [res.index.nlevels - 1, *list(range(res.index.nlevels - 1))]
         ).sort_index()
