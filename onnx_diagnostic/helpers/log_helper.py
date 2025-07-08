@@ -425,7 +425,9 @@ class CubeLogs:
         self.fill_missing = fill_missing
         self.keep_last_date = keep_last_date
 
-    def clone(self, data: Optional[pandas.DataFrame] = None) -> "CubeLogs":
+    def clone(
+        self, data: Optional[pandas.DataFrame] = None, keys: Optional[Sequence[str]] = None
+    ) -> "CubeLogs":
         """
         Makes a copy of the dataframe.
         It copies the processed data not the original one.
@@ -433,7 +435,7 @@ class CubeLogs:
         cube = self.__class__(
             data if data is not None else self.data.copy(),
             time=self.time,
-            keys=self.keys_no_time,
+            keys=keys or self.keys_no_time,
             values=self.values,
         )
         cube.load()
@@ -1248,16 +1250,25 @@ class CubeLogs:
             )
         return self.clone(data=dgr.reset_index(drop=False))
 
-    def sbs(self, configs: Sequence[Dict[str, Any]]) -> pandas.DataFrame:
+    def sbs(
+        self, configs: Dict[str, Dict[str, Any]], column_name: str = "CONF"
+    ) -> Tuple[pandas.DataFrame, pandas.DataFrame]:
         """
         Creates a side-by-side for two configurations.
         Every configuration a dictionary column:value which filters in
         the rows to keep in order to compute the side by side.
+        Every configuration is given a name (the key in configs),
+        it is added in column column_name.
+
+        :param configs: example
+            ``dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))``
+        :param column_name: column to add with the name of the configuration
+        :return: data and aggregated date
         """
         set_keys_time = set(self.keys_time)
         columns_index = None
         datas = []
-        for conf in configs:
+        for name_conf, conf in configs.items():
             if columns_index is None:
                 columns_index = list(conf.keys())
                 assert (
@@ -1272,18 +1283,68 @@ class CubeLogs:
             for k, v in conf.items():
                 data = data[data[k] == v]
             assert data.shape[0] > 0, f"No rows found for conf={conf}"
-            datas.append((conf, data))
+            assert (
+                column_name not in data.columns
+            ), f"column_name={column_name!r} is already in {data.columns}"
+            data = data.copy()
+            data[column_name] = name_conf
+            datas.append(data)
 
-        new_data = pandas.concat([d[1] for d in datas], axis=0)
-        cube = self.clone(new_data)
-        key_index = {c for c in self.keys_time if c not in set(columns_index)}
+        new_data = pandas.concat(datas, axis=0)
+        cube = self.clone(new_data, keys=[*self.keys_no_time, column_name])
+        key_index = {c for c in self.keys_time if c not in {*columns_index, column_name}}
         view = CubeViewDef(key_index=key_index, name="sbs", values=cube.values)
         res = cube.view(view)
         res = res.stack("METRICS", future_stack=True)  # type: ignore[union-attr]
         res = res.reorder_levels(
             [res.index.nlevels - 1, *list(range(res.index.nlevels - 1))]
         ).sort_index()
-        return res
+
+        # add metrics
+        index = list(res.columns.names).index(column_name)
+
+        def _mkc(s, index=index):
+            c = ["" for c in res.columns.names]
+            c[index] = s
+            return tuple(c)
+
+        n_conf = res.shape[1]
+        mean_columns = list(res.columns)
+        sum_columns = []
+        for i in range(n_conf):
+            c1 = res.columns[i]
+            n1 = c1[index]
+            if not pandas.api.types.is_numeric_dtype(res[c1].dtype):
+                continue
+            for j in range(i + 1, n_conf):
+                c2 = res.columns[j]
+                n2 = c2[index]
+                if not pandas.api.types.is_numeric_dtype(res[c2].dtype):
+                    continue
+                res[_mkc(f"∅{n1}∧∅{n2}")] = (res[c1].isna() & res[c2].isna()).astype(int)
+                res[_mkc(f"∅{n1}∧{n2}")] = (res[c1].isna() & ~res[c2].isna()).astype(int)
+                res[_mkc(f"{n1}∧∅{n2}")] = (~res[c1].isna() & res[c2].isna()).astype(int)
+                res[_mkc(f"{n1}∧{n2}")] = (~res[c1].isna() & ~res[c2].isna()).astype(int)
+                res[_mkc(f"{n1}<{n2}")] = (res[c1] < res[c2]).astype(int)
+                res[_mkc(f"{n1}>{n2}")] = (res[c1] > res[c2]).astype(int)
+                sum_columns.extend(
+                    [
+                        _mkc(f"∅{n1}∧∅{n2}"),
+                        _mkc(f"∅{n1}∧{n2}"),
+                        _mkc(f"{n1}∧∅{n2}"),
+                        _mkc(f"{n1}∧{n2}"),
+                        _mkc(f"{n1}<{n2}"),
+                        _mkc(f"{n1}>{n2}"),
+                    ]
+                )
+
+        # aggregated metrics
+        aggs = {
+            **{k: "mean" for k in mean_columns},  # noqa: C420
+            **{k: "sum" for k in sum_columns},  # noqa: C420
+        }
+        agg = res.reset_index(level="METRICS").groupby("METRICS").agg(aggs)
+        return res, agg
 
 
 class CubeLogsPerformance(CubeLogs):
@@ -1371,15 +1432,18 @@ class CubeLogsPerformance(CubeLogs):
             keep_last_date=keep_last_date,
         )
 
-    def clone(self, data: Optional[pandas.DataFrame] = None) -> "CubeLogs":
+    def clone(
+        self, data: Optional[pandas.DataFrame] = None, keys: Optional[Sequence[str]] = None
+    ) -> "CubeLogs":
         """
         Makes a copy of the dataframe.
         It copies the processed data not the original one.
+        keys can be changed as well.
         """
         cube = self.__class__(
             data if data is not None else self.data.copy(),
             time=self.time,
-            keys=self.keys_no_time,
+            keys=keys or self.keys_no_time,
             values=self.values,
             recent=False,
         )

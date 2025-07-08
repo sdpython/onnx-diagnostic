@@ -514,10 +514,15 @@ class TestLogHelper(ExtTestCase):
         cube = CubeLogs(
             df, keys=["^m_*", "exporter", "opt"], values=["time_p", "perf"], time="date"
         ).load()
-        sbs = cube.sbs([dict(exporter="E1", opt="O"), dict(exporter="E2", opt="O")])
-        self.assertEqual(sbs.shape, (4, 2))
+        sbs, sbs_agg = cube.sbs(
+            dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))
+        )
+        self.assertEqual(sbs.shape, (4, 8))
         self.assertEqual(sbs.index.names, ["METRICS", "m_name"])
-        self.assertEqual(sbs.columns.names, ["exporter"])
+        self.assertEqual(sorted(sbs.columns.names), ["CONF", "exporter"])
+        self.assertEqual(sbs_agg.shape, (2, 8))
+        self.assertEqual(sbs_agg.index.names, ["METRICS"])
+        self.assertEqual(sorted(sbs_agg.columns.names), ["CONF", "exporter"])
 
 
 if __name__ == "__main__":
