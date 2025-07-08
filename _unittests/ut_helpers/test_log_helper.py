@@ -470,6 +470,55 @@ class TestLogHelper(ExtTestCase):
         cube = CubeLogs(df, keys=["^m_*", "exporter"], time="date").load()
         cube.to_excel(output, views=["time_p"], time_mask=True, verbose=1)
 
+    def test_cube_sbs(self):
+        df = pandas.DataFrame(
+            [
+                dict(
+                    date="2025/01/01",
+                    time_p=0.51,
+                    exporter="E1",
+                    opt="O",
+                    perf=3.7,
+                    m_name="A",
+                    m_cls="CA",
+                ),
+                dict(
+                    date="2025/01/01",
+                    time_p=0.51,
+                    perf=3.4,
+                    exporter="E2",
+                    opt="O",
+                    m_name="A",
+                    m_cls="CA",
+                ),
+                dict(
+                    date="2025/01/01",
+                    time_p=0.71,
+                    perf=3.5,
+                    exporter="E2",
+                    opt="O",
+                    m_name="B",
+                    m_cls="CA",
+                ),
+                dict(
+                    date="2025/01/01",
+                    time_p=0.71,
+                    perf=3.6,
+                    exporter="E2",
+                    opt="K",
+                    m_name="B",
+                    m_cls="CA",
+                ),
+            ]
+        )
+        cube = CubeLogs(
+            df, keys=["^m_*", "exporter", "opt"], values=["time_p", "perf"], time="date"
+        ).load()
+        sbs = cube.sbs([dict(exporter="E1", opt="O"), dict(exporter="E2", opt="O")])
+        self.assertEqual(sbs.shape, (4, 2))
+        self.assertEqual(sbs.index.names, ["METRICS", "m_name"])
+        self.assertEqual(sbs.columns.names, ["exporter"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

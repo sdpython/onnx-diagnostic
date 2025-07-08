@@ -1248,6 +1248,43 @@ class CubeLogs:
             )
         return self.clone(data=dgr.reset_index(drop=False))
 
+    def sbs(self, configs: Sequence[Dict[str, Any]]) -> pandas.DataFrame:
+        """
+        Creates a side-by-side for two configurations.
+        Every configuration a dictionary column:value which filters in
+        the rows to keep in order to compute the side by side.
+        """
+        set_keys_time = set(self.keys_time)
+        columns_index = None
+        datas = []
+        for conf in configs:
+            if columns_index is None:
+                columns_index = list(conf.keys())
+                assert (
+                    set(columns_index) <= set_keys_time
+                ), f"Configuration {conf} includes columns outside the keys."
+            else:
+                assert set(columns_index) == set(conf), (
+                    f"Every conf should share the same keys but conf={conf} "
+                    f"is different from {set(columns_index)}"
+                )
+            data = self.data
+            for k, v in conf.items():
+                data = data[data[k] == v]
+            assert data.shape[0] > 0, f"No rows found for conf={conf}"
+            datas.append((conf, data))
+
+        new_data = pandas.concat([d[1] for d in datas], axis=0)
+        cube = self.clone(new_data)
+        key_index = [c for c in self.keys_time if c not in set(columns_index)]
+        view = CubeViewDef(key_index=key_index, name="sbs", values=cube.values)
+        res = cube.view(view)
+        res = res.stack("METRICS", future_stack=True)
+        res = res.reorder_levels(
+            [res.index.nlevels - 1, *list(range(res.index.nlevels - 1))]
+        ).sort_index()
+        return res
+
 
 class CubeLogsPerformance(CubeLogs):
     """
