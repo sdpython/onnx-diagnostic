@@ -1196,6 +1196,7 @@ class CubeLogs:
                 if verbose:
                     for k, v in sbs.items():
                         print(f"[CubeLogs.to_excel] sbs {k}: {v}")
+                name = "∧".join(sbs)
                 sbs_raw, sbs_agg = self.sbs(sbs)
                 if verbose:
                     print(f"[CubeLogs.to_excel] add sheet {name!r} with shape {sbs_raw.shape}")
@@ -1203,7 +1204,6 @@ class CubeLogs:
                         f"[CubeLogs.to_excel] add sheet '{name}-AGG' "
                         f"with shape {sbs_agg.shape}"
                     )
-                name = "∧".join(sbs)
                 sbs_raw = sbs_raw.reset_index(drop=False)
                 sbs_raw.to_excel(
                     writer,
@@ -1253,8 +1253,8 @@ class CubeLogs:
 
             if verbose:
                 print(f"[CubeLogs.to_excel] applies style to {output!r}")
-            apply_excel_style(  # type: ignore[arg-type]
-                writer, f_highlights, time_mask_view=time_mask_view, verbose=verbose
+            apply_excel_style(
+                writer, f_highlights, time_mask_view=time_mask_view, verbose=verbose  # type: ignore[arg-type]
             )
             if verbose:
                 print(f"[CubeLogs.to_excel] done with {len(views)} views")
@@ -1346,8 +1346,14 @@ class CubeLogs:
         new_data = pandas.concat(data_list, axis=0)
         cube = self.clone(new_data, keys=[*self.keys_no_time, column_name])
         key_index = set(self.keys_time) - {*columns_index, column_name}  # type: ignore[misc]
-        view = CubeViewDef(key_index=set(key_index), name="sbs", values=cube.values)  # type: ignore[arg-type]
+        view = CubeViewDef(
+            key_index=set(key_index),  # type: ignore[arg-type]
+            name="sbs",
+            values=cube.values,
+            keep_columns_in_index=[self.time],
+        )
         view_res = cube.view(view)
+        assert isinstance(view_res, pandas.DataFrame), "not needed but mypy complains"
 
         # add metrics
         index_column_name = list(view_res.columns.names).index(column_name)
@@ -1420,20 +1426,19 @@ class CubeLogs:
                     columns_to_add.append(nas)
                     sum_columns.extend(nas.columns)
 
-        # aggregated metrics
-        aggs = {
-            **{k: "mean" for k in mean_columns},  # noqa: C420
-            **{k: "sum" for k in sum_columns},  # noqa: C420
-        }
         view_res = pandas.concat([view_res, *columns_to_add], axis=1)
         res = view_res.stack("METRICS", future_stack=True)  # type: ignore[union-attr]
         res = res.reorder_levels(
             [res.index.nlevels - 1, *list(range(res.index.nlevels - 1))]
         ).sort_index()
 
-        view_res["GROUPBY"] = "A"
-        flat = view_res.groupby("GROUPBY").agg(aggs).reset_index(drop=True)
-        flat = flat.stack("METRICS", future_stack=True).droplevel(None, axis=0)
+        # aggregated metrics
+        aggs = {
+            **{k: "mean" for k in mean_columns},  # noqa: C420
+            **{k: "sum" for k in sum_columns},  # noqa: C420
+        }
+        flat = view_res.groupby(self.time).agg(aggs)
+        flat = flat.stack("METRICS", future_stack=True)
         return res, flat
 
 

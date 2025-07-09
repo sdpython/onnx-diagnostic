@@ -803,7 +803,7 @@ def get_parser_agg() -> ArgumentParser:
             Defines an exporter to compare to another, there must be at least
             two arguments defined with --sbs. Example:
                 --sbs dynamo:exporter=onnx-dynamo,opt=ir,attn_impl=eager
-                --sbs cusom:exporter=custom,opt=default,attn_impl=eager
+                --sbs custom:exporter=custom,opt=default,attn_impl=eager
             """
         ),
         action=_ParseNamedDict,
