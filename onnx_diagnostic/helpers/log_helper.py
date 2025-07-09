@@ -1267,7 +1267,7 @@ class CubeLogs:
         """
         set_keys_time = set(self.keys_time)
         columns_index = None
-        datas = []
+        data_list = []
         for name_conf, conf in configs.items():
             if columns_index is None:
                 columns_index = list(conf.keys())
@@ -1288,12 +1288,12 @@ class CubeLogs:
             ), f"column_name={column_name!r} is already in {data.columns}"
             data = data.copy()
             data[column_name] = name_conf
-            datas.append(data)
+            data_list.append(data)
 
-        new_data = pandas.concat(datas, axis=0)
+        new_data = pandas.concat(data_list, axis=0)
         cube = self.clone(new_data, keys=[*self.keys_no_time, column_name])
-        key_index = set(self.keys_time) - {*columns_index, column_name}
-        view = CubeViewDef(key_index=set(key_index), name="sbs", values=cube.values)
+        key_index = set(self.keys_time) - {*columns_index, column_name}  # type: ignore[misc]
+        view = CubeViewDef(key_index=set(key_index), name="sbs", values=cube.values)  # type: ignore[arg-type]
         res = cube.view(view)
         res = res.stack("METRICS", future_stack=True)  # type: ignore[union-attr]
         res = res.reorder_levels(
