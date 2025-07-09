@@ -320,6 +320,7 @@ def apply_excel_style(
         Dict[str, Callable[[Any], "CubeViewDef.HighLightKind"]]  # noqa: F821
     ] = None,
     time_mask_view: Optional[Dict[str, pandas.DataFrame]] = None,
+    verbose: int = 0,
 ):
     """
     Applies styles on all sheets in a file unless the sheet is too big.
@@ -329,6 +330,7 @@ def apply_excel_style(
     :param time_mask_view: if specified, it contains dataframe with the same shape
         and values in {-1, 0, +1} which indicates if a value is unexpectedly lower (-1)
         or higher (+1), it changes the color of the background then.
+    :param verbosity: progress loop
     """
     from openpyxl import load_workbook
     from openpyxl.styles import Alignment
@@ -353,8 +355,13 @@ def apply_excel_style(
         CubeViewDef.HighLightKind.GREEN: Font(color="00AA00"),
         CubeViewDef.HighLightKind.RED: Font(color="FF0000"),
     }
+    if verbose:
+        from tqdm import tqdm
 
-    for name in workbook.sheetnames:
+        sheet_names = tqdm(list(workbook.sheetnames))
+    else:
+        sheet_names = workbook.sheetnames
+    for name in sheet_names:
         if time_mask_view and name in time_mask_view:
             mask = time_mask_view[name]
             with pandas.ExcelWriter(io.BytesIO(), engine="openpyxl") as mask_writer:
@@ -367,7 +374,7 @@ def apply_excel_style(
         sheet = workbook[name]
         n_rows = sheet.max_row
         n_cols = sheet.max_column
-        if n_rows * n_cols > 2**18:
+        if n_rows * n_cols > 2**16 or n_rows > 2**13:
             # Too big.
             continue
         co: Dict[int, int] = {}

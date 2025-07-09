@@ -4,6 +4,8 @@ Change Logs
 0.7.5
 +++++
 
+* :pr:`184`: implements side-by-side
+
 0.7.4
 +++++
 

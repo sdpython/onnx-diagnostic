@@ -425,7 +425,9 @@ class CubeLogs:
         self.fill_missing = fill_missing
         self.keep_last_date = keep_last_date
 
-    def clone(self, data: Optional[pandas.DataFrame] = None) -> "CubeLogs":
+    def clone(
+        self, data: Optional[pandas.DataFrame] = None, keys: Optional[Sequence[str]] = None
+    ) -> "CubeLogs":
         """
         Makes a copy of the dataframe.
         It copies the processed data not the original one.
@@ -433,7 +435,7 @@ class CubeLogs:
         cube = self.__class__(
             data if data is not None else self.data.copy(),
             time=self.time,
-            keys=self.keys_no_time,
+            keys=keys or self.keys_no_time,
             values=self.values,
         )
         cube.load()
@@ -930,6 +932,17 @@ class CubeLogs:
         else:
             piv.sort_index(inplace=True, axis=1)
 
+        # final step, force columns with numerical values to be float
+        for c in list(piv.columns):
+            s = piv[c]
+            if not pandas.api.types.is_object_dtype(s):
+                continue
+            try:
+                sf = s.astype(float)
+            except (ValueError, TypeError):
+                continue
+            piv[c] = sf
+
         if verbose:
             print(f"[CubeLogs.view] levels {piv.index.names}, {piv.columns.names}")
             print(f"[CubeLogs.view] -- done view {view_def.name!r}")
@@ -972,7 +985,9 @@ class CubeLogs:
         for c in set(key_index) | set(key_columns):
             s = new_data[c]
             if s.isna().max():
-                if pandas.api.types.is_numeric_dtype(s):
+                if pandas.api.types.is_numeric_dtype(
+                    s
+                ) and not pandas.api.types.is_object_dtype(s):
                     min_v = s.dropna().min()
                     assert (
                         min_v >= 0
@@ -1009,7 +1024,7 @@ class CubeLogs:
             )
             if len(nonan) > 0:
                 obs.update(dict(count=len(nonan)))
-                if is_numeric_dtype(nonan):
+                if is_numeric_dtype(nonan) and not pandas.api.types.is_object_dtype(nonan):
                     obs.update(
                         dict(
                             min=nonan.min(),
@@ -1046,6 +1061,7 @@ class CubeLogs:
         verbose: int = 0,
         csv: Optional[Sequence[str]] = None,
         time_mask: bool = False,
+        sbs: Optional[Dict[str, Dict[str, Any]]] = None,
     ):
         """
         Creates an excel file with a list of views.
@@ -1059,6 +1075,9 @@ class CubeLogs:
         :param time_mask: color the background of the cells if one
             of the value for the last date is unexpected,
             assuming they should remain stale
+        :param sbs: configurations to compare side-by-side, this adds two tabs,
+            one gathering raw data about the two configurations, the other one
+            is aggregated by metrics
         """
         if verbose:
             print(f"[CubeLogs.to_excel] create Excel file {output}, shape={self.shape}")
@@ -1173,6 +1192,36 @@ class CubeLogs:
                         writer, sheet_name="raw", freeze_panes=(1, 1), index=True
                     )
 
+            if sbs:
+                if verbose:
+                    for k, v in sbs.items():
+                        print(f"[CubeLogs.to_excel] sbs {k}: {v}")
+                name = "∧".join(sbs)
+                sbs_raw, sbs_agg = self.sbs(sbs)
+                if verbose:
+                    print(f"[CubeLogs.to_excel] add sheet {name!r} with shape {sbs_raw.shape}")
+                    print(
+                        f"[CubeLogs.to_excel] add sheet '{name}-AGG' "
+                        f"with shape {sbs_agg.shape}"
+                    )
+                sbs_raw = sbs_raw.reset_index(drop=False)
+                sbs_raw.to_excel(
+                    writer,
+                    sheet_name=name,
+                    freeze_panes=(
+                        sbs_raw.columns.nlevels + sbs_raw.index.nlevels,
+                        sbs_raw.index.nlevels,
+                    ),
+                )
+                sbs_agg.to_excel(
+                    writer,
+                    sheet_name=f"{name}-AGG",
+                    freeze_panes=(
+                        sbs_agg.columns.nlevels + sbs_agg.index.nlevels,
+                        sbs_agg.index.nlevels,
+                    ),
+                )
+
             if plots:
                 from openpyxl.drawing.image import Image
 
@@ -1204,7 +1253,9 @@ class CubeLogs:
 
             if verbose:
                 print(f"[CubeLogs.to_excel] applies style to {output!r}")
-            apply_excel_style(writer, f_highlights, time_mask_view=time_mask_view)  # type: ignore[arg-type]
+            apply_excel_style(
+                writer, f_highlights, time_mask_view=time_mask_view, verbose=verbose  # type: ignore[arg-type]
+            )
             if verbose:
                 print(f"[CubeLogs.to_excel] done with {len(views)} views")
 
@@ -1247,6 +1298,148 @@ class CubeLogs:
                 f"other_df shapes={[df.shape for df in other_df]}"
             )
         return self.clone(data=dgr.reset_index(drop=False))
+
+    def sbs(
+        self, configs: Dict[str, Dict[str, Any]], column_name: str = "CONF"
+    ) -> Tuple[pandas.DataFrame, pandas.DataFrame]:
+        """
+        Creates a side-by-side for two configurations.
+        Every configuration a dictionary column:value which filters in
+        the rows to keep in order to compute the side by side.
+        Every configuration is given a name (the key in configs),
+        it is added in column column_name.
+
+        :param configs: example
+            ``dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))``
+        :param column_name: column to add with the name of the configuration
+        :return: data and aggregated date
+        """
+        assert (
+            len(configs) >= 2
+        ), f"A side by side needs at least two configs but configs={configs}"
+        set_keys_time = set(self.keys_time)
+        columns_index = None
+        data_list = []
+        for name_conf, conf in configs.items():
+            if columns_index is None:
+                columns_index = list(conf.keys())
+                assert set(columns_index) <= set_keys_time, (
+                    f"Configuration {conf} includes columns outside the keys "
+                    f"{', '.join(sorted(set_keys_time))}"
+                )
+            else:
+                assert set(columns_index) == set(conf), (
+                    f"Every conf should share the same keys but conf={conf} "
+                    f"is different from {set(columns_index)}"
+                )
+            data = self.data
+            for k, v in conf.items():
+                data = data[data[k] == v]
+            assert data.shape[0] > 0, f"No rows found for conf={conf}"
+            assert (
+                column_name not in data.columns
+            ), f"column_name={column_name!r} is already in {data.columns}"
+            data = data.copy()
+            data[column_name] = name_conf
+            data_list.append(data)
+
+        new_data = pandas.concat(data_list, axis=0)
+        cube = self.clone(new_data, keys=[*self.keys_no_time, column_name])
+        key_index = set(self.keys_time) - {*columns_index, column_name}  # type: ignore[misc]
+        view = CubeViewDef(
+            key_index=set(key_index),  # type: ignore[arg-type]
+            name="sbs",
+            values=cube.values,
+            keep_columns_in_index=[self.time],
+        )
+        view_res = cube.view(view)
+        assert isinstance(view_res, pandas.DataFrame), "not needed but mypy complains"
+
+        # add metrics
+        index_column_name = list(view_res.columns.names).index(column_name)
+        index_metrics = list(view_res.columns.names).index("METRICS")
+
+        def _mkc(m, s):
+            c = ["" for c in view_res.columns.names]
+            c[index_column_name] = s
+            c[index_metrics] = m
+            return tuple(c)
+
+        list_configs = list(configs.items())
+        mean_columns = [
+            c
+            for c in view_res.columns
+            if pandas.api.types.is_numeric_dtype(view_res[c])
+            and not pandas.api.types.is_object_dtype(view_res[c])
+        ]
+        assert mean_columns, f"No numerical columns in {view_res.dtypes}"
+        view_res = view_res[mean_columns].copy()
+        metrics = sorted(set(c[index_metrics] for c in view_res.columns))
+        assert metrics, (
+            f"No numerical metrics detected in "
+            f"view_res.columns.names={view_res.columns.names}, "
+            f"columns={view_res.dtypes}"
+        )
+        sum_columns = []
+        columns_to_add = []
+        for i in range(len(list_configs)):
+            for j in range(i + 1, len(list_configs)):
+                for m in metrics:
+                    iname, ci = list_configs[i]
+                    jname, cj = list_configs[j]
+                    ci = ci.copy()
+                    cj = cj.copy()
+                    ci["METRICS"] = m
+                    cj["METRICS"] = m
+                    ci["CONF"] = iname
+                    cj["CONF"] = jname
+
+                    ci_name = tuple(ci[n] for n in view_res.columns.names)
+                    cj_name = tuple(cj[n] for n in view_res.columns.names)
+                    assert ci_name in view_res.columns or cj_name in view_res.columns, (
+                        f"Unable to find column {ci_name} or {cj_name} "
+                        f"in columns {view_res.columns}, metrics={metrics}"
+                    )
+                    if ci_name not in view_res.columns or cj_name not in view_res.columns:
+                        # One config does not have such metric.
+                        continue
+
+                    si = view_res[ci_name]
+                    sj = view_res[cj_name]
+
+                    sinan = si.isna()
+                    sjnan = sj.isna()
+                    n1 = iname
+                    n2 = jname
+                    nas = pandas.DataFrame(
+                        {
+                            _mkc(m, f"∅{n1}∧∅{n2}"): (sinan & sjnan).astype(int),
+                            _mkc(m, f"∅{n1}∧{n2}"): (sinan & ~sjnan).astype(int),
+                            _mkc(m, f"{n1}∧∅{n2}"): (~sinan & sjnan).astype(int),
+                            _mkc(m, f"{n1}∧{n2}"): (~sinan & ~sjnan).astype(int),
+                            _mkc(m, f"{n1}<{n2}"): (si < sj).astype(int),
+                            _mkc(m, f"{n1}=={n2}"): (si == sj).astype(int),
+                            _mkc(m, f"{n1}>{n2}"): (si > sj).astype(int),
+                        }
+                    )
+                    nas.columns.names = view_res.columns.names
+                    columns_to_add.append(nas)
+                    sum_columns.extend(nas.columns)
+
+        view_res = pandas.concat([view_res, *columns_to_add], axis=1)
+        res = view_res.stack("METRICS", future_stack=True)  # type: ignore[union-attr]
+        res = res.reorder_levels(
+            [res.index.nlevels - 1, *list(range(res.index.nlevels - 1))]
+        ).sort_index()
+
+        # aggregated metrics
+        aggs = {
+            **{k: "mean" for k in mean_columns},  # noqa: C420
+            **{k: "sum" for k in sum_columns},  # noqa: C420
+        }
+        flat = view_res.groupby(self.time).agg(aggs)
+        flat = flat.stack("METRICS", future_stack=True)
+        return res, flat
 
 
 class CubeLogsPerformance(CubeLogs):
@@ -1334,15 +1527,18 @@ class CubeLogsPerformance(CubeLogs):
             keep_last_date=keep_last_date,
         )
 
-    def clone(self, data: Optional[pandas.DataFrame] = None) -> "CubeLogs":
+    def clone(
+        self, data: Optional[pandas.DataFrame] = None, keys: Optional[Sequence[str]] = None
+    ) -> "CubeLogs":
         """
         Makes a copy of the dataframe.
         It copies the processed data not the original one.
+        keys can be changed as well.
         """
         cube = self.__class__(
             data if data is not None else self.data.copy(),
             time=self.time,
-            keys=self.keys_no_time,
+            keys=keys or self.keys_no_time,
             values=self.values,
             recent=False,
         )
