@@ -645,6 +645,27 @@ def _cmd_stats(argv: List[Any]):
         print("done.")
 
 
+class _ParseNamedDict(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        assert ":" in values, f"':' missing from {values!r}"
+        namespace_key, rest = values.split(":", 1)
+        pairs = rest.split(",")
+        inner_dict = {}
+
+        for pair in pairs:
+            if "=" not in pair:
+                raise argparse.ArgumentError(self, f"Expected '=' in pair '{pair}'")
+            key, value = pair.split("=", 1)
+            inner_dict[key] = value
+        assert inner_dict, f"Unable to parse {rest!r} into a dictionary"
+        if not hasattr(namespace, self.dest) or getattr(namespace, self.dest) is None:
+            setattr(namespace, self.dest, {})
+        assert isinstance(
+            getattr(namespace, self.dest), dict
+        ), f"Unexpected type for namespace.{self.dest}={getattr(namespace, self.dest)}"
+        getattr(namespace, self.dest).update({namespace_key: inner_dict})
+
+
 def get_parser_agg() -> ArgumentParser:
     parser = ArgumentParser(
         prog="agg",
@@ -653,6 +674,9 @@ def get_parser_agg() -> ArgumentParser:
             Aggregates statistics coming from benchmarks.
             Every run is a row. Every row is indexed by some keys,
             and produces values. Every row has a date.
+            The data can come any csv files produces by benchmarks,
+            it can concatenates many csv files, or csv files inside zip files.
+            It produces an excel file with many tabs, one per view.
             """
         ),
         epilog=textwrap.dedent(
@@ -744,7 +768,15 @@ def get_parser_agg() -> ArgumentParser:
         "--views",
         default="agg-suite,agg-all,disc,speedup,time,time_export,err,cmd,"
         "bucket-speedup,raw-short,counts,peak-gpu,onnx",
-        help="Views to add to the output files.",
+        help=textwrap.dedent(
+            """
+            Views to add to the output files. Each view becomes a tab.
+            A view is defined by its name, among
+            agg-suite, agg-all, disc, speedup, time, time_export, err,
+            cmd, bucket-speedup, raw-short, counts, peak-gpu, onnx.
+            Their definition is part of class CubeLogsPerformance.
+            """
+        ),
     )
     parser.add_argument(
         "--csv",
@@ -763,6 +795,18 @@ def get_parser_agg() -> ArgumentParser:
         default="",
         help="adds a filter to filter out data, syntax is\n"
         '``"<column1>:<value1>;<value2>/<column2>:<value3>"`` ...',
+    )
+    parser.add_argument(
+        "--sbs",
+        help=textwrap.dedent(
+            """
+            Defines an exporter to compare to another, there must be at least
+            two arguments defined with --sbs. Example:
+                --sbs dynamo:exporter=onnx-dynamo,opt=ir,attn_impl=eager
+                --sbs cusom:exporter=custom,opt=default,attn_impl=eager
+            """
+        ),
+        action=_ParseNamedDict,
     )
     return parser
 
@@ -816,6 +860,7 @@ def _cmd_agg(argv: List[Any]):
         csv=args.csv.split(","),
         raw=args.raw,
         time_mask=True,
+        sbs=args.sbs,
     )
     if args.verbose:
         print(f"Wrote {args.output!r}")
