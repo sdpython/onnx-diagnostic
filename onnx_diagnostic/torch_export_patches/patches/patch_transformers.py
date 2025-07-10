@@ -255,7 +255,8 @@ class patched_DynamicCache:
         """
         # Update the number of seen tokens
         if layer_idx == 0:
-            self._seen_tokens += key_states.shape[-2]
+            if hasattr(self, "_seen_tokens"):
+                self._seen_tokens += key_states.shape[-2]
 
         # Update the cache
         if key_states is not None:
@@ -294,7 +295,8 @@ class patched_DynamicCache:
         if self.get_seq_length() <= max_length:
             return
 
-        self._seen_tokens = max_length
+        if hasattr(self, "_seen_tokens"):
+            self._seen_tokens = max_length
         for idx in range(len(self.key_cache)):
             if self.key_cache[idx].numel():
                 self.key_cache[idx] = self.key_cache[idx][..., :max_length, :]
