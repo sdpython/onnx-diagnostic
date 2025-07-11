@@ -5,6 +5,8 @@ Change Logs
 +++++
 
 * :pr:`186`: add parameter --output_names to command line validate to change the output names of the onnx exported model
+* :pr:`185`: remove the use of _seen_tokens in DynamicCache (removed in transformers>4.53),
+  updates dummpy inputs for feature-extraction
 * :pr:`184`: implements side-by-side
 
 0.7.4

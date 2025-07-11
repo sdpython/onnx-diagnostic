@@ -1099,7 +1099,7 @@ def validate_onnx_model(
     """
     import onnxruntime
 
-    def _mk(key):
+    def _mk(key, flavour=flavour):
         return f"{key}_{flavour}" if flavour else key
 
     summary: Dict[str, Any] = {}
@@ -1154,7 +1154,7 @@ def validate_onnx_model(
     )
     sess = _quiet_or_not_quiet(
         quiet,
-        _mk("onnx_ort_create"),
+        _mk("create_onnx_ort"),
         summary,
         data,
         (lambda source=source, providers=providers: cls_runtime(source, providers)),
@@ -1189,7 +1189,7 @@ def validate_onnx_model(
 
         got = _quiet_or_not_quiet(
             quiet,
-            _mk(f"time_onnx_ort_run{suffix}"),
+            _mk(f"run_onnx_ort{suffix}"),
             summary,
             data,
             (lambda sess=sess, feeds=feeds: sess.run(None, feeds)),
