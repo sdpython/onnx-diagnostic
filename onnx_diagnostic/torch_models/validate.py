@@ -288,6 +288,7 @@ def validate_model(
     repeat: int = 1,
     warmup: int = 0,
     inputs2: int = 1,
+    output_names: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -338,6 +339,7 @@ def validate_model(
     :param inputs2: checks that the second set of inputs is reunning as well,
         this ensures that the model does support dynamism, the value is used
         as an increment to the first set of values (added to dimensions)
+    :param output_names: output names the onnx exporter should use
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -631,6 +633,7 @@ def validate_model(
                     optimization=optimization,
                     do_run=do_run,
                     dump_folder=dump_folder,
+                    output_names=output_names,
                 )
         else:
             data["inputs_export"] = data["inputs"]
@@ -643,6 +646,7 @@ def validate_model(
                 optimization=optimization,
                 do_run=do_run,
                 dump_folder=dump_folder,
+                output_names=output_names,
             )
         summary.update(summary_export)
 
@@ -868,6 +872,7 @@ def call_exporter(
     optimization: Optional[str] = None,
     do_run: bool = False,
     dump_folder: Optional[str] = None,
+    output_names: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Calls an exporter on a model;
@@ -880,6 +885,7 @@ def call_exporter(
     :param optimization: optimization to do
     :param do_run: runs and compute discrepancies
     :param dump_folder: to dump additional information
+    :param output_names: list of output names to use with the onnx exporter
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -902,6 +908,7 @@ def call_exporter(
             quiet=quiet,
             verbose=verbose,
             optimization=optimization,
+            output_names=output_names,
         )
         return summary, data
     if exporter == "custom" or exporter.startswith("custom"):
@@ -913,6 +920,7 @@ def call_exporter(
             verbose=verbose,
             optimization=optimization,
             dump_folder=dump_folder,
+            output_names=output_names,
         )
         return summary, data
     if exporter == "modelbuilder":
@@ -923,6 +931,7 @@ def call_exporter(
             quiet=quiet,
             verbose=verbose,
             optimization=optimization,
+            output_names=output_names,
         )
         return summary, data
     raise NotImplementedError(
@@ -1211,6 +1220,7 @@ def call_torch_export_onnx(
     quiet: bool = False,
     verbose: int = 0,
     optimization: Optional[str] = None,
+    output_names: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx.
@@ -1222,6 +1232,7 @@ def call_torch_export_onnx(
     :param quiet: catch exception or not
     :param verbose: verbosity
     :param optimization: optimization to do
+    :param output_names: output names to use
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1276,6 +1287,8 @@ def call_torch_export_onnx(
             print("[call_torch_export_onnx] dynamo=False so...")
             print(f"[call_torch_export_onnx] args={string_type(args, with_shape=True)}")
             print(f"[call_torch_export_onnx] kwargs={string_type(kwargs, with_shape=True)}")
+    if output_names:
+        export_export_kwargs["output_names"] = output_names
     if opset:
         export_export_kwargs["opset_version"] = opset
     if verbose:
@@ -1346,6 +1359,7 @@ def call_torch_export_model_builder(
     quiet: bool = False,
     verbose: int = 0,
     optimization: Optional[str] = None,
+    output_names: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx with :epkg:`ModelBuilder`.
@@ -1356,6 +1370,7 @@ def call_torch_export_model_builder(
     :param quiet: catch exception or not
     :param verbose: verbosity
     :param optimization: optimization to do
+    :param output_names: list of output names to use
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1369,6 +1384,9 @@ def call_torch_export_model_builder(
     provider = data.get("model_device", "cpu")
     dump_folder = data.get("model_dump_folder", "")
     assert dump_folder, "dump_folder cannot be empty with ModelBuilder"
+    assert (
+        not output_names
+    ), f"output_names not empty, not supported yet, output_names={output_names}"
     cache_dir = os.path.join(dump_folder, "cache_mb")
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
@@ -1408,6 +1426,7 @@ def call_torch_export_custom(
     verbose: int = 0,
     optimization: Optional[str] = None,
     dump_folder: Optional[str] = None,
+    output_names: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx.
@@ -1420,6 +1439,7 @@ def call_torch_export_custom(
     :param verbose: verbosity
     :param optimization: optimization to do
     :param dump_folder: to store additional information
+    :param output_names: list of output names to use
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1504,6 +1524,8 @@ def call_torch_export_custom(
     )
     if opset:
         kws["target_opset"] = opset
+    if output_names:
+        kws["output_names"] = output_names
 
     epo, opt_stats = _quiet_or_not_quiet(
         quiet,
