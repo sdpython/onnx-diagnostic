@@ -103,7 +103,7 @@ def get_inputs(
         )
         cache_length = "cache_length_key"
         cache_length2 = "cache_length_val"
-        shapes["past_key_values"] = [
+        shapes["past_key_values"] = [  # type: ignore[assignment]
             [
                 [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
                 [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],

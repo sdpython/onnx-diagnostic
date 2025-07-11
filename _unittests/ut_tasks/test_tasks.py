@@ -213,7 +213,7 @@ class TestTasks(ExtTestCase):
         self.assertEqual(data["task"], "feature-extraction")
         self.assertIn((data["size"], data["n_weights"]), [(557681664, 139420416)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
-        model(**inputs)
+        model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
         with torch_export_patches(patch_transformers=True, verbose=10):
             torch.export.export(
