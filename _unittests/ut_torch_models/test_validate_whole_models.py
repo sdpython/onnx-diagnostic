@@ -258,7 +258,7 @@ class TestValidateWholeModels(ExtTestCase):
     @requires_torch("2.7")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
-    @requires_transformers("4.51")
+    @requires_transformers("4.53")
     def test_validate_phi35_mini_instruct(self):
         mid = "microsoft/Phi-3.5-mini-instruct"
         summary, data = validate_model(
