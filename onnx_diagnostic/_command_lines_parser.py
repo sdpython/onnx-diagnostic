@@ -548,7 +548,9 @@ def _cmd_validate(argv: List[Any]):
             repeat=args.repeat,
             warmup=args.warmup,
             inputs2=args.inputs2,
-            output_names=args.outnames.strip().split(","),
+            output_names=(
+                None if len(args.outnames.strip()) < 2 else args.outnames.strip().split(",")
+            ),
         )
         print("")
         print("-- summary --")

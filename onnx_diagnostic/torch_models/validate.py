@@ -435,6 +435,7 @@ def validate_model(
         )
         print(f"[validate_model] exporter={exporter!r}, optimization={optimization!r}")
         print(f"[validate_model] dump_folder={dump_folder!r}")
+        print(f"[validate_model] output_names={output_names}")
         summary["model_id"] = model_id
         summary["model_subfolder"] = subfolder or ""
 
