@@ -16,6 +16,8 @@ def get_function(name: str) -> Tuple[type, Callable]:
     module_name = ".".join(spl[:-1])
     fname = spl[-1]
     mod = importlib.import_module(module_name)
+    if not hasattr(mod, fname):
+        return None, None
     return mod, getattr(mod, fname)
 
 
@@ -39,6 +41,10 @@ def get_patches(mod, verbose: int = 0) -> Tuple[str, List[Any]]:
                     len(fall) == 1
                 ), f"Unable to find patching information for {v} in \n{doc}"
                 fmod, f = get_function(fall[0])
+                if fmod is None and f is None:
+                    # The function does not exist in this version of transformers.
+                    # No patch is needed.
+                    continue
                 to_patch.append({"module": fmod, "function": f, "patch": v})
 
     name = mod.__name__
