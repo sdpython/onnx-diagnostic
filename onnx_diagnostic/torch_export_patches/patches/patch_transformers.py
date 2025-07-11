@@ -864,6 +864,42 @@ def patched_dynamic_rope_update(rope_forward):
     return wrapper
 
 
+def patched_model_bart_eager_attention_forward(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    scaling: Optional[float] = None,
+    dropout: float = 0.0,
+    head_mask: Optional[torch.Tensor] = None,
+    **kwargs,
+):
+    """[patch:transformers.models.bart.modeling_bart.eager_attention_forward]"""
+    if scaling is None:
+        scaling = query.size(-1) ** -0.5
+
+    attn_weights = torch.matmul(query, key.transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        # The two following lines were added.
+        if attention_mask is not None and attention_mask.ndim == 4:
+            attention_mask = attention_mask[:, :, :, : key.shape[-2]]
+        attn_weights = attn_weights + attention_mask
+
+    attn_weights = torch.nn.functional.softmax(attn_weights, dim=-1)
+
+    if head_mask is not None:
+        attn_weights = attn_weights * head_mask.view(1, -1, 1, 1)
+
+    attn_weights = torch.nn.functional.dropout(
+        attn_weights, p=dropout, training=module.training
+    )
+    attn_output = torch.matmul(attn_weights, value)
+    attn_output = attn_output.transpose(1, 2).contiguous()
+
+    return attn_output, attn_weights
+
+
 class common_RotaryEmbedding(torch.nn.Module):
     @torch.no_grad()
     @patched_dynamic_rope_update

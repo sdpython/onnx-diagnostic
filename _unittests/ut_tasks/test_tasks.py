@@ -6,7 +6,7 @@ from onnx_diagnostic.ext_test_case import (
     has_transformers,
     requires_transformers,
 )
-from onnx_diagnostic.helpers.torch_helper import to_any
+from onnx_diagnostic.helpers.torch_helper import to_any, torch_deepcopy
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
