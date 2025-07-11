@@ -4,6 +4,7 @@ Change Logs
 0.7.5
 +++++
 
+* :pr:`186`: add parameter --output_names to command line validate to change the output names of the onnx exported model
 * :pr:`184`: implements side-by-side
 
 0.7.4
