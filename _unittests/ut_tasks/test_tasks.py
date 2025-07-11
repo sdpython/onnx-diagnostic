@@ -207,6 +207,7 @@ class TestTasks(ExtTestCase):
             )
 
     @hide_stdout()
+    @requires_transformers("4.53.99")
     def test_feature_extraction_bart_base(self):
         mid = "facebook/bart-base"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
