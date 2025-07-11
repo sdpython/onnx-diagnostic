@@ -1180,4 +1180,4 @@ class patched_IdeficsAttention(torch.nn.Module):
         if output_attentions:
             attn_weights = None
 
-        return attn_output, attn_weights, past_key_value
+        return attn_output, attn_weights
