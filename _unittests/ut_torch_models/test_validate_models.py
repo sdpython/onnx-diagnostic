@@ -12,7 +12,7 @@ from onnx_diagnostic.torch_models.validate import validate_model
 
 
 class TestValidateModel(ExtTestCase):
-    @requires_transformers("4.52")
+    @requires_transformers("4.53")
     @requires_torch("2.7.99")
     @requires_experimental()
     @hide_stdout()
@@ -33,7 +33,7 @@ class TestValidateModel(ExtTestCase):
         self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-5)
         self.assertIn("onnx_filename", data)
 
-    @requires_transformers("4.52")
+    @requires_transformers("4.53")
     @requires_torch("2.7.99")
     @requires_experimental()
     @hide_stdout()

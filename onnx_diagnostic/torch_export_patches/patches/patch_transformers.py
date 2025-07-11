@@ -255,7 +255,8 @@ class patched_DynamicCache:
         """
         # Update the number of seen tokens
         if layer_idx == 0:
-            self._seen_tokens += key_states.shape[-2]
+            if hasattr(self, "_seen_tokens"):
+                self._seen_tokens += key_states.shape[-2]
 
         # Update the cache
         if key_states is not None:
@@ -294,7 +295,8 @@ class patched_DynamicCache:
         if self.get_seq_length() <= max_length:
             return
 
-        self._seen_tokens = max_length
+        if hasattr(self, "_seen_tokens"):
+            self._seen_tokens = max_length
         for idx in range(len(self.key_cache)):
             if self.key_cache[idx].numel():
                 self.key_cache[idx] = self.key_cache[idx][..., :max_length, :]
@@ -862,6 +864,91 @@ def patched_dynamic_rope_update(rope_forward):
     return wrapper
 
 
+def common_eager_attention_forward(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    scaling: Optional[float] = None,
+    dropout: float = 0.0,
+    head_mask: Optional[torch.Tensor] = None,
+    **kwargs,
+):
+    if scaling is None:
+        scaling = query.size(-1) ** -0.5
+
+    attn_weights = torch.matmul(query, key.transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        # The two following lines were added.
+        if attention_mask is not None and attention_mask.ndim == 4:
+            attention_mask = attention_mask[:, :, :, : key.shape[-2]]
+        attn_weights = attn_weights + attention_mask
+
+    attn_weights = torch.nn.functional.softmax(attn_weights, dim=-1)
+
+    if head_mask is not None:
+        attn_weights = attn_weights * head_mask.view(1, -1, 1, 1)
+
+    attn_weights = torch.nn.functional.dropout(
+        attn_weights, p=dropout, training=module.training
+    )
+    attn_output = torch.matmul(attn_weights, value)
+    attn_output = attn_output.transpose(1, 2).contiguous()
+
+    return attn_output, attn_weights
+
+
+def patched_model_bart_eager_attention_forward(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    scaling: Optional[float] = None,
+    dropout: float = 0.0,
+    head_mask: Optional[torch.Tensor] = None,
+    **kwargs,
+):
+    """[patch:transformers.models.bart.modeling_bart.eager_attention_forward]"""
+    return common_eager_attention_forward(
+        module,
+        query,
+        key,
+        value,
+        attention_mask=attention_mask,
+        scaling=scaling,
+        dropout=dropout,
+        head_mask=head_mask,
+        **kwargs,
+    )
+
+
+def patched_modeling_marian_eager_attention_forward(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    scaling: Optional[float] = None,
+    dropout: float = 0.0,
+    head_mask: Optional[torch.Tensor] = None,
+    **kwargs,
+):
+    """[patch:transformers.models.marian.modeling_marian.eager_attention_forward]"""
+    return common_eager_attention_forward(
+        module,
+        query,
+        key,
+        value,
+        attention_mask=attention_mask,
+        scaling=scaling,
+        dropout=dropout,
+        head_mask=head_mask,
+        **kwargs,
+    )
+
+
 class common_RotaryEmbedding(torch.nn.Module):
     @torch.no_grad()
     @patched_dynamic_rope_update
@@ -1093,4 +1180,6 @@ class patched_IdeficsAttention(torch.nn.Module):
         if output_attentions:
             attn_weights = None
 
-        return attn_output, attn_weights, past_key_value
+        if pv.Version(transformers.__version__) < pv.Version("4.53.99"):
+            return attn_output, attn_weights, past_key_value
+        return attn_output, attn_weights

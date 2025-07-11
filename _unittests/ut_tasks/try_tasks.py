@@ -1,6 +1,8 @@
 import unittest
+import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, never_test
 from onnx_diagnostic.helpers import string_type
+from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 from onnx_diagnostic.helpers.torch_helper import steal_forward
 
 
@@ -378,6 +380,51 @@ class TestHuggingFaceHubModel(ExtTestCase):
         model = BartModel.from_pretrained("facebook/bart-base")
         text = "Replace me by any text you'd like."
         encoded_input = tokenizer(text, return_tensors="pt")
+        sequence_length, sequence_length2 = 30, 4
+        sequence_length = 3
+        batch_size, encoder_attention_heads, encoder_ffn_dim = 1, 12, 64
+        batch_size, decoder_attention_heads, decoder_ffn_dim = 1, 12, 64
+        num_hidden_layers = 6
+        encoded_input["past_key_values"] = make_encoder_decoder_cache(
+            make_dynamic_cache(
+                [
+                    (
+                        torch.randn(
+                            batch_size,
+                            encoder_attention_heads,
+                            sequence_length,
+                            encoder_ffn_dim,
+                        ),
+                        torch.randn(
+                            batch_size,
+                            encoder_attention_heads,
+                            sequence_length,
+                            encoder_ffn_dim,
+                        ),
+                    )
+                    for i in range(num_hidden_layers)
+                ]
+            ),
+            make_dynamic_cache(
+                [
+                    (
+                        torch.randn(
+                            batch_size,
+                            decoder_attention_heads,
+                            sequence_length2,
+                            decoder_ffn_dim,
+                        ),
+                        torch.randn(
+                            batch_size,
+                            decoder_attention_heads,
+                            sequence_length2,
+                            decoder_ffn_dim,
+                        ),
+                    )
+                    for i in range(num_hidden_layers)
+                ]
+            ),
+        )
         print()
         print("-- inputs", string_type(encoded_input, with_shape=True, with_min_max=True))
         output = model(**encoded_input)

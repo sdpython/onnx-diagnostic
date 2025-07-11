@@ -144,6 +144,11 @@ def get_untrained_model_with_inputs(
                 f"[get_untrained_model_with_inputs] config._attn_implementation="
                 f"{config._attn_implementation!r}"  # type: ignore[union-attr]
             )
+    elif verbose:
+        print(
+            f"[get_untrained_model_with_inputs] default config._attn_implementation="
+            f"{getattr(config, '_attn_implementation', '?')!r}"  # type: ignore[union-attr]
+        )
 
     if type(config) is dict and "_diffusers_version" in config:
         import diffusers
