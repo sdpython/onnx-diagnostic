@@ -4,6 +4,8 @@ Change Logs
 0.7.5
 +++++
 
+* :pr:`185`: remove the use of _seen_tokens in DynamicCache (removed in transformers>4.53),
+  updates dummpy inputs for feature-extraction
 * :pr:`184`: implements side-by-side
 
 0.7.4
