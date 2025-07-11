@@ -864,7 +864,7 @@ def patched_dynamic_rope_update(rope_forward):
     return wrapper
 
 
-def patched_model_bart_eager_attention_forward(
+def common_eager_attention_forward(
     module: torch.nn.Module,
     query: torch.Tensor,
     key: torch.Tensor,
@@ -875,7 +875,6 @@ def patched_model_bart_eager_attention_forward(
     head_mask: Optional[torch.Tensor] = None,
     **kwargs,
 ):
-    """[patch:transformers.models.bart.modeling_bart.eager_attention_forward]"""
     if scaling is None:
         scaling = query.size(-1) ** -0.5
 
@@ -898,6 +897,56 @@ def patched_model_bart_eager_attention_forward(
     attn_output = attn_output.transpose(1, 2).contiguous()
 
     return attn_output, attn_weights
+
+
+def patched_model_bart_eager_attention_forward(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    scaling: Optional[float] = None,
+    dropout: float = 0.0,
+    head_mask: Optional[torch.Tensor] = None,
+    **kwargs,
+):
+    """[patch:transformers.models.bart.modeling_bart.eager_attention_forward]"""
+    return common_eager_attention_forward(
+        module,
+        query,
+        key,
+        value,
+        attention_mask=attention_mask,
+        scaling=scaling,
+        dropout=dropout,
+        head_mask=head_mask,
+        **kwargs,
+    )
+
+
+def patched_modeling_marian_eager_attention_forward(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    scaling: Optional[float] = None,
+    dropout: float = 0.0,
+    head_mask: Optional[torch.Tensor] = None,
+    **kwargs,
+):
+    """[patch:transformers.models.marian.modeling_marian.eager_attention_forward]"""
+    return common_eager_attention_forward(
+        module,
+        query,
+        key,
+        value,
+        attention_mask=attention_mask,
+        scaling=scaling,
+        dropout=dropout,
+        head_mask=head_mask,
+        **kwargs,
+    )
 
 
 class common_RotaryEmbedding(torch.nn.Module):
