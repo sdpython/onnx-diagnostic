@@ -483,6 +483,12 @@ def get_parser_validate() -> ArgumentParser:
     parser.add_argument(
         "--warmup", default=0, type=int, help="number of times to run the model to do warmup"
     )
+    parser.add_argument(
+        "--outnames",
+        help="This comma separated list defines the output names "
+        "the onnx exporter should use.",
+        default="",
+    )
     return parser
 
 
@@ -542,6 +548,9 @@ def _cmd_validate(argv: List[Any]):
             repeat=args.repeat,
             warmup=args.warmup,
             inputs2=args.inputs2,
+            output_names=(
+                None if len(args.outnames.strip()) < 2 else args.outnames.strip().split(",")
+            ),
         )
         print("")
         print("-- summary --")
