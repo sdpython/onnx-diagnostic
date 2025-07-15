@@ -33,13 +33,13 @@ def mann_kendall(series: Sequence[float], threshold: float = 0.5):
     .. math::
 
         sign(x) = \\left\\{ \\begin{array}{l} -1 if x < 0 \\\\ 0 if x = 0 \\\\ +1 otherwise
-        \\right.
+        \\end{array} \\right.
 
     And:
 
     .. math::
 
-        Var(S)= \\frac{n(n-1)(2n+5)} - \\sum_t t(t-1)(2t+5)}{18}
+        Var(S)= \\frac{n(n-1)(2n+5) - \\sum_t t(t-1)(2t+5)}{18}
     """
     aseries = np.asarray(series)
     stat = 0
