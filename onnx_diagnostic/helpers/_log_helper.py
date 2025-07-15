@@ -251,7 +251,7 @@ def open_dataframe(
 ) -> pandas.DataFrame:
     """
     Opens a filename defined by function
-    :func:`onnx_diagnostic.helpers.log_helper.enumerate_csv_files`.
+    :func:`onnx_diagnostic.helpers._log_helper.enumerate_csv_files`.
 
     :param data: a dataframe, a filename, a tuple indicating the file is coming
         from a zip file
