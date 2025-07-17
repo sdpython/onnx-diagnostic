@@ -280,7 +280,7 @@ def string_type(
             print(f"[string_type] L:{type(obj)}")
         return f"{{...}}#{len(obj)}" if with_shape else "{...}"
     # dict
-    if isinstance(obj, dict) and type(obj) is dict:
+    if isinstance(obj, dict):
         if len(obj) == 0:
             if verbose:
                 print(f"[string_type] M:{type(obj)}")

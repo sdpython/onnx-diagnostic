@@ -10,6 +10,7 @@ from huggingface_hub import HfApi, model_info, hf_hub_download, list_repo_files
 from ...helpers.config_helper import update_config
 from . import hub_data_cached_configs
 from .hub_data import __date__, __data_tasks__, load_architecture_task, __data_arch_values__
+import diffusers
 
 
 @functools.cache
@@ -119,9 +120,21 @@ def get_pretrained_config(
                 # Diffusers uses a dictionayr.
                 with open(config, "r") as f:
                     return json.load(f)
-    return transformers.AutoConfig.from_pretrained(
-        model_id, trust_remote_code=trust_remote_code, **kwargs
-    )
+    try:
+        config = transformers.AutoConfig.from_pretrained(
+            model_id, trust_remote_code=trust_remote_code, **kwargs
+        )
+    except ValueError:
+        # The model might be from diffusers, not transformers.
+        try:
+            pipe = diffusers.DiffusionPipeline.from_pretrained(
+                model_id, trust_remote_code=trust_remote_code, **kwargs
+            )
+            config = pipe.unet.config
+        except Exception as exc:
+            raise ValueError(f"Unable to retrieve the configuration for {model_id!r}") from exc
+
+    return config
 
 
 def get_model_info(model_id) -> Any:
@@ -211,7 +224,7 @@ def task_from_id(
         data = load_architecture_task()
         if model_id in data:
             return data[model_id]
-        if type(config) is dict and "_class_name" in config:
+        if isinstance(config, dict) and "_class_name" in config:
             return task_from_arch(config["_class_name"], default_value=default_value)
         if not config.architectures or not config.architectures:
             # Some hardcoded values until a better solution is found.
@@ -362,7 +375,7 @@ def download_code_modelid(
     paths = set()
     for i, name in enumerate(pyfiles):
         if verbose:
-            print(f"[download_code_modelid] download file {i+1}/{len(pyfiles)}: {name!r}")
+            print(f"[download_code_modelid] download file {i + 1}/{len(pyfiles)}: {name!r}")
         r = hf_hub_download(repo_id=model_id, filename=name)
         p = os.path.split(r)[0]
         paths.add(p)

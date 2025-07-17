@@ -576,7 +576,7 @@ def validate_model(
     summary["model_config"] = str(
         shrink_config(
             data["configuration"]
-            if type(data["configuration"]) is dict
+            if isinstance(data["configuration"], dict)
             else data["configuration"].to_dict()
         )
     ).replace(" ", "")

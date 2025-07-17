@@ -341,7 +341,7 @@ class CoupleInputsDynamicShapes:
                     if any(v is not None for v in value)
                     else None
                 )
-            assert type(inputs) is dict, f"Unexpected type for inputs {type(inputs)}"
+            assert isinstance(inputs, dict), f"Unexpected type for inputs {type(inputs)}"
             assert set(inputs) == set(ds), (
                 f"Keys mismatch between inputs {set(inputs)} and ds={set(ds)}, "
                 f"inputs={string_type(inputs, with_shape=True)}, ds={ds}"

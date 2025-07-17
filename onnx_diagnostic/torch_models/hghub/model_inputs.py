@@ -7,6 +7,7 @@ import transformers
 from ...helpers.config_helper import update_config
 from ...tasks import reduce_model_config, random_input_kwargs
 from .hub_api import task_from_arch, task_from_id, get_pretrained_config, download_code_modelid
+import diffusers
 
 
 def _code_needing_rewriting(model: Any) -> Any:
@@ -18,7 +19,7 @@ def _code_needing_rewriting(model: Any) -> Any:
 def get_untrained_model_with_inputs(
     model_id: str,
     config: Optional[Any] = None,
-    task: Optional[str] = "",
+    task: Optional[str] = None,
     inputs_kwargs: Optional[Dict[str, Any]] = None,
     model_kwargs: Optional[Dict[str, Any]] = None,
     verbose: int = 0,
@@ -88,14 +89,20 @@ def get_untrained_model_with_inputs(
             **(model_kwargs or {}),
         )
 
-    if hasattr(config, "architecture") and config.architecture:
-        archs = [config.architecture]
-    if type(config) is dict:
-        assert "_class_name" in config, f"Unable to get the architecture from config={config}"
-        archs = [config["_class_name"]]
+    # Extract architecture information from config
+    archs = None
+    if isinstance(config, dict):
+        if "_class_name" in config:
+            archs = [config["_class_name"]]
+        else:
+            raise ValueError(f"Unable to get the architecture from config={config}")
     else:
-        archs = config.architectures  # type: ignore
-    task = None
+        # Config is an object (e.g., transformers config)
+        if hasattr(config, "architecture") and config.architecture:
+            archs = [config.architecture]
+        elif hasattr(config, "architectures") and config.architectures:
+            archs = config.architectures
+
     if archs is None:
         task = task_from_id(model_id)
     assert task is not None or (archs is not None and len(archs) == 1), (
@@ -112,9 +119,9 @@ def get_untrained_model_with_inputs(
 
     # model kwagrs
     if dynamic_rope is not None:
-        assert (
-            type(config) is not dict
-        ), f"Unable to set dynamic_rope if the configuration is a dictionary\n{config}"
+        assert type(config) is not dict, (
+            f"Unable to set dynamic_rope if the configuration is a dictionary\n{config}"
+        )
         assert hasattr(config, "rope_scaling"), f"Missing 'rope_scaling' in\n{config}"
         config.rope_scaling = (
             {"rope_type": "dynamic", "factor": 10.0} if dynamic_rope else None
@@ -150,9 +157,7 @@ def get_untrained_model_with_inputs(
             f"{getattr(config, '_attn_implementation', '?')!r}"  # type: ignore[union-attr]
         )
 
-    if type(config) is dict and "_diffusers_version" in config:
-        import diffusers
-
+    if isinstance(config, dict) and "_diffusers_version" in config:
         package_source = diffusers
     else:
         package_source = transformers
@@ -206,7 +211,7 @@ def get_untrained_model_with_inputs(
             )
 
         try:
-            if type(config) is dict:
+            if isinstance(config, dict):
                 model = cls_model(**config)
             else:
                 model = cls_model(config)
