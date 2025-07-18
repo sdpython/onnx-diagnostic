@@ -227,7 +227,6 @@ class TestOnnxExportErrors(ExtTestCase):
 
     @ignore_warnings(UserWarning)
     def test_export_dynamic_cache_cat(self):
-
         class ModelDynamicCache(torch.nn.Module):
             def forward(self, x, dc):
                 y = (

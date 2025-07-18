@@ -19,7 +19,6 @@ DEVICES = {-1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memor
 
 
 class _InferenceSession:
-
     @classmethod
     def has_onnxruntime_training(cls):
         """Tells if onnxruntime_training is installed."""

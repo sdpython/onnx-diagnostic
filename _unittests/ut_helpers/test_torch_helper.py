@@ -32,7 +32,6 @@ TFLOAT = onnx.TensorProto.FLOAT
 
 
 class TestTorchTestHelper(ExtTestCase):
-
     def test_is_torchdynamo_exporting(self):
         self.assertFalse(is_torchdynamo_exporting())
 

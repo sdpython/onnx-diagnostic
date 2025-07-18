@@ -23,7 +23,6 @@ TFLOAT = onnx.TensorProto.FLOAT
 
 class TestOnnxruntimeEvaluator(ExtTestCase):
     def test_ort_eval_scan_cdist_add(self):
-
         def dist(unused: torch.Tensor, x: torch.Tensor, samex: torch.Tensor):
             sub = samex - x.reshape((1, -1))
             sq = sub * sub

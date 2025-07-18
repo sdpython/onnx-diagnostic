@@ -14,7 +14,6 @@ from onnx_diagnostic.torch_export_patches.patch_expressions import (
 
 
 class TestOnnxExportErrors(ExtTestCase):
-
     def test_patched_expressions(self):
         res = list(_iterate_patched_expressions())
         names = {_[0] for _ in res}
@@ -22,7 +21,6 @@ class TestOnnxExportErrors(ExtTestCase):
 
     @requires_torch("2.8")
     def test_filter_position_ids(self):
-
         def filter_position_ids(
             patch_attention_mask: torch.Tensor,
             position_ids: torch.Tensor,
@@ -57,7 +55,6 @@ class TestOnnxExportErrors(ExtTestCase):
             boundaries: torch.Tensor,
             num_patches_per_side: int,
         ):
-
             def body(p_attn_mask, position_ids_row):
                 h_len = torch.tensor(1) / p_attn_mask[:, 0].sum()
                 w_len = torch.tensor(1) / p_attn_mask[0].sum()

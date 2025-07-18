@@ -252,7 +252,6 @@ def shrink_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Shrinks the configuration before it gets added to the information to log."""
     new_cfg = {}
     for k, v in cfg.items():
-
         new_cfg[k] = (
             v
             if (not isinstance(v, (list, tuple, set, dict)) or len(v) < 50)
@@ -827,7 +826,6 @@ def _validate_do_run_model(
 
 
 def _validate_do_run_exported_program(data, summary, verbose, quiet):
-
     # We run a second time the model to check the patch did not
     # introduce any discrepancies
     if verbose:

@@ -3,7 +3,6 @@ from onnx.reference.ops.op_scan import Scan as _Scan
 
 
 class Scan(_Scan):
-
     def need_context(self) -> bool:
         """Tells the runtime if this node needs the context
         (all the results produced so far) as it may silently access

@@ -19,7 +19,6 @@ from onnx_diagnostic.helpers.onnx_helper import np_dtype_to_tensor_dtype
 
 
 class TestOrtSessionTinyLLM(ExtTestCase):
-
     def test_ort_value(self):
         val = np.array([30, 31, 32], dtype=np.int64)
         ort = ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(val, onnx.TensorProto.INT64)

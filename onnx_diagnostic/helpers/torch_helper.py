@@ -526,7 +526,6 @@ def dummy_llm(
             return word_emb + word_pe
 
     class AttentionBlock(torch.nn.Module):
-
         def __init__(self, embedding_dim: int = 16, context_size: int = 256):
             super().__init__()
             self.query = torch.nn.Linear(embedding_dim, embedding_dim, bias=False)
@@ -555,7 +554,6 @@ def dummy_llm(
             return out
 
     class MultiAttentionBlock(torch.nn.Module):
-
         def __init__(
             self, embedding_dim: int = 16, num_heads: int = 2, context_size: int = 256
         ):
@@ -573,7 +571,6 @@ def dummy_llm(
             return x
 
     class FeedForward(torch.nn.Module):
-
         def __init__(self, embedding_dim: int = 16, ff_dim: int = 128):
             super().__init__()
             self.linear_1 = torch.nn.Linear(embedding_dim, ff_dim)
@@ -587,7 +584,6 @@ def dummy_llm(
             return x
 
     class DecoderLayer(torch.nn.Module):
-
         def __init__(
             self,
             embedding_dim: int = 16,
@@ -613,7 +609,6 @@ def dummy_llm(
             return ff
 
     class LLM(torch.nn.Module):
-
         def __init__(
             self,
             vocab_size: int = 1024,

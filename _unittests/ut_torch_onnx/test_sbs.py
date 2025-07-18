@@ -15,7 +15,6 @@ except ImportError:
 
 
 class TestSideBySide(ExtTestCase):
-
     @hide_stdout()
     @unittest.skipIf(to_onnx is None, "to_onnx not installed")
     @ignore_errors(OSError)  # connectivity issues

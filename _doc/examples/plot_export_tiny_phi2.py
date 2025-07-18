@@ -89,7 +89,6 @@ print(f"expected: {string_type(expected, with_shape=True, with_min_max=True)}")
 
 
 with torch_export_patches(patch_transformers=True):
-
     # Two unnecessary steps but useful in case of an error
     # We check the cache is registered.
     assert is_cache_dynamic_registered()

@@ -79,7 +79,6 @@ def make_feeds(
     if len(names) < len(flat) and (
         isinstance(proto, onnx.ModelProto) or hasattr(proto, "get_inputs")
     ):
-
         typed_names = (
             [(i.name, i.type.tensor_type.elem_type) for i in proto.graph.input]
             if isinstance(proto, onnx.ModelProto)

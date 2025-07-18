@@ -1103,9 +1103,11 @@ class patched_IdeficsAttention(torch.nn.Module):
                 .transpose(1, 2)
             )
         else:
-            _, kv_len, _ = (
-                key_value_states.size()
-            )  # Note that, in this case, `kv_len` == `kv_seq_len`
+            (
+                _,
+                kv_len,
+                _,
+            ) = key_value_states.size()  # Note that, in this case, `kv_len` == `kv_seq_len`
             key_states = (
                 self.k_proj(key_value_states)
                 .view(bsz, kv_len, self.num_heads, self.head_dim)
@@ -1127,10 +1129,11 @@ class patched_IdeficsAttention(torch.nn.Module):
                 torch.tensor(q_len, dtype=torch.int64),
             )
             cos, sin = self.rotary_emb(value_states, seq_len=rotary_length)
-            query_states, key_states = (
-                transformers.models.idefics.modeling_idefics.apply_rotary_pos_emb(
-                    query_states, key_states, cos, sin, position_ids
-                )
+            (
+                query_states,
+                key_states,
+            ) = transformers.models.idefics.modeling_idefics.apply_rotary_pos_emb(
+                query_states, key_states, cos, sin, position_ids
             )
         # [bsz, nh, t, hd]
 
