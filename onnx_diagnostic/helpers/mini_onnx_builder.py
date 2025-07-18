@@ -498,7 +498,7 @@ def _unflatten(
             for k, v in res:
                 setattr(r, k, v)
             return r
-        if ty is dict:
+        if isinstance(res, dict):
             d = {}
             for k, v in res:
                 if k.startswith("((") and k.endswith("))"):

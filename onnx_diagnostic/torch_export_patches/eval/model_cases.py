@@ -358,7 +358,6 @@ class ControlFlowCondIdentity_153832(torch.nn.Module):
     """
 
     def forward(self, x, y):
-
         def branch_cond_then_1(x):
             x = torch.abs(x) + 1
             return x
@@ -789,7 +788,6 @@ class TypeBFloat16(torch.nn.Module):
 
 
 class CropLastDimensionWithTensorShape(torch.nn.Module):
-
     def forward(self, x, y):
         return x[..., : y.shape[0]]
 

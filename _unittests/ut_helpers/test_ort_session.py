@@ -24,7 +24,6 @@ TFLOAT = onnx.TensorProto.FLOAT
 
 
 class TestOrtSession(ExtTestCase):
-
     @classmethod
     def _range(cls, *shape, bias: Optional[float] = None):
         n = np.prod(shape)

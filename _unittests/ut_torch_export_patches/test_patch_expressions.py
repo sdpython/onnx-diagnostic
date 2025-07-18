@@ -11,7 +11,6 @@ from onnx_diagnostic.helpers.torch_helper import fake_torchdynamo_exporting
 
 
 class TestOnnxExportErrors(ExtTestCase):
-
     @classmethod
     def setUp(cls):
         register_patched_expressions()

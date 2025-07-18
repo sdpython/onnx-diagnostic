@@ -28,7 +28,6 @@ class TestTinyLlmBypassed(ExtTestCase):
         with torch_export_patches(
             patch_torch=False, patch_transformers=True, catch_constraints=False, verbose=10
         ) as modificator:
-
             for k in patched_DynamicCache._PATCHES_:
                 self.assertEqual(getattr(patched_DynamicCache, k), getattr(DynamicCache, k))
 

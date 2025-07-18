@@ -38,12 +38,12 @@ def update_config(config: Any, mkwargs: Dict[str, Any]):
                 setattr(config, k, v)
                 continue
             existing = getattr(config, k)
-            if type(existing) is dict:
+            if isinstance(existing, dict):
                 existing.update(v)
             else:
                 update_config(getattr(config, k), v)
             continue
-        if type(config) is dict:
+        if isinstance(config, dict):
             config[k] = v
         else:
             setattr(config, k, v)
@@ -76,7 +76,7 @@ def pick(config, name: str, default_value: Any) -> Any:
     """
     if not config:
         return default_value
-    if type(config) is dict:
+    if isinstance(config, dict):
         return config.get(name, default_value)
     return getattr(config, name, default_value)
 

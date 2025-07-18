@@ -13,7 +13,6 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
 class TestHuggingFaceHubModelRewrite(ExtTestCase):
-
     def test_code_needing_rewriting(self):
         self.assertEqual(2, len(code_needing_rewriting("BartForConditionalGeneration")))
 

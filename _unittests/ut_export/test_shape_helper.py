@@ -16,7 +16,6 @@ from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestShapeHelper(ExtTestCase):
-
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
     def test_all_dynamic_shape_from_cache(self):

@@ -4,7 +4,6 @@ from onnx_diagnostic.doc import reset_torch_transformers
 
 
 class TestDocDoc(ExtTestCase):
-
     def test_reset(self):
         reset_torch_transformers(None, None)
 

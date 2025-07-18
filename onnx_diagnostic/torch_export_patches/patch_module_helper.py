@@ -22,7 +22,6 @@ def ast_or_into_bitor(node: "ast.Node") -> "ast.Node":
 
 @functools.lru_cache
 def _rewrite_forward_clamp_float16() -> Dict[str, List[type]]:
-
     import transformers
 
     _known = {

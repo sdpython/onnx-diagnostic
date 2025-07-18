@@ -166,7 +166,6 @@ def patched__broadcast_shapes(*_shapes):
 
 
 class patched_ShapeEnv:
-
     def _check_frozen(
         self, expr: "sympy.Basic", concrete_val: "sympy.Basic"  # noqa: F821
     ) -> None:

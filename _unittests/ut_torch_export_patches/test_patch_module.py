@@ -48,7 +48,6 @@ class TestPatchModule(ExtTestCase):
         ), f"Missing parent in {ast.dump(tree, indent=2)}"
 
     def test_rewrite_test_in_forward_return1(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x.sum() > 0:
@@ -75,7 +74,6 @@ class TestPatchModule(ExtTestCase):
 
     @hide_stdout()
     def test_rewrite_test_in_forward_return2(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x.sum() > 0:
@@ -101,7 +99,6 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
     def test_rewrite_test_in_forward_assign1(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x.sum() > 0:
@@ -128,7 +125,6 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualArray(expected_, ep.module()(-x, y))
 
     def test_rewrite_test_in_forward_assign2(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x.sum() > 0:
@@ -155,10 +151,8 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
     def test_check_syntax_assign_noelse(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
-
                 def branch_cond_then_1(x):
                     x = torch.abs(x) + 1
                     return x
@@ -179,7 +173,6 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
     def test_rewrite_test_in_forward_assign_noelse(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x.sum() > 0:
@@ -204,7 +197,6 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
     def test_rewrite_test_in_forward_return_noelse(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x.sum() > 0:
@@ -216,7 +208,6 @@ class TestPatchModule(ExtTestCase):
         )
 
     def test_rewrite_test_in_forward_assign2_in_2(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x.sum() > 0:
@@ -245,7 +236,6 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
     def test_rewrite_test_in_forward_assign2_in_3(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x.sum() > 0:
@@ -277,13 +267,11 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
     def test_assign_nested_check(self):
-
         torch_cond = torch.cond
 
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 def torch_cond_then_3(y, x):
-
                     def torch_cond_then_1(y, x):
                         w = x + y
                         z = x - y
@@ -301,7 +289,6 @@ class TestPatchModule(ExtTestCase):
                     return (w, z)
 
                 def torch_cond_else_3(y, x):
-
                     def torch_cond_then_2(y):
                         u = y + 1
                         return u
@@ -322,7 +309,6 @@ class TestPatchModule(ExtTestCase):
         Model()(x, y)
 
     def test_rewrite_test_in_forward_assign_nested(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x.sum() > 0:
@@ -371,7 +357,6 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_1, ep.module()(-x, -y))
 
     def test_rewrite_test_in_forward_none(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 if x is None:
@@ -513,7 +498,6 @@ class TestPatchModule(ExtTestCase):
 
     @requires_torch("2.8")
     def test_rewrite_loop(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 z = torch.empty((x.shape[0], y.shape[0]))

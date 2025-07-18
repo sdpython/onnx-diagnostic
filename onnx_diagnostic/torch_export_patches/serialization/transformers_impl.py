@@ -67,7 +67,9 @@ def unflatten_mamba_cache(
     return cache
 
 
-def flatten_with_keys_mamba_cache(cache: MambaCache) -> Tuple[
+def flatten_with_keys_mamba_cache(
+    cache: MambaCache,
+) -> Tuple[
     List[Tuple[torch.utils._pytree.KeyEntry, Any]],
     torch.utils._pytree.Context,
 ]:
@@ -224,7 +226,9 @@ def flatten_encoder_decoder_cache(
     return torch.utils._pytree._dict_flatten(dictionary)
 
 
-def flatten_with_keys_encoder_decoder_cache(ec_cache: EncoderDecoderCache) -> Tuple[
+def flatten_with_keys_encoder_decoder_cache(
+    ec_cache: EncoderDecoderCache,
+) -> Tuple[
     List[Tuple[torch.utils._pytree.KeyEntry, Any]],
     torch.utils._pytree.Context,
 ]:
