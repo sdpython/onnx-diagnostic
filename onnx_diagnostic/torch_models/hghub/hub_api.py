@@ -10,7 +10,6 @@ from huggingface_hub import HfApi, model_info, hf_hub_download, list_repo_files
 from ...helpers.config_helper import update_config
 from . import hub_data_cached_configs
 from .hub_data import __date__, __data_tasks__, load_architecture_task, __data_arch_values__
-import diffusers
 
 
 @functools.cache
@@ -127,6 +126,8 @@ def get_pretrained_config(
     except ValueError:
         # The model might be from diffusers, not transformers.
         try:
+            import diffusers
+
             pipe = diffusers.DiffusionPipeline.from_pretrained(
                 model_id, trust_remote_code=trust_remote_code, **kwargs
             )
