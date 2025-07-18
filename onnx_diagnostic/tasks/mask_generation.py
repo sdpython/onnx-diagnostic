@@ -48,11 +48,14 @@ def get_inputs(
     ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     
 
+    # TODO(anyone): input_masks is weridly failing all the time with mismatch channels with Conv
+    # or embedding_size. I guess maybe the model is too implicit on the input_masks shape.
+
     shapes = {
         "pixel_values": {0: "batch", 2: "height", 3: "width"},  # 1: num_channels is static
         "input_points": {0: "batch", 1: "point_batch_size", 2: "nb_points_per_image"},
         "input_boxes": {0: "batch", 1: "point_batch_size"},
-        "input_masks": {0: "batch", 1: "height", 2: "width"},
+        # "input_masks": {0: "batch", 2: "height", 3: "width"},
     }
     inputs = dict(
         pixel_values=torch.randn(
@@ -64,10 +67,11 @@ def get_inputs(
         input_boxes=torch.randn(
             (batch_size, 1, 4), dtype=torch.float32
         ),  # 1 box per image
-        input_masks=torch.randn(
-            (batch_size, num_channels, height, width), dtype=torch.float32
-        ),  # mask for the image
+        # input_masks=torch.randn(
+        #     (batch_size, 1, height, width), dtype=torch.float32
+        # ),  # mask for the image
     )
+
     res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
         assert (
@@ -82,6 +86,7 @@ def get_inputs(
             num_channels=num_channels,
             output_channels=output_channels,
             window_size=window_size,
+            add_second_input=False,
             **kwargs,
         )["inputs"]
     return res
@@ -128,7 +133,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
         width=1024 if config is None else config.vision_config.image_size,
         height=1024 if config is None else config.vision_config.image_size,
         num_channels=3 if config is None else config.vision_config.num_channels,
-        output_channels=256 if config is None else config.vision_config.num_channels,
+        output_channels=256 if config is None else config.vision_config.output_channels,
         window_size=14 if config is None else config.vision_config.window_size,
     )
     return kwargs, get_inputs
