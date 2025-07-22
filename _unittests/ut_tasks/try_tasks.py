@@ -257,7 +257,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         print(f">>> Response\n{response}")
 
     @never_test()
-    def test_imagetext2text_generation(self):
+    def test_imagetext2text_generation_idefics(self):
         # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k etext2t
         # https://huggingface.co/docs/transformers/main/en/tasks/idefics
 
@@ -286,6 +286,47 @@ class TestHuggingFaceHubModel(ExtTestCase):
         generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)
 
         print(generated_text[0])
+
+    @never_test()
+    def test_imagetext2text_generation_gemma3(self):
+        import torch
+        from transformers import Gemma3ForConditionalGeneration, AutoProcessor
+
+        mid = "tiny-random/gemma-3"
+        processor = AutoProcessor.from_pretrained(mid)
+        model = Gemma3ForConditionalGeneration.from_pretrained(
+            mid, torch_dtype=torch.bfloat16, device_map="auto"
+        )
+
+        messages = [
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": "You are a helpful assistant."}],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "image": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/bee.jpg",
+                    },
+                    {"type": "text", "text": "Describe this image in detail."},
+                ],
+            },
+        ]
+        inputs = processor.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to(model.device, dtype=torch.bfloat16)
+        print()
+        with steal_forward(model):
+            generated_ids = model.generate(**inputs, max_new_tokens=10)
+        decoded = processor.decode(generated_ids, skip_special_tokens=True)
+
+        print(decoded[0])
 
     @never_test()
     def test_automatic_speech_recognition(self):

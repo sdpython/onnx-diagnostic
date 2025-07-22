@@ -56,6 +56,7 @@ def get_inputs(
         "cls_cache" not in kwargs
     ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     batch = torch.export.Dim("batch", min=1, max=1024)
+    batch_img = torch.export.Dim("batch_img", min=1, max=1024)
     seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
     cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
     images = "images"  # torch.export.Dim("images", min=1, max=4096)
@@ -74,7 +75,7 @@ def get_inputs(
             [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
             [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
         ],
-        "pixel_values": {0: batch, 1: images},
+        "pixel_values": {0: batch_img},
         "image_attention_mask": {0: batch, 1: seq_length, 2: images},
     }
     inputs = dict(
@@ -96,9 +97,7 @@ def get_inputs(
                 for i in range(num_hidden_layers)
             ]
         ),
-        pixel_values=torch.ones((batch_size, n_images, num_channels, width, height)).to(
-            torch.int64
-        ),
+        pixel_values=torch.randn(n_images, num_channels, width, height).clamp(-1, 1),
         image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
             torch.int64
         ),

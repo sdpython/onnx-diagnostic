@@ -558,7 +558,12 @@ def string_type(
             print(f"[string_type] CACHE1:{type(obj)}")
         return f"MambaCache(conv_states={c}, ssm_states={d})"
 
-    if obj.__class__.__name__ in {"DynamicCache", "SlidingWindowCache", "StaticCache"}:
+    if obj.__class__.__name__ in {
+        "DynamicCache",
+        "SlidingWindowCache",
+        "StaticCache",
+        "HybridCache",
+    }:
         kc = string_type(
             obj.key_cache,
             with_shape=with_shape,

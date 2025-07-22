@@ -4330,3 +4330,61 @@ def _ccached_diffusers_tiny_torch_full_checker_unet():
         "up_block_types": ["CrossAttnUpBlock2D", "UpBlock2D"],
         "use_linear_projection": false,
     }
+
+
+def _ccached_riny_random_gemma_3():
+    "tiny-random/gemma-3"
+    return transformers.Gemma3Config(
+        **{
+            "architectures": ["Gemma3ForConditionalGeneration"],
+            "boi_token_index": 255999,
+            "eoi_token_index": 256000,
+            "eos_token_id": [1, 106],
+            "image_token_index": 262144,
+            "initializer_range": 0.02,
+            "mm_tokens_per_image": 256,
+            "model_type": "gemma3",
+            "text_config": {
+                "attention_bias": false,
+                "attention_dropout": 0.0,
+                "attn_logit_softcapping": null,
+                "cache_implementation": "hybrid",
+                "final_logit_softcapping": null,
+                "head_dim": 32,
+                "hidden_activation": "gelu_pytorch_tanh",
+                "hidden_size": 32,
+                "initializer_range": 0.02,
+                "intermediate_size": 128,
+                "max_position_embeddings": 131072,
+                "model_type": "gemma3_text",
+                "num_attention_heads": 1,
+                "num_hidden_layers": 2,
+                "num_key_value_heads": 1,
+                "query_pre_attn_scalar": 168,
+                "rms_norm_eps": 1e-06,
+                "rope_local_base_freq": 10000.0,
+                "rope_scaling": {"factor": 8.0, "rope_type": "linear"},
+                "rope_theta": 1000000.0,
+                "sliding_window": 1024,
+                "sliding_window_pattern": 2,
+                "use_cache": true,
+                "vocab_size": 262208,
+            },
+            "torch_dtype": "bfloat16",
+            "transformers_version": "4.50.0.dev0",
+            "vision_config": {
+                "attention_dropout": 0.0,
+                "hidden_act": "gelu_pytorch_tanh",
+                "hidden_size": 32,
+                "image_size": 896,
+                "intermediate_size": 128,
+                "layer_norm_eps": 1e-06,
+                "model_type": "siglip_vision_model",
+                "num_attention_heads": 1,
+                "num_channels": 3,
+                "num_hidden_layers": 2,
+                "patch_size": 14,
+                "vision_use_head": false,
+            },
+        }
+    )
