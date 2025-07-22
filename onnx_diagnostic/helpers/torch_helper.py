@@ -14,6 +14,7 @@ from .helper import string_type, size_type
 from .cache_helper import (
     make_dynamic_cache,
     make_encoder_decoder_cache,
+    make_hybrid_cache,
     make_sliding_window_cache,
     make_mamba_cache,
     make_static_cache,
@@ -789,6 +790,8 @@ def torch_deepcopy(value: Any) -> Any:
             torch_deepcopy(list(zip(value.key_cache, value.value_cache))),
             max_cache_len=value.max_cache_len,
         )
+    if value.__class__.__name__ == "HybridCache":
+        return make_hybrid_cache(torch_deepcopy(list(zip(value.key_cache, value.value_cache))))
     if value.__class__.__name__ == "SlidingWindowCache":
         return make_sliding_window_cache(
             torch_deepcopy(list(zip(value.key_cache, value.value_cache)))

@@ -318,3 +318,65 @@ def make_sliding_window_cache(
         )
         cache.value_cache[i][:, :, :, :] = key_value_pairs[i][1]
     return cache
+
+
+def make_hybrid_cache(
+    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    max_cache_len: Optional[int] = None,
+    max_batch_size: Optional[int] = None,
+) -> transformers.cache_utils.HybridCache:
+    """
+    Creates an instance of :class:`transformers.cache_utils.HybridCache`.
+    This version is valid for ``transformers < 4.50``.
+
+    :param key_value_pairs: list of pairs of (key, values)
+    :return: :class:`transformers.cache_utils.HybridCache`
+
+    Example:
+
+    .. runpython::
+        :showcode:
+
+        import torch
+        from onnx_diagnostic.helpers import string_type
+        from onnx_diagnostic.helpers.cache_helper import make_hybrid_cache
+
+        n_layers = 2
+        bsize, nheads, slen, dim = 2, 4, 3, 7
+
+        past_key_values = make_hybrid_cache(
+            [
+                (
+                    torch.randn(bsize, nheads, slen, dim),
+                    torch.randn(bsize, nheads, slen, dim),
+                )
+                for i in range(n_layers)
+            ]
+        )
+        print(string_type(past_key_values, with_shape=True))
+    """
+    if key_value_pairs:
+        assert (
+            not max_batch_size and not max_cache_len
+        ), "key_value_pairs is not empty, do not specify max_cache_len and max_batch_size"
+        max_batch_size = key_value_pairs[0][0].shape[0]
+        max_cache_len = key_value_pairs[0][0].shape[2]
+    else:
+        assert (
+            max_batch_size and max_cache_len
+        ), "key_value_pairs is empty, max_batch_size and max_cache_len are required"
+    _ = max_cache_len
+
+    class _config:
+        max_cache_len = _
+        batch_size = max_batch_size
+        num_heads = key_value_pairs[0][0].shape[1] if key_value_pairs else None
+        head_dim = key_value_pairs[0][0].shape[-1] if key_value_pairs else None
+        num_attention_heads = key_value_pairs[0][1].shape[1] if key_value_pairs else None
+
+    cache = transformers.cache_utils.HybridCache(
+        _config(), max_cache_len=max_cache_len, max_batch_size=max_batch_size
+    )
+    for i, (key, value) in enumerate(key_value_pairs):
+        cache.update(key, value, i)
+    return cache

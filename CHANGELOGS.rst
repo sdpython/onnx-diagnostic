@@ -4,6 +4,8 @@ Change Logs
 0.7.6
 +++++
 
+* :pr:`192`: add support for Gemma-3, add serialization for HybridCache
+
 0.7.5
 +++++
 

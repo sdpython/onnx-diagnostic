@@ -7,10 +7,12 @@ from onnx_diagnostic.helpers.cache_helper import (
     flatten_unflatten_for_dynamic_shapes,
     make_dynamic_cache,
     make_encoder_decoder_cache,
+    make_hybrid_cache,
     make_mamba_cache,
     make_sliding_window_cache,
     make_static_cache,
 )
+from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.export import CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
@@ -198,6 +200,45 @@ class TestCacheHelpers(ExtTestCase):
             )
             self.assertEqual(0, max_diff(c2, c2)["abs"])
             self.assertIsInstance(c2, transformers.cache_utils.StaticCache)
+            flat, _spec = torch.utils._pytree.tree_flatten(c2)
+            self.assertIsInstance(flat, list)
+            self.assertEqual(len(flat), 6)
+            unflat = flatten_unflatten_for_dynamic_shapes(c2)
+            self.assertIsInstance(unflat, list)
+            self.assertEqual(len(unflat), 2)
+            self.assertEqual(
+                "#2[#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7],#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7]]",
+                self.string_type(unflat, with_shape=True),
+            )
+
+    def test_make_hybrid_cache(self):
+        cache = make_hybrid_cache(
+            [
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+            ],
+        )
+        text = self.string_type(cache, with_shape=True)
+        self.assertEqual(
+            "HybridCache(key_cache=#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7], "
+            "value_cache=#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7])",
+            text,
+        )
+        self.assertEqual(0, max_diff(cache, cache)["abs"])
+        self.assertEqual(0, max_diff(cache, torch_deepcopy(cache))["abs"])
+
+    def test_unflatten_flatten_hybrid_cache(self):
+        with torch_export_patches(patch_transformers=True):
+            c2 = make_hybrid_cache(
+                [
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                ],
+            )
+            self.assertEqual(0, max_diff(c2, c2)["abs"])
+            self.assertIsInstance(c2, transformers.cache_utils.HybridCache)
             flat, _spec = torch.utils._pytree.tree_flatten(c2)
             self.assertIsInstance(flat, list)
             self.assertEqual(len(flat), 6)

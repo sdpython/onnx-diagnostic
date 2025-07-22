@@ -4,6 +4,7 @@ import transformers
 from transformers.cache_utils import (
     DynamicCache,
     EncoderDecoderCache,
+    HybridCache,
     SlidingWindowCache,
     StaticCache,
 )
@@ -13,7 +14,7 @@ try:
 except ImportError:
     from transformers.cache_utils import MambaCache
 from transformers.modeling_outputs import BaseModelOutput
-from ...helpers.cache_helper import make_static_cache
+from ...helpers.cache_helper import make_hybrid_cache, make_static_cache
 from . import make_serialization_function_for_dataclass
 
 
@@ -33,6 +34,12 @@ def flatten_mamba_cache(
     mamba_cache: MambaCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.MambaCache` with python objects."""
+    assert isinstance(mamba_cache.conv_states, list) and isinstance(
+        mamba_cache.ssm_states, list
+    ), (
+        f"Unexpected types for conv_states and ssm_states {type(mamba_cache.conv_states)}, "
+        f"{type(mamba_cache.ssm_states)}"
+    )
     flat = [
         ("conv_states", mamba_cache.conv_states),
         ("ssm_states", mamba_cache.ssm_states),
@@ -91,7 +98,10 @@ def flatten_dynamic_cache(
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
     if hasattr(transformers.cache_utils, "_flatten_dynamic_cache"):
         return transformers.cache_utils._flatten_dynamic_cache(dynamic_cache)
-    flat = [("key_cache", dynamic_cache.key_cache), ("value_cache", dynamic_cache.value_cache)]
+    flat = [
+        ("key_cache", list(dynamic_cache.key_cache)),
+        ("value_cache", list(dynamic_cache.value_cache)),
+    ]
     return [f[1] for f in flat], [f[0] for f in flat]
 
 
@@ -121,6 +131,38 @@ def unflatten_dynamic_cache(
 
 
 #############
+# HybridCache
+#############
+
+
+def flatten_hybrid_cache(
+    cache: HybridCache,
+) -> Tuple[List[Any], torch.utils._pytree.Context]:
+    """Serializes a :class:`transformers.cache_utils.HybridCache` with python objects."""
+    if hasattr(transformers.cache_utils, "_flatten_hybrid_cache"):
+        return transformers.cache_utils._flatten_hybrid_cache(cache)
+    flat = [("key_cache", list(cache.key_cache)), ("value_cache", list(cache.value_cache))]
+    return [f[1] for f in flat], [f[0] for f in flat]
+
+
+def flatten_with_keys_hybrid_cache(
+    cache: HybridCache,
+) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
+    """Serializes a :class:`transformers.cache_utils.HybridCache` with python objects."""
+    if hasattr(transformers.cache_utils, "_flatten_with_keys_dynamic_cache"):
+        return transformers.cache_utils._flatten_with_keys_hybrid_cache(cache)
+    values, context = flatten_hybrid_cache(cache)
+    return [(torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)], context
+
+
+def unflatten_hybrid_cache(
+    values: List[Any], context: torch.utils._pytree.Context, output_type=None
+) -> HybridCache:
+    """Restores a :class:`transformers.cache_utils.HybridCache` from python objects."""
+    return make_hybrid_cache(list(zip(values[0], values[1])))
+
+
+#############
 # StaticCache
 #############
 
@@ -129,12 +171,14 @@ def flatten_static_cache(
     cache: StaticCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.StaticCache` with python objects."""
+    keys = list(cache.key_cache)
+    values = list(cache.value_cache)
     assert not cache.key_cache or cache.max_cache_len == cache.key_cache[0].shape[2], (
         f"Serialization doet not work when "
         f"cache.max_cache_len={cache.max_cache_len} != "
-        f"cache.key_cache[0].shape[2]={cache.key_cache[0].shape[2]}"
+        f"cache.key_cache[0].shape[2]={keys[0].shape[2]}"
     )
-    flat = [("key_cache", cache.key_cache), ("value_cache", cache.value_cache)]
+    flat = [("key_cache", keys), ("value_cache", values)]
     return [f[1] for f in flat], [f[0] for f in flat]
 
 
@@ -167,7 +211,7 @@ def flatten_sliding_window_cache(
     Serializes a :class:`transformers.cache_utils.SlidingWindowCache`
     with python objects.
     """
-    flat = [("key_cache", cache.key_cache), ("value_cache", cache.value_cache)]
+    flat = [("key_cache", list(cache.key_cache)), ("value_cache", list(cache.value_cache))]
     return [f[1] for f in flat], [f[0] for f in flat]
 
 
