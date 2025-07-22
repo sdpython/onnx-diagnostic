@@ -22,7 +22,11 @@ class TestOnnxExportErrors(ExtTestCase):
     def test_pytree_flatten_mamba_cache(self):
         import torch
         import torch.utils._pytree as py_pytree
-        from transformers.cache_utils import MambaCache
+
+        try:
+            from transformers.models.mamba.cache_mamba import MambaCache
+        except ImportError:
+            from transformers.cache_utils import MambaCache
 
         class _config:
             def __init__(self):

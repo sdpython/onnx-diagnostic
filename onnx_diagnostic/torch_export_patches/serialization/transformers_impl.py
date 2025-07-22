@@ -3,11 +3,15 @@ import torch
 import transformers
 from transformers.cache_utils import (
     DynamicCache,
-    MambaCache,
     EncoderDecoderCache,
     SlidingWindowCache,
     StaticCache,
 )
+
+try:
+    from transformers.models.mamba.cache_mamba import MambaCache
+except ImportError:
+    from transformers.cache_utils import MambaCache
 from transformers.modeling_outputs import BaseModelOutput
 from ...helpers.cache_helper import make_static_cache
 from . import make_serialization_function_for_dataclass

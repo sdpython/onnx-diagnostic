@@ -6,11 +6,15 @@ import torch
 import transformers
 from transformers.cache_utils import (
     DynamicCache,
-    MambaCache,
     EncoderDecoderCache,
     SlidingWindowCache,
     StaticCache,
 )
+
+try:
+    from transformers.models.mamba.cache_mamba import MambaCache
+except ImportError:
+    from transformers.cache_utils import MambaCache
 
 from ..helpers import string_type
 from .serialization import _lower_name_with_
