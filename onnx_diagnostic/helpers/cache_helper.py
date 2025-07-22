@@ -4,6 +4,11 @@ import torch
 import transformers
 import transformers.cache_utils
 
+try:
+    from transformers.models.mamba.modeling_mamba import MambaCache
+except ImportError:
+    from transformers.cache_utils import MambaCache
+
 
 def flatten_unflatten_for_dynamic_shapes(
     obj: Any,
@@ -242,10 +247,8 @@ def make_encoder_decoder_cache(
     )
 
 
-def make_mamba_cache(
-    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
-) -> transformers.cache_utils.MambaCache:
-    "Creates a :class:`transformers.cache_utils.MambaCache`."
+def make_mamba_cache(key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]]) -> MambaCache:
+    "Creates a ``MambaCache``."
     dtype = key_value_pairs[0][0].dtype
 
     class _config:
@@ -256,7 +259,7 @@ def make_mamba_cache(
             self.num_hidden_layers = len(key_value_pairs)
             self.dtype = dtype
 
-    cache = transformers.cache_utils.MambaCache(
+    cache = MambaCache(
         _config(),
         max_batch_size=key_value_pairs[0][0].shape[0],
         device=key_value_pairs[0][0].device,
@@ -286,7 +289,7 @@ def make_mamba_cache(
 
 def make_sliding_window_cache(
     key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
-) -> transformers.cache_utils.MambaCache:
+) -> transformers.cache_utils.SlidingWindowCache:
     "Creates a :class:`transformers.cache_utils.SlidingWindowCache`."
 
     class _config:
