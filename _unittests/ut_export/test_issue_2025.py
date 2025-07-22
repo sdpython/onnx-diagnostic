@@ -1,10 +1,11 @@
 import unittest
 import numpy as np
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
 
 
 class TestIssues2025(ExtTestCase):
+    @requires_torch("2.8")
     def test_issue_158786_qwen2vl(self):
         # https://github.com/pytorch/pytorch/issues/158786
         class Model(torch.nn.Module):
