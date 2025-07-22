@@ -24,7 +24,7 @@ class TestOnnxExportErrors(ExtTestCase):
         import torch.utils._pytree as py_pytree
 
         try:
-            from transformers.models.mamba.cache_mamba import MambaCache
+            from transformers.models.mamba.modeling_mamba import MambaCache
         except ImportError:
             from transformers.cache_utils import MambaCache
 

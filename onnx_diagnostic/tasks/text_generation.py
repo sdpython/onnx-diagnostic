@@ -95,7 +95,7 @@ def get_inputs(
 
     if config is not None and config.__class__.__name__ == "FalconMambaConfig":
         try:
-            from transformers.models.mamba.cache_mamba import MambaCache
+            from transformers.models.mamba.modeling_mamba import MambaCache
         except ImportError:
             from transformers.cache_utils import MambaCache
 
