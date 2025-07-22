@@ -77,6 +77,7 @@ def get_inputs(
         ],
         "pixel_values": {0: batch_img},
         "image_attention_mask": {0: batch, 1: seq_length, 2: images},
+        "use_cache": None,
     }
     inputs = dict(
         input_ids=torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
@@ -101,6 +102,7 @@ def get_inputs(
         image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
             torch.int64
         ),
+        use_cache=True,  # Gemma3 does not set this value to true when a cache is provided
     )
     res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
