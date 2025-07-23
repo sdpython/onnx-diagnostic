@@ -1,6 +1,5 @@
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 import torch
-import transformers
 from ..helpers.cache_helper import (
     make_dynamic_cache,
     make_mamba_cache,
@@ -95,9 +94,14 @@ def get_inputs(
     cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
 
     if config is not None and config.__class__.__name__ == "FalconMambaConfig":
+        try:
+            from transformers.models.mamba.modeling_mamba import MambaCache
+        except ImportError:
+            from transformers.cache_utils import MambaCache
+
         assert cls_cache in (
             "MambaCache",
-            transformers.cache_utils.MambaCache,
+            MambaCache,
         ), f"Unexpected value for cls_cache={cls_cache} and config={config}"
         seq_length_multiple = 8
         sequence_length = (

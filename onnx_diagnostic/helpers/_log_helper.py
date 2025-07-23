@@ -260,17 +260,17 @@ def open_dataframe(
     if isinstance(data, pandas.DataFrame):
         return data
     if isinstance(data, str):
-        df = pandas.read_csv(data)
+        df = pandas.read_csv(data, low_memory=False)
         df["RAWFILENAME"] = data
         return df
     if isinstance(data, tuple):
         if not data[-1]:
-            df = pandas.read_csv(data[2])
+            df = pandas.read_csv(data[2], low_memory=False)
             df["RAWFILENAME"] = data[2]
             return df
         zf = zipfile.ZipFile(data[-1])
         with zf.open(data[2]) as f:
-            df = pandas.read_csv(f)
+            df = pandas.read_csv(f, low_memory=False)
             df["RAWFILENAME"] = f"{data[-1]}/{data[2]}"
         zf.close()
         return df
