@@ -14,7 +14,12 @@ try:
 except ImportError:
     from transformers.cache_utils import MambaCache
 from transformers.modeling_outputs import BaseModelOutput
-from ...helpers.cache_helper import make_hybrid_cache, make_static_cache, CacheKeyValue
+from ...helpers.cache_helper import (
+    make_dynamic_cache,
+    make_hybrid_cache,
+    make_static_cache,
+    CacheKeyValue,
+)
 from . import make_serialization_function_for_dataclass
 
 
@@ -96,8 +101,6 @@ def flatten_dynamic_cache(
     dynamic_cache: DynamicCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
-    if hasattr(transformers.cache_utils, "_flatten_dynamic_cache"):
-        return transformers.cache_utils._flatten_dynamic_cache(dynamic_cache)
     ca = CacheKeyValue(dynamic_cache)
     flat = [("key_cache", ca.key_cache), ("value_cache", ca.value_cache)]
     return [f[1] for f in flat], [f[0] for f in flat]
@@ -107,8 +110,6 @@ def flatten_with_keys_dynamic_cache(
     dynamic_cache: DynamicCache,
 ) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
-    if hasattr(transformers.cache_utils, "_flatten_with_keys_dynamic_cache"):
-        return transformers.cache_utils._flatten_with_keys_dynamic_cache(dynamic_cache)
     values, context = flatten_dynamic_cache(dynamic_cache)
     return [(torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)], context
 
@@ -117,15 +118,7 @@ def unflatten_dynamic_cache(
     values: List[Any], context: torch.utils._pytree.Context, output_type=None
 ) -> DynamicCache:
     """Restores a :class:`transformers.cache_utils.DynamicCache` from python objects."""
-    if hasattr(transformers.cache_utils, "_unflatten_dynamic_cache"):
-        assert output_type is None, f"output_type={output_type} not supported"
-        return transformers.cache_utils._unflatten_dynamic_cache(values, context)
-
-    cache = transformers.cache_utils.DynamicCache()
-    values = dict(zip(context, values))
-    for k, v in values.items():
-        setattr(cache, k, v)
-    return cache
+    return make_dynamic_cache(list(zip(values[0], values[1])))
 
 
 #############

@@ -26,10 +26,9 @@ class CacheKeyValue:
 
     def __init__(self, cache):
         if hasattr(cache, "layers"):
-            self.key_cache = [layer.keys for layer in cache.layers if layer.keys is not None]
-            self.value_cache = [
-                layer.values for layer in cache.layers if layer.values is not None
-            ]
+            layers = [layer for layer in cache.layers if layer is not None]
+            self.key_cache = [layer.keys for layer in layers]
+            self.value_cache = [layer.values for layer in layers]
         else:
             self.key_cache = cache.key_cache
             self.value_cache = cache.value_cache
