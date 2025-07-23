@@ -361,7 +361,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 "head_dim",
                 (
                     config.text_config.head_dim
-                    if hasattr(config.text_config, "head_dim")
+                    if text_config and hasattr(config.text_config, "head_dim")
                     else (
                         (config.text_config.hidden_size if text_config else config.hidden_size)
                         // (
