@@ -540,13 +540,19 @@ def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> Te
         ), f"Unable to convert type {type(tensor)} into TensorProto."
         return proto_from_tensor(tensor, name=name)
 
-    from onnx.reference.ops.op_cast import (
-        bfloat16,
-        float8e4m3fn,
-        float8e4m3fnuz,
-        float8e5m2,
-        float8e5m2fnuz,
-    )
+    try:
+        from onnx.reference.ops.op_cast import (
+            bfloat16,
+            float8e4m3fn,
+            float8e4m3fnuz,
+            float8e5m2,
+            float8e5m2fnuz,
+        )
+    except ImportError:
+        bfloat16 = None
+
+    if bfloat16 is None:
+        return onh.from_array(tensor, name)
 
     dt = tensor.dtype
     if dt == float8e4m3fn and dt.descr[0][0] == "e4m3fn":

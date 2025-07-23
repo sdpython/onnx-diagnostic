@@ -11,7 +11,20 @@ except ImportError:
 
 
 class CacheKeyValue:
-    def __init__(self, cache: "Cache"):  # noqa: F821
+    """
+    Starting transformers>=4.54, the cache API has deprecated
+    ``cache.key_cache`` and ``cache.value_cache``.
+    This class wraps a cache independently from transformers version and enables
+    attributes ``key_cache`` and ``value_cache``.
+
+    .. code-block:: python
+
+        capi = CacheKeyValue(cache)
+        capi.cache.key_cache
+        capi.cache.value_cache
+    """
+
+    def __init__(self, cache):
         if hasattr(cache, "layers"):
             self.key_cache = [layer.keys for layer in cache.layers if layer.keys is not None]
             self.value_cache = [

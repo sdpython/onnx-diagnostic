@@ -12,7 +12,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     if hasattr(config, "num_hidden_layers"):
         config.num_hidden_layers = min(config.num_hidden_layers, 2)
     if hasattr(config, "mm_tokens_per_image"):
-        config.mm_tokens_per_image = min(config.mm_tokens_per_image, 16)
+        config.mm_tokens_per_image = min(config.mm_tokens_per_image, 2)
     if hasattr(config, "vision_config"):
         if hasattr(config.vision_config, "num_hidden_layers"):
             config.vision_config.num_hidden_layers = min(
@@ -67,7 +67,6 @@ def _get_inputs_gemma3(
     n_images: int = 2,
     dynamic_rope: bool = False,
     max_sequence_length: int = 380,
-    cache_dim2: int = 4,
     **kwargs,  # unused
 ):
     """
@@ -99,7 +98,7 @@ def _get_inputs_gemma3(
     ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     batch = torch.export.Dim("batch", min=1, max=1024)
     seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
-    cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
+    # cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
@@ -111,8 +110,8 @@ def _get_inputs_gemma3(
         "position_ids": {0: batch, 1: seq_length},
         "cache_position": {1: seq_length},
         "past_key_values": [
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+            [{0: batch} for _ in range(num_hidden_layers)],
+            [{0: batch} for _ in range(num_hidden_layers)],
         ],
         "pixel_values": {0: batch},
         "use_cache": None,
@@ -121,10 +120,7 @@ def _get_inputs_gemma3(
     input_ids = torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
         torch.int64
     )
-    input_ids[0, 5:13] = image_token_index
-    input_ids[0, 17:25] = image_token_index
-    input_ids[1, 24:32] = image_token_index
-    input_ids[1, 1:9] = image_token_index
+    input_ids[:, 1] = image_token_index
     # input_ids[input_ids == image_token_index] = pad_token_id
     token_type_ids = torch.zeros_like(input_ids)
     token_type_ids[input_ids == image_token_index] = 1
@@ -136,12 +132,17 @@ def _get_inputs_gemma3(
             full_attention=torch.randn(batch_size, 1, sequence_length, max_sequence_length),
             sliding_attention=torch.randn(batch_size, 1, sequence_length, max_sequence_length),
         ),
+        cache_position=torch.arange(0, sequence_length).to(torch.int64),
         position_ids=torch.arange(0, sequence_length).to(torch.int64).expand((batch_size, -1)),
         past_key_values=make_hybrid_cache(
             [
                 (
-                    torch.randn(batch_size, cache_dim2, max_sequence_length, head_dim),
-                    torch.randn(batch_size, cache_dim2, max_sequence_length, head_dim),
+                    torch.randn(
+                        batch_size, num_key_value_heads, max_sequence_length, head_dim
+                    ),
+                    torch.randn(
+                        batch_size, num_key_value_heads, max_sequence_length, head_dim
+                    ),
                 )
                 for i in range(num_hidden_layers)
             ]
@@ -230,7 +231,7 @@ def get_inputs(
             "attention_mask": {0: batch, 1: "cache+seq"},
             "position_ids": {0: batch, 1: "cache+seq"},
             "past_key_values": [
-                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                [{0: batch} for _ in range(num_hidden_layers)],
                 [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
             ],
             "pixel_values": (
@@ -358,11 +359,17 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
             else getattr(
                 config,
                 "head_dim",
-                (config.text_config.hidden_size if text_config else config.hidden_size)
-                // (
-                    config.text_config.num_attention_heads
-                    if text_config
-                    else config.num_attention_heads
+                (
+                    config.text_config.head_dim
+                    if hasattr(config.text_config, "head_dim")
+                    else (
+                        (config.text_config.hidden_size if text_config else config.hidden_size)
+                        // (
+                            config.text_config.num_attention_heads
+                            if text_config
+                            else config.num_attention_heads
+                        )
+                    )
                 ),
             )
         ),
