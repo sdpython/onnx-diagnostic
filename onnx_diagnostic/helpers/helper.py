@@ -564,8 +564,11 @@ def string_type(
         "StaticCache",
         "HybridCache",
     }:
+        from .cache_helper import CacheKeyValue
+
+        ca = CacheKeyValue(obj)
         kc = string_type(
-            list(obj.key_cache),
+            ca.key_cache,
             with_shape=with_shape,
             with_min_max=with_min_max,
             with_device=with_device,
@@ -573,7 +576,7 @@ def string_type(
             verbose=verbose,
         )
         vc = string_type(
-            list(obj.value_cache),
+            ca.value_cache,
             with_shape=with_shape,
             with_min_max=with_min_max,
             with_device=with_device,
@@ -1471,17 +1474,24 @@ def max_diff(
     # backup function in case pytorch does not know how to serialize.
     if expected.__class__.__name__ == "HybridCache":
         if got.__class__.__name__ == "HybridCache":
+            from .cache_helper import CacheKeyValue
+
             if verbose >= 6:
                 print(f"[max_diff] HybridCache: {string_type(expected)} ? {string_type(got)}")
+            cae = CacheKeyValue(expected)
+            cag = CacheKeyValue(got)
             return max_diff(
-                [expected.key_cache, expected.value_cache],
-                [got.key_cache, got.value_cache],
+                [cae.key_cache, cae.value_cache],
+                [cag.key_cache, cag.value_cache],
                 verbose=verbose,
                 hist=hist,
             )
         if isinstance(got, tuple) and len(got) == 2:
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
             return max_diff(
-                [expected.key_cache, expected.value_cache],
+                [cae.key_cache, cae.value_cache],
                 [got[0], got[1]],
                 debug_info=_debug(expected.__class__.__name__),
                 **_dkws,
@@ -1495,17 +1505,24 @@ def max_diff(
 
     if expected.__class__.__name__ == "StaticCache":
         if got.__class__.__name__ == "StaticCache":
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
+            cag = CacheKeyValue(got)
             if verbose >= 6:
                 print(f"[max_diff] StaticCache: {string_type(expected)} ? {string_type(got)}")
             return max_diff(
-                [expected.key_cache, expected.value_cache],
-                [got.key_cache, got.value_cache],
+                [cae.key_cache, cae.value_cache],
+                [cag.key_cache, cag.value_cache],
                 verbose=verbose,
                 hist=hist,
             )
         if isinstance(got, tuple) and len(got) == 2:
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
             return max_diff(
-                [expected.key_cache, expected.value_cache],
+                [cae.key_cache, cae.value_cache],
                 [got[0], got[1]],
                 debug_info=_debug(expected.__class__.__name__),
                 **_dkws,
@@ -1524,15 +1541,22 @@ def max_diff(
                     f"[max_diff] SlidingWindowCache: "
                     f"{string_type(expected)} ? {string_type(got)}"
                 )
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
+            cag = CacheKeyValue(got)
             return max_diff(
-                [expected.key_cache, expected.value_cache],
-                [got.key_cache, got.value_cache],
+                [cae.key_cache, cae.value_cache],
+                [cag.key_cache, cag.value_cache],
                 verbose=verbose,
                 hist=hist,
             )
         if isinstance(got, tuple) and len(got) == 2:
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
             return max_diff(
-                [expected.key_cache, expected.value_cache],
+                [cae.key_cache, cae.value_cache],
                 [got[0], got[1]],
                 debug_info=_debug(expected.__class__.__name__),
                 **_dkws,

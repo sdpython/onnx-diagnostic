@@ -10,6 +10,18 @@ except ImportError:
     from transformers.cache_utils import MambaCache
 
 
+class CacheKeyValue:
+    def __init__(self, cache: "Cache"):  # noqa: F821
+        if hasattr(cache, "layers"):
+            self.key_cache = [layer.keys for layer in cache.layers if layer.keys is not None]
+            self.value_cache = [
+                layer.values for layer in cache.layers if layer.values is not None
+            ]
+        else:
+            self.key_cache = cache.key_cache
+            self.value_cache = cache.value_cache
+
+
 def flatten_unflatten_for_dynamic_shapes(
     obj: Any,
     use_dict: bool = False,
@@ -221,19 +233,20 @@ def make_static_cache(
         ),
     )
     cache = transformers.cache_utils.StaticCache(
-        _config(),
+        config=_config(),
         max_batch_size=key_value_pairs[0][0].shape[0],
         device=key_value_pairs[0][0].device,
         dtype=key_value_pairs[0][0].dtype,
         max_cache_len=max_cache_len,
     )
+    ca = CacheKeyValue(cache)
     for i in range(len(key_value_pairs)):
         assert (
             key_value_pairs[i][0].shape == key_value_pairs[i][1].shape
         ), f"Shape mismatch {key_value_pairs[i][0].shape} != {key_value_pairs[i][1].shape}"
         d = key_value_pairs[i][1].shape[2]
-        cache.key_cache[i][:, :, :d, :] = key_value_pairs[i][0]
-        cache.value_cache[i][:, :, :d, :] = key_value_pairs[i][1]
+        ca.key_cache[i][:, :, :d, :] = key_value_pairs[i][0]
+        ca.value_cache[i][:, :, :d, :] = key_value_pairs[i][1]
     return cache
 
 
@@ -300,23 +313,24 @@ def make_sliding_window_cache(
             self.sliding_window = key_value_pairs[0][0].shape[2]
 
     cache = transformers.cache_utils.SlidingWindowCache(
-        _config(),
+        config=_config(),
         max_batch_size=key_value_pairs[0][0].shape[0],
         max_cache_len=key_value_pairs[0][0].shape[2],  # same as sliding_window
         device=key_value_pairs[0][0].device,
         dtype=key_value_pairs[0][0].dtype,
     )
+    ca = CacheKeyValue(cache)
     for i in range(len(key_value_pairs)):
-        assert cache.key_cache[i].shape == key_value_pairs[i][0].shape, (
+        assert ca.key_cache[i].shape == key_value_pairs[i][0].shape, (
             f"Shape mismatch, expected {cache.key_cache[i].shape}, "
             f"got {key_value_pairs[i][0].shape}"
         )
-        cache.key_cache[i][:, :, :, :] = key_value_pairs[i][0]
-        assert cache.value_cache[i].shape == key_value_pairs[i][1].shape, (
+        ca.key_cache[i][:, :, :, :] = key_value_pairs[i][0]
+        assert ca.value_cache[i].shape == key_value_pairs[i][1].shape, (
             f"Shape mismatch, expected {cache.value_cache[i].shape}, "
             f"got {key_value_pairs[i][1].shape}"
         )
-        cache.value_cache[i][:, :, :, :] = key_value_pairs[i][1]
+        ca.value_cache[i][:, :, :, :] = key_value_pairs[i][1]
     return cache
 
 
@@ -373,9 +387,10 @@ def make_hybrid_cache(
         num_heads = key_value_pairs[0][0].shape[1] if key_value_pairs else None
         head_dim = key_value_pairs[0][0].shape[-1] if key_value_pairs else None
         num_attention_heads = key_value_pairs[0][1].shape[1] if key_value_pairs else None
+        num_hidden_layers = len(key_value_pairs)
 
     cache = transformers.cache_utils.HybridCache(
-        _config(), max_cache_len=max_cache_len, max_batch_size=max_batch_size
+        config=_config(), max_cache_len=max_cache_len, max_batch_size=max_batch_size
     )
     for i, (key, value) in enumerate(key_value_pairs):
         cache.update(key, value, i)

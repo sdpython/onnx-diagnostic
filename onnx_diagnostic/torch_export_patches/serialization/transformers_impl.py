@@ -14,7 +14,7 @@ try:
 except ImportError:
     from transformers.cache_utils import MambaCache
 from transformers.modeling_outputs import BaseModelOutput
-from ...helpers.cache_helper import make_hybrid_cache, make_static_cache
+from ...helpers.cache_helper import make_hybrid_cache, make_static_cache, CacheKeyValue
 from . import make_serialization_function_for_dataclass
 
 
@@ -98,10 +98,8 @@ def flatten_dynamic_cache(
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
     if hasattr(transformers.cache_utils, "_flatten_dynamic_cache"):
         return transformers.cache_utils._flatten_dynamic_cache(dynamic_cache)
-    flat = [
-        ("key_cache", list(dynamic_cache.key_cache)),
-        ("value_cache", list(dynamic_cache.value_cache)),
-    ]
+    ca = CacheKeyValue(dynamic_cache)
+    flat = [("key_cache", ca.key_cache), ("value_cache", ca.value_cache)]
     return [f[1] for f in flat], [f[0] for f in flat]
 
 
@@ -141,7 +139,8 @@ def flatten_hybrid_cache(
     """Serializes a :class:`transformers.cache_utils.HybridCache` with python objects."""
     if hasattr(transformers.cache_utils, "_flatten_hybrid_cache"):
         return transformers.cache_utils._flatten_hybrid_cache(cache)
-    flat = [("key_cache", list(cache.key_cache)), ("value_cache", list(cache.value_cache))]
+    ca = CacheKeyValue(cache)
+    flat = [("key_cache", ca.key_cache), ("value_cache", ca.value_cache)]
     return [f[1] for f in flat], [f[0] for f in flat]
 
 
@@ -171,14 +170,13 @@ def flatten_static_cache(
     cache: StaticCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.StaticCache` with python objects."""
-    keys = list(cache.key_cache)
-    values = list(cache.value_cache)
-    assert not cache.key_cache or cache.max_cache_len == cache.key_cache[0].shape[2], (
+    ca = CacheKeyValue(cache)
+    assert not ca.key_cache or cache.max_cache_len == ca.key_cache[0].shape[2], (
         f"Serialization doet not work when "
         f"cache.max_cache_len={cache.max_cache_len} != "
-        f"cache.key_cache[0].shape[2]={keys[0].shape[2]}"
+        f"cache.key_cache[0].shape[2]={ca.keu_cache[0].shape[2]}"
     )
-    flat = [("key_cache", keys), ("value_cache", values)]
+    flat = [("key_cache", ca.key_cache), ("value_cache", ca.value_cache)]
     return [f[1] for f in flat], [f[0] for f in flat]
 
 
@@ -211,7 +209,8 @@ def flatten_sliding_window_cache(
     Serializes a :class:`transformers.cache_utils.SlidingWindowCache`
     with python objects.
     """
-    flat = [("key_cache", list(cache.key_cache)), ("value_cache", list(cache.value_cache))]
+    ca = CacheKeyValue(cache)
+    flat = [("key_cache", ca.key_cache), ("value_cache", ca.value_cache)]
     return [f[1] for f in flat], [f[0] for f in flat]
 
 

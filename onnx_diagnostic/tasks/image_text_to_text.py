@@ -11,8 +11,40 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     kwargs: Dict[str, Any] = {}
     if hasattr(config, "num_hidden_layers"):
         config.num_hidden_layers = min(config.num_hidden_layers, 2)
-    if hasattr(config, "vision_config") and hasattr(config.vision_config, "num_hidden_layers"):
-        config.vision_config.num_hidden_layers = min(config.vision_config.num_hidden_layers, 2)
+    if hasattr(config, "mm_tokens_per_image"):
+        config.mm_tokens_per_image = min(config.mm_tokens_per_image, 16)
+    if hasattr(config, "vision_config"):
+        if hasattr(config.vision_config, "num_hidden_layers"):
+            config.vision_config.num_hidden_layers = min(
+                config.vision_config.num_hidden_layers, 2
+            )
+        if hasattr(config.vision_config, "image_size"):
+            config.vision_config.image_size = min(config.vision_config.image_size, 96)
+        if hasattr(config.vision_config, "intermediate_size"):
+            config.vision_config.intermediate_size = min(
+                config.vision_config.intermediate_size, 1076
+            )
+        if hasattr(config.vision_config, "patch_size"):
+            config.vision_config.patch_size = min(config.vision_config.patch_size, 2)
+        if hasattr(config.vision_config, "hidden_size"):
+            config.vision_config.hidden_size = min(config.vision_config.hidden_size, 16)
+    if hasattr(config, "text_config"):
+        if hasattr(config.text_config, "intermediate_size"):
+            config.text_config.intermediate_size = min(
+                config.text_config.intermediate_size, 320
+            )
+        if hasattr(config.text_config, "hidden_size"):
+            config.text_config.hidden_size = min(config.text_config.hidden_size, 16)
+        if hasattr(config.text_config, "num_hidden_layers"):
+            config.text_config.num_hidden_layers = min(config.text_config.num_hidden_layers, 2)
+        if hasattr(config.text_config, "layer_types"):
+            config.text_config.layer_types = config.text_config.layer_types[
+                : config.text_config.num_hidden_layers
+            ]
+        if hasattr(config.text_config, "num_attention_heads"):
+            config.text_config.num_attention_heads = min(
+                config.text_config.num_attention_heads, 2
+            )
     update_config(config, kwargs)
     return kwargs
 
@@ -30,8 +62,8 @@ def _get_inputs_gemma3(
     height: int,
     num_channels: int,
     batch_size: int = 2,
-    sequence_length: int = 30,
-    sequence_length2: int = 3,
+    sequence_length: int = 43,
+    sequence_length2: int = 43,
     n_images: int = 2,
     dynamic_rope: bool = False,
     max_sequence_length: int = 380,
@@ -89,8 +121,11 @@ def _get_inputs_gemma3(
     input_ids = torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
         torch.int64
     )
-    input_ids[0, 0] = image_token_index
-    input_ids[input_ids == image_token_index] = pad_token_id
+    input_ids[0, 5:13] = image_token_index
+    input_ids[0, 17:25] = image_token_index
+    input_ids[1, 24:32] = image_token_index
+    input_ids[1, 1:9] = image_token_index
+    # input_ids[input_ids == image_token_index] = pad_token_id
     token_type_ids = torch.zeros_like(input_ids)
     token_type_ids[input_ids == image_token_index] = 1
 
@@ -133,8 +168,8 @@ def get_inputs(
     height: int,
     num_channels: int,
     batch_size: int = 2,
-    sequence_length: int = 30,
-    sequence_length2: int = 3,
+    sequence_length: int = 43,
+    sequence_length2: int = 43,
     n_images: int = 2,
     dynamic_rope: bool = False,
     add_second_input: int = 1,
@@ -179,67 +214,80 @@ def get_inputs(
             dynamic_rope=dynamic_rope,
             **kwargs,
         )
+    else:
+        assert (
+            "cls_cache" not in kwargs
+        ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
+        batch = torch.export.Dim("batch", min=1, max=1024)
+        batch_img = torch.export.Dim("batch_img", min=1, max=1024)
+        seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
+        cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
+        images = "images"  # torch.export.Dim("images", min=1, max=4096)
 
-    assert (
-        "cls_cache" not in kwargs
-    ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
-    batch = torch.export.Dim("batch", min=1, max=1024)
-    batch_img = torch.export.Dim("batch_img", min=1, max=1024)
-    seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
-    cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
-    images = "images"  # torch.export.Dim("images", min=1, max=4096)
-
-    shapes = {
-        "input_ids": {0: batch, 1: seq_length},
-        "token_type_ids": {0: batch, 1: seq_length},
-        "attention_mask": {0: batch, 1: "cache+seq"},
-        "position_ids": {0: batch, 1: "cache+seq"},
-        "past_key_values": [
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-        ],
-        "pixel_values": {0: batch_img},
-        "image_attention_mask": {0: batch, 1: seq_length, 2: images},
-        "use_cache": None,
-    }
-
-    input_ids = torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
-        torch.int64
-    )
-    input_ids[0, 0] = image_token_index
-    input_ids[input_ids == image_token_index] = pad_token_id
-    token_type_ids = torch.zeros_like(input_ids)
-    token_type_ids[input_ids == image_token_index] = 1
-
-    inputs = dict(
-        input_ids=input_ids,
-        attention_mask=torch.cat(
-            [
-                torch.ones((batch_size, sequence_length), dtype=torch.int64),
-                input_ids.ne(pad_token_id).to(torch.int64),
+        shapes = {
+            "input_ids": {0: batch, 1: seq_length},
+            "token_type_ids": {0: batch, 1: seq_length},
+            "attention_mask": {0: batch, 1: "cache+seq"},
+            "position_ids": {0: batch, 1: "cache+seq"},
+            "past_key_values": [
+                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
             ],
-            axis=-1,
-        ),
-        position_ids=torch.arange(sequence_length, sequence_length + sequence_length2)
-        .to(torch.int64)
-        .expand((batch_size, -1)),
-        past_key_values=make_dynamic_cache(
-            [
-                (
-                    torch.randn(batch_size, num_key_value_heads, sequence_length, head_dim),
-                    torch.randn(batch_size, num_key_value_heads, sequence_length, head_dim),
-                )
-                for i in range(num_hidden_layers)
-            ]
-        ),
-        pixel_values=torch.randn(n_images, num_channels, width, height).clamp(-1, 1),
-        image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
+            "pixel_values": (
+                {0: batch, 1: images}
+                if model.__class__.__name__ == "IdeficsForVisionText2Text"
+                else {0: batch_img}
+            ),
+            "image_attention_mask": {0: batch, 1: seq_length, 2: images},
+            "use_cache": None,
+        }
+
+        input_ids = torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
             torch.int64
-        ),
-        token_type_ids=token_type_ids,
-        use_cache=True,  # Gemma3 does not set this value to true when a cache is provided
-    )
-    res = dict(inputs=inputs, dynamic_shapes=shapes)
+        )
+        input_ids[0, 0] = image_token_index
+        input_ids[1, 1] = image_token_index
+        # input_ids[input_ids == image_token_index] = pad_token_id
+        token_type_ids = torch.zeros_like(input_ids)
+        token_type_ids[input_ids == image_token_index] = 1
+
+        inputs = dict(
+            input_ids=input_ids,
+            attention_mask=torch.cat(
+                [
+                    torch.ones((batch_size, sequence_length), dtype=torch.int64),
+                    input_ids.ne(pad_token_id).to(torch.int64),
+                ],
+                axis=-1,
+            ),
+            position_ids=torch.arange(0, sequence_length2)
+            .to(torch.int64)
+            .expand((batch_size, -1)),
+            past_key_values=make_dynamic_cache(
+                [
+                    (
+                        torch.randn(
+                            batch_size, num_key_value_heads, sequence_length, head_dim
+                        ),
+                        torch.randn(
+                            batch_size, num_key_value_heads, sequence_length, head_dim
+                        ),
+                    )
+                    for i in range(num_hidden_layers)
+                ]
+            ),
+            pixel_values=(
+                torch.randn((batch_size, n_images, num_channels, width, height)).clamp(-1, 1)
+                if model.__class__.__name__ == "IdeficsForVisionText2Text"
+                else torch.randn(n_images, num_channels, width, height).clamp(-1, 1)
+            ),
+            image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
+                torch.int64
+            ),
+            token_type_ids=token_type_ids,
+            use_cache=True,  # Gemma3 does not set this value to true when a cache is provided
+        )
+        res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
         assert (
             add_second_input > 0
@@ -302,8 +350,8 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
         check_hasattr(config.vision_config, "image_size", "num_channels")
     kwargs = dict(
         batch_size=2,
-        sequence_length=30,
-        sequence_length2=3,
+        sequence_length=43,
+        sequence_length2=43,
         head_dim=(
             16
             if config is None
@@ -358,7 +406,15 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
         width=224 if config is None else config.vision_config.image_size,
         height=224 if config is None else config.vision_config.image_size,
         num_channels=3 if config is None else config.vision_config.num_channels,
-        pad_token_id=0 if config is None else config.text_config.pad_token_id,
-        image_token_index=4 if config is None else config.image_token_index,
+        pad_token_id=(
+            0
+            if config is None or not hasattr(config, "text_config")
+            else config.text_config.pad_token_id
+        ),
+        image_token_index=(
+            4
+            if config is None or not hasattr(config, "image_token_index")
+            else config.image_token_index
+        ),
     )
     return kwargs, get_inputs
