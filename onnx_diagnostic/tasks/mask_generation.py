@@ -1,7 +1,6 @@
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.cache_helper import make_dynamic_cache
-from ..helpers.config_helper import update_config, check_hasattr, _pick
+from ..helpers.config_helper import update_config, check_hasattr
 
 __TASK__ = "mask-generation"
 
@@ -31,7 +30,7 @@ def get_inputs(
 ):
     """
     Generates input for task ``mask-generation``.
-    
+
     :param model: model to get the missing information
     :param config: configuration used to generate the model
     :param batch_size: batch size
@@ -46,10 +45,10 @@ def get_inputs(
     assert (
         "cls_cache" not in kwargs
     ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
-    
 
-    # TODO(anyone): input_masks is weridly failing all the time with mismatch channels with Conv
-    # or embedding_size. I guess maybe the model is too implicit on the input_masks shape.
+    # TODO(anyone): input_masks is weridly failing all the time with mismatch channels
+    # with Conv or embedding_size. I guess maybe the model is too implicit on the
+    # input_masks shape.
 
     shapes = {
         "pixel_values": {0: "batch", 2: "height", 3: "width"},  # 1: num_channels is static
@@ -64,9 +63,7 @@ def get_inputs(
         input_points=torch.randn(
             (batch_size, 1, 10, 2), dtype=torch.float32
         ),  # 10 points per image
-        input_boxes=torch.randn(
-            (batch_size, 1, 4), dtype=torch.float32
-        ),  # 1 box per image
+        input_boxes=torch.randn((batch_size, 1, 4), dtype=torch.float32),  # 1 box per image
         # input_masks=torch.randn(
         #     (batch_size, 1, height, width), dtype=torch.float32
         # ),  # mask for the image

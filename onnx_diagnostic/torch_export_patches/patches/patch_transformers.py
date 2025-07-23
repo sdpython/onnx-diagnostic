@@ -1184,6 +1184,7 @@ class patched_IdeficsAttention(torch.nn.Module):
             return attn_output, attn_weights, past_key_value
         return attn_output, attn_weights
 
+
 class patched_SamMaskDecoder(torch.nn.Module):
     _PATCHES_ = ["forward"]
     _PATCHED_CLASS_ = transformers.models.sam.modeling_sam.SamMaskDecoder
@@ -1223,10 +1224,11 @@ class patched_SamMaskDecoder(torch.nn.Module):
         output_tokens = output_tokens.repeat(batch_size, point_batch_size, 1, 1)
 
         # torch.cond rewrites the if-else logic to handle empty sparse_prompt_embeddings
-        # torch.any is needed to avoid data-dependent control flow 
+        # torch.any is needed to avoid data-dependent control flow
         # with sparse_prompt_embeddings.sum().item() != 0
         def sparse_prompt_embeddings_is_not_empty(output_tokens, sparse_prompt_embeddings):
             return torch.cat((output_tokens, sparse_prompt_embeddings), dim=2)
+
         def sparse_prompt_embeddings_is_empty(output_tokens, sparse_prompt_embeddings):
             return output_tokens.clone()
 
@@ -1242,7 +1244,9 @@ class patched_SamMaskDecoder(torch.nn.Module):
         # Expand per-image data in batch direction to be per-point
         image_embeddings = image_embeddings + dense_prompt_embeddings
         image_embeddings = image_embeddings.repeat_interleave(point_batch_size, 0)
-        image_positional_embeddings = image_positional_embeddings.repeat_interleave(point_batch_size, 0)
+        image_positional_embeddings = image_positional_embeddings.repeat_interleave(
+            point_batch_size, 0
+        )
 
         # Run the transformer, image_positional_embedding are consumed
         point_embedding, image_embeddings, attentions = self.transformer(
@@ -1272,8 +1276,12 @@ class patched_SamMaskDecoder(torch.nn.Module):
         hyper_in = torch.stack(hyper_in_list, dim=2)
 
         _, num_channels, height, width = upscaled_embedding.shape
-        upscaled_embedding = upscaled_embedding.reshape(batch_size, point_batch_size, num_channels, height * width)
-        masks = (hyper_in @ upscaled_embedding).reshape(batch_size, point_batch_size, -1, height, width)
+        upscaled_embedding = upscaled_embedding.reshape(
+            batch_size, point_batch_size, num_channels, height * width
+        )
+        masks = (hyper_in @ upscaled_embedding).reshape(
+            batch_size, point_batch_size, -1, height, width
+        )
 
         # Generate mask quality predictions
         iou_pred = self.iou_prediction_head(iou_token_out)
@@ -1289,8 +1297,8 @@ class patched_SamMaskDecoder(torch.nn.Module):
         outputs = (masks, iou_pred)
 
         if output_attentions:
-            outputs = outputs + (attentions,)
+            outputs = outputs + (attentions,)  # noqa: RUF005
         else:
-            outputs = outputs + (None,)
+            outputs = outputs + (None,)  # noqa: RUF005
 
         return outputs
