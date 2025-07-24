@@ -1257,8 +1257,10 @@ class patched_SamMaskDecoder(torch.nn.Module):
             target_embedding=target_embedding,
             output_attentions=output_attentions,
         )
-        iou_token_out = point_embedding[:, :, 0, :]
-        mask_tokens_out = point_embedding[:, :, 1 : (1 + self.num_mask_tokens), :]
+        iou_token_out = torch.select(point_embedding, dim=2, index=0)
+        mask_tokens_out = torch.narrow(
+            point_embedding, dim=2, start=1, length=self.num_mask_tokens
+        )
 
         # Upscale mask embeddings and predict masks using the mask tokens
         image_embeddings = image_embeddings.transpose(2, 3).reshape(

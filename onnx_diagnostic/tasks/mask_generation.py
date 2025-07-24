@@ -46,12 +46,15 @@ def get_inputs(
         "cls_cache" not in kwargs
     ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
 
-    # TODO(anyone): input_masks is weridly failing all the time with mismatch channels
+    # TODO(anyone): input_masks is weirdly failing all the time with mismatch channels
     # with Conv or embedding_size. I guess maybe the model is too implicit on the
     # input_masks shape.
 
+    # TODO(titaiwang): modeling code specifically requires the height and width of inputs
+    # should be the same as the config.vision_config.image_size. Does that make sense?
+
     shapes = {
-        "pixel_values": {0: "batch", 2: "height", 3: "width"},  # 1: num_channels is static
+        "pixel_values": {0: "batch"},  # 1: num_channels is static
         "input_points": {0: "batch", 1: "point_batch_size", 2: "nb_points_per_image"},
         "input_boxes": {0: "batch", 1: "point_batch_size"},
         # "input_masks": {0: "batch", 2: "height", 3: "width"},
@@ -59,11 +62,11 @@ def get_inputs(
     inputs = dict(
         pixel_values=torch.randn(
             (batch_size, num_channels, height, width), dtype=torch.float32
-        ),
+        ).clamp(-1, 1),
         input_points=torch.randn(
-            (batch_size, 1, 10, 2), dtype=torch.float32
+            (batch_size, 2, 10, 2), dtype=torch.float32
         ),  # 10 points per image
-        input_boxes=torch.randn((batch_size, 1, 4), dtype=torch.float32),  # 1 box per image
+        input_boxes=torch.randn((batch_size, 2, 4), dtype=torch.float32),  # 1 box per image
         # input_masks=torch.randn(
         #     (batch_size, 1, height, width), dtype=torch.float32
         # ),  # mask for the image
@@ -78,8 +81,8 @@ def get_inputs(
             model=model,
             config=config,
             batch_size=batch_size + 1,
-            width=width // 2,
-            height=height // 2,
+            width=width,
+            height=height,
             num_channels=num_channels,
             output_channels=output_channels,
             window_size=window_size,
