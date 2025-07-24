@@ -481,6 +481,7 @@ def make_hybrid_cache(
         num_attention_heads = key_value_pairs[0][1].shape[1] if key_value_pairs else None
         num_hidden_layers = len(key_value_pairs)
         sliding_window = _sliding_window
+        num_key_value_heads = key_value_pairs[0][1].shape[1]  # transformers 4.48.3
 
     if layer_types:
         _config.layer_types = layer_types  # type: ignore[attr-defined]
