@@ -20,15 +20,27 @@ class CacheKeyValue:
     .. code-block:: python
 
         capi = CacheKeyValue(cache)
-        capi.cache.key_cache
-        capi.cache.value_cache
+        capi.key_cache
+        capi.value_cache
     """
 
     def __init__(self, cache):
         if hasattr(cache, "layers"):
-            layers = [layer for layer in cache.layers if layer is not None]
+            layers = [
+                layer
+                for layer in cache.layers
+                if layer is not None and layer.keys is not None and layer.values is not None
+            ]
             self.key_cache = [layer.keys for layer in layers]
             self.value_cache = [layer.values for layer in layers]
+            if None in self.key_cache or None in self.value_cache:
+                from .helper import string_type
+
+                raise AssertionError(
+                    f"issue with key_cache={string_type(self.key_cache)}, "
+                    f"or value_cache={string_type(self.value_cache)}, "
+                    f"cache.layers={string_type(cache.layers)}"
+                )
         else:
             self.key_cache = cache.key_cache
             self.value_cache = cache.value_cache

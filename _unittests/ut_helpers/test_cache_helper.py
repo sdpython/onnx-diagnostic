@@ -50,6 +50,10 @@ class TestCacheHelpers(ExtTestCase):
         past_key_values = make_dynamic_cache(
             [(torch.randn(bsize, nheads, slen, dim), torch.randn(bsize, nheads, slen, dim))]
         )
+        self.assertEqual(
+            "DynamicCache(key_cache=#1[T1s2x4x3x7], value_cache=#1[T1s2x4x3x7])",
+            self.string_type(past_key_values, with_shape=True),
+        )
         kwargs = dict(
             input_ids=torch.zeros(2, 3),
             attention_mask=torch.zeros(2, 3),

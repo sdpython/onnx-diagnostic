@@ -710,6 +710,32 @@ def string_type(
         )
         return f"{obj.__class__.__name__}[{obj.cache_type}]{s}"
 
+    if obj.__class__.__name__ == "DynamicLayer":
+        import transformers
+
+        assert isinstance(
+            obj, transformers.cache_utils.DynamicLayer
+        ), f"Unexpected type {type(obj)}"
+        if verbose:
+            print(f"[string_type] LY0:{type(obj)}")
+        s1 = string_type(
+            obj.keys,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        s2 = string_type(
+            obj.values,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        return f"{obj.__class__.__name__}(keys={s1}, values={s2})"
+
     if isinstance(obj, torch.nn.Module):
         if verbose:
             print(f"[string_type] MM:{type(obj)}")
