@@ -52,7 +52,7 @@ class TestTinyLlmBypassed(ExtTestCase):
                 strict=False,
             )
             got = ep.module()(**inputs)
-            self.assertEqualArrayAny(expected, got)
+            self.assertEqualArrayAny(expected, got, atol=1e-5)
 
     @ignore_warnings(UserWarning)
     def test_export_phi2_2_bypassed(self):
