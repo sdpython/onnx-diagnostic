@@ -14,6 +14,7 @@ from . import (
     text_to_image,
     text2text_generation,
     zero_shot_image_classification,
+    mask_generation,
 )
 
 __TASKS__ = [
@@ -31,6 +32,7 @@ __TASKS__ = [
     text_to_image,
     text2text_generation,
     zero_shot_image_classification,
+    mask_generation,
 ]
 
 
