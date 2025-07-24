@@ -4,6 +4,8 @@ Change Logs
 0.7.6
 +++++
 
+* :pr:`189`: support for task mask-generation
+
 0.7.5
 +++++
 
