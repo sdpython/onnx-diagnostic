@@ -931,7 +931,10 @@ def flatten_object(x: Any, drop_keys: bool = False) -> Any:
         return flatten_object(list(x.items()), drop_keys=drop_keys)
 
     if x.__class__.__name__ in {"DynamicCache", "StaticCache"}:
-        res = flatten_object(x.key_cache) + flatten_object(x.value_cache)
+        from .cache_helper import CacheKeyValue
+
+        kc = CacheKeyValue(x)
+        res = flatten_object(kc.key_cache) + flatten_object(kc.value_cache)
         return tuple(res)
     if x.__class__.__name__ == "EncoderDecoderCache":
         res = flatten_object(x.self_attention_cache) + flatten_object(x.cross_attention_cache)
