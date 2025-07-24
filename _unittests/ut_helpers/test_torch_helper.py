@@ -4,7 +4,7 @@ import ml_dtypes
 import onnx
 import torch
 import transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, requires_torch
 from onnx_diagnostic.helpers import max_diff, string_type
 from onnx_diagnostic.helpers.torch_helper import (
     dummy_llm,
@@ -274,6 +274,7 @@ class TestTorchTestHelper(ExtTestCase):
         self.assertEqual(hash1, hash2)
         self.assertGreater(torch_tensor_size(cc), 1)
 
+    @requires_torch("4.50")
     def test_torch_deepcopy_mamba_cache(self):
         cache = make_mamba_cache(
             [
