@@ -483,7 +483,7 @@ def make_hybrid_cache(
         sliding_window = _sliding_window
 
     if layer_types:
-        _config.layer_types = layer_types
+        _config.layer_types = layer_types  # type: ignore[attr-defined]
 
     cache = transformers.cache_utils.HybridCache(
         config=_config(), max_cache_len=max_cache_len, max_batch_size=max_batch_size
