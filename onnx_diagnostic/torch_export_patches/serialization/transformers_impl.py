@@ -1,6 +1,5 @@
 from typing import Any, List, Set, Tuple
 import torch
-import transformers
 from transformers.cache_utils import (
     DynamicCache,
     EncoderDecoderCache,
@@ -130,8 +129,6 @@ def flatten_hybrid_cache(
     cache: HybridCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.HybridCache` with python objects."""
-    if hasattr(transformers.cache_utils, "_flatten_hybrid_cache"):
-        return transformers.cache_utils._flatten_hybrid_cache(cache)
     ca = CacheKeyValue(cache)
     flat = [("key_cache", ca.key_cache), ("value_cache", ca.value_cache)]
     return [f[1] for f in flat], [f[0] for f in flat]
@@ -141,8 +138,6 @@ def flatten_with_keys_hybrid_cache(
     cache: HybridCache,
 ) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.HybridCache` with python objects."""
-    if hasattr(transformers.cache_utils, "_flatten_with_keys_dynamic_cache"):
-        return transformers.cache_utils._flatten_with_keys_hybrid_cache(cache)
     values, context = flatten_hybrid_cache(cache)
     return [(torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)], context
 
