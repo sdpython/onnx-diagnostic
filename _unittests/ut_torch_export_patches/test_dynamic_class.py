@@ -11,7 +11,7 @@ from onnx_diagnostic.ext_test_case import (
     has_transformers,
 )
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
+from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyValue
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     torch_export_patches,
 )
@@ -27,14 +27,26 @@ class TestOnnxExportErrors(ExtTestCase):
 
             class SubModelCache(torch.nn.Module):
                 def forward(self, cache):
+                    cc = CacheKeyValue(cache)
+                    # If not patched...
+                    # Fails with transformers>=4.54 because function ``parse_processor_args``
+                    # relies in inspect and the exporter is not very fond of that.
+                    # torch._dynamo.exc.Unsupported: id() with unsupported args
+                    # Explanation: Dynamo doesn't know how to trace id()
+                    # call with args
+                    # (GetAttrVariable(ConstantVariable(NoneType: None), __init__),)
+                    # Hint: Supported args are Tensors, and functions/nn.Modules/user-defined
+                    # objects from outside the compiled region.
+                    # Hint: It may be possible to write Dynamo tracing rules for this code.
                     d = cache.__class__()
-                    d.update(cache.key_cache[0] + 1, cache.value_cache[0] + 2, 0)
-                    d.update(cache.key_cache[0] + 3, cache.value_cache[0] + 5, 1)
+                    d.update(cc.key_cache[0] + 1, cc.value_cache[0] + 2, 0)
+                    d.update(cc.key_cache[0] + 3, cc.value_cache[0] + 5, 1)
                     return d
 
             class SubModel(torch.nn.Module):
                 def forward(self, x, cache):
-                    return x + cache.key_cache[0] + cache.value_cache[0]
+                    cc = CacheKeyValue(cache)
+                    return x + cc.key_cache[0] + cc.value_cache[0]
 
             class Model(torch.nn.Module):
                 def __init__(self):
@@ -56,7 +68,7 @@ class TestOnnxExportErrors(ExtTestCase):
             DYN = torch.export.Dim.DYNAMIC
 
             # patching
-            with torch_export_patches(patch_transformers=True):
+            with torch_export_patches(patch_transformers=True, verbose=10):
                 got = model(*inputs)
                 self.assertEqualArray(expected, got)
                 ep = torch.export.export(
@@ -230,9 +242,10 @@ class TestOnnxExportErrors(ExtTestCase):
 
         class ModelDynamicCache(torch.nn.Module):
             def forward(self, x, dc):
+                cc = CacheKeyValue(dc)
                 y = (
                     (
-                        torch.cat(dc.key_cache, axis=1) + torch.cat(dc.value_cache, axis=1)
+                        torch.cat(cc.key_cache, axis=1) + torch.cat(cc.value_cache, axis=1)
                     ).reshape((-1, x.shape[1]))
                 ).transpose(1, 0)
                 return x @ y

@@ -367,10 +367,12 @@ def _flatten_iterator(obj: Any, sep: str) -> Iterator:
         elif obj.__class__.__name__ == "DynamicCache":
             # transformers
             import transformers
+            from .cache_helper import CacheKeyValue
 
             assert isinstance(
                 obj, transformers.cache_utils.DynamicCache
             ), f"Unexpected type {type(obj)}"
+            obj = CacheKeyValue(obj)
             atts = ["key_cache", "value_cache"]
             for i, att in enumerate(atts):
                 if i == len(atts) - 1:
@@ -494,9 +496,12 @@ def _unflatten(
 
     def _make(ty: type, res: Any) -> Any:
         if ty.__name__ == "DynamicCache":
-            r = ty()
+            from .cache_helper import CacheKeyValue
+
+            cc = CacheKeyValue()
             for k, v in res:
-                setattr(r, k, v)
+                setattr(cc, k, v)
+            r = cc.make_dynamic_cache()
             return r
         if ty is dict:
             d = {}

@@ -24,7 +24,7 @@ class CacheKeyValue:
         capi.value_cache
     """
 
-    def __init__(self, cache):
+    def __init__(self, cache=None):
         if hasattr(cache, "layers"):
             layers = [
                 layer
@@ -41,9 +41,13 @@ class CacheKeyValue:
                     f"or value_cache={string_type(self.value_cache)}, "
                     f"cache.layers={string_type(cache.layers)}"
                 )
-        else:
+        elif cache is not None:
             self.key_cache = cache.key_cache
             self.value_cache = cache.value_cache
+
+    def make_dynamic_cache(self):
+        """Do the reverse operation."""
+        return make_dynamic_cache(list(zip(self.key_cache, self.value_cache)))
 
 
 def flatten_unflatten_for_dynamic_shapes(
