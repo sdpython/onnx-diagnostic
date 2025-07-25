@@ -24,7 +24,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - uses: tlylt/install-graphviz@v1
+      - name: install graphviz
+        uses: ts-graphviz/setup-graphviz@v2
 
       - name: Install pandoc
         run: sudo apt-get install -y pandoc
