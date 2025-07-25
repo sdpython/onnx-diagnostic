@@ -1058,6 +1058,8 @@ class ExtTestCase(unittest.TestCase):
         elif hasattr(expected, "shape"):
             self.assertEqual(type(expected), type(value), msg=msg)
             self.assertEqualArray(expected, value, msg=msg, atol=atol, rtol=rtol)
+        elif expected is None:
+            assert value is None, f"Expected is None but value is of type {type(value)}"
         else:
             raise AssertionError(
                 f"Comparison not implemented for types {type(expected)} and {type(value)}"

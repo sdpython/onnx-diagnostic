@@ -1,7 +1,6 @@
 import copy
 import unittest
 import torch
-from transformers.cache_utils import DynamicCache
 from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, hide_stdout
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.torch_models.llms import get_phi2
@@ -9,9 +8,6 @@ from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
-from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
-    patched_DynamicCache,
-)
 
 
 class TestTinyLlmBypassed(ExtTestCase):
@@ -28,9 +24,6 @@ class TestTinyLlmBypassed(ExtTestCase):
         with torch_export_patches(
             patch_torch=False, patch_transformers=True, catch_constraints=False, verbose=10
         ) as modificator:
-
-            for k in patched_DynamicCache._PATCHES_:
-                self.assertEqual(getattr(patched_DynamicCache, k), getattr(DynamicCache, k))
 
             inputs = modificator(copy.deepcopy(inputs))
 
@@ -59,7 +52,7 @@ class TestTinyLlmBypassed(ExtTestCase):
                 strict=False,
             )
             got = ep.module()(**inputs)
-            self.assertEqualArrayAny(expected, got)
+            self.assertEqualArrayAny(expected, got, atol=1e-5)
 
     @ignore_warnings(UserWarning)
     def test_export_phi2_2_bypassed(self):

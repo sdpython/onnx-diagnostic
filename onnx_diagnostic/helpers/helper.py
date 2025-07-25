@@ -558,9 +558,17 @@ def string_type(
             print(f"[string_type] CACHE1:{type(obj)}")
         return f"MambaCache(conv_states={c}, ssm_states={d})"
 
-    if obj.__class__.__name__ in {"DynamicCache", "SlidingWindowCache", "StaticCache"}:
+    if obj.__class__.__name__ in {
+        "DynamicCache",
+        "SlidingWindowCache",
+        "StaticCache",
+        "HybridCache",
+    }:
+        from .cache_helper import CacheKeyValue
+
+        ca = CacheKeyValue(obj)
         kc = string_type(
-            obj.key_cache,
+            ca.key_cache,
             with_shape=with_shape,
             with_min_max=with_min_max,
             with_device=with_device,
@@ -568,7 +576,7 @@ def string_type(
             verbose=verbose,
         )
         vc = string_type(
-            obj.value_cache,
+            ca.value_cache,
             with_shape=with_shape,
             with_min_max=with_min_max,
             with_device=with_device,
@@ -578,6 +586,27 @@ def string_type(
         if verbose:
             print(f"[string_type] CACHE2:{type(obj)}")
         return f"{obj.__class__.__name__}(key_cache={kc}, value_cache={vc})"
+
+    if obj.__class__.__name__ == "StaticLayer":
+        kc = string_type(
+            list(obj.keys),
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        vc = string_type(
+            list(obj.values),
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        if verbose:
+            print(f"[string_type] SL:{type(obj)}")
+        return f"{obj.__class__.__name__}(keys={kc}, values={vc})"
 
     if obj.__class__.__name__ == "EncoderDecoderCache":
         att = string_type(
@@ -662,6 +691,50 @@ def string_type(
             f"{obj.__class__.__name__}(name={obj.name!r}, "
             f"dtype={obj.dtype}, shape={obj.shape})"
         )
+
+    if obj.__class__.__name__ == "KeyValuesWrapper":
+        import transformers
+
+        assert isinstance(
+            obj, transformers.cache_utils.KeyValuesWrapper
+        ), f"Unexpected type {type(obj)}"
+        if verbose:
+            print(f"[string_type] KW0:{type(obj)}")
+        s = string_type(
+            list(obj),
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        return f"{obj.__class__.__name__}[{obj.cache_type}]{s}"
+
+    if obj.__class__.__name__ == "DynamicLayer":
+        import transformers
+
+        assert isinstance(
+            obj, transformers.cache_utils.DynamicLayer
+        ), f"Unexpected type {type(obj)}"
+        if verbose:
+            print(f"[string_type] LY0:{type(obj)}")
+        s1 = string_type(
+            obj.keys,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        s2 = string_type(
+            obj.values,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        return f"{obj.__class__.__name__}(keys={s1}, values={s2})"
 
     if isinstance(obj, torch.nn.Module):
         if verbose:
@@ -858,7 +931,10 @@ def flatten_object(x: Any, drop_keys: bool = False) -> Any:
         return flatten_object(list(x.items()), drop_keys=drop_keys)
 
     if x.__class__.__name__ in {"DynamicCache", "StaticCache"}:
-        res = flatten_object(x.key_cache) + flatten_object(x.value_cache)
+        from .cache_helper import CacheKeyValue
+
+        kc = CacheKeyValue(x)
+        res = flatten_object(kc.key_cache) + flatten_object(kc.value_cache)
         return tuple(res)
     if x.__class__.__name__ == "EncoderDecoderCache":
         res = flatten_object(x.self_attention_cache) + flatten_object(x.cross_attention_cache)
@@ -1424,19 +1500,58 @@ def max_diff(
             f"level={level}"
         )
 
-    if expected.__class__.__name__ == "StaticCache":
-        if got.__class__.__name__ == "StaticCache":
+    # backup function in case pytorch does not know how to serialize.
+    if expected.__class__.__name__ == "HybridCache":
+        if got.__class__.__name__ == "HybridCache":
+            from .cache_helper import CacheKeyValue
+
             if verbose >= 6:
-                print(f"[max_diff] StaticCache: {string_type(expected)} ? {string_type(got)}")
+                print(f"[max_diff] HybridCache: {string_type(expected)} ? {string_type(got)}")
+            cae = CacheKeyValue(expected)
+            cag = CacheKeyValue(got)
             return max_diff(
-                [expected.key_cache, expected.value_cache],
-                [got.key_cache, got.value_cache],
+                [cae.key_cache, cae.value_cache],
+                [cag.key_cache, cag.value_cache],
                 verbose=verbose,
                 hist=hist,
             )
         if isinstance(got, tuple) and len(got) == 2:
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
             return max_diff(
-                [expected.key_cache, expected.value_cache],
+                [cae.key_cache, cae.value_cache],
+                [got[0], got[1]],
+                debug_info=_debug(expected.__class__.__name__),
+                **_dkws,
+            )
+        raise AssertionError(
+            f"HybridCache not fully implemented with classes "
+            f"{expected.__class__.__name__!r} and {got.__class__.__name__!r}, "
+            f"and expected={string_type(expected)}, got={string_type(got)},\n"
+            f"level={level}"
+        )
+
+    if expected.__class__.__name__ == "StaticCache":
+        if got.__class__.__name__ == "StaticCache":
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
+            cag = CacheKeyValue(got)
+            if verbose >= 6:
+                print(f"[max_diff] StaticCache: {string_type(expected)} ? {string_type(got)}")
+            return max_diff(
+                [cae.key_cache, cae.value_cache],
+                [cag.key_cache, cag.value_cache],
+                verbose=verbose,
+                hist=hist,
+            )
+        if isinstance(got, tuple) and len(got) == 2:
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
+            return max_diff(
+                [cae.key_cache, cae.value_cache],
                 [got[0], got[1]],
                 debug_info=_debug(expected.__class__.__name__),
                 **_dkws,
@@ -1455,15 +1570,22 @@ def max_diff(
                     f"[max_diff] SlidingWindowCache: "
                     f"{string_type(expected)} ? {string_type(got)}"
                 )
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
+            cag = CacheKeyValue(got)
             return max_diff(
-                [expected.key_cache, expected.value_cache],
-                [got.key_cache, got.value_cache],
+                [cae.key_cache, cae.value_cache],
+                [cag.key_cache, cag.value_cache],
                 verbose=verbose,
                 hist=hist,
             )
         if isinstance(got, tuple) and len(got) == 2:
+            from .cache_helper import CacheKeyValue
+
+            cae = CacheKeyValue(expected)
             return max_diff(
-                [expected.key_cache, expected.value_cache],
+                [cae.key_cache, cae.value_cache],
                 [got[0], got[1]],
                 debug_info=_debug(expected.__class__.__name__),
                 **_dkws,
@@ -1517,6 +1639,20 @@ def max_diff(
         return max_diff(
             [getattr(expected, k) for k in atts],
             [getattr(got, k) for k in atts],
+            debug_info=_debug(expected.__class__.__name__),
+            **_dkws,
+        )
+
+    if expected.__class__.__name__ == "KeyValuesWrapper":
+        if verbose >= 6:
+            print(f"[max_diff] KeyValuesWrapper: {string_type(expected)} ? {string_type(got)}")
+        if got.__class__.__name__ != expected.__class__.__name__:
+            return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
+        if got.cache_type != expected.cache_type:
+            return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
+        return max_diff(
+            list(expected),
+            list(got),
             debug_info=_debug(expected.__class__.__name__),
             **_dkws,
         )

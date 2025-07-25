@@ -70,6 +70,8 @@ def convert_dynamic_axes_into_dynamic_shapes(
     :param verbose: verbosity
     :return: (args, kwargs, dynamic shapes)
     """
+    from ..helpers.cache_helper import CacheKeyValue
+
     new_kwargs = {}
     if args:
         assert hasattr(model, "forward"), f"Missing method 'forward' for {model!r}"
@@ -121,7 +123,8 @@ def convert_dynamic_axes_into_dynamic_shapes(
                 changes[k] = type(updated_kwargs[k])
                 continue
         if isinstance(v, transformers.cache_utils.DynamicCache):
-            updated_kwargs[k] = [v.key_cache, v.value_cache]
+            ca = CacheKeyValue(v)
+            updated_kwargs[k] = [ca.key_cache, ca.value_cache]
             changes[k] = type(v)
             continue
         raise NotImplementedError(
