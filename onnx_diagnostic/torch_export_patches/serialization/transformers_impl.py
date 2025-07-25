@@ -16,6 +16,7 @@ from transformers.modeling_outputs import BaseModelOutput
 from ...helpers.cache_helper import (
     make_dynamic_cache,
     make_hybrid_cache,
+    make_sliding_window_cache,
     make_static_cache,
     CacheKeyValue,
 )
@@ -218,26 +219,7 @@ def unflatten_sliding_window_cache(
 ) -> SlidingWindowCache:
     """Restores a :class:`transformers.cache_utils.SlidingWindowCache` from python objects."""
     key_cache, value_cache = values
-
-    class _config:
-        def __init__(self):
-            self.head_dim = key_cache[0].shape[-1]
-            self.num_attention_heads = key_cache[0].shape[1]
-            self.num_hidden_layers = len(key_cache)
-            self.sliding_window = key_cache[0].shape[2]
-
-    cache = SlidingWindowCache(
-        _config(),
-        max_batch_size=key_cache[0].shape[0],
-        max_cache_len=key_cache[0].shape[2],  # sligding window
-        device=key_cache[0].device,
-        dtype=key_cache[0].dtype,
-    )
-
-    values = dict(zip(context, values))
-    for k, v in values.items():
-        setattr(cache, k, v)
-    return cache
+    return make_sliding_window_cache(list(zip(values[0], values[1])))
 
 
 #####################
