@@ -1,12 +1,19 @@
 import inspect
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 import packaging.version as pv
 import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
-from transformers.cache_utils import StaticCache, Cache, DynamicCache
+from transformers.cache_utils import StaticCache, Cache
+
+try:
+    from transformers.cache_utils import parse_processor_args  # noqa: F401
+
+    patch_parse_processor_args = True
+except ImportError:
+    patch_parse_processor_args = False
 
 try:
     import transformers.masking_utils
@@ -15,9 +22,9 @@ try:
 except ImportError:
     patch_masking_utils = False
 
+
 from ...ext_test_case import has_transformers
 from ...helpers.torch_helper import is_torchdynamo_exporting
-
 
 if patch_masking_utils:
     # Introduced in 4.52
@@ -110,6 +117,46 @@ if patch_masking_utils:
         return mask
 
 
+if patch_parse_processor_args:
+
+    def _init_cache_inspect():
+        res = {}
+        for processor_class in transformers.cache_utils.PROCESSOR_CLASS_MAP.values():
+            try:
+                params = list(inspect.signature(processor_class.__init__).parameters)[2:]
+                res[processor_class.__init__] = params
+            except Exception:
+                res[processor_class.__init__] = None
+        return res
+
+    _cache_inspect = _init_cache_inspect()
+
+    def patched_parse_processor_args(
+        processor_class: Optional[type["CacheProcessor"]], kwargs: dict  # noqa: F821
+    ) -> tuple[dict, dict]:
+        """[patch:transformers.cache_utils.parse_processor_args]"""
+        # If not patched...
+        # Fails with transformers>=4.54 because function ``parse_processor_args``
+        # relies in inspect and the exporter is not very fond of that.
+        # torch._dynamo.exc.Unsupported: id() with unsupported args
+        # Explanation: Dynamo doesn't know how to trace id()
+        # call with args
+        # (GetAttrVariable(ConstantVariable(NoneType: None), __init__),)
+        # Hint: Supported args are Tensors, and functions/nn.Modules/user-defined
+        # objects from outside the compiled region.
+        # Hint: It may be possible to write Dynamo tracing rules for this code.
+        #
+        # The patch is caching the signature to avoid any call to inspect.
+        if processor_class is None:
+            return {}, kwargs
+        params = _cache_inspect[processor_class.__init__]
+        if params is None:
+            return {}, kwargs
+        processor_kwargs = {k: kwargs[k] for k in params if k in kwargs}
+        remaining_kwargs = {k: v for k, v in kwargs.items() if k not in processor_kwargs}
+        return processor_kwargs, remaining_kwargs
+
+
 def _patch_make_causal_mask(
     input_ids_shape: torch.Size,
     dtype: torch.dtype,
@@ -192,136 +239,140 @@ class patched_AttentionMaskConverter:
         return _patch_make_causal_mask(**kwargs)
 
 
-class patched_DynamicCache:
-    """
-    Applies modifications implemented in PR
-    `transformers/#36652 <https://github.com/huggingface/transformers/pull/36652>`_.
-    """
+if pv.Version(transformers.__version__) < pv.Version("4.51"):
+    from typing import Any, Dict
+    from transformers.cache_utils import DynamicCache
 
-    _PATCHES_ = ["reorder_cache", "update", "crop", "from_batch_splits", "get_seq_length"]
-    _PATCHED_CLASS_ = transformers.cache_utils.DynamicCache
-
-    def get_seq_length(self, layer_idx: Optional[int] = 0) -> int:
-        """Returns the sequence length of the cached states.
-        A layer index can be optionally passed."""
-        # TODO: deprecate this function in favor of `cache_position`
-        is_empty_layer = (
-            len(self.key_cache) == 0  # no cache in any layer
-            or len(self.key_cache)
-            <= layer_idx  # skipped `layer_idx` and hasn't run a layer with cache after it
-            or self.key_cache[layer_idx].numel() == 0  # the layer has no cache
-        )
-        layer_seq_length = self.key_cache[layer_idx].shape[-2] if not is_empty_layer else 0
-        return layer_seq_length
-
-    def reorder_cache(self, beam_idx: torch.LongTensor):
-        """Reorders the cache for beam search, given the selected beam indices."""
-        for layer_idx in range(len(self.key_cache)):
-            if self.key_cache[layer_idx].numel():
-                device = self.key_cache[layer_idx].device
-                self.key_cache[layer_idx] = self.key_cache[layer_idx].index_select(
-                    0, beam_idx.to(device)
-                )
-            if self.value_cache[layer_idx].numel():
-                device = self.value_cache[layer_idx].device
-                self.value_cache[layer_idx] = self.value_cache[layer_idx].index_select(
-                    0, beam_idx.to(device)
-                )
-
-    def update(
-        self,
-        key_states: torch.Tensor,
-        value_states: torch.Tensor,
-        layer_idx: int,
-        cache_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    class patched_DynamicCache:
         """
-        Updates the cache with the new `key_states`
-        and `value_states` for the layer `layer_idx`.
-
-        Parameters:
-            key_states (`torch.Tensor`):
-                The new key states to cache.
-            value_states (`torch.Tensor`):
-                The new value states to cache.
-            layer_idx (`int`):
-                The index of the layer to cache the states for.
-            cache_kwargs (`Dict[str, Any]`, `optional`):
-                Additional arguments for the cache subclass.
-                No additional arguments are used in `DynamicCache`.
-
-        Return:
-            A tuple containing the updated key and value states.
+        Applies modifications implemented in PR
+        `transformers/#36652 <https://github.com/huggingface/transformers/pull/36652>`_.
         """
-        # Update the number of seen tokens
-        if layer_idx == 0:
+
+        _PATCHES_ = ["reorder_cache", "update", "crop", "from_batch_splits", "get_seq_length"]
+        _PATCHED_CLASS_ = transformers.cache_utils.DynamicCache
+
+        def get_seq_length(self, layer_idx: Optional[int] = 0) -> int:
+            """Returns the sequence length of the cached states.
+            A layer index can be optionally passed."""
+            # TODO: deprecate this function in favor of `cache_position`
+            is_empty_layer = (
+                len(self.key_cache) == 0  # no cache in any layer
+                or len(self.key_cache)
+                <= layer_idx  # skipped `layer_idx` and hasn't run a layer with cache after it
+                or self.key_cache[layer_idx].numel() == 0  # the layer has no cache
+            )
+            layer_seq_length = self.key_cache[layer_idx].shape[-2] if not is_empty_layer else 0
+            return layer_seq_length
+
+        def reorder_cache(self, beam_idx: torch.LongTensor):
+            """Reorders the cache for beam search, given the selected beam indices."""
+            for layer_idx in range(len(self.key_cache)):
+                if self.key_cache[layer_idx].numel():
+                    device = self.key_cache[layer_idx].device
+                    self.key_cache[layer_idx] = self.key_cache[layer_idx].index_select(
+                        0, beam_idx.to(device)
+                    )
+                if self.value_cache[layer_idx].numel():
+                    device = self.value_cache[layer_idx].device
+                    self.value_cache[layer_idx] = self.value_cache[layer_idx].index_select(
+                        0, beam_idx.to(device)
+                    )
+
+        def update(
+            self,
+            key_states: torch.Tensor,
+            value_states: torch.Tensor,
+            layer_idx: int,
+            cache_kwargs: Optional[Dict[str, Any]] = None,
+        ) -> Tuple[torch.Tensor, torch.Tensor]:
+            """
+            Updates the cache with the new `key_states`
+            and `value_states` for the layer `layer_idx`.
+            Parameters:
+                key_states (`torch.Tensor`):
+                    The new key states to cache.
+                value_states (`torch.Tensor`):
+                    The new value states to cache.
+                layer_idx (`int`):
+                    The index of the layer to cache the states for.
+                cache_kwargs (`Dict[str, Any]`, `optional`):
+                    Additional arguments for the cache subclass.
+                    No additional arguments are used in `DynamicCache`.
+            Return:
+                A tuple containing the updated key and value states.
+            """
+            # Update the number of seen tokens
+            if layer_idx == 0:
+                if hasattr(self, "_seen_tokens"):
+                    self._seen_tokens += key_states.shape[-2]
+
+            # Update the cache
+            if key_states is not None:
+                if len(self.key_cache) <= layer_idx:
+                    # There may be skipped layers, fill them with empty lists
+                    for _ in range(len(self.key_cache), layer_idx):
+                        self.key_cache.append(torch.tensor([], dtype=key_states.dtype))
+                        self.value_cache.append(torch.tensor([], dtype=key_states.dtype))
+                    self.key_cache.append(key_states)
+                    self.value_cache.append(value_states)
+                elif not self.key_cache[
+                    layer_idx
+                ].numel():  # prefers not t.numel() to len(t) == 0 to export the model
+                    # fills previously skipped layers; checking for tensor causes errors
+                    self.key_cache[layer_idx] = key_states
+                    self.value_cache[layer_idx] = value_states
+                else:
+                    self.key_cache[layer_idx] = torch.cat(
+                        [self.key_cache[layer_idx], key_states], dim=-2
+                    )
+                    self.value_cache[layer_idx] = torch.cat(
+                        [self.value_cache[layer_idx], value_states], dim=-2
+                    )
+            return self.key_cache[layer_idx], self.value_cache[layer_idx]
+
+        def crop(self, max_length: int):
+            """Crop the past key values up to a new `max_length`
+            in terms of tokens. `max_length` can also be
+            negative to remove `max_length` tokens.
+            This is used in assisted decoding and contrastive search.
+            """
+            # In case it is negative
+            if max_length < 0:
+                max_length = self.get_seq_length() - abs(max_length)
+
+            if self.get_seq_length() <= max_length:
+                return
+
             if hasattr(self, "_seen_tokens"):
-                self._seen_tokens += key_states.shape[-2]
+                self._seen_tokens = max_length
+            for idx in range(len(self.key_cache)):
+                if self.key_cache[idx].numel():
+                    self.key_cache[idx] = self.key_cache[idx][..., :max_length, :]
+                    self.value_cache[idx] = self.value_cache[idx][..., :max_length, :]
 
-        # Update the cache
-        if key_states is not None:
-            if len(self.key_cache) <= layer_idx:
-                # There may be skipped layers, fill them with empty lists
-                for _ in range(len(self.key_cache), layer_idx):
-                    self.key_cache.append(torch.tensor([], dtype=key_states.dtype))
-                    self.value_cache.append(torch.tensor([], dtype=key_states.dtype))
-                self.key_cache.append(key_states)
-                self.value_cache.append(value_states)
-            elif not self.key_cache[
-                layer_idx
-            ].numel():  # prefers not t.numel() to len(t) == 0 to export the model
-                # fills previously skipped layers; checking for tensor causes errors
-                self.key_cache[layer_idx] = key_states
-                self.value_cache[layer_idx] = value_states
-            else:
-                self.key_cache[layer_idx] = torch.cat(
-                    [self.key_cache[layer_idx], key_states], dim=-2
-                )
-                self.value_cache[layer_idx] = torch.cat(
-                    [self.value_cache[layer_idx], value_states], dim=-2
-                )
-        return self.key_cache[layer_idx], self.value_cache[layer_idx]
-
-    def crop(self, max_length: int):
-        """Crop the past key values up to a new `max_length`
-        in terms of tokens. `max_length` can also be
-        negative to remove `max_length` tokens.
-        This is used in assisted decoding and contrastive search.
-        """
-        # In case it is negative
-        if max_length < 0:
-            max_length = self.get_seq_length() - abs(max_length)
-
-        if self.get_seq_length() <= max_length:
-            return
-
-        if hasattr(self, "_seen_tokens"):
-            self._seen_tokens = max_length
-        for idx in range(len(self.key_cache)):
-            if self.key_cache[idx].numel():
-                self.key_cache[idx] = self.key_cache[idx][..., :max_length, :]
-                self.value_cache[idx] = self.value_cache[idx][..., :max_length, :]
-
-    @classmethod
-    def from_batch_splits(cls, splits: List[DynamicCache]) -> DynamicCache:
-        """This is the opposite of the above `batch_split()` method.
-        This will be used by `stack_model_outputs` in
-        `generation.utils`"""
-        cache = cls()
-        for idx in range(len(splits[0])):
-            key_cache = [
-                current.key_cache[idx] for current in splits if current.key_cache[idx].numel()
-            ]
-            value_cache = [
-                current.value_cache[idx]
-                for current in splits
-                if current.value_cache[idx].numel()
-            ]
-            if key_cache != []:
-                layer_keys = torch.cat(key_cache, dim=0)
-                layer_values = torch.cat(value_cache, dim=0)
-                cache.update(layer_keys, layer_values, idx)
-        return cache
+        @classmethod
+        def from_batch_splits(cls, splits: List[DynamicCache]) -> DynamicCache:
+            """This is the opposite of the above `batch_split()` method.
+            This will be used by `stack_model_outputs` in
+            `generation.utils`"""
+            cache = cls()
+            for idx in range(len(splits[0])):
+                key_cache = [
+                    current.key_cache[idx]
+                    for current in splits
+                    if current.key_cache[idx].numel()
+                ]
+                value_cache = [
+                    current.value_cache[idx]
+                    for current in splits
+                    if current.value_cache[idx].numel()
+                ]
+                if key_cache != []:
+                    layer_keys = torch.cat(key_cache, dim=0)
+                    layer_values = torch.cat(value_cache, dim=0)
+                    cache.update(layer_keys, layer_values, idx)
+            return cache
 
 
 class patched_GenerationMixin:
@@ -1249,7 +1300,11 @@ class patched_SamMaskDecoder(torch.nn.Module):
         )
 
         # Run the transformer, image_positional_embedding are consumed
-        point_embedding, image_embeddings, attentions = self.transformer(
+        torch._check(point_embeddings.shape[0] != 0)
+        torch._check(point_embeddings.shape[1] != 0)
+        torch._check(point_embeddings.shape[2] != 0)
+        torch._check(point_embeddings.shape[3] != 0)
+        embeddings_attentions = self.transformer(
             point_embeddings=point_embeddings,
             image_embeddings=image_embeddings,
             image_positional_embeddings=image_positional_embeddings,
@@ -1257,6 +1312,7 @@ class patched_SamMaskDecoder(torch.nn.Module):
             target_embedding=target_embedding,
             output_attentions=output_attentions,
         )
+        point_embedding, image_embeddings = embeddings_attentions[:2]
         iou_token_out = torch.select(point_embedding, dim=2, index=0)
         mask_tokens_out = torch.narrow(
             point_embedding, dim=2, start=1, length=self.num_mask_tokens
@@ -1298,9 +1354,12 @@ class patched_SamMaskDecoder(torch.nn.Module):
 
         outputs = (masks, iou_pred)
 
-        if output_attentions:
-            outputs = outputs + (attentions,)  # noqa: RUF005
+        if len(embeddings_attentions) == 2:
+            # transformers==4.54
+            return outputs
+
+        if output_attentions and len(embeddings_attentions) > 2:
+            outputs = outputs + (embeddings_attentions[2],)  # noqa: RUF005
         else:
             outputs = outputs + (None,)  # noqa: RUF005
-
         return outputs

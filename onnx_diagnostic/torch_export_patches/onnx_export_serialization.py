@@ -7,6 +7,7 @@ import transformers
 from transformers.cache_utils import (
     DynamicCache,
     EncoderDecoderCache,
+    HybridCache,
     SlidingWindowCache,
     StaticCache,
 )
@@ -165,6 +166,9 @@ def serialization_functions(
             flatten_dynamic_cache,
             unflatten_dynamic_cache,
             flatten_with_keys_dynamic_cache,
+            flatten_hybrid_cache,
+            unflatten_hybrid_cache,
+            flatten_with_keys_hybrid_cache,
             flatten_mamba_cache,
             unflatten_mamba_cache,
             flatten_with_keys_mamba_cache,
@@ -188,6 +192,14 @@ def serialization_functions(
                 flatten_dynamic_cache,
                 unflatten_dynamic_cache,
                 flatten_with_keys_dynamic_cache,
+                # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
+                verbose=verbose,
+            ),
+            HybridCache: lambda verbose=verbose: register_class_serialization(
+                HybridCache,
+                flatten_hybrid_cache,
+                unflatten_hybrid_cache,
+                flatten_with_keys_hybrid_cache,
                 # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
                 verbose=verbose,
             ),

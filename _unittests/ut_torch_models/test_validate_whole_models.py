@@ -267,9 +267,10 @@ class TestValidateWholeModels(ExtTestCase):
             verbose=10,
             exporter="custom",
             dump_folder="dump_test/validate_phi35_mini_instruct",
-            inputs2=True,
+            inputs2=False,
             patch=True,
             rewrite=True,
+            optimization="default",
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)

@@ -140,6 +140,7 @@ nitpick_ignore = [
     ("py:class", "transformers.cache_utils.Cache"),
     ("py:class", "transformers.cache_utils.DynamicCache"),
     ("py:class", "transformers.cache_utils.EncoderDecoderCache"),
+    ("py:class", "transformers.cache_utils.HybridCache"),
     ("py:class", "transformers.cache_utils.MambaCache"),
     ("py:class", "transformers.cache_utils.SlidingWindowCache"),
     ("py:class", "transformers.cache_utils.StaticCache"),

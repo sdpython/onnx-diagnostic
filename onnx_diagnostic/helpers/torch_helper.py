@@ -14,9 +14,11 @@ from .helper import string_type, size_type
 from .cache_helper import (
     make_dynamic_cache,
     make_encoder_decoder_cache,
+    make_hybrid_cache,
     make_sliding_window_cache,
     make_mamba_cache,
     make_static_cache,
+    CacheKeyValue,
 )
 from .mini_onnx_builder import create_onnx_model_from_input_tensors
 from .onnx_helper import (
@@ -720,20 +722,22 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
     if type(value) is dict:
         return {k: to_any(t, to_value) for k, t in value.items()}
     if value.__class__.__name__ == "DynamicCache":
+        cc = CacheKeyValue(value)
         return make_dynamic_cache(
             list(
                 zip(
-                    [t.to(to_value) for t in value.key_cache],
-                    [t.to(to_value) for t in value.value_cache],
+                    [t.to(to_value) if t is not None else t for t in cc.key_cache],
+                    [t.to(to_value) if t is not None else t for t in cc.value_cache],
                 )
             )
         )
     if value.__class__.__name__ == "StaticCache":
+        cc = CacheKeyValue(value)
         return make_static_cache(
             list(
                 zip(
-                    [t.to(to_value) for t in value.key_cache],
-                    [t.to(to_value) for t in value.value_cache],
+                    [t.to(to_value) if t is not None else t for t in cc.key_cache],
+                    [t.to(to_value) if t is not None else t for t in cc.value_cache],
                 )
             ),
             max_cache_len=value.max_cache_len,
@@ -781,17 +785,29 @@ def torch_deepcopy(value: Any) -> Any:
     if hasattr(value, "clone"):
         return value.clone()
     if value.__class__.__name__ == "DynamicCache":
-        return make_dynamic_cache(
-            torch_deepcopy(list(zip(value.key_cache, value.value_cache)))
-        )
+        from .cache_helper import CacheKeyValue
+
+        ca = CacheKeyValue(value)
+        return make_dynamic_cache(torch_deepcopy(list(zip(ca.key_cache, ca.value_cache))))
     if value.__class__.__name__ == "StaticCache":
+        from .cache_helper import CacheKeyValue
+
+        ca = CacheKeyValue(value)
         return make_static_cache(
-            torch_deepcopy(list(zip(value.key_cache, value.value_cache))),
+            torch_deepcopy(list(zip(ca.key_cache, ca.value_cache))),
             max_cache_len=value.max_cache_len,
         )
+    if value.__class__.__name__ == "HybridCache":
+        from .cache_helper import CacheKeyValue
+
+        ca = CacheKeyValue(value)
+        return make_hybrid_cache(torch_deepcopy(list(zip(ca.key_cache, ca.value_cache))))
     if value.__class__.__name__ == "SlidingWindowCache":
+        from .cache_helper import CacheKeyValue
+
+        ca = CacheKeyValue(value)
         return make_sliding_window_cache(
-            torch_deepcopy(list(zip(value.key_cache, value.value_cache)))
+            torch_deepcopy(list(zip(ca.key_cache, ca.value_cache)))
         )
     if value.__class__.__name__ == "EncoderDecoderCache":
         return make_encoder_decoder_cache(
@@ -825,8 +841,14 @@ def torch_tensor_size(value: Any) -> Any:
         return value.copy()
     if hasattr(value, "clone"):
         return value.numel() * size_type(value.dtype)
-    if value.__class__.__name__ in {"DynamicCache", "SlidingWindowCache"}:
-        return torch_tensor_size(value.key_cache) + torch_tensor_size(value.value_cache)
+    if value.__class__.__name__ in {
+        "DynamicCache",
+        "SlidingWindowCache",
+        "HybridCache",
+        "StaticCache",
+    }:
+        cc = CacheKeyValue(value)
+        return torch_tensor_size(cc.key_cache) + torch_tensor_size(cc.value_cache)
     if value.__class__.__name__ == "EncoderDecoderCache":
         return torch_tensor_size(value.self_attention_cache) + torch_tensor_size(
             value.cross_attention_cache

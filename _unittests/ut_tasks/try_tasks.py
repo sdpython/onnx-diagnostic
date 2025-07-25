@@ -257,7 +257,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         print(f">>> Response\n{response}")
 
     @never_test()
-    def test_imagetext2text_generation(self):
+    def test_imagetext2text_generation_idefics(self):
         # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k etext2t
         # https://huggingface.co/docs/transformers/main/en/tasks/idefics
 
@@ -286,6 +286,81 @@ class TestHuggingFaceHubModel(ExtTestCase):
         generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)
 
         print(generated_text[0])
+
+    @never_test()
+    def test_imagetext2text_generation_gemma3(self):
+        """
+        ::
+
+            dict(input_ids:T7s1x281,
+                pixel_values:T16s1x3x896x896,
+                attention_mask:dict(full_attention:T9s1x1x281x380,sliding_attention:T9s1x1x281x380),
+                position_ids:T7s1x281,
+                past_key_values:HybridCache(
+                    key_cache=#34[T1s1x4x380x256,...],
+                    value_cache=#34[T1s1x4x380x256,...]),
+                token_type_ids:T7s1x281,
+                cache_position:T7s281,
+                logits_to_keep:1)
+            dict(input_ids:T7s1x1,
+                pixel_values:None,
+                attention_mask:dict(full_attention:T9s1x1x1x380,sliding_attention:T9s1x1x1x380),
+                position_ids:T7s1x1,
+                past_key_values:HybridCache(
+                    key_cache=#34[T1s1x4x380x256,...],
+                    value_cache=#34[T1s1x4x380x256,...]),
+                token_type_ids:T7s1x1,
+                cache_position:T7s1,
+                logits_to_keep:1)
+        """
+        from transformers import AutoProcessor, Gemma3ForConditionalGeneration
+        import torch
+
+        # model_id = "tiny-random/gemma-3"
+        model_id = "google/gemma-3-4b-it"
+
+        model = Gemma3ForConditionalGeneration.from_pretrained(
+            model_id, device_map="auto"
+        ).eval()
+
+        processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
+
+        messages = [
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": "You are a helpful assistant."}],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "image": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/bee.jpg",
+                    },
+                    {"type": "text", "text": "Describe this image in detail."},
+                ],
+            },
+        ]
+
+        inputs = processor.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to(model.device, dtype=torch.bfloat16)
+
+        input_len = inputs["input_ids"].shape[-1]
+
+        print()
+        print(f"-- input_len={input_len}")
+        # steal forward creates a bug...
+        # with steal_forward(model), torch.inference_mode():
+        with torch.inference_mode():
+            generation = model.generate(**inputs, max_new_tokens=100, do_sample=False)
+            generation = generation[0][input_len:]
+        decoded = processor.decode(generation, skip_special_tokens=True)
+        print(decoded)
 
     @never_test()
     def test_automatic_speech_recognition(self):
