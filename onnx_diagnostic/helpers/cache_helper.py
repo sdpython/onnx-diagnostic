@@ -160,7 +160,19 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             )
             print(string_type(past_key_values, with_shape=True))
         """
-        return transformers.cache_utils.DynamicCache(key_value_pairs)
+        cache = transformers.cache_utils.DynamicCache(key_value_pairs)
+        if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
+            # The cache constructor contains the two following lines
+            # (in cache_utils.py) which append empty layers when the cache is
+            # initialized. We need to remove them.
+            # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
+            # self.append_new_layers(self.num_hidden_layers - 1)
+            cache.layers[:] = cache.layers[-len(key_value_pairs) :]
+        assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
+            f"Unexpected number of layers in the cache ({len(cache.layers)}), "
+            f"{len(key_value_pairs)} expected."
+        )
+        return cache
 
 else:
 
@@ -271,6 +283,17 @@ def make_static_cache(
         d = key_value_pairs[i][1].shape[2]
         ca.key_cache[i][:, :, :d, :] = key_value_pairs[i][0]
         ca.value_cache[i][:, :, :d, :] = key_value_pairs[i][1]
+    if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
+        # The cache constructor contains the two following lines
+        # (in cache_utils.py) which append empty layers when the cache is
+        # initialized. We need to remove them.
+        # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
+        # self.append_new_layers(self.num_hidden_layers - 1)
+        cache.layers[:] = cache.layers[-len(key_value_pairs) :]
+    assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
+        f"Unexpected number of layers in the cache ({len(cache.layers)}), "
+        f"{len(key_value_pairs)} expected."
+    )
     return cache
 
 
@@ -355,6 +378,17 @@ def make_sliding_window_cache(
             f"got {key_value_pairs[i][1].shape}"
         )
         ca.value_cache[i][:, :, :, :] = key_value_pairs[i][1]
+    if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
+        # The cache constructor contains the two following lines
+        # (in cache_utils.py) which append empty layers when the cache is
+        # initialized. We need to remove them.
+        # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
+        # self.append_new_layers(self.num_hidden_layers - 1)
+        cache.layers[:] = cache.layers[-len(key_value_pairs) :]
+    assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
+        f"Unexpected number of layers in the cache ({len(cache.layers)}), "
+        f"{len(key_value_pairs)} expected."
+    )
     return cache
 
 
@@ -500,4 +534,15 @@ def make_hybrid_cache(
                 )
             },
         )
+    if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
+        # The cache constructor contains the two following lines
+        # (in cache_utils.py) which append empty layers when the cache is
+        # initialized. We need to remove them.
+        # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
+        # self.append_new_layers(self.num_hidden_layers - 1)
+        cache.layers[:] = cache.layers[-len(key_value_pairs) :]
+    assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
+        f"Unexpected number of layers in the cache ({len(cache.layers)}), "
+        f"{len(key_value_pairs)} expected."
+    )
     return cache
