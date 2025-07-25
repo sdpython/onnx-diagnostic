@@ -1300,7 +1300,11 @@ class patched_SamMaskDecoder(torch.nn.Module):
         )
 
         # Run the transformer, image_positional_embedding are consumed
-        point_embedding, image_embeddings, attentions = self.transformer(
+        torch._check(point_embeddings.shape[0] != 0)
+        torch._check(point_embeddings.shape[1] != 0)
+        torch._check(point_embeddings.shape[2] != 0)
+        torch._check(point_embeddings.shape[3] != 0)
+        embeddings_attentions = self.transformer(
             point_embeddings=point_embeddings,
             image_embeddings=image_embeddings,
             image_positional_embeddings=image_positional_embeddings,
@@ -1308,6 +1312,7 @@ class patched_SamMaskDecoder(torch.nn.Module):
             target_embedding=target_embedding,
             output_attentions=output_attentions,
         )
+        point_embedding, image_embeddings = embeddings_attentions[:2]
         iou_token_out = torch.select(point_embedding, dim=2, index=0)
         mask_tokens_out = torch.narrow(
             point_embedding, dim=2, start=1, length=self.num_mask_tokens
@@ -1349,9 +1354,12 @@ class patched_SamMaskDecoder(torch.nn.Module):
 
         outputs = (masks, iou_pred)
 
-        if output_attentions:
-            outputs = outputs + (attentions,)  # noqa: RUF005
+        if len(embeddings_attentions) == 2:
+            # transformers==4.54
+            return outputs
+
+        if output_attentions and len(embeddings_attentions) > 2:
+            outputs = outputs + (embeddings_attentions[2],)  # noqa: RUF005
         else:
             outputs = outputs + (None,)  # noqa: RUF005
-
         return outputs
