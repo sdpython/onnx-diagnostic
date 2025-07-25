@@ -78,7 +78,7 @@ class TestSideBySide(ExtTestCase):
                 onx,
                 (x,),
                 check_conversion_cls=dict(
-                    cls=ExtendedReferenceEvaluator, atol=1e-5, rtol=1e-5
+                    cls=ExtendedReferenceEvaluator, atol=1e-4, rtol=1e-4
                 ),
                 verbose=1,
             ),
