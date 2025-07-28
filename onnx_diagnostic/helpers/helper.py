@@ -36,11 +36,12 @@ def size_type(dtype: Any) -> int:
             TensorProto.FLOAT8E4M3FNUZ,
             TensorProto.FLOAT8E5M2,
             TensorProto.FLOAT8E5M2FNUZ,
+            getattr(TensorProto, "FLOAT8E8M0", None),
         }:
             return 1
         if dtype in {TensorProto.COMPLEX128}:
             return 16
-        from .helpers.onnx_helper import onnx_dtype_name
+        from .onnx_helper import onnx_dtype_name
 
         raise AssertionError(
             f"Unable to return the element size for type {onnx_dtype_name(dtype)}"
