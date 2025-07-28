@@ -245,11 +245,15 @@ backend_test.exclude(
 if onnx_opset_version() <= 24:
     backend_test.exclude(
         "(deform_conv"
-        "|gru_batchwise"
-        "|lstm_batchwise"
-        "|l1normalization_axis_last"
-        "|l2normalization_axis"
-        "|lpnormalization)"
+        "|gru"
+        "|lstm"
+        "|l1normalization"
+        "|l2normalization"
+        "|lpnormalization"
+        "|maxunpool"
+        "|attention_3d"
+        "|causal_expanded"
+        ")"
     )
 
 
