@@ -333,6 +333,7 @@ class TestHelpers(ExtTestCase):
                     "FLOAT8E5M2",
                     "FLOAT8E4M3FN",
                     "FLOAT8E4M3FNUZ",
+                    "FLOAT8E8M0",
                 }:
                     onnx_dtype_to_torch_dtype(i)
                     onnx_dtype_to_np_dtype(i)
