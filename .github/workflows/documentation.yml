@@ -85,6 +85,12 @@ jobs:
           pip install pytest pytest-cov          
           PYTHONPATH=. UNITTEST_GOING=1 UNITTEST_DOT=1 pytest --cov=./onnx_diagnostic/ --cov-report=xml --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py  --ignore _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --ignore _unittests/ut_torch_models/test_tiny_llms_bypassed.py
 
+      - name: run backend tests python
+        run: PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_extended_reference_evaluator.py
+
+      - name: run backend tests onnxruntime
+        run: PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --maxfail=15
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
         env:
