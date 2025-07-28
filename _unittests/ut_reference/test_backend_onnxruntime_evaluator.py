@@ -242,6 +242,16 @@ backend_test.exclude(
     ")"
 )
 
+if onnx_opset_version() <= 24:
+    backend_test.exclude(
+        "(deform_conv"
+        "|gru_batchwise"
+        "|lstm_batchwise"
+        "|l1normalization_axis_last"
+        "|l2normalization_axis"
+        "|lpnormalization)"
+    )
+
 
 # import all test cases at global scope to make them visible to python.unittest
 globals().update(backend_test.test_cases)
