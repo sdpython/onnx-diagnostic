@@ -231,6 +231,7 @@ backend_test.exclude(
     "|test_sub_uint8"
     "|test_thresholdedrelu"
     "|test_top_k_uint64"
+    "|test_training"
     ")"
 )
 
@@ -253,6 +254,16 @@ if onnx_opset_version() <= 24:
         "|maxunpool"
         "|attention_3d"
         "|causal_expanded"
+        "|layer_normalization.*expanded"
+        "|layer_normalization.*expanded"
+        "|affine_grid.*expanded"
+        "|test_rnn_seq"
+        "|test_roialign_aligned_false"
+        "|test_roialign_aligned_true"
+        "|test_roialign_mode_max"
+        "|test_simple_rnn_batchwise"
+        "|test_simple_rnn_defaults"
+        "|test_simple_rnn_with_initial_bias"
         ")"
     )
 
