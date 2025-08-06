@@ -1363,3 +1363,30 @@ class patched_SamMaskDecoder(torch.nn.Module):
         else:
             outputs = outputs + (None,)  # noqa: RUF005
         return outputs
+
+
+def rewrite_loop_for_square_mask(mask: torch.Tensor, seq: torch.Tensor):
+    """
+    Rewrites the loop in:
+
+    .. code-block:: python
+
+        attention_mask = torch.full(
+            [1, seq_length, seq_length], torch.finfo(q.dtype).min, dtype=q.dtype
+        )
+        for i in range(1, len(seq)):
+            attention_mask[..., seq[i - 1] : seq[i], seq[i - 1] : seq[i]] = 0
+    """
+    r = torch.arange(0, mask.shape[-1], dtype=torch.int64)
+    less0 = (r.reshape((-1, 1)) < seq.reshape((1, -1))).to(torch.int64)
+    less = less0.sum(axis=-1, keepdim=True) + 1
+    sq = less * less.T
+    less_min = less.min()
+    less_max = less.max()
+    look = (
+        torch.max(seq.min() == 0, less != less.max())
+        * torch.max(seq.max() == mask.shape[-1], less != less_min)
+        * less
+    )
+    filt = (sq != look**2).to(mask.dtype)
+    return mask * filt
