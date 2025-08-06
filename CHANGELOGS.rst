@@ -4,6 +4,8 @@ Change Logs
 0.7.7
 +++++
 
+* :pr:`196`: implements a patch to rewrite a loop in modeling_qwen2_vl.VisionAttention 
+
 0.7.6
 +++++
 

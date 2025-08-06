@@ -1381,11 +1381,9 @@ def rewrite_loop_for_square_mask(mask: torch.Tensor, seq: torch.Tensor):
     less0 = (r.reshape((-1, 1)) < seq.reshape((1, -1))).to(torch.int64)
     less = less0.sum(axis=-1, keepdim=True) + 1
     sq = less * less.T
-    less_min = less.min()
-    less_max = less.max()
     look = (
         torch.max(seq.min() == 0, less != less.max())
-        * torch.max(seq.max() == mask.shape[-1], less != less_min)
+        * torch.max(seq.max() == mask.shape[-1], less != less.min())
         * less
     )
     filt = (sq != look**2).to(mask.dtype)
