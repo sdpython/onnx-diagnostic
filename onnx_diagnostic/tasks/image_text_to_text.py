@@ -334,7 +334,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 "hidden_size",
                 "pad_token_id",
             )
-            check_hasattr(config, "vision_config", "image_token_index")
+            check_hasattr(config, "vision_config", ("image_token_index", "image_token_id"))
             text_config = True
         else:
             check_hasattr(
@@ -348,7 +348,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 "vision_config",
             )
             text_config = False
-        check_hasattr(config.vision_config, "image_size", "num_channels")
+        check_hasattr(config.vision_config, ("num_channels", "in_chans"))
     kwargs = dict(
         batch_size=2,
         sequence_length=43,
@@ -410,18 +410,34 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
             if config is None
             else (config.text_config.hidden_size if text_config else config.hidden_size)
         ),
-        width=224 if config is None else config.vision_config.image_size,
-        height=224 if config is None else config.vision_config.image_size,
-        num_channels=3 if config is None else config.vision_config.num_channels,
+        width=(
+            224
+            if config is None or not hasattr(config.vision_config, "image_size")
+            else config.vision_config.image_size
+        ),
+        height=(
+            224
+            if config is None or not hasattr(config.vision_config, "image_size")
+            else config.vision_config.image_size
+        ),
+        num_channels=(
+            3 if config is None else _pick(config.vision_config, "num_channels", "in_chans")
+        ),
         pad_token_id=(
             0
-            if config is None or not hasattr(config, "text_config")
+            if config is None
+            or not hasattr(config, "text_config")
+            or not hasattr(config.text_config, "pad_token_id")
             else config.text_config.pad_token_id
         ),
         image_token_index=(
             4
-            if config is None or not hasattr(config, "image_token_index")
-            else config.image_token_index
+            if config is None
+            or (
+                not hasattr(config, "image_token_index")
+                and not hasattr(config, "image_token_id")
+            )
+            else _pick(config, "image_token_index", "image_token_id")
         ),
     )
     return kwargs, get_inputs
