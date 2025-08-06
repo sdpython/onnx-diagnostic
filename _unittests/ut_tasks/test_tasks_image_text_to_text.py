@@ -30,9 +30,15 @@ class TestTasksImageTextToText(ExtTestCase):
             )
 
     @hide_stdout()
-    @requires_transformers("4.53")
+    @requires_transformers("4.56")
     @requires_torch("2.7.99")
     def test_image_text_to_text_gemma3(self):
+        """
+        If the model tails because of
+        ``if inputs_embeds[special_image_mask].numel() != image_features.numel():```,
+        make sure this PR was merged:
+        https://github.com/huggingface/transformers/pull/39962.
+        """
         # mid = "google/gemma-3-4b-it"
         mid = "tiny-random/gemma-3"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
