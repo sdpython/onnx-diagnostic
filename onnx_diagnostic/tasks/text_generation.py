@@ -34,6 +34,9 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
         )
     else:
         kwargs = dict(
+            head_dim=getattr(
+                config, "head_dim", config.hidden_size // config.num_attention_heads
+            ),
             num_hidden_layers=min(config.num_hidden_layers, 2),
             num_key_value_heads=(
                 config.num_key_value_heads
