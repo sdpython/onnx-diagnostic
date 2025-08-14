@@ -52,6 +52,7 @@ __data_arch__ = textwrap.dedent(
     GPTJModel,feature-extraction
     GPTNeoModel,feature-extraction
     GPTNeoXForCausalLM,text-generation
+    GptOssForCausalLM,text-generation
     GemmaForCausalLM,text-generation
     Gemma2ForCausalLM,text-generation
     Gemma3ForConditionalGeneration,image-text-to-text
