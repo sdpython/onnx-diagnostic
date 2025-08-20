@@ -280,6 +280,33 @@ def make_static_cache(
         max_cache_len=max_cache_len,
     )
     ca = CacheKeyValue(cache)
+    if hasattr(cache, "layers") and len(ca.key_cache) == 0:
+        # transformers>= 4.55.2, layers are empty
+        for i, (key, value) in enumerate(key_value_pairs):
+            cache.update(key, value, i)
+        return cache
+
+    torch._check(
+        len(key_value_pairs) == len(cache.layers),
+        lambda: (
+            f"Length mismatch len(key_value_pairs)={len(key_value_pairs)}, "
+            f"len(cache.layers)={len(cache.layers)}"
+        ),
+    )
+    torch._check(
+        len(key_value_pairs) == len(ca.key_cache),
+        lambda: (
+            f"Length mismatch len(key_value_pairs)={len(key_value_pairs)}, "
+            f"len(ca.key_cache)={len(ca.key_cache)}"
+        ),
+    )
+    torch._check(
+        len(key_value_pairs) == len(ca.value_cache),
+        lambda: (
+            f"Length mismatch len(key_value_pairs)={len(key_value_pairs)}, "
+            f"len(ca.value_cache)={len(ca.value_cache)}"
+        ),
+    )
     for i in range(len(key_value_pairs)):
         assert (
             key_value_pairs[i][0].shape == key_value_pairs[i][1].shape
