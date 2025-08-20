@@ -265,6 +265,9 @@ def make_static_cache(
             self.num_attention_heads = key_value_pairs[0][0].shape[1]
             self.num_hidden_layers = len(key_value_pairs)
 
+        def get_text_config(self):
+            return self
+
     assert max_cache_len is not None, (
         f"max_cache_len={max_cache_len} cannot be setup "
         f"automatically yet from shape {key_value_pairs[0][0].shape}"
