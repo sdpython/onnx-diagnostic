@@ -287,7 +287,7 @@ def make_static_cache(
         return cache
 
     torch._check(
-        len(key_value_pairs) == len(cache.layers),
+        not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers),
         lambda: (
             f"Length mismatch len(key_value_pairs)={len(key_value_pairs)}, "
             f"len(cache.layers)={len(cache.layers)}"
@@ -334,7 +334,10 @@ def make_encoder_decoder_cache(
 ) -> transformers.cache_utils.EncoderDecoderCache:
     """Creates an EncoderDecoderCache."""
     return transformers.cache_utils.EncoderDecoderCache(
-        self_attention_cache=self_attention_cache, cross_attention_cache=cross_attention_cache
+        # self_attention_cache=self_attention_cache,
+        # cross_attention_cache=cross_attention_cache
+        self_attention_cache,
+        cross_attention_cache,
     )
 
 
