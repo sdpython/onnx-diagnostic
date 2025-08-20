@@ -27,8 +27,8 @@ def _catch_produce_guards_and_solve_constraints(
     dynamic_shapes: Union[Dict[str, Any], Tuple[Any], List[Any], None],
     equalities_inputs: "EqualityConstraint",  # noqa: F821
     original_signature: inspect.Signature,
-    _is_torch_jit_trace: bool = False,
     verbose: int = 0,
+    **kwargs,
 ):
     try:
         return previous_function(
@@ -37,7 +37,7 @@ def _catch_produce_guards_and_solve_constraints(
             dynamic_shapes=dynamic_shapes,
             equalities_inputs=equalities_inputs,
             original_signature=original_signature,
-            _is_torch_jit_trace=_is_torch_jit_trace,
+            **kwargs,
         )
     except Exception as e:
         if not int(os.environ.get("SKIP_SOLVE_CONSTRAINTS", "1")):
@@ -51,7 +51,7 @@ def _catch_produce_guards_and_solve_constraints(
                 f"dynamic_shapes={dynamic_shapes}\n"
                 f"equalities_inputs={equalities_inputs}\n"
                 f"original_signature={original_signature}\n"
-                f"_is_torch_jit_trace={_is_torch_jit_trace}\n"
+                f"kwargs={kwargs}\n"
                 f"exc={e}\ngm={gm}"
             )
         torch._dynamo.reset()

@@ -8,6 +8,7 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_static_cache,
     make_sliding_window_cache,
     flatten_unflatten_for_dynamic_shapes,
+    CacheKeyValue,
 )
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     torch_export_patches,
@@ -48,7 +49,8 @@ class TestPatchSerialization(ExtTestCase):
     def test_encoder_decoder_cache_export(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
-                return cache.self_attention_cache.key_cache[0]
+                att = CacheKeyValue(cache.self_attention_cache)
+                return att.key_cache[0]
 
         cache1 = make_dynamic_cache(
             [(torch.randn(2, 4, 3, 7), torch.randn(2, 4, 3, 7)) for i in range(3)]
@@ -88,6 +90,7 @@ class TestPatchSerialization(ExtTestCase):
     def test_dynamic_cache_export(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
+                cache = CacheKeyValue(cache)
                 return cache.key_cache[0]
 
         cache = make_dynamic_cache(
@@ -180,7 +183,8 @@ class TestPatchSerialization(ExtTestCase):
     def test_sliding_window_cache_export(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
-                return cache.key_cache[0]
+                dc = CacheKeyValue(cache)
+                return dc.key_cache[0]
 
         cache = make_sliding_window_cache(
             [
@@ -268,6 +272,7 @@ class TestPatchSerialization(ExtTestCase):
         # export
         class Model(torch.nn.Module):
             def forward(self, cache):
+                cache = CacheKeyValue(cache)
                 return cache.key_cache[0]
 
         model = Model()
