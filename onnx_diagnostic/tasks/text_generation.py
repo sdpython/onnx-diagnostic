@@ -43,18 +43,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
                 if hasattr(config, "num_key_value_heads")
                 else config.num_attention_heads
             ),
-            hidden_size=(
-                min(config.hidden_size, 4096 // 4)
-                if config.hidden_size % 64 == 0
-                else config.hidden_size
-            ),
         )
-        if config is None or hasattr(config, "intermediate_size"):
-            kwargs["intermediate_size"] = (
-                min(config.intermediate_size, 24576 // 4)
-                if config.intermediate_size % 4 == 0
-                else config.intermediate_size
-            )
     update_config(config, kwargs)
     return kwargs
 
