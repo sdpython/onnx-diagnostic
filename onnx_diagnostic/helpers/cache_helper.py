@@ -41,9 +41,14 @@ class CacheKeyValue:
                     f"or value_cache={string_type(self.value_cache)}, "
                     f"cache.layers={string_type(cache.layers)}"
                 )
-        elif cache is not None:
+        elif cache is not None and hasattr(cache, "key_cache"):
             self.key_cache = cache.key_cache
             self.value_cache = cache.value_cache
+        elif cache is None:
+            self.key_cache = None
+            self.value_cache = None
+        else:
+            raise NotImplementedError(f"type(cache)={type(cache)}")
 
     def make_dynamic_cache(self):
         """Do the reverse operation."""
@@ -401,6 +406,13 @@ def make_sliding_window_cache(
         dtype=key_value_pairs[0][0].dtype,
     )
     ca = CacheKeyValue(cache)
+    if hasattr(cache, "layers") and len(ca.key_cache) == 0:
+        # transformers>= 4.55.2, layers are empty
+        cache_position = torch.arange(key_value_pairs[0][0].shape[2], dtype=torch.int64)
+        for i, (key, value) in enumerate(key_value_pairs):
+            cache.update(key, value, i, cache_kwargs={"cache_position": cache_position})
+        return cache
+
     for i in range(len(key_value_pairs)):
         assert ca.key_cache[i].shape == key_value_pairs[i][0].shape, (
             f"Shape mismatch, expected {cache.key_cache[i].shape}, "
