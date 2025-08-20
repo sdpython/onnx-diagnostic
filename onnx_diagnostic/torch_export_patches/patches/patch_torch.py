@@ -174,7 +174,7 @@ class patched_ShapeEnv:
             self.counter["ignored_backward_guard"] += 1
             raise AssertionError(
                 f"[patched_ShapeEnv] Ignored guard {expr} == {concrete_val}, "
-                f"this could result in accuracy problems."
+                f"this could result in accuracy problems"
             )
 
     def _set_replacement(

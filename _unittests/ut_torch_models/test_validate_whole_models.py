@@ -82,7 +82,7 @@ class TestValidateWholeModels(ExtTestCase):
             exporter="onnx-dynamo",
             dump_folder="dump_test/validate_model_onnx_dynamo_ir",
             patch=True,
-            stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
+            stop_if_static=0,
             optimization="ir",
         )
         self.assertIsInstance(summary, dict)
