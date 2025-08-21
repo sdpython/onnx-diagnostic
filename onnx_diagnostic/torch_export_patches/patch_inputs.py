@@ -34,7 +34,7 @@ def _make_shape(subset: Dict, cls: type, value: Any) -> Any:
             f"Inconsistencies in subset={subset}, found={values}, "
             f"it cannot be a {cls}, value={string_type(value)}"
         )
-        cache_length = len(value.key_cache)
+        cache_length = len(value.layers if hasattr(value, "layers") else value.key_cache)
         for v in subset.values():
             axes = v
             break

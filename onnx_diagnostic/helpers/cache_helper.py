@@ -183,7 +183,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             f"Unexpected number of layers in the cache ({len(cache.layers)}), "
             f"{len(key_value_pairs)} expected."
         )
-        return cache
+        return finalize_cache(cache)
 
 else:
 
@@ -335,7 +335,7 @@ def make_static_cache(
         f"Unexpected number of layers in the cache ({len(cache.layers)}), "
         f"{len(key_value_pairs)} expected."
     )
-    return cache
+    return finalize_cache(cache)
 
 
 def make_encoder_decoder_cache(
@@ -391,7 +391,7 @@ def make_mamba_cache(key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]]) -
             f"got {key_value_pairs[i][1].shape}"
         )
         cache.ssm_states[i][:, :, :] = key_value_pairs[i][1]
-    return cache
+    return finalize_cache(cache)
 
 
 def make_sliding_window_cache(
@@ -446,7 +446,7 @@ def make_sliding_window_cache(
         f"Unexpected number of layers in the cache ({len(cache.layers)}), "
         f"{len(key_value_pairs)} expected."
     )
-    return cache
+    return finalize_cache(cache)
 
 
 def make_hybrid_cache(
@@ -605,4 +605,21 @@ def make_hybrid_cache(
         f"Unexpected number of layers in the cache ({len(cache.layers)}), "
         f"{len(key_value_pairs)} expected."
     )
+    return finalize_cache(cache)
+
+
+def finalize_cache(cache: transformers.cache_utils.Cache) -> transformers.cache_utils.Cache:
+    """
+    Ensures the created cache is consistent.
+    Returns the cache modified inplace.
+    """
+    if (
+        hasattr(cache, "layer_class_to_replicate")
+        and hasattr(cache, "layers")
+        and cache.layers
+        and not cache.layer_class_to_replicate
+    ):
+        # This is used to expand the cache when it does not contains enough layers.
+        # This is needed since transformers>4.55.3
+        cache.layer_class_to_replicate = cache.layers[0].__class__
     return cache
