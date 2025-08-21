@@ -3,7 +3,7 @@ import torch
 import transformers
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
+from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyValue
 from onnx_diagnostic.export import ModelInputs, CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
@@ -408,6 +408,7 @@ class TestDynamicShapes(ExtTestCase):
     def test_guess_dynamic_shapes_cache(self):
         class Model(torch.nn.Module):
             def forward(self, cache, z):
+                cache = CacheKeyValue(cache)
                 return (
                     z
                     + cache.key_cache[0]
@@ -475,6 +476,7 @@ class TestDynamicShapes(ExtTestCase):
     def test_guess_dynamic_shapes_cache_str(self):
         class Model(torch.nn.Module):
             def forward(self, cache, z):
+                cache = CacheKeyValue(cache)
                 return (
                     z
                     + cache.key_cache[0]
@@ -812,8 +814,9 @@ class TestDynamicShapes(ExtTestCase):
         with torch_export_patches(patch_transformers=True):
             new_inputs = inst.change_dynamic_dimensions()
         self.assertIsInstance(new_inputs["A"], transformers.cache_utils.DynamicCache)
-        self.assertEqual((3, 2, 3, 2), new_inputs["A"].key_cache[0].shape)
-        self.assertEqual((3, 2, 3, 2), new_inputs["A"].value_cache[0].shape)
+        new_inputs_A = CacheKeyValue(new_inputs["A"])
+        self.assertEqual((3, 2, 3, 2), new_inputs_A.key_cache[0].shape)
+        self.assertEqual((3, 2, 3, 2), new_inputs_A.value_cache[0].shape)
 
     @requires_transformers("4.51")
     def test_dynamic_cache_replace_by_string(self):

@@ -5,6 +5,7 @@ from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import (
     make_dynamic_cache,
     flatten_unflatten_for_dynamic_shapes,
+    CacheKeyValue,
 )
 from onnx_diagnostic.export import ModelInputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -23,13 +24,15 @@ class TestSerialization(ExtTestCase):
     def test_dynamic_cache(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
+                cache = CacheKeyValue(cache)
                 return cache.key_cache[0]
 
         cache = self._get_cache()
         DYN = torch.export.Dim.DYNAMIC
         ds = {0: DYN, 1: DYN, 3: DYN}
         dynamic_shapes = ([[ds, ds], [ds, ds]],)
-        exp = torch.export.export(Model(), (cache,), dynamic_shapes=dynamic_shapes)
+        with torch_export_patches(patch_transformers=True):
+            exp = torch.export.export(Model(), (cache,), dynamic_shapes=dynamic_shapes)
         self.assertNotEmpty(exp)
 
     @requires_transformers("4.50")

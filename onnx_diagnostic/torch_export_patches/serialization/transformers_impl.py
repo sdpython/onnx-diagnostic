@@ -261,7 +261,9 @@ def unflatten_encoder_decoder_cache(
 ) -> EncoderDecoderCache:
     """Restores a :class:`transformers.cache_utils.EncoderDecoderCache` from python objects."""
     dictionary = torch.utils._pytree._dict_unflatten(values, context)
-    return EncoderDecoderCache(**dictionary)
+    return EncoderDecoderCache(
+        dictionary["self_attention_cache"], dictionary["cross_attention_cache"]
+    )
 
 
 #############

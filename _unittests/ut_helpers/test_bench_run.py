@@ -10,7 +10,7 @@ from onnx_diagnostic.helpers.bench_run import (
     make_configs,
     run_benchmark,
 )
-from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
+from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyValue
 
 
 class TestBenchRun(ExtTestCase):
@@ -153,9 +153,10 @@ class TestBenchRun(ExtTestCase):
     def test_max_diff_dynamic_cache(self):
         t1 = torch.tensor([0, 1], dtype=torch.float32)
         cache = make_dynamic_cache([(torch.ones((2, 2)), (torch.ones((2, 2)) * 2))])
+        dc = CacheKeyValue(cache)
         md = max_diff(
             (t1, cache),
-            (t1, cache.key_cache[0], cache.value_cache[0]),
+            (t1, dc.key_cache[0], dc.value_cache[0]),
             flatten=True,
             verbose=10,
         )

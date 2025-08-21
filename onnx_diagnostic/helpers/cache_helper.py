@@ -41,9 +41,14 @@ class CacheKeyValue:
                     f"or value_cache={string_type(self.value_cache)}, "
                     f"cache.layers={string_type(cache.layers)}"
                 )
-        elif cache is not None:
+        elif cache is not None and hasattr(cache, "key_cache"):
             self.key_cache = cache.key_cache
             self.value_cache = cache.value_cache
+        elif cache is None:
+            self.key_cache = None
+            self.value_cache = None
+        else:
+            raise NotImplementedError(f"type(cache)={type(cache)}")
 
     def make_dynamic_cache(self):
         """Do the reverse operation."""
@@ -126,6 +131,8 @@ def is_cache_dynamic_registered(fast: bool = False) -> bool:
     )
     values, spec = torch.utils._pytree.tree_flatten(cache)
     cache2 = torch.utils._pytree.tree_unflatten(values, spec)
+    if hasattr(cache2, "layers") and hasattr(cache, "layers"):
+        return len(cache2.layers) == len(cache.layers)
     return len(cache2.key_cache) == len(cache.value_cache)
 
 
@@ -176,7 +183,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             f"Unexpected number of layers in the cache ({len(cache.layers)}), "
             f"{len(key_value_pairs)} expected."
         )
-        return cache
+        return finalize_cache(cache)
 
 else:
 
@@ -260,6 +267,9 @@ def make_static_cache(
             self.num_attention_heads = key_value_pairs[0][0].shape[1]
             self.num_hidden_layers = len(key_value_pairs)
 
+        def get_text_config(self):
+            return self
+
     assert max_cache_len is not None, (
         f"max_cache_len={max_cache_len} cannot be setup "
         f"automatically yet from shape {key_value_pairs[0][0].shape}"
@@ -280,6 +290,33 @@ def make_static_cache(
         max_cache_len=max_cache_len,
     )
     ca = CacheKeyValue(cache)
+    if hasattr(cache, "layers") and len(ca.key_cache) == 0:
+        # transformers>= 4.55.2, layers are empty
+        for i, (key, value) in enumerate(key_value_pairs):
+            cache.update(key, value, i)
+        return cache
+
+    torch._check(
+        not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers),
+        lambda: (
+            f"Length mismatch len(key_value_pairs)={len(key_value_pairs)}, "
+            f"len(cache.layers)={len(cache.layers)}"
+        ),
+    )
+    torch._check(
+        len(key_value_pairs) == len(ca.key_cache),
+        lambda: (
+            f"Length mismatch len(key_value_pairs)={len(key_value_pairs)}, "
+            f"len(ca.key_cache)={len(ca.key_cache)}"
+        ),
+    )
+    torch._check(
+        len(key_value_pairs) == len(ca.value_cache),
+        lambda: (
+            f"Length mismatch len(key_value_pairs)={len(key_value_pairs)}, "
+            f"len(ca.value_cache)={len(ca.value_cache)}"
+        ),
+    )
     for i in range(len(key_value_pairs)):
         assert (
             key_value_pairs[i][0].shape == key_value_pairs[i][1].shape
@@ -298,7 +335,7 @@ def make_static_cache(
         f"Unexpected number of layers in the cache ({len(cache.layers)}), "
         f"{len(key_value_pairs)} expected."
     )
-    return cache
+    return finalize_cache(cache)
 
 
 def make_encoder_decoder_cache(
@@ -307,7 +344,10 @@ def make_encoder_decoder_cache(
 ) -> transformers.cache_utils.EncoderDecoderCache:
     """Creates an EncoderDecoderCache."""
     return transformers.cache_utils.EncoderDecoderCache(
-        self_attention_cache=self_attention_cache, cross_attention_cache=cross_attention_cache
+        # self_attention_cache=self_attention_cache,
+        # cross_attention_cache=cross_attention_cache
+        self_attention_cache,
+        cross_attention_cache,
     )
 
 
@@ -322,6 +362,9 @@ def make_mamba_cache(key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]]) -
             self.state_size = key_value_pairs[0][1].shape[-1]
             self.num_hidden_layers = len(key_value_pairs)
             self.dtype = dtype
+
+        def get_text_config(self):
+            return self
 
     cache = MambaCache(
         _config(),
@@ -348,7 +391,7 @@ def make_mamba_cache(key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]]) -
             f"got {key_value_pairs[i][1].shape}"
         )
         cache.ssm_states[i][:, :, :] = key_value_pairs[i][1]
-    return cache
+    return finalize_cache(cache)
 
 
 def make_sliding_window_cache(
@@ -363,6 +406,9 @@ def make_sliding_window_cache(
             self.num_hidden_layers = len(key_value_pairs)
             self.sliding_window = key_value_pairs[0][0].shape[2]
 
+        def get_text_config(self):
+            return self
+
     cache = transformers.cache_utils.SlidingWindowCache(
         config=_config(),
         max_batch_size=key_value_pairs[0][0].shape[0],
@@ -371,6 +417,13 @@ def make_sliding_window_cache(
         dtype=key_value_pairs[0][0].dtype,
     )
     ca = CacheKeyValue(cache)
+    if hasattr(cache, "layers") and len(ca.key_cache) == 0:
+        # transformers>= 4.55.2, layers are empty
+        cache_position = torch.arange(key_value_pairs[0][0].shape[2], dtype=torch.int64)
+        for i, (key, value) in enumerate(key_value_pairs):
+            cache.update(key, value, i, cache_kwargs={"cache_position": cache_position})
+        return cache
+
     for i in range(len(key_value_pairs)):
         assert ca.key_cache[i].shape == key_value_pairs[i][0].shape, (
             f"Shape mismatch, expected {cache.key_cache[i].shape}, "
@@ -393,7 +446,7 @@ def make_sliding_window_cache(
         f"Unexpected number of layers in the cache ({len(cache.layers)}), "
         f"{len(key_value_pairs)} expected."
     )
-    return cache
+    return finalize_cache(cache)
 
 
 def make_hybrid_cache(
@@ -521,6 +574,9 @@ def make_hybrid_cache(
         sliding_window = _sliding_window
         num_key_value_heads = key_value_pairs[0][1].shape[1]  # transformers 4.48.3
 
+        def get_text_config(self):
+            return self
+
     if layer_types:
         _config.layer_types = layer_types  # type: ignore[attr-defined]
 
@@ -549,4 +605,21 @@ def make_hybrid_cache(
         f"Unexpected number of layers in the cache ({len(cache.layers)}), "
         f"{len(key_value_pairs)} expected."
     )
+    return finalize_cache(cache)
+
+
+def finalize_cache(cache: transformers.cache_utils.Cache) -> transformers.cache_utils.Cache:
+    """
+    Ensures the created cache is consistent.
+    Returns the cache modified inplace.
+    """
+    if (
+        hasattr(cache, "layer_class_to_replicate")
+        and hasattr(cache, "layers")
+        and cache.layers
+        and not cache.layer_class_to_replicate
+    ):
+        # This is used to expand the cache when it does not contains enough layers.
+        # This is needed since transformers>4.55.3
+        cache.layer_class_to_replicate = cache.layers[0].__class__
     return cache

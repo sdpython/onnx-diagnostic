@@ -4,6 +4,12 @@ Change Logs
 0.7.7
 +++++
 
+
+* :pr:`200`: fixes patches for 4.55.1+, DynamicCache is no longer registered by default,
+  this code moved to executorch.py in transformers
+* :pr:`199`: delete hidden_size and num_attention_heads modification in a config
+* :pr:`198`: support gpt-oss
+* :pr:`197`: updates CI for torch 2.8
 * :pr:`196`: implements a patch to rewrite a loop in modeling_qwen2_vl.VisionAttention 
 
 0.7.6

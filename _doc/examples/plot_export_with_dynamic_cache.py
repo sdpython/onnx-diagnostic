@@ -23,11 +23,11 @@ The dynamic shapes must be provided following the serialized form.
 import pprint
 import torch
 from onnx_diagnostic import doc
-from onnx_diagnostic.ext_test_case import has_transformers
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import (
     flatten_unflatten_for_dynamic_shapes,
     make_dynamic_cache,
+    CacheKeyValue,
 )
 from onnx_diagnostic.export import ModelInputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -35,6 +35,7 @@ from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 class Model(torch.nn.Module):
     def forward(self, cache, z):
+        cache = CacheKeyValue(cache)
         return (
             z
             + cache.key_cache[0]
@@ -105,13 +106,8 @@ pprint.pprint(ds)
 # registers functions to serialize ``DynamicCache``. This one is modified to make
 # the shape inference implemented in :epkg:`torch` happy.
 
-if has_transformers("4.50"):
+with torch_export_patches(patch_transformers=True):
     ep = torch.export.export(model, inputs[0], dynamic_shapes=ds[0], strict=False)
-else:
-    with torch_export_patches(patch_transformers=True) as modificator:
-        ep = torch.export.export(
-            model, modificator(inputs[0]), dynamic_shapes=ds[0], strict=False
-        )
 print(ep)
 
 # %%

@@ -8,7 +8,7 @@ from onnx_diagnostic.helpers.mini_onnx_builder import (
     create_input_tensors_from_onnx_model,
     MiniOnnxBuilder,
 )
-from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
+from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyValue
 from onnx_diagnostic.helpers import string_type
 
 
@@ -127,8 +127,9 @@ class TestMiniOnnxBuilder(ExtTestCase):
 
     def test_mini_onnx_builder_transformers(self):
         cache = make_dynamic_cache([(torch.ones((3, 3)), torch.ones((3, 3)) * 2)])
-        self.assertEqual(len(cache.key_cache), 1)
-        self.assertEqual(len(cache.value_cache), 1)
+        dc = CacheKeyValue(cache)
+        self.assertEqual(len(dc.key_cache), 1)
+        self.assertEqual(len(dc.value_cache), 1)
 
         data = [(cache,), cache]
 
@@ -140,8 +141,9 @@ class TestMiniOnnxBuilder(ExtTestCase):
 
     def test_mini_onnx_builder_transformers_sep(self):
         cache = make_dynamic_cache([(torch.ones((3, 3)), torch.ones((3, 3)) * 2)])
-        self.assertEqual(len(cache.key_cache), 1)
-        self.assertEqual(len(cache.value_cache), 1)
+        dc = CacheKeyValue(cache)
+        self.assertEqual(len(dc.key_cache), 1)
+        self.assertEqual(len(dc.value_cache), 1)
 
         data = [(cache,), cache]
 

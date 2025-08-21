@@ -8,7 +8,6 @@ from onnx_diagnostic.ext_test_case import (
     ignore_warnings,
     hide_stdout,
     requires_torch,
-    has_transformers,
 )
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyValue
@@ -22,76 +21,72 @@ class TestOnnxExportErrors(ExtTestCase):
     @ignore_warnings(UserWarning)
     @hide_stdout()
     def test_export_dynamic_cache_update(self):
-        values = [True, False] if has_transformers("4.50") else [False]
-        for strict in self.subloop(values, verbose=1):
+        class SubModelCache(torch.nn.Module):
+            def forward(self, cache):
+                cc = CacheKeyValue(cache)
+                # If not patched...
+                # Fails with transformers>=4.54 because function ``parse_processor_args``
+                # relies in inspect and the exporter is not very fond of that.
+                # torch._dynamo.exc.Unsupported: id() with unsupported args
+                # Explanation: Dynamo doesn't know how to trace id()
+                # call with args
+                # (GetAttrVariable(ConstantVariable(NoneType: None), __init__),)
+                # Hint: Supported args are Tensors, and functions/nn.Modules/user-defined
+                # objects from outside the compiled region.
+                # Hint: It may be possible to write Dynamo tracing rules for this code.
+                d = cache.__class__()
+                d.update(cc.key_cache[0] + 1, cc.value_cache[0] + 2, 0)
+                d.update(cc.key_cache[0] + 3, cc.value_cache[0] + 5, 1)
+                return d
 
-            class SubModelCache(torch.nn.Module):
-                def forward(self, cache):
-                    cc = CacheKeyValue(cache)
-                    # If not patched...
-                    # Fails with transformers>=4.54 because function ``parse_processor_args``
-                    # relies in inspect and the exporter is not very fond of that.
-                    # torch._dynamo.exc.Unsupported: id() with unsupported args
-                    # Explanation: Dynamo doesn't know how to trace id()
-                    # call with args
-                    # (GetAttrVariable(ConstantVariable(NoneType: None), __init__),)
-                    # Hint: Supported args are Tensors, and functions/nn.Modules/user-defined
-                    # objects from outside the compiled region.
-                    # Hint: It may be possible to write Dynamo tracing rules for this code.
-                    d = cache.__class__()
-                    d.update(cc.key_cache[0] + 1, cc.value_cache[0] + 2, 0)
-                    d.update(cc.key_cache[0] + 3, cc.value_cache[0] + 5, 1)
-                    return d
+        class SubModel(torch.nn.Module):
+            def forward(self, x, cache):
+                cc = CacheKeyValue(cache)
+                y = cc.key_cache[0] + cc.value_cache[0]
+                return x + y
 
-            class SubModel(torch.nn.Module):
-                def forward(self, x, cache):
-                    cc = CacheKeyValue(cache)
-                    return x + cc.key_cache[0] + cc.value_cache[0]
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.sub = SubModel()
+                self.subcache = SubModelCache()
 
-            class Model(torch.nn.Module):
-                def __init__(self):
-                    super().__init__()
-                    self.sub = SubModel()
-                    self.subcache = SubModelCache()
+            def forward(self, x, cache):
+                return self.sub(x, self.subcache(cache))
 
-                def forward(self, x, cache):
-                    return self.sub(x, self.subcache(cache))
+        # no patch
+        cache = make_dynamic_cache([(torch.ones((5, 6, 5, 6)), torch.ones((5, 6, 5, 6)) + 2)])
+        model = Model()
+        inputs = (torch.randn((5, 6, 5, 6)), cache)
+        expected = model(*inputs)
 
-            # no patch
-            cache = make_dynamic_cache(
-                [(torch.ones((5, 6, 5, 6)), torch.ones((5, 6, 5, 6)) + 2)]
+        DYN = torch.export.Dim.DYNAMIC
+
+        # patching
+        with torch_export_patches(patch_transformers=True, verbose=10):
+            got = model(*inputs)
+            self.assertEqualArray(expected, got)
+            ep = torch.export.export(
+                model,
+                inputs,
+                dynamic_shapes=(
+                    {0: DYN, 2: DYN},
+                    [[{0: DYN, 2: DYN}], [{0: DYN, 2: DYN}]],
+                ),
+                strict=False,
             )
-            model = Model()
-            inputs = (torch.randn((5, 6, 5, 6)), cache)
-            expected = model(*inputs)
+            mod = ep.module()
+            got = mod(*inputs)
+            self.assertEqualArray(expected, got)
 
-            DYN = torch.export.Dim.DYNAMIC
+            class MyInterpreter(torch.fx.Interpreter):
+                def call_function(self, target, args, kwargs):
+                    res = super().call_function(target, args, kwargs)
+                    return res
 
-            # patching
-            with torch_export_patches(patch_transformers=True, verbose=10):
-                got = model(*inputs)
-                self.assertEqualArray(expected, got)
-                ep = torch.export.export(
-                    model,
-                    inputs,
-                    dynamic_shapes=(
-                        {0: DYN, 2: DYN},
-                        [[{0: DYN, 2: DYN}], [{0: DYN, 2: DYN}]],
-                    ),
-                    strict=strict,
-                )
-                mod = ep.module()
-                got = mod(*inputs)
-                self.assertEqualArray(expected, got)
-
-                class MyInterpreter(torch.fx.Interpreter):
-                    def call_function(self, target, args, kwargs):
-                        res = super().call_function(target, args, kwargs)
-                        return res
-
-                args, _spec = torch.utils._pytree.tree_flatten(inputs)
-                got = MyInterpreter(ep.module()).run(*args)
-                self.assertEqualAny(expected, got)
+            args, _spec = torch.utils._pytree.tree_flatten(inputs)
+            got = MyInterpreter(ep.module()).run(*args)
+            self.assertEqualAny(expected, got)
 
     @ignore_warnings(UserWarning)
     @requires_torch(

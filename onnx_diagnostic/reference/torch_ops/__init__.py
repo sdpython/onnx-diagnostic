@@ -45,6 +45,7 @@ from .unary_ops import (
     Erf_9,
     Exp_1,
     Identity_1,
+    IsNaN_9,
     Log_1,
     Neg_1,
     Not_1,

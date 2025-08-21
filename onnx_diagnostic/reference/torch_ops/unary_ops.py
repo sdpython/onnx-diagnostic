@@ -37,6 +37,13 @@ class Identity_1(OpRunKernel):
         return OpRunTensor(x.tensor)
 
 
+class IsNaN_9(OpRunKernel):
+    """IsNaN"""
+
+    def run(self, x: OpRunTensor) -> OpRunTensor:
+        return OpRunTensor(x.tensor.isnan())
+
+
 class Log_1(OpRunKernel):
     """Log"""
 

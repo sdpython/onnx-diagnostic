@@ -1479,8 +1479,12 @@ def max_diff(
     # backup function in case pytorch does not know how to serialize.
     if expected.__class__.__name__ == "DynamicCache":
         if got.__class__.__name__ == "DynamicCache":
+            from .cache_helper import CacheKeyValue
+
             if verbose >= 6:
                 print(f"[max_diff] DynamicCache: {string_type(expected)} ? {string_type(got)}")
+            expected = CacheKeyValue(expected)
+            got = CacheKeyValue(got)
             return max_diff(
                 [expected.key_cache, expected.value_cache],
                 [got.key_cache, got.value_cache],

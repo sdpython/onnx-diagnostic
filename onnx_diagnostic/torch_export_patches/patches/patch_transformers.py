@@ -24,6 +24,14 @@ except ImportError:
     patch_masking_utils = False
 
 
+try:
+    # transformers>= 4.55.1
+    from transformers.cache_utils import DynamicLayer
+
+    patch_DynamicLayer = hasattr(DynamicLayer, "lazy_initialization")
+except ImportError:
+    patch_DynamicLayer = False
+
 from ...ext_test_case import has_transformers
 from ...helpers.torch_helper import is_torchdynamo_exporting
 
@@ -156,6 +164,20 @@ if patch_parse_processor_args:
         processor_kwargs = {k: kwargs[k] for k in params if k in kwargs}
         remaining_kwargs = {k: v for k, v in kwargs.items() if k not in processor_kwargs}
         return processor_kwargs, remaining_kwargs
+
+
+if patch_DynamicLayer:
+
+    class patched_DynamicLayer:
+        _PATCHES_ = ["lazy_initialization"]
+        _PATCHED_CLASS_ = DynamicLayer
+
+        def lazy_initialization(self, key_states: torch.Tensor):
+            self.dtype, self.device = key_states.dtype, key_states.device
+            new_shape = list(key_states.shape)
+            new_shape[-2] = 0
+            self.keys = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+            self.values = torch.empty(new_shape, dtype=self.dtype, device=self.device)
 
 
 def _patch_make_causal_mask(
@@ -324,6 +346,14 @@ if pv.Version(transformers.__version__) < pv.Version("4.51"):
                     self.key_cache[layer_idx] = key_states
                     self.value_cache[layer_idx] = value_states
                 else:
+                    torch._check(
+                        len(self.key_cache[layer_idx].shape) == len(key_states.shape),
+                        lambda: (
+                            f"Rank mismatch len(self.key_cache[layer_idx].shape)="
+                            f"{len(self.key_cache[layer_idx].shape)}, "
+                            f"len(key_states.shape)={len(key_states.shape)}"
+                        ),
+                    )
                     self.key_cache[layer_idx] = torch.cat(
                         [self.key_cache[layer_idx], key_states], dim=-2
                     )

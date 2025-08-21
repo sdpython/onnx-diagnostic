@@ -107,6 +107,8 @@ class TestTinyLlmOnnx(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
+        print("***", self.string_type(inputs, with_shape=True))
+        print("---", type(model))
         with torch_export_patches(
             patch_transformers=True, verbose=1, stop_if_static=1
         ) as modificator:

@@ -14,7 +14,7 @@ class TestCommandLines(ExtTestCase):
             os.path.join(os.path.dirname(__file__), "data", "two_nodes.onnx")
         )
 
-    def test_parser_print(self):
+    def test_a_parser_print(self):
         for fmt in ["raw", "text", "pretty", "printer"]:
             with self.subTest(format=fmt):
                 st = StringIO()
@@ -23,7 +23,7 @@ class TestCommandLines(ExtTestCase):
                 text = st.getvalue()
                 self.assertIn("Add", text)
 
-    def test_parser_stats(self):
+    def test_b_parser_stats(self):
         output = self.get_dump_file("test_parser_stats.xlsx")
         st = StringIO()
         with redirect_stdout(st):
@@ -32,28 +32,28 @@ class TestCommandLines(ExtTestCase):
         self.assertIn("processing", text)
         self.assertExists(output)
 
-    def test_parser_find(self):
+    def test_c_parser_find(self):
         st = StringIO()
         with redirect_stdout(st):
             main(["find", "-i", self.dummy_path, "-n", "node_Add_188"])
         text = st.getvalue()
         self.assertIsInstance(text, str)
 
-    def test_parser_find_v2(self):
+    def test_d_parser_find_v2(self):
         st = StringIO()
         with redirect_stdout(st):
             main(["find", "-i", self.dummy_path, "-n", "node_Add_188", "--v2"])
         text = st.getvalue()
         self.assertIsInstance(text, str)
 
-    def test_parser_config(self):
+    def test_e_parser_config(self):
         st = StringIO()
         with redirect_stdout(st):
             main(["config", "-m", "arnir0/Tiny-LLM"])
         text = st.getvalue()
         self.assertIn("LlamaForCausalLM", text)
 
-    def test_parser_validate(self):
+    def test_f_parser_validate(self):
         st = StringIO()
         with redirect_stdout(st):
             main(["validate"])
@@ -68,7 +68,7 @@ class TestCommandLines(ExtTestCase):
         self.assertIn("model_clas", text)
 
     @ignore_warnings(UserWarning)
-    def test_parser_agg(self):
+    def test_g_parser_agg(self):
         path = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "ut_helpers", "data")
         )

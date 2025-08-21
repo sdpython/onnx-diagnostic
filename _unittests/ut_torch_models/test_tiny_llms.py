@@ -37,7 +37,6 @@ class TestTinyLlm(ExtTestCase):
                 dynamic_shapes=use_dyn_not_str(data["dynamic_shapes"]),
             )
             got = ep.module()(**inputs)
-            print(ep)
             self.assertEqualArrayAny(expected, got)
 
     @requires_transformers("4.52")

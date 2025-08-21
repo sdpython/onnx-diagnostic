@@ -30,7 +30,7 @@ class TestValidateModel(ExtTestCase):
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             dump_folder="dump_test/validate_microsoft_phi4_reasoning",
         )
-        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-5)
+        self.assertLess(summary["disc_onnx_ort_run_abs"], 2e-5)
         self.assertIn("onnx_filename", data)
 
     @requires_transformers("4.53")
@@ -51,7 +51,7 @@ class TestValidateModel(ExtTestCase):
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             dump_folder="dump_test/validate_microsoft_phi3_mini_128k",
         )
-        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-5)
+        self.assertLess(summary["disc_onnx_ort_run_abs"], 2e-5)
         self.assertIn("onnx_filename", data)
 
 

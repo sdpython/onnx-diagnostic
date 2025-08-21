@@ -887,19 +887,30 @@ class ModelInputs:
 
         # In case DynamicCache is not registered.
         if obj.__class__.__name__ == "DynamicCache":
-            kc = set(len(o.key_cache) for o in objs)
-            assert (
-                len(kc) == 1
-            ), f"All attribute 'key_cache' should have the same length but found {kc}"
-            vc = set(len(o.value_cache) for o in objs)
-            assert (
-                len(vc) == 1
-            ), f"All attribute 'value_cache' should have the same length but found {vc}"
+            if hasattr(obj, "layers"):
+                kc = set(len(o.layers) for o in objs)
+                assert (
+                    len(kc) == 1
+                ), f"All attribute 'key_cache' should have the same length but found {kc}"
+                vc = kc.copy()
+            else:
+                kc = set(len(o.key_cache) for o in objs)
+                assert (
+                    len(kc) == 1
+                ), f"All attribute 'key_cache' should have the same length but found {kc}"
+                vc = set(len(o.value_cache) for o in objs)
+                assert (
+                    len(vc) == 1
+                ), f"All attribute 'value_cache' should have the same length but found {vc}"
+
             key_cache = []
             for i in range(kc.pop()):
                 key_cache.append(
                     self.guess_dynamic_dimensions(
-                        *[o.key_cache[i] for o in objs],
+                        *[
+                            o.layers[i].keys if hasattr(o, "layers") else o.key_cache[i]
+                            for o in objs
+                        ],
                         auto=auto if isinstance(auto, bool) else f"{auto}_{i}kdc",
                     )
                 )
@@ -907,7 +918,10 @@ class ModelInputs:
             for i in range(vc.pop()):
                 value_cache.append(
                     self.guess_dynamic_dimensions(
-                        *[o.value_cache[i] for o in objs],
+                        *[
+                            o.layers[i].values if hasattr(o, "layers") else o.value_cache[i]
+                            for o in objs
+                        ],
                         auto=auto if isinstance(auto, bool) else f"{auto}_{i}vdc",
                     )
                 )

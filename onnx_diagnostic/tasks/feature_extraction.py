@@ -160,5 +160,4 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
         if hasattr(config, att):
             kwargs[att] = getattr(config, att)
     kwargs["decoder_ffn_dim"] = kwargs["encoder_ffn_dim"] = 64
-    print(kwargs)
     return kwargs, get_inputs
