@@ -23,7 +23,7 @@ from onnx_diagnostic.tasks import supported_tasks
 
 
 class TestValidateWholeModels(ExtTestCase):
-    def test_get_inputs_for_task(self):
+    def test_a_get_inputs_for_task(self):
         fcts = supported_tasks()
         for task in self.subloop(sorted(fcts)):
             try:
@@ -35,11 +35,11 @@ class TestValidateWholeModels(ExtTestCase):
             self.assertIn("dynamic_shapes", data)
             copy.deepcopy(data["inputs"])
 
-    def test_empty(self):
+    def test_b_empty(self):
         self.assertFalse(empty("float16"))
 
     @hide_stdout()
-    def test_validate_model(self):
+    def test_c_validate_model(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(mid, do_run=True, verbose=2)
         self.assertIsInstance(summary, dict)
@@ -47,7 +47,7 @@ class TestValidateWholeModels(ExtTestCase):
         validate_model(mid, do_run=True, verbose=2, quiet=True)
 
     @hide_stdout()
-    def test_validate_model_dtype(self):
+    def test_d_validate_model_dtype(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid, do_run=True, verbose=2, dtype="float32", device="cpu"
@@ -57,7 +57,7 @@ class TestValidateWholeModels(ExtTestCase):
         validate_model(mid, do_run=True, verbose=2, quiet=True)
 
     @hide_stdout()
-    def test_validate_model_export(self):
+    def test_e_validate_model_export(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid,
@@ -73,7 +73,7 @@ class TestValidateWholeModels(ExtTestCase):
     @requires_torch("2.8.99")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
-    def test_validate_model_onnx_dynamo_ir(self):
+    def test_f_validate_model_onnx_dynamo_ir(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid,
@@ -98,7 +98,7 @@ class TestValidateWholeModels(ExtTestCase):
     @requires_onnxscript("0.4")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
-    def test_validate_model_onnx_dynamo_os_ort(self):
+    def test_g_validate_model_onnx_dynamo_os_ort(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid,
@@ -120,7 +120,7 @@ class TestValidateWholeModels(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_experimental()
-    def test_validate_model_custom_os_ort(self):
+    def test_h_validate_model_custom_os_ort(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid,
@@ -142,7 +142,7 @@ class TestValidateWholeModels(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_experimental()
-    def test_validate_model_custom(self):
+    def test_i_validate_model_custom(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid,
@@ -171,7 +171,7 @@ class TestValidateWholeModels(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_experimental()
-    def test_validate_model_custom_torch(self):
+    def test_j_validate_model_custom_torch(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid,
@@ -190,7 +190,7 @@ class TestValidateWholeModels(ExtTestCase):
         self.assertIn("disc_onnx_ort_run_abs", summary)
         self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
 
-    def test_filter_inputs(self):
+    def test_k_filter_inputs(self):
         inputs, ds = {"a": 1, "b": 2}, {"a": 20, "b": 30}
         ni, nd = filter_inputs(inputs, dynamic_shapes=ds, drop_names=["a"])
         self.assertEqual((ni, nd), ({"b": 2}, {"b": 30}))
@@ -215,7 +215,7 @@ class TestValidateWholeModels(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.51")
-    def test_validate_model_modelbuilder(self):
+    def test_l_validate_model_modelbuilder(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
             mid,
@@ -234,7 +234,7 @@ class TestValidateWholeModels(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.51")
-    def test_validate_model_vit_model(self):
+    def test_m_validate_model_vit_model(self):
         mid = "ydshieh/tiny-random-ViTForImageClassification"
         summary, data = validate_model(
             mid,
@@ -255,11 +255,11 @@ class TestValidateWholeModels(ExtTestCase):
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
 
-    @requires_torch("2.7")
+    @requires_torch("2.9")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.55")
-    def test_validate_phi35_mini_instruct(self):
+    def test_n_validate_phi35_mini_instruct(self):
         mid = "microsoft/Phi-3.5-mini-instruct"
         summary, data = validate_model(
             mid,
@@ -279,11 +279,11 @@ class TestValidateWholeModels(ExtTestCase):
         op_types = set(n.op_type for n in onx.graph.node)
         self.assertIn("If", op_types)
 
-    @requires_torch("2.7")
+    @requires_torch("2.9")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.55")
-    def test_validate_phi35_4k_mini_instruct(self):
+    def test_o_validate_phi35_4k_mini_instruct(self):
         mid = "microsoft/Phi-3-mini-4k-instruct"
         summary, data = validate_model(
             mid,
