@@ -131,6 +131,8 @@ def is_cache_dynamic_registered(fast: bool = False) -> bool:
     )
     values, spec = torch.utils._pytree.tree_flatten(cache)
     cache2 = torch.utils._pytree.tree_unflatten(values, spec)
+    if hasattr(cache2, "layers") and hasattr(cache, "layers"):
+        return len(cache2.layers) == len(cache.layers)
     return len(cache2.key_cache) == len(cache.value_cache)
 
 
