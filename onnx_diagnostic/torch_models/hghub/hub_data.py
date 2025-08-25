@@ -37,6 +37,7 @@ __data_arch__ = textwrap.dedent(
     DebertaModel,feature-extraction
     DebertaV2Model,feature-extraction
     DecisionTransformerModel,reinforcement-learning
+    DeepseekV3ForCausalLM,text-generation
     DeiTModel,image-feature-extraction
     DetrModel,image-feature-extraction
     Dinov2Model,image-feature-extraction
@@ -56,6 +57,8 @@ __data_arch__ = textwrap.dedent(
     GemmaForCausalLM,text-generation
     Gemma2ForCausalLM,text-generation
     Gemma3ForConditionalGeneration,image-text-to-text
+    Gemma3ForCausalLM,text-generation
+    Glm4vMoeForConditionalGeneration,image-text-to-text
     GraniteForCausalLM,text-generation
     GroupViTModel,feature-extraction
     HieraForImageClassification,image-classification
@@ -108,6 +111,7 @@ __data_arch__ = textwrap.dedent(
     PvtForImageClassification,image-classification
     Qwen2ForCausalLM,text-generation
     Qwen2_5_VLForConditionalGeneration,image-text-to-text
+    Qwen3MoeForCausalLM,text-generation
     RTDetrForObjectDetection,object-detection
     RegNetModel,image-feature-extraction
     RemBertModel,feature-extraction
