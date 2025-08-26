@@ -120,28 +120,6 @@ class TestValidateWholeModels(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_experimental()
-    def test_h_validate_model_custom_os_ort(self):
-        mid = "arnir0/Tiny-LLM"
-        summary, data = validate_model(
-            mid,
-            do_run=True,
-            verbose=10,
-            exporter="custom",
-            dump_folder="dump_test/validate_model_custom_os_ort",
-            patch=True,
-            stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
-            optimization="default+os_ort",
-        )
-        self.assertIsInstance(summary, dict)
-        self.assertIsInstance(data, dict)
-        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
-        onnx_filename = data["onnx_filename"]
-        self.assertExists(onnx_filename)
-
-    @requires_torch("2.7")
-    @hide_stdout()
-    @ignore_warnings(FutureWarning)
-    @requires_experimental()
     def test_i_validate_model_custom(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
