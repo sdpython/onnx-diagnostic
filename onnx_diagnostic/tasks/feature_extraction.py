@@ -9,7 +9,7 @@ __TASK__ = "feature-extraction"
 def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     check_hasattr(config, "num_hidden_layers")
-    kwargs = dict(num_hidden_layers=min(config.num_hidden_layers, 2))
+    kwargs = dict(num_hidden_layers=min(config.num_hidden_layers, 4))
     update_config(config, kwargs)
     return kwargs
 

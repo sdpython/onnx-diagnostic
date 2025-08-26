@@ -9,7 +9,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     check_hasattr(config, "num_attention_heads", "num_hidden_layers")
     kwargs = dict(
-        num_hidden_layers=min(config.num_hidden_layers, 2),
+        num_hidden_layers=min(config.num_hidden_layers, 4),
         num_attention_heads=min(config.num_attention_heads, 4),
     )
     update_config(config, kwargs)
