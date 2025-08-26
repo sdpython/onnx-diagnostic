@@ -348,7 +348,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 "vision_config",
             )
             text_config = False
-        check_hasattr(config.vision_config, ("num_channels", "in_chans"))
+        check_hasattr(config.vision_config, ("num_channels", "in_chans", "in_channels"))
     kwargs = dict(
         batch_size=2,
         sequence_length=43,
@@ -421,7 +421,9 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
             else config.vision_config.image_size
         ),
         num_channels=(
-            3 if config is None else _pick(config.vision_config, "num_channels", "in_chans")
+            3
+            if config is None
+            else _pick(config.vision_config, "num_channels", "in_chans", "in_channels")
         ),
         pad_token_id=(
             0
