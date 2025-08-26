@@ -426,6 +426,7 @@ def validate_model(
             print(f"[validate_model] validate model id {model_id!r}, subfolder={subfolder!r}")
         else:
             print(f"[validate_model] validate model id {model_id!r}")
+        print(f"[validate_model] patch={patch!r}")
         if model_options:
             print(f"[validate_model] model_options={model_options!r}")
         print(f"[validate_model] get dummy inputs with input_options={input_options}...")
