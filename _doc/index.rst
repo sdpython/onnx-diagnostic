@@ -239,6 +239,7 @@ The function replaces dynamic dimensions defined as strings by
 Older versions
 ==============
 
+* `0.7.8 <../v0.7.8/index.html>`_
 * `0.7.7 <../v0.7.7/index.html>`_
 * `0.7.6 <../v0.7.6/index.html>`_
 * `0.6.3 <../v0.6.3/index.html>`_
