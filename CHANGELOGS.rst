@@ -4,7 +4,10 @@ Change Logs
 0.7.7
 +++++
 
-
+* :pr:`205`: add in_channels in image_text_to_text
+* :pr:`204`: switch default num_hidden_layers to 4
+* :pr:`202`: add models DeepseekV3ForCausalLM, Gemma3ForCausalLM, Glm4vMoeForConditionalGeneration
+* :pr:`201`: switch CI to 4.55.4
 * :pr:`200`: fixes patches for 4.55.1+, DynamicCache is no longer registered by default,
   this code moved to executorch.py in transformers
 * :pr:`199`: delete hidden_size and num_attention_heads modification in a config
