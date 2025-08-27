@@ -1,6 +1,10 @@
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.config_helper import update_config, check_hasattr
+from ..helpers.config_helper import (
+    update_config,
+    check_hasattr,
+    default_num_hidden_layers as nhl,
+)
 
 __TASK__ = "image-classification"
 
@@ -17,7 +21,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     check_hasattr(config, ("num_hidden_layers", "hidden_sizes"))
     kwargs = dict(
         num_hidden_layers=(
-            min(config.num_hidden_layers, 4)
+            min(config.num_hidden_layers, nhl())
             if hasattr(config, "num_hidden_layers")
             else len(config.hidden_sizes)
         )

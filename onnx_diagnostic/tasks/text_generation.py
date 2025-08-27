@@ -6,7 +6,12 @@ from ..helpers.cache_helper import (
     make_sliding_window_cache,
     make_static_cache,
 )
-from ..helpers.config_helper import update_config, check_hasattr, _pick
+from ..helpers.config_helper import (
+    update_config,
+    check_hasattr,
+    _pick,
+    default_num_hidden_layers as nhl,
+)
 
 __TASK__ = "text-generation"
 
@@ -25,7 +30,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     if config.__class__.__name__ == "FalconMambaConfig":
         check_hasattr(config, "conv_kernel", "state_size", "intermediate_size")  # 4 and 8
         kwargs = dict(
-            num_hidden_layers=min(config.num_hidden_layers, 4),
+            num_hidden_layers=min(config.num_hidden_layers, nhl()),
             intermediate_size=256 if config is None else min(512, config.intermediate_size),
             hidden_size=512 if config is None else min(512, config.hidden_size),
             cls_cache="MambaCache",
@@ -37,7 +42,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
             head_dim=getattr(
                 config, "head_dim", config.hidden_size // config.num_attention_heads
             ),
-            num_hidden_layers=min(config.num_hidden_layers, 4),
+            num_hidden_layers=min(config.num_hidden_layers, nhl()),
             num_key_value_heads=(
                 config.num_key_value_heads
                 if hasattr(config, "num_key_value_heads")

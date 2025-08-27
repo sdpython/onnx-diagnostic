@@ -1,6 +1,10 @@
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.config_helper import update_config, check_hasattr
+from ..helpers.config_helper import (
+    update_config,
+    check_hasattr,
+    default_num_hidden_layers as nhl,
+)
 
 __TASK__ = "mask-generation"
 
@@ -9,7 +13,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     kwargs: Dict[str, Any] = {}
     if hasattr(config, "num_hidden_layers"):
-        config.num_hidden_layers = min(config.num_hidden_layers, 4)
+        config.num_hidden_layers = min(config.num_hidden_layers, nhl())
     if hasattr(config, "vision_config") and hasattr(config.vision_config, "num_hidden_layers"):
         config.vision_config.num_hidden_layers = min(config.vision_config.num_hidden_layers, 2)
     update_config(config, kwargs)
