@@ -17,7 +17,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     check_hasattr(config, ("num_hidden_layers", "hidden_sizes"))
     kwargs = dict(
         num_hidden_layers=(
-            min(config.num_hidden_layers, 2)
+            min(config.num_hidden_layers, 4)
             if hasattr(config, "num_hidden_layers")
             else len(config.hidden_sizes)
         )

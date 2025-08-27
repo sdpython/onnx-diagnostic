@@ -10,7 +10,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     kwargs: Dict[str, Any] = {}
     if hasattr(config, "num_hidden_layers"):
-        config.num_hidden_layers = min(config.num_hidden_layers, 2)
+        config.num_hidden_layers = min(config.num_hidden_layers, 4)
     if hasattr(config, "mm_tokens_per_image"):
         config.mm_tokens_per_image = min(config.mm_tokens_per_image, 2)
     if hasattr(config, "vision_config"):
@@ -348,7 +348,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 "vision_config",
             )
             text_config = False
-        check_hasattr(config.vision_config, ("num_channels", "in_chans"))
+        check_hasattr(config.vision_config, ("num_channels", "in_chans", "in_channels"))
     kwargs = dict(
         batch_size=2,
         sequence_length=43,
@@ -421,7 +421,9 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
             else config.vision_config.image_size
         ),
         num_channels=(
-            3 if config is None else _pick(config.vision_config, "num_channels", "in_chans")
+            3
+            if config is None
+            else _pick(config.vision_config, "num_channels", "in_chans", "in_channels")
         ),
         pad_token_id=(
             0
