@@ -29,7 +29,7 @@ would appear:
       to non-tensor type <class 'transformers.cache_utils.DynamicCache'>
       at `inputs['past_key_values']` (expected None)
   For more information about this error,
-  see: https://docs.pytorch.org/main/generated/exportdb/index.html#dynamic-shapes-validation
+  see: https://docs.pytorch.org/docs/stable/generated/exportdb/index.html#dynamic-shapes-validation
 
 With ``transformers==4.50``, it shows the following:
 
