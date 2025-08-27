@@ -306,7 +306,7 @@ class _ParseDict(argparse.Action):
                 value = split_items[1]
 
                 if value in ("True", "true", "False", "false"):
-                    d[key] = bool(value)
+                    d[key] = value in ("True", "true")
                     continue
                 try:
                     d[key] = int(value)
@@ -319,6 +319,54 @@ class _ParseDict(argparse.Action):
                 except (TypeError, ValueError):
                     pass
                 d[key] = _parse_json(value)
+
+        setattr(namespace, self.dest, d)
+
+
+class _BoolOrParseDictPatch(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+
+        if not values:
+            return
+        if len(values) == 1 and values[0] in (
+            "True",
+            "False",
+            "true",
+            "false",
+            "0",
+            "1",
+            0,
+            1,
+        ):
+            setattr(namespace, self.dest, values[0] in ("True", "true", 1, "1"))
+            return
+        d = getattr(namespace, self.dest) or {}
+        if not isinstance(d, dict):
+            d = {
+                "patch_sympy": d,
+                "patch_torch": d,
+                "patch_transformers": d,
+                "patch_diffusers": d,
+            }
+        for item in values:
+            split_items = item.split("=", 1)
+            key = split_items[0].strip()  # we remove blanks around keys, as is logical
+            value = split_items[1]
+
+            if value in ("True", "true", "False", "false"):
+                d[key] = value in ("True", "true")
+                continue
+            try:
+                d[key] = int(value)
+                continue
+            except (TypeError, ValueError):
+                pass
+            try:
+                d[key] = float(value)
+                continue
+            except (TypeError, ValueError):
+                pass
+            d[key] = _parse_json(value)
 
         setattr(namespace, self.dest, d)
 
@@ -383,8 +431,13 @@ def get_parser_validate() -> ArgumentParser:
     parser.add_argument(
         "--patch",
         default=True,
-        action=BooleanOptionalAction,
-        help="Applies patches before exporting.",
+        action=_BoolOrParseDictPatch,
+        nargs="*",
+        help="Applies patches before exporting, it can be a boolean "
+        "to enable to disable the patches or be more finetuned. It is possible to "
+        "disable patch for torch by adding "
+        '--patch "patch_sympy=False" --patch "patch_torch=False", '
+        "default is True.",
     )
     parser.add_argument(
         "--rewrite",

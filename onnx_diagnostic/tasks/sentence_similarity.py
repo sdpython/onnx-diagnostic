@@ -1,6 +1,10 @@
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.config_helper import update_config, check_hasattr
+from ..helpers.config_helper import (
+    update_config,
+    check_hasattr,
+    default_num_hidden_layers as nhl,
+)
 
 __TASK__ = "sentence-similarity"
 
@@ -9,7 +13,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     check_hasattr(config, "num_attention_heads", "num_hidden_layers")
     kwargs = dict(
-        num_hidden_layers=min(config.num_hidden_layers, 4),
+        num_hidden_layers=min(config.num_hidden_layers, nhl()),
         num_attention_heads=min(config.num_attention_heads, 4),
     )
     update_config(config, kwargs)

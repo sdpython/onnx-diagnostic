@@ -1,7 +1,12 @@
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
 from ..helpers.cache_helper import make_dynamic_cache, make_hybrid_cache
-from ..helpers.config_helper import update_config, check_hasattr, _pick
+from ..helpers.config_helper import (
+    update_config,
+    check_hasattr,
+    _pick,
+    default_num_hidden_layers as nhl,
+)
 
 __TASK__ = "image-text-to-text"
 
@@ -10,7 +15,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     kwargs: Dict[str, Any] = {}
     if hasattr(config, "num_hidden_layers"):
-        config.num_hidden_layers = min(config.num_hidden_layers, 4)
+        config.num_hidden_layers = min(config.num_hidden_layers, nhl())
     if hasattr(config, "mm_tokens_per_image"):
         config.mm_tokens_per_image = min(config.mm_tokens_per_image, 2)
     if hasattr(config, "vision_config"):

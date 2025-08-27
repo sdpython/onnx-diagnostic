@@ -101,28 +101,28 @@ jobs:
         run: python -m pip freeze
 
       - name: tiny-llm torch.export.export
-        run: PYTHONPATH=. python _unittests/ut_torch_models/test_tiny_llms.py
+        run: PYTHONPATH=. UNITTEST_GOING=1 python _unittests/ut_torch_models/test_tiny_llms.py
 
       - name: tiny-llm onnx
-        run: PYTHONPATH=. python _unittests/ut_torch_models/test_tiny_llms_onnx.py
+        run: PYTHONPATH=. UNITTEST_GOING=1 python _unittests/ut_torch_models/test_tiny_llms_onnx.py
         continue-on-error: true  # connectivity issues
 
       - name: tiny-llm example
-        run: PYTHONPATH=. python _doc/examples/plot_export_tiny_llm.py
+        run: PYTHONPATH=. UNITTEST_GOING=1 python _doc/examples/plot_export_tiny_llm.py
         continue-on-error: true  # connectivity issues
 
       - name: tiny-llm bypass
-        run: PYTHONPATH=. python _doc/examples/plot_export_tiny_llm_patched.py
+        run: PYTHONPATH=. UNITTEST_GOING=1 python _doc/examples/plot_export_tiny_llm_patched.py
         continue-on-error: true  # connectivity issues
 
       - name: run tests bypassed
-        run: PYTHONPATH=. python _unittests/ut_torch_models/test_tiny_llms_bypassed.py
+        run: PYTHONPATH=. UNITTEST_GOING=1 python _unittests/ut_torch_models/test_tiny_llms_bypassed.py
 
       - name: test image_classification
-        run: PYTHONPATH=. python _unittests/ut_tasks/test_tasks_image_classification.py
+        run: PYTHONPATH=. UNITTEST_GOING=1 python _unittests/ut_tasks/test_tasks_image_classification.py
 
       - name: test zero_shot_image_classification
-        run: PYTHONPATH=. python _unittests/ut_tasks/test_tasks_zero_shot_image_classification.py
+        run: PYTHONPATH=. UNITTEST_GOING=1 python _unittests/ut_tasks/test_tasks_zero_shot_image_classification.py
 
       - name: run tests
         run: |

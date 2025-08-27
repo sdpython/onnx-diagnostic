@@ -361,7 +361,7 @@ def torch_export_patches(
             torch._meta_registrations._broadcast_shapes = patched__broadcast_shapes
 
         # torch._export.non_strict_utils.produce_guards_and_solve_constraints
-        if catch_constraints:
+        if patch_torch and catch_constraints:
             if verbose:
                 print("[torch_export_patches] modifies shape constraints")
             f_produce_guards_and_solve_constraints = (
@@ -513,7 +513,7 @@ def torch_export_patches(
                 if verbose:
                     print("[torch_export_patches] restored pytorch functions")
 
-            if stop_if_static:
+            if patch_torch and stop_if_static:
                 if verbose:
                     print("[torch_export_patches] restored ShapeEnv._set_replacement")
 
@@ -529,7 +529,7 @@ def torch_export_patches(
                         print("[torch_export_patches] restored ShapeEnv._check_frozen")
                     ShapeEnv._check_frozen = f_shape_env__check_frozen
 
-            if catch_constraints:
+            if patch_torch and catch_constraints:
                 # to catch or skip dynamic_shapes issues
                 torch._export.non_strict_utils.produce_guards_and_solve_constraints = (
                     f_produce_guards_and_solve_constraints

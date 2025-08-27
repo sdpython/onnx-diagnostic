@@ -1,7 +1,12 @@
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.config_helper import update_config, check_hasattr
+from ..helpers.config_helper import (
+    update_config,
+    check_hasattr,
+    default_num_hidden_layers as nhl,
+)
 from ..helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
+
 
 __TASK__ = "feature-extraction"
 
@@ -9,7 +14,7 @@ __TASK__ = "feature-extraction"
 def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     check_hasattr(config, "num_hidden_layers")
-    kwargs = dict(num_hidden_layers=min(config.num_hidden_layers, 4))
+    kwargs = dict(num_hidden_layers=min(config.num_hidden_layers, nhl()))
     update_config(config, kwargs)
     return kwargs
 

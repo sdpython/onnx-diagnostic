@@ -2,7 +2,11 @@ from typing import Any, Callable, Dict, Optional, Tuple
 import torch
 import transformers
 from ..helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
-from ..helpers.config_helper import update_config, check_hasattr
+from ..helpers.config_helper import (
+    update_config,
+    check_hasattr,
+    default_num_hidden_layers as nhl,
+)
 
 __TASK__ = "automatic-speech-recognition"
 
@@ -15,7 +19,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     if hasattr(config, "decoder_layers"):
         config.decoder_layers = min(config.decoder_layers, 2)
     if hasattr(config, "num_hidden_layers"):
-        config.num_hidden_layers = min(config.num_hidden_layers, 4)
+        config.num_hidden_layers = min(config.num_hidden_layers, nhl())
     update_config(config, kwargs)
     return kwargs
 

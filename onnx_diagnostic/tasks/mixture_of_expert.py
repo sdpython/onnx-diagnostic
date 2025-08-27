@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 import torch
 
 # from ..helpers.cache_helper import make_dynamic_cache
-from ..helpers.config_helper import update_config  # , check_hasattr, _pick
+from ..helpers.config_helper import update_config, default_num_hidden_layers as nhl
 
 __TASK__ = "MoE"
 
@@ -11,7 +11,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     kwargs: Dict[str, Any] = {}
     if hasattr(config, "num_hidden_layers"):
-        config.num_hidden_layers = min(config.num_hidden_layers, 4)
+        config.num_hidden_layers = min(config.num_hidden_layers, nhl())
     if hasattr(config, "vision_config") and hasattr(config.vision_config, "num_hidden_layers"):
         config.vision_config.num_hidden_layers = min(config.vision_config.num_hidden_layers, 2)
     if hasattr(config, "audio_processor") and hasattr(

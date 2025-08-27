@@ -1,6 +1,7 @@
 import functools
 import importlib
 import inspect
+import os
 import re
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 import transformers
@@ -110,3 +111,12 @@ def config_class_from_architecture(arch: str, exc: bool = False) -> Optional[typ
     )
     cls_name = unique.pop()
     return getattr(transformers, cls_name)
+
+
+def default_num_hidden_layers():
+    """
+    Returns the default number of layers.
+    It is lower when the unit tests are running
+    when ``UNITTEST_GOING=1``.
+    """
+    return 2 if os.environ.get("UNITTEST_GOING", "0") == "1" else 4
