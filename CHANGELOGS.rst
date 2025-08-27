@@ -6,6 +6,7 @@ Change Logs
 
 * :pr:`205`: add in_channels in image_text_to_text
 * :pr:`204`: switch default num_hidden_layers to 4
+* :pr:`203`: Add option to disable patches for torch in command line validate
 * :pr:`202`: add models DeepseekV3ForCausalLM, Gemma3ForCausalLM, Glm4vMoeForConditionalGeneration
 * :pr:`201`: switch CI to 4.55.4
 * :pr:`200`: fixes patches for 4.55.1+, DynamicCache is no longer registered by default,
