@@ -25,7 +25,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     if config.__class__.__name__ == "FalconMambaConfig":
         check_hasattr(config, "conv_kernel", "state_size", "intermediate_size")  # 4 and 8
         kwargs = dict(
-            num_hidden_layers=min(config.num_hidden_layers, 2),
+            num_hidden_layers=min(config.num_hidden_layers, 4),
             intermediate_size=256 if config is None else min(512, config.intermediate_size),
             hidden_size=512 if config is None else min(512, config.hidden_size),
             cls_cache="MambaCache",
@@ -37,7 +37,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
             head_dim=getattr(
                 config, "head_dim", config.hidden_size // config.num_attention_heads
             ),
-            num_hidden_layers=min(config.num_hidden_layers, 2),
+            num_hidden_layers=min(config.num_hidden_layers, 4),
             num_key_value_heads=(
                 config.num_key_value_heads
                 if hasattr(config, "num_key_value_heads")

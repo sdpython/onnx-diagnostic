@@ -10,7 +10,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     kwargs: Dict[str, Any] = {}
     if hasattr(config, "num_hidden_layers"):
-        config.num_hidden_layers = min(config.num_hidden_layers, 2)
+        config.num_hidden_layers = min(config.num_hidden_layers, 4)
     if hasattr(config, "mm_tokens_per_image"):
         config.mm_tokens_per_image = min(config.mm_tokens_per_image, 2)
     if hasattr(config, "vision_config"):
