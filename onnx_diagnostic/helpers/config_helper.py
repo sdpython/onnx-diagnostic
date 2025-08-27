@@ -119,4 +119,4 @@ def default_num_hidden_layers():
     It is lower when the unit tests are running
     when ``UNITTEST_GOING=1``.
     """
-    return 2 if os.environ("UNITTEST_GOING", "0") == "1" else 4
+    return 2 if os.environ.get("UNITTEST_GOING", "0") == "1" else 4

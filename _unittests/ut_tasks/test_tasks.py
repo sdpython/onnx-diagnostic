@@ -1,3 +1,4 @@
+import os
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import (
@@ -13,6 +14,11 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
 class TestTasks(ExtTestCase):
+    def test_unittest_going(self):
+        assert (
+            os.environ.get("UNITTEST_GOING", "0") == "1"
+        ), "UNITTEST_GOING=1 must be defined for these tests"
+
     @hide_stdout()
     def test_text2text_generation(self):
         mid = "sshleifer/tiny-marian-en-de"

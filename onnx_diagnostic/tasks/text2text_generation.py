@@ -17,7 +17,7 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     if hasattr(config, "num_decoder_layers"):
         config.num_decoder_layers = min(config.num_decoder_layers, 2)
     if hasattr(config, "num_hidden_layers"):
-        config.num_hidden_layers = min(config.num_hidden_layers, nhl)
+        config.num_hidden_layers = min(config.num_hidden_layers, nhl())
     update_config(config, kwargs)
     return kwargs
 
