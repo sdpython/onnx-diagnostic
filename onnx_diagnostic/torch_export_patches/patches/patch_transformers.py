@@ -1032,7 +1032,8 @@ def patched_modeling_marian_eager_attention_forward(
 
 
 class common_RotaryEmbedding(torch.nn.Module):
-    @torch.no_grad()
+    # This may cause some issues.
+    # @torch.no_grad()
     @patched_dynamic_rope_update
     def forward(self, x, position_ids):
         inv_freq_expanded = (

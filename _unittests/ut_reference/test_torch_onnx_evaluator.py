@@ -1377,6 +1377,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
             torch.tensor([2, 2], dtype=torch.int64),
         )
 
+    @ignore_warnings(UserWarning)
     def test_custom_kernels(self):
         class LayerNormalizationOrt(OpRunKernel):
             "LayerNormalization"
