@@ -243,7 +243,7 @@ backend_test.exclude(
     ")"
 )
 
-if onnx_opset_version() <= 24:
+if onnx_opset_version() <= 25:
     backend_test.exclude(
         "(deform_conv"
         "|gru"
