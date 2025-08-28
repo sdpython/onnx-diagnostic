@@ -70,7 +70,7 @@ class TestValidateWholeModels(ExtTestCase):
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
 
-    @requires_torch("2.8.99")
+    @requires_torch("2.10.99")
     @requires_transformers("4.54")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
