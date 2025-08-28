@@ -1551,7 +1551,9 @@ if patch_qwen3:
             # expert_hit = torch.greater(expert_sum, 0).nonzero()
             # for expert_idx in expert_hit:
             for expert_idx in range(self.num_experts):
-                expert_mask_idx = expert_mask[expert_idx].squeeze(0)
+                # initial code has a squeeze but it is not possible to do that.
+                # expert_mask_idx = expert_mask[expert_idx].squeeze(0)
+                expert_mask_idx = expert_mask[expert_idx]
                 final_hidden_states = torch.cond(
                     (expert_sum[expert_idx] > 0).item(),
                     lambda final_hidden_states, expert_mask, hidden_states, routing_weights, _i=expert_idx: self._forward_expert_loop(  # noqa: E501
