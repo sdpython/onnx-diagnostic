@@ -22,6 +22,7 @@ except ImportError:
 class TestTinyLlmOnnx(ExtTestCase):
     @ignore_warnings((UserWarning, DeprecationWarning, FutureWarning))
     @requires_transformers("4.52.9999")
+    @requires_torch("2.10.99")  # added 08/28/2025
     @hide_stdout()
     def test_onnx_export_tiny_llm_official(self):
         data = get_tiny_llm()
