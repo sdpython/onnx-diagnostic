@@ -71,6 +71,7 @@ class TestValidateWholeModels(ExtTestCase):
         self.assertIsInstance(data, dict)
 
     @requires_torch("2.8.99")
+    @requires_transformers("4.51")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     def test_f_validate_model_onnx_dynamo_ir(self):
