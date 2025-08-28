@@ -119,4 +119,10 @@ def default_num_hidden_layers():
     It is lower when the unit tests are running
     when ``UNITTEST_GOING=1``.
     """
+    import torch
+
+    if torch.cuda.is_available():
+        capa = torch.cuda.get_device_capability(0)
+        if capa[0] < 9:
+            return 2
     return 2 if os.environ.get("UNITTEST_GOING", "0") == "1" else 4
