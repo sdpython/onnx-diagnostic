@@ -4,6 +4,8 @@ Change Logs
 0.7.8
 +++++
 
+* :pr:`208`: add a patch for Qwen3 (rewrite a loop)
+
 0.7.7
 +++++
 
