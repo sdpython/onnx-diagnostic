@@ -23,14 +23,20 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
             config.vision_config.num_hidden_layers = min(
                 config.vision_config.num_hidden_layers, 2
             )
+        if hasattr(config.vision_config, "num_heads"):
+            config.vision_config.num_heads = min(config.vision_config.num_heads, 4)
         if hasattr(config.vision_config, "image_size"):
-            config.vision_config.image_size = min(config.vision_config.image_size, 96)
+            config.vision_config.image_size = min(config.vision_config.image_size, 168 // 2)
         if hasattr(config.vision_config, "intermediate_size"):
             config.vision_config.intermediate_size = min(
                 config.vision_config.intermediate_size, 1076
             )
         if hasattr(config.vision_config, "patch_size"):
-            config.vision_config.patch_size = min(config.vision_config.patch_size, 2)
+            config.vision_config.patch_size = min(config.vision_config.patch_size, 1)
+        if hasattr(config.vision_config, "temporal_patch_size"):
+            config.vision_config.temporal_patch_size = min(
+                config.vision_config.temporal_patch_size, 8
+            )
         if hasattr(config.vision_config, "hidden_size"):
             config.vision_config.hidden_size = min(config.vision_config.hidden_size, 16)
     if hasattr(config, "text_config"):
