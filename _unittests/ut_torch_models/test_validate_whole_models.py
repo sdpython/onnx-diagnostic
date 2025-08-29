@@ -96,7 +96,7 @@ class TestValidateWholeModels(ExtTestCase):
         )
 
     @requires_torch("2.7")
-    @requires_onnxscript("0.4")
+    @requires_onnxscript("0.5")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     def test_g_validate_model_onnx_dynamo_os_ort(self):
