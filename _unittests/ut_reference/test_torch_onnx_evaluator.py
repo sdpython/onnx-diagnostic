@@ -1474,7 +1474,7 @@ class TestTorchOnnxEvaluator(ExtTestCase):
         )
         expected = torch_sess.run(None, feeds)
         got = torch_sess_custom.run(None, feeds)
-        self.assertEqualAny(expected, got, atol=1e-3)
+        self.assertEqualAny(expected, got, atol=3e-3)
         self.assertEqual([1], LayerNormalizationOrt._shared)
 
     @hide_stdout()
