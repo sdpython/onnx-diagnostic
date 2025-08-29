@@ -30,7 +30,7 @@ class TestTasksImageTextToText(ExtTestCase):
             )
 
     @hide_stdout()
-    @requires_transformers("4.55.99")
+    @requires_transformers("4.56.99")
     @requires_torch("2.7.99")
     def test_image_text_to_text_gemma3(self):
         """
@@ -54,7 +54,7 @@ class TestTasksImageTextToText(ExtTestCase):
             )
 
     @hide_stdout()
-    @requires_transformers("4.55.99")
+    @requires_transformers("4.56.99")
     @requires_torch("2.7.99")
     def test_image_text_to_text_zai_glm(self):
         """
