@@ -268,6 +268,9 @@ if onnx_opset_version() <= 25:
     )
 
 
+if onnx_opset_version() <= 25:
+    backend_test.exclude("(rms_normalization|convinteger_with_padding_cpu)")
+
 # import all test cases at global scope to make them visible to python.unittest
 globals().update(backend_test.test_cases)
 
