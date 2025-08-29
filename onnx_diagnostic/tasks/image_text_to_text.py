@@ -245,6 +245,7 @@ def get_inputs(
                 else {0: batch_img}
             ),
             "image_attention_mask": {0: batch, 1: seq_length, 2: images},
+            "image_grid_thw": {0: batch},
             "use_cache": None,
         }
 
@@ -256,6 +257,11 @@ def get_inputs(
         # input_ids[input_ids == image_token_index] = pad_token_id
         token_type_ids = torch.zeros_like(input_ids)
         token_type_ids[input_ids == image_token_index] = 1
+        image_grid_thw = torch.zeros((n_images, 3), dtype=torch.int64)
+        image_grid_thw[:, 1] = height
+        image_grid_thw[:, 2] = width
+        image_grid_thw[0, :] //= 2
+        image_grid_thw[:, 0] = torch.arange(n_images, dtype=image_grid_thw.dtype)
 
         inputs = dict(
             input_ids=input_ids,
@@ -291,6 +297,7 @@ def get_inputs(
                 torch.int64
             ),
             token_type_ids=token_type_ids,
+            image_grid_thw=image_grid_thw,
             use_cache=True,  # Gemma3 does not set this value to true when a cache is provided
         )
         res = dict(inputs=inputs, dynamic_shapes=shapes)

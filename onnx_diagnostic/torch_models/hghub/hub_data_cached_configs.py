@@ -4562,7 +4562,7 @@ def _ccached_diffusers_tiny_torch_full_checker_unet():
     }
 
 
-def _ccached_riny_random_gemma_3():
+def _ccached_tiny_random_gemma_3():
     "tiny-random/gemma-3"
     return transformers.Gemma3Config(
         **{
@@ -4615,6 +4615,75 @@ def _ccached_riny_random_gemma_3():
                 "num_hidden_layers": 2,
                 "patch_size": 14,
                 "vision_use_head": false,
+            },
+        }
+    )
+
+
+def _ccached_zai_glm_45():
+    "zai-org/GLM-4.5V"
+    return transformers.Glm4vMoeConfig(
+        **{
+            "architectures": ["Glm4vMoeForConditionalGeneration"],
+            "model_type": "glm4v_moe",
+            "text_config": {
+                "pad_token_id": 151329,
+                "vocab_size": 151552,
+                "eos_token_id": [151329, 151336, 151338],
+                "image_end_token_id": 151340,
+                "image_start_token_id": 151339,
+                "image_token_id": 151363,
+                "head_dim": 128,
+                "attention_bias": true,
+                "attention_dropout": 0.0,
+                "first_k_dense_replace": 1,
+                "hidden_act": "silu",
+                "hidden_size": 4096,
+                "initializer_range": 0.02,
+                "intermediate_size": 10944,
+                "max_position_embeddings": 65536,
+                "model_type": "glm4v_moe_text",
+                "moe_intermediate_size": 1408,
+                "n_group": 1,
+                "n_routed_experts": 128,
+                "n_shared_experts": 1,
+                "norm_topk_prob": true,
+                "num_attention_heads": 96,
+                "num_experts_per_tok": 8,
+                "num_hidden_layers": 46,
+                "num_key_value_heads": 8,
+                "partial_rotary_factor": 0.5,
+                "rms_norm_eps": 1e-05,
+                "torch_dtype": "bfloat16",
+                "rope_scaling": {"rope_type": "default", "mrope_section": [8, 12, 12]},
+                "rope_theta": 10000.0,
+                "routed_scaling_factor": 1.0,
+                "topk_group": 1,
+                "use_cache": true,
+                "use_qk_norm": false,
+            },
+            "torch_dtype": "bfloat16",
+            "transformers_version": "4.55.0.dev0",
+            "video_end_token_id": 151342,
+            "video_start_token_id": 151341,
+            "video_token_id": 151364,
+            "vision_config": {
+                "attention_bias": false,
+                "attention_dropout": 0.0,
+                "depth": 24,
+                "hidden_act": "silu",
+                "hidden_size": 1536,
+                "image_size": 336,
+                "in_channels": 3,
+                "initializer_range": 0.02,
+                "intermediate_size": 10944,
+                "model_type": "glm4v_moe",
+                "num_heads": 12,
+                "out_hidden_size": 4096,
+                "patch_size": 14,
+                "rms_norm_eps": 1e-05,
+                "spatial_merge_size": 2,
+                "temporal_patch_size": 2,
             },
         }
     )

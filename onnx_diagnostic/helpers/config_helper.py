@@ -126,3 +126,42 @@ def default_num_hidden_layers():
         if capa[0] < 9:
             return 2
     return 2 if os.environ.get("UNITTEST_GOING", "0") == "1" else 4
+
+
+def build_diff_config(config0, config1):
+    """
+    Returns all the modified values between two configuration
+    """
+    import torch
+
+    diff = {}
+    for k in config0:
+        assert isinstance(k, str), f"k={k!r}, wrong type in {config0}"
+        if k not in config1:
+            diff[k] = f"-{config0[k]}"
+    for k in config1:
+        assert isinstance(k, str), f"k={k!r}, wrong type in {config1}"
+        if k not in config0:
+            diff[k] = f"+{config1[k]}"
+    for k in config0:
+        if k not in config1:
+            continue
+        v0 = getattr(config0, k) if hasattr(config0, k) else config0[k]
+        v1 = getattr(config1, k) if hasattr(config1, k) else config1[k]
+        if (
+            v0 is None
+            or v1 is None
+            or isinstance(v1, (float, int, bool, str, list, tuple, torch.dtype))
+            or (
+                isinstance(v0, dict)
+                and isinstance(v1, dict)
+                and all(isinstance(k, int) for k in v1)
+            )
+        ):
+            if v1 != v0:
+                diff[k] = f"{v0} -> {v1}"
+        else:
+            d = build_diff_config(v0, v1)
+            if d:
+                diff[k] = d
+    return diff
