@@ -54,9 +54,12 @@ except Exception as e:
 # Same model, a dynamic dimension = 1 and backed_size_oblivious=True
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-with torch.fx.experimental._config.patch(backed_size_oblivious=True):
-    ep = torch.export.export(model, (x, y, z), dynamic_shapes=(ds, ds, ds))
-    print(ep.graph)
+try:
+    with torch.fx.experimental._config.patch(backed_size_oblivious=True):
+        ep = torch.export.export(model, (x, y, z), dynamic_shapes=(ds, ds, ds))
+        print(ep.graph)
+except RuntimeError as e:
+    print("ERROR", e)
 
 # %%
 # It worked.

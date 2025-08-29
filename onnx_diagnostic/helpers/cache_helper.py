@@ -96,13 +96,16 @@ def flatten_unflatten_for_dynamic_shapes(
             return tuple(subtrees)
         if spec.type is list:
             return list(subtrees)
+        if spec.type is None and not subtrees:
+            return None
         if spec.context:
             # This is a custom class with attributes.
             # It is returned as a list.
             return list(subtrees)
         raise ValueError(
             f"Unable to interpret spec type {spec.type} "
-            f"(type is {type(spec.type)}, context is {spec.context})."
+            f"(type is {type(spec.type)}, context is {spec.context}), "
+            f"spec={spec}, subtrees={subtrees}"
         )
     # This is a list.
     return subtrees
