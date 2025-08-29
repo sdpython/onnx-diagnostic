@@ -138,11 +138,13 @@ def build_diff_config(config0, config1):
     for k in config0:
         assert isinstance(k, str), f"k={k!r}, wrong type in {config0}"
         if k not in config1:
-            diff[k] = f"-{config0[k]}"
+            v0 = getattr(config0, k) if hasattr(config0, k) else config0[k]
+            diff[k] = f"-{v0}"
     for k in config1:
         assert isinstance(k, str), f"k={k!r}, wrong type in {config1}"
         if k not in config0:
-            diff[k] = f"+{config1[k]}"
+            v1 = getattr(config1, k) if hasattr(config1, k) else config1[k]
+            diff[k] = f"+{v1}"
     for k in config0:
         if k not in config1:
             continue
