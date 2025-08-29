@@ -4,6 +4,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, never_test
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 from onnx_diagnostic.helpers.torch_helper import steal_forward
+from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 
 
 class TestHuggingFaceHubModel(ExtTestCase):
@@ -711,6 +712,48 @@ class TestHuggingFaceHubModel(ExtTestCase):
         # sample=T10s2x4x96x96[-3.7734375,4.359375:A-0.043463995395642184]
         # time_step=T7s=101
         # encoder_hidden_states:T10s2x77x1024[-6.58203125,13.0234375:A-0.16780663634440257]
+
+    @never_test()
+    def test_imagetext2text_generation_zai_glm(self):
+        """
+        clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k zai_glm
+        """
+        from transformers import AutoProcessor
+
+        model_id = "zai-org/GLM-4.5V"
+        data = get_untrained_model_with_inputs(model_id, verbose=1, add_second_input=True)
+        model = data["model"]
+        processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "url": "http://images.cocodataset.org/val2017/000000039769.jpg",
+                    },
+                    {"type": "text", "text": "describe this image"},
+                ],
+            }
+        ]
+        inputs = processor.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to(model.device)
+        inputs.pop("token_type_ids", None)
+
+        print()
+        # steal forward creates a bug...
+        with steal_forward(model):  # , torch.inference_mode():
+            generated_ids = model.generate(**inputs, max_new_tokens=8192)
+        output_text = processor.decode(
+            generated_ids[0][inputs["input_ids"].shape[1] :], skip_special_tokens=False
+        )
+        print(output_text)
 
 
 if __name__ == "__main__":

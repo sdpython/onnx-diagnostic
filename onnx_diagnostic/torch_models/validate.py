@@ -478,6 +478,11 @@ def validate_model(
                     else data["configuration"].to_dict()
                 )
             )
+        dump_info = data.get("dump_info", None)
+        if dump_info:
+            with open(os.path.join(dump_folder, "model_dump_info.txt"), "w") as f:
+                f.write(f"model_id: {model_id}\n------\n")
+                f.write(pprint.pformat(dump_info))
 
     if exporter == "modelbuilder":
         # Models used with ModelBuilder do not like batch size > 1.

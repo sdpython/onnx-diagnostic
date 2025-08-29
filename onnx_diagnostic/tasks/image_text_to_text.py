@@ -23,14 +23,20 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
             config.vision_config.num_hidden_layers = min(
                 config.vision_config.num_hidden_layers, 2
             )
+        if hasattr(config.vision_config, "num_heads"):
+            config.vision_config.num_heads = min(config.vision_config.num_heads, 4)
         if hasattr(config.vision_config, "image_size"):
-            config.vision_config.image_size = min(config.vision_config.image_size, 96)
+            config.vision_config.image_size = min(config.vision_config.image_size, 168 // 2)
         if hasattr(config.vision_config, "intermediate_size"):
             config.vision_config.intermediate_size = min(
                 config.vision_config.intermediate_size, 1076
             )
         if hasattr(config.vision_config, "patch_size"):
-            config.vision_config.patch_size = min(config.vision_config.patch_size, 2)
+            config.vision_config.patch_size = min(config.vision_config.patch_size, 1)
+        if hasattr(config.vision_config, "temporal_patch_size"):
+            config.vision_config.temporal_patch_size = min(
+                config.vision_config.temporal_patch_size, 8
+            )
         if hasattr(config.vision_config, "hidden_size"):
             config.vision_config.hidden_size = min(config.vision_config.hidden_size, 16)
     if hasattr(config, "text_config"):
@@ -245,6 +251,7 @@ def get_inputs(
                 else {0: batch_img}
             ),
             "image_attention_mask": {0: batch, 1: seq_length, 2: images},
+            "image_grid_thw": {0: batch},
             "use_cache": None,
         }
 
@@ -256,6 +263,11 @@ def get_inputs(
         # input_ids[input_ids == image_token_index] = pad_token_id
         token_type_ids = torch.zeros_like(input_ids)
         token_type_ids[input_ids == image_token_index] = 1
+        image_grid_thw = torch.zeros((n_images, 3), dtype=torch.int64)
+        image_grid_thw[:, 1] = height
+        image_grid_thw[:, 2] = width
+        image_grid_thw[0, :] //= 2
+        image_grid_thw[:, 0] = torch.arange(n_images, dtype=image_grid_thw.dtype)
 
         inputs = dict(
             input_ids=input_ids,
@@ -291,6 +303,7 @@ def get_inputs(
                 torch.int64
             ),
             token_type_ids=token_type_ids,
+            image_grid_thw=image_grid_thw,
             use_cache=True,  # Gemma3 does not set this value to true when a cache is provided
         )
         res = dict(inputs=inputs, dynamic_shapes=shapes)

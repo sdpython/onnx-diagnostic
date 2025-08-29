@@ -1,10 +1,11 @@
+import copy
 import inspect
 import os
 import pprint
 from typing import Any, Dict, Optional, Tuple
 import torch
 import transformers
-from ...helpers.config_helper import update_config
+from ...helpers.config_helper import update_config, build_diff_config
 from ...tasks import reduce_model_config, random_input_kwargs
 from .hub_api import task_from_arch, task_from_id, get_pretrained_config, download_code_modelid
 
@@ -121,6 +122,7 @@ def get_untrained_model_with_inputs(
         )
 
     # updating the configuration
+    config0 = copy.deepcopy(config)
     mkwargs = reduce_model_config(config, task) if not same_as_pretrained else {}
     if model_kwargs:
         for k, v in model_kwargs.items():
@@ -133,6 +135,15 @@ def get_untrained_model_with_inputs(
                 mkwargs[k] = v
     if mkwargs:
         update_config(config, mkwargs)
+    try:
+        diff_config = build_diff_config(config0, config)
+    except (ValueError, AttributeError, TypeError) as e:
+        diff_config = f"DIFF CONFIG ERROR {e}"
+    if verbose:
+        if diff_config:
+            print("[get_untrained_model_with_inputs] -- updated config")
+            pprint.pprint(diff_config)
+            print("[get_untrained_model_with_inputs] --")
 
     # SDPA
     if model_kwargs and "attn_implementation" in model_kwargs:
@@ -232,6 +243,7 @@ def get_untrained_model_with_inputs(
 
     res["input_kwargs"] = kwargs
     res["model_kwargs"] = mkwargs
+    res["dump_info"] = dict(config_diff=diff_config)
 
     sizes = compute_model_size(model)
     res["model"] = model
