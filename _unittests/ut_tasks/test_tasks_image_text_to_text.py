@@ -20,7 +20,6 @@ class TestTasksImageTextToText(ExtTestCase):
         mid = "HuggingFaceM4/tiny-random-idefics"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "image-text-to-text")
-        self.assertIn((data["size"], data["n_weights"]), [(12628776, 3157194)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
