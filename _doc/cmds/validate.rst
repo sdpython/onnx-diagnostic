@@ -100,6 +100,7 @@ Let's export with ONNX this time and checks for discrepancies.
     python -m onnx_diagnostic validate -m arnir0/Tiny-LLM --run -v 1 --export onnx-dynamo -o dump_models --patch --opt ir
 
 .. runpython::
+    :process:
 
     from onnx_diagnostic._command_lines_parser import main
 
@@ -117,6 +118,7 @@ of function :func:`onnx_diagnostic.torch_models.validate.run_ort_fusion`.
     python -m onnx_diagnostic validate -m arnir0/Tiny-LLM --run -v 1 --export onnx-dynamo -o dump_models --patch --opt ir --ortfusiontype ALL
 
 .. runpython::
+    :process:
 
     from onnx_diagnostic._command_lines_parser import main
 
