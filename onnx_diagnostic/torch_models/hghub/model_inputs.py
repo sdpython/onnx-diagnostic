@@ -135,7 +135,10 @@ def get_untrained_model_with_inputs(
                 mkwargs[k] = v
     if mkwargs:
         update_config(config, mkwargs)
-    diff_config = build_diff_config(config0, config)
+    try:
+        diff_config = build_diff_config(config0, config)
+    except (ValueError, AttributeError, TypeError) as e:
+        diff_config = f"DIFF CONFIG ERROR {e}"
     if verbose:
         if diff_config:
             print("[get_untrained_model_with_inputs] -- updated config")

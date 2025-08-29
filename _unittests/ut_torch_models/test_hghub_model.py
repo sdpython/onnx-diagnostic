@@ -30,6 +30,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 "input_kwargs",
                 "model_kwargs",
                 "task",
+                "dump_info",
             },
         )
         model, inputs = data["model"], data["inputs"]
