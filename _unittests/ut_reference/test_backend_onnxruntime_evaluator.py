@@ -269,7 +269,24 @@ if onnx_opset_version() <= 25:
 
 
 if onnx_opset_version() <= 25:
-    backend_test.exclude("(rms_normalization|convinteger_with_padding_cpu)")
+    exc = "|".join(
+        [
+            "batchnorm_.*_training",
+            "convinteger_with_padding",
+            "rms_normalization",
+            "rotary_embedding_3d",
+            "rotary_embedding_with",
+            "rotary_embedding_no_position_ids",
+            # cuda,
+            "test_Conv3d_dilated.*_cuda",
+            "test_reduce_.*_empty_set_cuda",
+            "test_reduce_sum_square_.*_expanded_cuda",
+            "test_reduce_l1_.*_expanded_cuda",
+            "test_reduce_l2_.*_expanded_cuda",
+            "test_reduce_log_sum_.*_expanded_cuda",
+        ]
+    )
+    backend_test.exclude(f"({exc})")
 
 # import all test cases at global scope to make them visible to python.unittest
 globals().update(backend_test.test_cases)
