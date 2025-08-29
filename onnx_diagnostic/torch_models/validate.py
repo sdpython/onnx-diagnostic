@@ -1,6 +1,7 @@
 import datetime
 import inspect
 import os
+import pprint
 import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import time
@@ -467,6 +468,16 @@ def validate_model(
         f"inputs2 is True but second set is missing in data for "
         f"model id {model_id!r}: {sorted(data)}"
     )
+    if dump_folder:
+        with open(os.path.join(dump_folder, "model_config.txt"), "w") as f:
+            f.write(f"model_id: {model_id}\n------\n")
+            f.write(
+                pprint.pformat(
+                    data["configuration"]
+                    if type(data["configuration"]) is dict
+                    else data["configuration"].to_dict()
+                )
+            )
 
     if exporter == "modelbuilder":
         # Models used with ModelBuilder do not like batch size > 1.

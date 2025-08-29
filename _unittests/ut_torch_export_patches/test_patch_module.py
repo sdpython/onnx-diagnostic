@@ -5,7 +5,13 @@ import unittest
 import numpy as np
 from scipy.spatial.distance import cdist
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, has_torch, requires_torch
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    hide_stdout,
+    has_torch,
+    requires_torch,
+    ignore_warnings,
+)
 from onnx_diagnostic.torch_export_patches import torch_export_patches, torch_export_rewrite
 from onnx_diagnostic.torch_export_patches.patch_module import (
     transform_method,
@@ -370,6 +376,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_0, ep.module()(x, -y))
         self.assertEqualAny(expected_1, ep.module()(-x, -y))
 
+    @ignore_warnings(UserWarning)
     def test_rewrite_test_in_forward_none(self):
 
         class Model(torch.nn.Module):
