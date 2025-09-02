@@ -850,13 +850,13 @@ def get_parser_agg() -> ArgumentParser:
         "--filter-in",
         default="",
         help="adds a filter to filter in data, syntax is\n"
-        '``"<column1>:<value1>;<value2>/<column2>:<value3>"`` ...',
+        '``"<column1>:<value1>;<value2>//<column2>:<value3>"`` ...',
     )
     parser.add_argument(
         "--filter-out",
         default="",
         help="adds a filter to filter out data, syntax is\n"
-        '``"<column1>:<value1>;<value2>/<column2>:<value3>"`` ...',
+        '``"<column1>:<value1>;<value2>//<column2>:<value3>"`` ...',
     )
     parser.add_argument(
         "--sbs",
