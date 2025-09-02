@@ -1,5 +1,6 @@
 import enum
 import io
+import os
 import pprint
 import re
 import warnings
@@ -270,6 +271,10 @@ class CubePlot:
     def _to_images_bar(
         self, verbose: int = 0, merge: bool = True, title_suffix: Optional[str] = None
     ) -> List[bytes]:
+        """
+        Environment variable ``FIGSIZEH`` can be set to increase the
+        graph height. Default is 1.0.
+        """
         assert merge, f"merge={merge} not implemented yet"
         import matplotlib.pyplot as plt
 
@@ -279,7 +284,8 @@ class CubePlot:
         n_cols = 3
         nn = df.shape[1] // n_cols
         nn += int(df.shape[1] % n_cols != 0)
-        fig, axs = plt.subplots(nn, n_cols, figsize=(6 * n_cols, nn * df.shape[0] / 5))
+        ratio = float(os.environ.get("FIGSIZEH", "1"))
+        fig, axs = plt.subplots(nn, n_cols, figsize=(6 * n_cols, nn * df.shape[0] / 3 * ratio))
         pos = 0
         imgs = []
         for c in self._make_loop(df.columns, verbose):

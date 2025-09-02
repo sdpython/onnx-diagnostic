@@ -118,9 +118,11 @@ def filter_data(
         if isinstance(fmt, str):
             cols = fmt.split("//")
             for c in cols:
-                assert ":" in c, f"Unexpected value {c!r} in fmt={fmt!r}"
+                assert ":" in c, f"Unexpected value {c!r} in fmt={fmt!r}, cols={cols!r}"
                 spl = c.split(":")
-                assert len(spl) == 2, f"Unexpected value {c!r} in fmt={fmt!r}"
+                assert (
+                    len(spl) == 2
+                ), f"Unexpected value {c!r} in fmt={fmt!r}, spl={spl}, cols={cols}"
                 name, fil = spl
                 cond[name] = set(fil.split(";"))
         return cond
