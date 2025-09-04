@@ -4,6 +4,9 @@ Change Logs
 0.7.9
 +++++
 
+* :pr:`214`: fix modelbuilder export
+* :pr:`213`: use DYNAMIC on batch size
+
 0.7.8
 +++++
 
