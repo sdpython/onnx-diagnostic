@@ -497,7 +497,7 @@ def validate_model(
                 tuple(), data[k], dynamic_shapes=data["dynamic_shapes"]
             )
             if patch_kwargs.get("patch", False):
-                with torch_export_patches(**patch_kwargs):
+                with torch_export_patches(**patch_kwargs):  # type: ignore[arg-type]
                     data[k] = cpl.change_dynamic_dimensions(
                         desired_values=dict(batch=1), only_desired=True
                     )
