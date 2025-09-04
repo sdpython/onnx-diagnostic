@@ -201,10 +201,12 @@ def create_model_builder(
     arch_map = {
         "ChatGLMForConditionalGeneration": builder.ChatGLMModel,
         "ChatGLMModel": builder.ChatGLMModel,
+        "Ernie4_5_ForCausalLM": builder.ErnieModel,
         "GemmaForCausalLM": builder.Gemma2Model,
         "Gemma3ForCausalLM": builder.Gemma3Model,
         "Gemma3ForConditionalGeneration": builder.Gemma3Model,
         "GraniteForCausalLM": builder.GraniteModel,
+        "GptOssForCausalLM": builder.GPTOSSModel,
         "LlamaForCausalLM": builder.LlamaModel,
         "MistralForCausalLM": builder.MistralModel,
         "NemotronForCausalLM": builder.NemotronModel,
@@ -235,6 +237,7 @@ def create_model_builder(
         "Phi4MMForCausalLM": builder.Phi4MMModel,
         "Qwen2ForCausalLM": builder.QwenModel,
         "Qwen3ForCausalLM": builder.Qwen3Model,
+        "SmolLM3ForCausalLM": builder.SmolLM3Model,
     }
 
     assert config.architectures[0] in arch_map, (
@@ -276,6 +279,8 @@ def create_model_builder(
         for key in text_config:
             if not hasattr(config, key):
                 setattr(config, key, getattr(text_config, key))
+    elif config.architectures[0] == "GptOssForCausalLM":
+        delattr(config, "quantization_config")
     elif (
         config.architectures[0] == "PhiMoEForCausalLM"
         and config.max_position_embeddings != config.original_max_position_embeddings
