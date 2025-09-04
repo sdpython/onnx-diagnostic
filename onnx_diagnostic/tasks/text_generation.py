@@ -83,7 +83,7 @@ def get_inputs(
         :class:`transformers.cache_utils.DynamicCache`
     :return: dictionary
     """
-    batch = torch.export.Dim("batch", min=1, max=1024)
+    batch = "batch"
     seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
     cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
 
