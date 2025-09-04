@@ -65,7 +65,7 @@ def get_inputs(
         input_width, int
     ), f"Unexpected type for input_height {type(input_height)}{config}"
 
-    batch = torch.export.Dim("batch", min=1, max=1024)
+    batch = "batch"
     seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
