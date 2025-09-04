@@ -57,37 +57,21 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**data["inputs"])
         model(**data["inputs2"])
-        Dim = torch.export.Dim
         self.maxDiff = None
-        self.assertIn("{0:Dim(batch),1:DYN(seq_length)}", self.string_type(ds))
+        self.assertIn("{0:DYN(batch),1:DYN(seq_length)}", self.string_type(ds))
         self.assertEqualAny(
             {
-                "decoder_input_ids": {
-                    0: Dim("batch", min=1, max=1024),
-                    1: "seq_length",
-                },
+                "decoder_input_ids": {0: "batch", 1: "seq_length"},
                 "cache_position": {0: "seq_length"},
-                "encoder_outputs": [{0: Dim("batch", min=1, max=1024)}],
+                "encoder_outputs": [{0: "batch"}],
                 "past_key_values": [
                     [
-                        [
-                            {0: Dim("batch", min=1, max=1024)},
-                            {0: Dim("batch", min=1, max=1024)},
-                        ],
-                        [
-                            {0: Dim("batch", min=1, max=1024)},
-                            {0: Dim("batch", min=1, max=1024)},
-                        ],
+                        [{0: "batch"}, {0: "batch"}],
+                        [{0: "batch"}, {0: "batch"}],
                     ],
                     [
-                        [
-                            {0: Dim("batch", min=1, max=1024)},
-                            {0: Dim("batch", min=1, max=1024)},
-                        ],
-                        [
-                            {0: Dim("batch", min=1, max=1024)},
-                            {0: Dim("batch", min=1, max=1024)},
-                        ],
+                        [{0: "batch"}, {0: "batch"}],
+                        [{0: "batch"}, {0: "batch"}],
                     ],
                 ],
             },
@@ -134,37 +118,21 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model = to_any(model, torch.float16)
         model(**data["inputs2"])
-        Dim = torch.export.Dim
         self.maxDiff = None
-        self.assertIn("{0:Dim(batch),1:DYN(seq_length)}", self.string_type(ds))
+        self.assertIn("{0:DYN(batch),1:DYN(seq_length)}", self.string_type(ds))
         self.assertEqualAny(
             {
-                "decoder_input_ids": {
-                    0: Dim("batch", min=1, max=1024),
-                    1: "seq_length",
-                },
+                "decoder_input_ids": {0: "batch", 1: "seq_length"},
                 "cache_position": {0: "seq_length"},
-                "encoder_outputs": [{0: Dim("batch", min=1, max=1024)}],
+                "encoder_outputs": [{0: "batch"}],
                 "past_key_values": [
                     [
-                        [
-                            {0: Dim("batch", min=1, max=1024)},
-                            {0: Dim("batch", min=1, max=1024)},
-                        ],
-                        [
-                            {0: Dim("batch", min=1, max=1024)},
-                            {0: Dim("batch", min=1, max=1024)},
-                        ],
+                        [{0: "batch"}, {0: "batch"}],
+                        [{0: "batch"}, {0: "batch"}],
                     ],
                     [
-                        [
-                            {0: Dim("batch", min=1, max=1024)},
-                            {0: Dim("batch", min=1, max=1024)},
-                        ],
-                        [
-                            {0: Dim("batch", min=1, max=1024)},
-                            {0: Dim("batch", min=1, max=1024)},
-                        ],
+                        [{0: "batch"}, {0: "batch"}],
+                        [{0: "batch"}, {0: "batch"}],
                     ],
                 ],
             },
