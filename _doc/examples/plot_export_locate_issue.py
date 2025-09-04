@@ -88,7 +88,7 @@ except Exception as e:
 with torch_export_patches(stop_if_static=1, verbose=1):
     try:
         torch.export.export(model, inputs, dynamic_shapes=dyn_shapes)
-    except (AssertionError, torch._dynamo.exc.TorchRuntimeError) as e:
+    except (AssertionError, ValueError, torch._dynamo.exc.TorchRuntimeError) as e:
         print("-- It failed as excepted.")
         print(f"-- final error is {e}")
         print("-- Stack Trace")

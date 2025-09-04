@@ -205,7 +205,10 @@ class patched_ShapeEnv:
         # Precondition: a == tgt
         assert isinstance(a, sympy.Symbol)
 
-        if self.allow_complex_guards_as_runtime_asserts and not _is_supported_equivalence(tgt):
+        if (
+            getattr(self, "allow_complex_guards_as_runtime_asserts", False)
+            or getattr(self, "prefer_deferred_runtime_asserts_over_guards", False)
+        ) and not _is_supported_equivalence(tgt):
             # continuing leads to placeholder shapes
             # having complex expressions that we can't resolve
             return
