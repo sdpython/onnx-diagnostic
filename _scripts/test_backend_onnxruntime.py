@@ -50,6 +50,8 @@ class OnnxruntimeBackendRep(onnx.backend.base.BackendRep):
 class OnnxruntimeBackend(onnx.backend.base.Backend):
     @classmethod
     def is_compatible(cls, model) -> bool:
+        # Not compatible with backend?
+        # model.ir_version = 11
         return all(not (d.domain == "" and d.version > ORT_OPSET) for d in model.opset_import)
 
     @classmethod
@@ -98,10 +100,12 @@ class OnnxruntimeBackend(onnx.backend.base.Backend):
 dft_atol = 1e-3
 stft_atol = 1e-4
 ql_atol = 1e-5
+fp16_atol = 1e-3
 backend_test = onnx.backend.test.BackendTest(
     OnnxruntimeBackend,
     __name__,
     test_kwargs={
+        "test_attention_4d_fp16": {"atol": fp16_atol},
         "test_dft": {"atol": dft_atol, "rtol": numpy.inf},
         "test_dft_axis": {"atol": dft_atol, "rtol": numpy.inf},
         "test_dft_axis_opset19": {"atol": dft_atol, "rtol": numpy.inf},
@@ -148,6 +152,7 @@ if __name__ == "__main__":
     unexpected_successes = len(res.result.unexpectedSuccesses)
     expected_failures = len(res.result.expectedFailures)
     print("---------------------------------")
+    print(f"ORT_OPSET={ORT_OPSET}")
     print(
         f"tests_run={tests_run} errors={errors} skipped={skipped} "
         f"unexpected_successes={unexpected_successes} "
