@@ -724,7 +724,7 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
     if value.__class__.__name__ in {"DynamicCache", "HybridCache"}:
         make = dict(DynamicCache=make_dynamic_cache, HybridCache=make_hybrid_cache)
         cc = CacheKeyValue(value)
-        return make[value.__class__.__name__](
+        return make[value.__class__.__name__](  # type: ignore[operator]
             list(
                 zip(
                     [t.to(to_value) if t is not None else t for t in cc.key_cache],
