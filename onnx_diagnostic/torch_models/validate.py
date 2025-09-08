@@ -712,6 +712,7 @@ def validate_model(
                 print(f"[validate_model] done (dump onnx) in {duration}")
             data["onnx_filename"] = onnx_filename
             summary["time_onnx_save"] = duration
+        summary.update(compute_statistics(onnx_filename))
         if verbose:
             print(f"[validate_model] dumps statistics in {dump_folder!r}...")
         dump_stats = os.path.join(dump_folder, f"{folder_name}.stats")
@@ -813,6 +814,39 @@ def validate_model(
             for k, v in sorted(summary.items()):
                 f.write(f":{k}:{v};\n")
     return summary, data
+
+
+def compute_statistics(onnx_filename: str) -> Dict[str, float]:
+    """Computes some statistics on the model itself."""
+    onx = onnx.load(onnx_filename, load_external_data=False)
+
+    def node_iter(proto):
+        if isinstance(proto, onnx.ModelProto):
+            yield from node_iter(proto.graph)
+            for f in proto.functions:
+                yield from node_iter(f)
+        elif isinstance(proto, (onnx.FunctionProto, onnx.GraphProto)):
+            for node in proto.node:
+                yield node
+                for att in node.attribute:
+                    if att.type == onnx.AttributeProto.GRAPH:
+                        yield from att.g
+            if hasattr(proto, "initializer"):
+                yield from proto.initializer
+        else:
+            raise NotImplementedError(f"Unexpected type={type(proto)}")
+
+    counts = {}
+    for proto in node_iter(onx):
+        if isinstance(proto, onnx.NodeProto):
+            key = f"n_node_{proto.op_type}"
+        else:
+            key = f"n_node_initializer_{proto.data_type}"
+
+        if key not in counts:
+            counts[key] = 0
+        counts[key] += 1
+    return counts
 
 
 def _validate_do_run_model(
