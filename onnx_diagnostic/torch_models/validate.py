@@ -830,7 +830,7 @@ def compute_statistics(onnx_filename: str) -> Dict[str, Union[float, int]]:
                 yield node
                 for att in node.attribute:
                     if att.type == onnx.AttributeProto.GRAPH:
-                        yield from att.g
+                        yield from node_iter(att.g)
             if hasattr(proto, "initializer"):
                 yield from proto.initializer
         else:
