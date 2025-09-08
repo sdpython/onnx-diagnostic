@@ -755,6 +755,42 @@ class TestHuggingFaceHubModel(ExtTestCase):
         )
         print(output_text)
 
+    @never_test()
+    def test_sentence_similary_alibaba_nlp_gte(self):
+        """
+        clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k alibaba
+        """
+        import torch.nn.functional as F
+        from transformers import AutoModel, AutoTokenizer
+
+        input_texts = [
+            "what is the capital of China?",
+            "how to implement quick sort in python?",
+            "Beijing",
+            "sorting algorithms",
+        ]
+
+        model_path = "Alibaba-NLP/gte-large-en-v1.5"
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
+
+        # Tokenize the input texts
+        batch_dict = tokenizer(
+            input_texts, max_length=8192, padding=True, truncation=True, return_tensors="pt"
+        )
+
+        print("-- type:", type(model))
+        print("-- subclasses:", type(model).__subclasses__())
+        print("-- inputs:", self.string_type(batch_dict, with_shape=True))
+        outputs = model(**batch_dict)
+        print("-- outputs:", self.string_type(outputs, with_shape=True))
+        embeddings = outputs.last_hidden_state[:, 0]
+
+        # (Optionally) normalize embeddings
+        embeddings = F.normalize(embeddings, p=2, dim=1)
+        scores = (embeddings[:1] @ embeddings[1:].T) * 100
+        print(scores.tolist())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
