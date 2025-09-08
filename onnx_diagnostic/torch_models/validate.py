@@ -712,7 +712,7 @@ def validate_model(
                 print(f"[validate_model] done (dump onnx) in {duration}")
             data["onnx_filename"] = onnx_filename
             summary["time_onnx_save"] = duration
-        summary.update(compute_statistics(onnx_filename))
+            summary.update(compute_statistics(onnx_filename))
         if verbose:
             print(f"[validate_model] dumps statistics in {dump_folder!r}...")
         dump_stats = os.path.join(dump_folder, f"{folder_name}.stats")
