@@ -721,9 +721,10 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
         return {to_any(t, to_value) for t in value}
     if type(value) is dict:
         return {k: to_any(t, to_value) for k, t in value.items()}
-    if value.__class__.__name__ == "DynamicCache":
+    if value.__class__.__name__ in {"DynamicCache", "HybridCache"}:
+        make = dict(DynamicCache=make_dynamic_cache, HybridCache=make_hybrid_cache)
         cc = CacheKeyValue(value)
-        return make_dynamic_cache(
+        return make[value.__class__.__name__](  # type: ignore[operator]
             list(
                 zip(
                     [t.to(to_value) if t is not None else t for t in cc.key_cache],
@@ -821,6 +822,15 @@ def torch_deepcopy(value: Any) -> Any:
         args, spec = torch.utils._pytree.tree_flatten(value)
         new_args = torch_deepcopy(args)
         return torch.utils._pytree.tree_unflatten(new_args, spec)
+
+    if value.__class__.__name__ == "Results":
+        import copy
+        import ultralytics
+
+        assert isinstance(
+            value, ultralytics.engine.results.Results
+        ), f"Unexpected type={type(value)}"
+        return copy.deepcopy(value)
 
     # We should have a code using serialization, deserialization assuming a model
     # cannot be exported without them.

@@ -11,6 +11,7 @@ __data_arch__ = textwrap.dedent(
     """
     architecture,task
     ASTModel,feature-extraction
+    AutoencoderKL,image-to-image
     AlbertModel,feature-extraction
     BeitForImageClassification,image-classification
     BartForConditionalGeneration,summarization
@@ -154,6 +155,7 @@ __data_arch__ = textwrap.dedent(
     Wav2Vec2ForCTC,automatic-speech-recognition
     YolosForObjectDetection,object-detection
     YolosModel,image-feature-extraction
+    Alibaba-NLP/gte-large-en-v1.5,sentence-similarity
     emilyalsentzer/Bio_ClinicalBERT,fill-mask"""
 )
 

@@ -774,6 +774,14 @@ def string_type(
             return f"{obj.__class__.__name__}(**{s})"
     if obj.__class__.__name__ in {"TorchModelContainer", "InferenceSession"}:
         return f"{obj.__class__.__name__}(...)"
+    if obj.__class__.__name__ == "Results":
+        import ultralytics
+
+        assert isinstance(
+            obj, ultralytics.engine.results.Results
+        ), f"Unexpected type={type(obj)}"
+        return f"ultralytics.{obj.__class__.__name__}(...)"
+
     if verbose:
         print(f"[string_type] END:{type(obj)}")
     raise AssertionError(f"Unsupported type {type(obj).__name__!r} - {type(obj)}")
