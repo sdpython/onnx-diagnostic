@@ -816,7 +816,7 @@ def validate_model(
     return summary, data
 
 
-def compute_statistics(onnx_filename: str) -> Dict[str, float]:
+def compute_statistics(onnx_filename: str) -> Dict[str, Union[float, int]]:
     """Computes some statistics on the model itself."""
     onx = onnx.load(onnx_filename, load_external_data=False)
 
