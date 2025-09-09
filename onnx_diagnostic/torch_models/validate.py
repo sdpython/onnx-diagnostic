@@ -836,7 +836,7 @@ def compute_statistics(onnx_filename: str) -> Dict[str, Union[float, int]]:
         else:
             raise NotImplementedError(f"Unexpected type={type(proto)}")
 
-    counts = {}
+    counts: Dict[str, Union[float, int]] = {}
     for proto in node_iter(onx):
         if isinstance(proto, onnx.NodeProto):
             key = f"n_node_{proto.op_type}"
