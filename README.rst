@@ -58,7 +58,7 @@ Getting started
 
     git clone https://github.com/sdpython/onnx-diagnostic.git
     cd onnx-diagnostic
-    pip install -e .
+    pip install -e . -v
 
 or
 
