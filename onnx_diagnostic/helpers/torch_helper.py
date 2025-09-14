@@ -543,7 +543,7 @@ def dummy_llm(
             )
 
         def forward(self, x):
-            B, T, C = x.shape
+            _B, T, C = x.shape
 
             query = self.query(x)
             key = self.key(x)
@@ -866,7 +866,7 @@ def torch_tensor_size(value: Any) -> Any:
     if value.__class__.__name__ == "MambaCache":
         return torch_tensor_size(value.conv_states) + torch_tensor_size(value.ssm_states)
     if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:
-        args, spec = torch.utils._pytree.tree_flatten(value)
+        args, _spec = torch.utils._pytree.tree_flatten(value)
         return sum(torch_tensor_size(a) for a in args)
 
     # We should have a code using serialization, deserialization assuming a model

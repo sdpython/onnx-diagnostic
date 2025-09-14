@@ -32,7 +32,7 @@ class TestTinyLlmBypassed(ExtTestCase):
                 print("***", data["dynamic_shapes"])
                 import torch.export._draft_export
 
-                ep, report = torch.export._draft_export.draft_export(
+                _ep, report = torch.export._draft_export.draft_export(
                     model,
                     (),
                     kwargs=inputs,

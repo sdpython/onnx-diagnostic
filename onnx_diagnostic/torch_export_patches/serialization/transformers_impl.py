@@ -218,7 +218,6 @@ def unflatten_sliding_window_cache(
     values: List[Any], context: torch.utils._pytree.Context, output_type=None
 ) -> SlidingWindowCache:
     """Restores a :class:`transformers.cache_utils.SlidingWindowCache` from python objects."""
-    key_cache, value_cache = values
     return make_sliding_window_cache(list(zip(values[0], values[1])))
 
 

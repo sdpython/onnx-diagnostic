@@ -69,7 +69,7 @@ class TestCacheHelpers(ExtTestCase):
         )
 
         DYN = torch.export.Dim.DYNAMIC
-        nargs, nkwargs, nds = convert_dynamic_axes_into_dynamic_shapes(
+        _nargs, _nkwargs, nds = convert_dynamic_axes_into_dynamic_shapes(
             None, args=tuple(), kwargs=kwargs, dynamic_axes=dynamic_shapes
         )
         self.assertEqual(dynamic_shapes, nds)
