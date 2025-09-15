@@ -62,6 +62,7 @@ class TestTinyLlmBypassed(ExtTestCase):
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
         model(**torch_deepcopy(inputs))
+        ds = use_dyn_not_str(ds)
         with torch_export_patches(patch_transformers=True, stop_if_static=1) as modificator:
             inputs = modificator(inputs)
             ep = torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)
