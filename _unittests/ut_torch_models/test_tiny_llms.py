@@ -29,7 +29,7 @@ class TestTinyLlm(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with torch_export_patches(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True, verbose=1):
             ep = torch.export.export(
                 model,
                 (),

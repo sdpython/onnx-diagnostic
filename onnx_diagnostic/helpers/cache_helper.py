@@ -270,7 +270,7 @@ def make_static_cache(
             self.num_attention_heads = key_value_pairs[0][0].shape[1]
             self.num_hidden_layers = len(key_value_pairs)
 
-        def get_text_config(self):
+        def get_text_config(self, *args, **kwargs):
             return self
 
     assert max_cache_len is not None, (
@@ -366,7 +366,7 @@ def make_mamba_cache(key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]]) -
             self.num_hidden_layers = len(key_value_pairs)
             self.dtype = dtype
 
-        def get_text_config(self):
+        def get_text_config(self, *args, **kwargs):
             return self
 
     cache = MambaCache(
@@ -409,7 +409,7 @@ def make_sliding_window_cache(
             self.num_hidden_layers = len(key_value_pairs)
             self.sliding_window = key_value_pairs[0][0].shape[2]
 
-        def get_text_config(self):
+        def get_text_config(self, *args, **kwargs):
             return self
 
     cache = transformers.cache_utils.SlidingWindowCache(
@@ -577,7 +577,7 @@ def make_hybrid_cache(
         sliding_window = _sliding_window
         num_key_value_heads = key_value_pairs[0][1].shape[1]  # transformers 4.48.3
 
-        def get_text_config(self):
+        def get_text_config(self, *args, **kwargs):
             return self
 
     if layer_types:

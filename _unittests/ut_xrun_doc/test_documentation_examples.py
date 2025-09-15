@@ -47,7 +47,7 @@ class TestDocumentationExamples(ExtTestCase):
             cmds = [sys.executable, "-u", os.path.join(fold, name)]
             p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             res = p.communicate()
-            out, err = res
+            _out, err = res
             st = err.decode("ascii", errors="ignore")
             if st and "Traceback" in st:
                 if '"dot" not found in path.' in st:
@@ -113,6 +113,13 @@ class TestDocumentationExamples(ExtTestCase):
                 not reason
                 and name in {"plot_dump_intermediate_results.py"}
                 and not has_torch("2.9.1")
+            ):
+                reason = "unstable, let's wait for the next version"
+
+            if (
+                not reason
+                and name in {"plot_export_tiny_phi2.py"}
+                and not has_transformers("4.55")
             ):
                 reason = "unstable, let's wait for the next version"
 

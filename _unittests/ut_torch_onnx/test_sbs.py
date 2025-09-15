@@ -68,9 +68,7 @@ class TestSideBySide(ExtTestCase):
         ep = torch.export.export(
             Model(), (x,), dynamic_shapes=({0: torch.export.Dim("batch")},)
         )
-        epo = torch.onnx.export(
-            ep, (x,), dynamic_shapes=({0: torch.export.Dim("batch")},), dynamo=True
-        )
+        epo = torch.onnx.export(ep, (x,), dynamic_shapes=({0: torch.export.Dim("batch")},))
         onx = epo.model_proto
         results = list(
             run_aligned(

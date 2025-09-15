@@ -126,7 +126,7 @@ with torch_export_patches(patch_transformers=True):
 
 with torch_export_patches(patch_transformers=True):
     epo = torch.onnx.export(
-        ep, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=dynamic_shapes, dynamo=True
+        ep, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=dynamic_shapes
     )
 
 # %%

@@ -9,6 +9,7 @@ def get_phi2(
     sequence_length: int = 30,
     sequence_length2: int = 3,
     dynamic_rope: bool = False,
+    use_dim_not_dynamic: bool = False,
     **kwargs,
 ) -> Dict[str, Any]:
     """
@@ -18,6 +19,8 @@ def get_phi2(
     :param sequence_length: sequence length
     :param sequence_length2: new sequence length
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
+    :param use_dim_not_dynamic: uses ``torch.export.Dim`` and not a string for the batch size,
+        the sequence length and the cache length
     :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
     :return: dictionary
 
@@ -62,9 +65,14 @@ def get_phi2(
     n_layers = config["num_hidden_layers"]
     num_key_value_heads = config["num_key_value_heads"]
 
-    batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = torch.export.Dim("seq_length", min=1, max=4096)
-    cache_length = torch.export.Dim("cache_length", min=1, max=4096)
+    if use_dim_not_dynamic:
+        batch = torch.export.Dim("batch", min=1, max=1024)
+        seq_length = torch.export.Dim("seq_length", min=1, max=4096)
+        cache_length = torch.export.Dim("cache_length", min=1, max=4096)
+    else:
+        batch = "batch"
+        seq_length = "seq_length"
+        cache_length = "cache_length"
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},

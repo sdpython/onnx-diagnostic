@@ -4,6 +4,8 @@ Change Logs
 0.7.10
 ++++++
 
+* :pr:`218`: patches used sdpa_mask_recent_torch used from _vmap_for_bhqkv
+
 0.7.9
 +++++
 

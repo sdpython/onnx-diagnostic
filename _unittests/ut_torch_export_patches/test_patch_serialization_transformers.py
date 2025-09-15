@@ -164,7 +164,7 @@ class TestPatchSerialization(ExtTestCase):
     def test_base_model_output_unflatten_flatten(self):
         bo = BaseModelOutput(last_hidden_state=torch.rand((4, 4, 4)))
         with torch_export_patches(patch_transformers=True):
-            flat, _spec = torch.utils._pytree.tree_flatten(bo)
+            _flat, _spec = torch.utils._pytree.tree_flatten(bo)
             unflat = flatten_unflatten_for_dynamic_shapes(bo, use_dict=True)
             self.assertIsInstance(unflat, list)
             self.assertEqual("#1[T1r3]", self.string_type(unflat))

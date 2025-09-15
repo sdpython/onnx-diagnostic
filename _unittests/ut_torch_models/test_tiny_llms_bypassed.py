@@ -32,7 +32,7 @@ class TestTinyLlmBypassed(ExtTestCase):
                 print("***", data["dynamic_shapes"])
                 import torch.export._draft_export
 
-                ep, report = torch.export._draft_export.draft_export(
+                _ep, report = torch.export._draft_export.draft_export(
                     model,
                     (),
                     kwargs=inputs,
@@ -56,12 +56,13 @@ class TestTinyLlmBypassed(ExtTestCase):
 
     @ignore_warnings(UserWarning)
     def test_export_phi2_2_bypassed(self):
-        data = get_phi2(num_hidden_layers=2)
+        data = get_phi2(num_hidden_layers=2, batch_size=2)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
         model(**torch_deepcopy(inputs))
+        ds = use_dyn_not_str(ds)
         with torch_export_patches(patch_transformers=True, stop_if_static=1) as modificator:
             inputs = modificator(inputs)
             ep = torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds, strict=False)

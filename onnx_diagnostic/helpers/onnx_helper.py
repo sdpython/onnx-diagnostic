@@ -1186,7 +1186,7 @@ def shadowing_names(
                 shadow |= set(i.name for i in g.input) & shadow_context
                 shadow |= set(i.name for i in g.initializer) & shadow_context
                 shadow |= set(i.name for i in g.sparse_initializer) & shadow_context
-                s, ps, c = shadowing_names(
+                s, _ps, c = shadowing_names(
                     g.node, verbose=verbose, existing=existing, shadow_context=existing
                 )
                 shadow |= s

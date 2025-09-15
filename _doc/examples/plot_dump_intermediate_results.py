@@ -129,7 +129,7 @@ for k, v in saved_tensors.items():
 # Let's create the ONNX model.
 
 ep = torch.export.export(model, inputs, dynamic_shapes=ds)
-epo = torch.onnx.export(ep, dynamo=True)
+epo = torch.onnx.export(ep)
 epo.optimize()
 epo.save("plot_dump_intermediate_results.onnx")
 

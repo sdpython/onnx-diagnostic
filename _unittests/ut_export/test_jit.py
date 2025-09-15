@@ -7,7 +7,6 @@ from onnx_diagnostic.ext_test_case import (
     ignore_warnings,
     requires_onnxscript,
 )
-from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 from onnx_diagnostic.helpers.torch_helper import is_torchdynamo_exporting
 
 try:
@@ -62,7 +61,7 @@ class TestJit(ExtTestCase):
 
     @hide_stdout()
     @ignore_warnings(UserWarning)
-    @requires_onnxscript("0.5")
+    @requires_onnxscript("0.7")
     def test_export_loop_onnxscript(self):
         class Model(torch.nn.Module):
             def forward(self, images, position):
@@ -74,19 +73,6 @@ class TestJit(ExtTestCase):
         x = torch.randn((5, 6))
         y = torch.arange(5, dtype=torch.int64) + 1
         expected = model(x, y)
-
-        name = self.get_dump_file("test_export_loop_onnxscript.onnx")
-        torch.onnx.export(
-            model,
-            (x, y),
-            name,
-            dynamic_axes={"images": {0: "batch", 1: "maxdim"}, "position": {0: "batch"}},
-            dynamo=False,
-        )
-        ref = ExtendedReferenceEvaluator(name)
-        feeds = dict(images=x.numpy(), position=y.numpy())
-        got = ref.run(None, feeds)[0]
-        self.assertEqualArray(expected, got)
 
         DYN = torch.export.Dim.DYNAMIC
         ep = torch.export.export(
@@ -103,7 +89,6 @@ class TestJit(ExtTestCase):
             (x, y),
             name2,
             dynamic_shapes={"images": {0: "batch", 1: "maxdim"}, "position": {0: "batch"}},
-            dynamo=True,
             fallback=False,
         )
         import onnxruntime

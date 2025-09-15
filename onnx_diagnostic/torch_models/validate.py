@@ -352,7 +352,7 @@ def validate_model(
     The following exporters are available:
 
     * ``export-nostrict``: run :func:`torch.export.export` (..., strict=False)
-    * ``onnx-dynamo``: run :func:`torch.onnx.export` (..., dynamo=True),
+    * ``onnx-dynamo``: run :func:`torch.onnx.export` (...),
       models can be optimized with ``optimization`` in ``("ir", "os_ort")``
     * ``modelbuilder``: use :epkg:`ModelBuilder` to builds the onnx model
     * ``custom``: custom exporter (see :epkg:`experimental-experiment`),

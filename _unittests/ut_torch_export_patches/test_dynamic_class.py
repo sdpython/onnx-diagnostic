@@ -3,6 +3,11 @@ import os
 import unittest
 from typing import Any, Dict, List, Tuple
 import torch
+
+try:
+    import transformers.masking_utils as masking_utils
+except ImportError:
+    masking_utils = None
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     ignore_warnings,
@@ -14,7 +19,9 @@ from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyVal
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     torch_export_patches,
 )
+from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
+import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_transformers
 
 
 class TestOnnxExportErrors(ExtTestCase):
@@ -305,7 +312,7 @@ class TestOnnxExportErrors(ExtTestCase):
                 model,
                 (),
                 kwargs=inputs,
-                dynamic_shapes=dyn_shapes,
+                dynamic_shapes=use_dyn_not_str(dyn_shapes),
                 strict=False,  # True works but then the it fails during the execution
             )
             # ep = ep.run_decompositions()
@@ -319,6 +326,7 @@ class TestOnnxExportErrors(ExtTestCase):
 
     @ignore_warnings(UserWarning)
     @requires_torch("2.9")
+    @hide_stdout()
     def test_phi2_export_interpreter(self):
         data = get_untrained_model_with_inputs("microsoft/phi-2")
         model, inputs, dyn_shapes = data["model"], data["inputs"], data["dynamic_shapes"]
@@ -338,12 +346,17 @@ class TestOnnxExportErrors(ExtTestCase):
             str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
         )
 
-        with torch_export_patches(patch_transformers=True):
+        with torch_export_patches(patch_transformers=True, verbose=1):
+            if masking_utils is not None:
+                self.assertEqual(
+                    masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"],
+                    patch_transformers.patched_sdpa_mask_recent_torch,
+                )
             ep = torch.export.export(
                 model,
                 (),
                 kwargs=inputs,
-                dynamic_shapes=dyn_shapes,
+                dynamic_shapes=use_dyn_not_str(dyn_shapes),
                 strict=False,  # True works but then the it fails during the execution
             )
             # ep = ep.run_decompositions()

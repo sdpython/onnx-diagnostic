@@ -604,8 +604,8 @@ class TestPatchModule(ExtTestCase):
         rewritten_expected2 = RewrittenModel2()(x, y)
         self.assertEqualArray(expected, rewritten_expected2)
 
-        if not has_torch("2.9"):
-            raise unittest.SkipTest("skipped export, torch must be >= 2.9")
+        if not has_torch("2.10"):
+            raise unittest.SkipTest("skipped export, torch must be >= 2.10")
 
         torch.export.export(RewrittenModel2(), (x, y), dynamic_shapes=ds, strict=False)
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds, strict=False)

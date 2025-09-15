@@ -562,7 +562,7 @@ class OnnxruntimeEvaluator:
         if key in self._cache:
             sess = self._cache[key][1]
         else:
-            self._cache[key] = onx, sess = self._get_sess_if(node, name, inputs, results)
+            self._cache[key] = _onx, sess = self._get_sess_if(node, name, inputs, results)
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
         feeds = {name: results[name] for name in sess.input_names}
@@ -616,7 +616,7 @@ class OnnxruntimeEvaluator:
         if key in self._cache:
             sess = self._cache[key][1]
         else:
-            self._cache[key] = onx, sess = self._get_sess_scan(node, name, inputs, results)
+            self._cache[key] = _onx, sess = self._get_sess_scan(node, name, inputs, results)
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
         feeds = {name: results[name] for name in sess.input_names}
