@@ -8,6 +8,7 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.torch_models.llms import get_phi2
 from onnx_diagnostic.helpers import string_type
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestLlmPhi(ExtTestCase):
@@ -27,7 +28,8 @@ class TestLlmPhi(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        ep = torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds)
+        with torch_export_patches(patch_transformers=True):
+            ep = torch.export.export(model, (), kwargs=inputs, dynamic_shapes=ds)
         assert ep
 
 
