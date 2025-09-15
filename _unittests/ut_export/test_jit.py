@@ -61,7 +61,7 @@ class TestJit(ExtTestCase):
 
     @hide_stdout()
     @ignore_warnings(UserWarning)
-    @requires_onnxscript("0.5")
+    @requires_onnxscript("0.7")
     def test_export_loop_onnxscript(self):
         class Model(torch.nn.Module):
             def forward(self, images, position):
@@ -89,7 +89,6 @@ class TestJit(ExtTestCase):
             (x, y),
             name2,
             dynamic_shapes={"images": {0: "batch", 1: "maxdim"}, "position": {0: "batch"}},
-            dynamo=True,
             fallback=False,
         )
         import onnxruntime
