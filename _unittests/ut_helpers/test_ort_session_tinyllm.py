@@ -87,7 +87,7 @@ class TestOrtSessionTinyLLM(ExtTestCase):
                 proto = to_onnx(model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=ds)
             else:
                 proto = torch.onnx.export(
-                    model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=ds, dynamo=True
+                    model, (), kwargs=copy.deepcopy(inputs), dynamic_shapes=ds
                 ).model_proto
 
         self.dump_onnx("test_check_allruntimes_on_tiny_llm.onnx", proto)

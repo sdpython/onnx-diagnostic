@@ -116,6 +116,13 @@ class TestDocumentationExamples(ExtTestCase):
             ):
                 reason = "unstable, let's wait for the next version"
 
+            if (
+                not reason
+                and name in {"plot_export_tiny_phi2.py"}
+                and not has_transformers("4.55")
+            ):
+                reason = "unstable, let's wait for the next version"
+
             if reason:
 
                 @unittest.skip(reason)

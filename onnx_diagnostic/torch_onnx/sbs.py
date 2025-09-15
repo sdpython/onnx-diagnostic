@@ -205,7 +205,7 @@ def run_aligned(
             Model(), (x,), dynamic_shapes=({0: torch.export.Dim("batch")},)
         )
         onx = torch.onnx.export(
-            Model(), (x,), dynamic_shapes=({0: torch.export.Dim("batch")},), dynamo=True
+            Model(), (x,), dynamic_shapes=({0: torch.export.Dim("batch")},)
         ).model_proto
         results = list(
             map(
