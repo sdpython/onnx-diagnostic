@@ -1,4 +1,5 @@
 import unittest
+from typing import Callable
 import torch
 import transformers
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
@@ -18,6 +19,9 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
 )
 from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+    patched__vmap_for_bhqkv,
+)
 
 
 class TestCacheHelpers(ExtTestCase):
@@ -253,6 +257,73 @@ class TestCacheHelpers(ExtTestCase):
                 "#2[#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7],#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7]]",
                 self.string_type(unflat, with_shape=True),
             )
+
+    def test_cache_update_padding_mask_function(self):
+        from torch._dynamo._trace_wrapped_higher_order_op import TransformGetItemToIndex
+
+        def causal_mask_function(
+            batch_idx: int, head_idx: int, q_idx: int, kv_idx: int
+        ) -> bool:
+            return kv_idx <= q_idx
+
+        def padding_mask_function(padding_mask: torch.Tensor) -> Callable:
+            def inner_mask(batch_idx: int, head_idx: int, q_idx: int, kv_idx: int) -> bool:
+                return padding_mask[batch_idx, kv_idx]
+
+            return inner_mask
+
+        def and_masks(*mask_functions: list[Callable]) -> Callable:
+            if not all(callable(arg) for arg in mask_functions):
+                raise RuntimeError(
+                    f"All inputs should be callable mask_functions: {mask_functions}"
+                )
+
+            def and_mask(batch_idx, head_idx, q_idx, kv_idx):
+                result = q_idx.new_ones((), dtype=torch.bool)
+                for mask in mask_functions:
+                    result = result & mask(batch_idx, head_idx, q_idx, kv_idx).to(
+                        result.device
+                    )
+                return result
+
+            return and_mask
+
+        def _vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) -> Callable:
+            dimensions = [(None, None, None, 0), (None, None, 0, None)]
+            if bh_indices:
+                dimensions.extend([(None, 0, None, None), (0, None, None, None)])
+            for dims in dimensions:
+                mask_function = torch.vmap(mask_function, in_dims=dims, out_dims=0)
+            return mask_function
+
+        class Model(torch.nn.Module):
+            def forward(self, x, mask):
+                mask_function = and_masks(causal_mask_function, padding_mask_function(mask))
+                batch_arange = torch.arange(x.shape[0])
+                head_arange = torch.arange(x.shape[3])
+                kv_arange = torch.arange(x.shape[1])
+                cache_position = torch.arange(x.shape[2])
+                with TransformGetItemToIndex():
+                    causal_mask = patched__vmap_for_bhqkv(mask_function)(
+                        batch_arange, head_arange, cache_position, kv_arange
+                    )
+                    return x + causal_mask.to(x.dtype)
+
+        inputs = {
+            "x": torch.rand((4, 4, 4, 4), dtype=torch.float32),
+            "mask": torch.ones((4, 4), dtype=torch.int64),
+        }
+        model = Model()
+        expected = model(**inputs)
+        self.assertNotEmpty(expected)
+        DYN = torch.export.Dim.DYNAMIC
+        ep = torch.export.export(
+            model,
+            (),
+            kwargs=inputs,
+            dynamic_shapes={"x": {0: DYN, 1: DYN, 2: DYN, 3: DYN}, "mask": {0: DYN, 1: DYN}},
+        )
+        self.assertNotEmpty(ep)
 
 
 if __name__ == "__main__":
