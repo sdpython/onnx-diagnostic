@@ -3,7 +3,11 @@ import os
 import unittest
 from typing import Any, Dict, List, Tuple
 import torch
-import transformers
+
+try:
+    import transformers.masking_utils as masking_utils
+except ImportError:
+    masking_utils = None
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     ignore_warnings,
@@ -322,6 +326,7 @@ class TestOnnxExportErrors(ExtTestCase):
 
     @ignore_warnings(UserWarning)
     @requires_torch("2.9")
+    @hide_stdout()
     def test_phi2_export_interpreter(self):
         data = get_untrained_model_with_inputs("microsoft/phi-2")
         model, inputs, dyn_shapes = data["model"], data["inputs"], data["dynamic_shapes"]
@@ -342,10 +347,11 @@ class TestOnnxExportErrors(ExtTestCase):
         )
 
         with torch_export_patches(patch_transformers=True, verbose=1):
-            self.assertEqual(
-                transformers.masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"],
-                patch_transformers.patched_sdpa_mask_recent_torch,
-            )
+            if masking_utils is not None:
+                self.assertEqual(
+                    masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"],
+                    patch_transformers.patched_sdpa_mask_recent_torch,
+                )
             ep = torch.export.export(
                 model,
                 (),
