@@ -19,9 +19,13 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
 )
 from onnx_diagnostic.torch_export_patches import torch_export_patches
-from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
-    patched__vmap_for_bhqkv,
-)
+
+try:
+    from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+        patched__vmap_for_bhqkv,
+    )
+except ImportError:
+    patched__vmap_for_bhqkv = None
 
 
 class TestCacheHelpers(ExtTestCase):
@@ -258,6 +262,7 @@ class TestCacheHelpers(ExtTestCase):
                 self.string_type(unflat, with_shape=True),
             )
 
+    @unittest.skipIf(patched__vmap_for_bhqkv is None, "transformers too old")
     def test_cache_update_padding_mask_function_vmap(self):
         def causal_mask_function(
             batch_idx: int, head_idx: int, q_idx: int, kv_idx: int
