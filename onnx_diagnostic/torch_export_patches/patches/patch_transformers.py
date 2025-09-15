@@ -39,7 +39,6 @@ if patch_masking_utils:
     # Introduced in 4.52
     from transformers.masking_utils import (
         causal_mask_function,
-        sdpa_mask,
         padding_mask_function,
         and_masks,
         _ignore_causal_mask_sdpa,
@@ -112,7 +111,7 @@ if patch_masking_utils:
         """manual patch for function ``transformers.masking_utils.eager_mask``."""
         # The masks for eager attention are simply boolean mask from sdpa, casted to 0 and -inf
         _ = kwargs.pop("allow_is_causal_skip", None)
-        mask = sdpa_mask(
+        mask = patched_sdpa_mask_recent_torch(
             batch_size=batch_size,
             cache_position=cache_position,
             kv_length=kv_length,
