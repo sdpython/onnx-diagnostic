@@ -62,9 +62,14 @@ def get_phi2(
     n_layers = config["num_hidden_layers"]
     num_key_value_heads = config["num_key_value_heads"]
 
-    batch = torch.export.Dim("batch", min=1, max=1024)
-    seq_length = torch.export.Dim("seq_length", min=1, max=4096)
-    cache_length = torch.export.Dim("cache_length", min=1, max=4096)
+    if batch_size == 1:
+        batch = torch.export.Dim("batch", min=1, max=1024)
+        seq_length = torch.export.Dim("seq_length", min=1, max=4096)
+        cache_length = torch.export.Dim("cache_length", min=1, max=4096)
+    else:
+        batch = "batch"
+        seq_length = "seq_length"
+        cache_length = "cache_length"
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},

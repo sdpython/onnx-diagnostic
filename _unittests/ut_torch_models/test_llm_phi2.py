@@ -22,9 +22,25 @@ class TestLlmPhi(ExtTestCase):
     @ignore_warnings(UserWarning)
     @requires_transformers("4.54")
     @requires_torch("2.9.99")
-    def test_export_phi2_1(self):
+    def test_export_phi2_1_batch_size_1(self):
         # exporting vmap does not work
         data = get_phi2(num_hidden_layers=2)
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        self.assertEqual(
+            {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
+        )
+        with torch_export_patches(patch_transformers=True):
+            ep = torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+            )
+        assert ep
+
+    @ignore_warnings(UserWarning)
+    @requires_transformers("4.54")
+    @requires_torch("2.9.99")
+    def test_export_phi2_1_batch_size_2(self):
+        # exporting vmap does not work
+        data = get_phi2(num_hidden_layers=2, batch=2)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
