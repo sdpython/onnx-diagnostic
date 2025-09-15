@@ -14,7 +14,7 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 class TestLlmPhi(ExtTestCase):
     def test_get_phi2(self):
-        data = get_phi2(num_hidden_layers=2)
+        data = get_phi2(num_hidden_layers=2, batch_size=2)
         model, inputs = data["model"], data["inputs"]
         self.assertIn("DynamicCache", string_type(inputs))
         model(**inputs)

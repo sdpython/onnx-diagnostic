@@ -56,7 +56,7 @@ class TestTinyLlmBypassed(ExtTestCase):
 
     @ignore_warnings(UserWarning)
     def test_export_phi2_2_bypassed(self):
-        data = get_phi2(num_hidden_layers=2)
+        data = get_phi2(num_hidden_layers=2, batch_size=2)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
