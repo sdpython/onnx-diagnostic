@@ -17,7 +17,7 @@ class TestPatchPatchTorch(ExtTestCase):
         got = patched_vmap(f)(x, y)
         self.assertEqualArray(expected, got)
 
-    @requires_torch("2.9")
+    @requires_torch("2.10")
     def test_export_vmap(self):
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -206,10 +206,11 @@ class TestPatchPatchTorch(ExtTestCase):
 
         class Model(torch.nn.Module):
             def forward(self, batch_arange, head_arange, cache_position, kv_arange):
-                with TransformGetItemToIndex():
-                    causal_mask2 = _vmap_for_bhqkv2(mask_function)(
-                        batch_arange, head_arange, cache_position, kv_arange
-                    )
+                # with TransformGetItemToIndex():
+                # This context as ignored in 2.8 and not any more in 2.9.
+                causal_mask2 = _vmap_for_bhqkv2(mask_function)(
+                    batch_arange, head_arange, cache_position, kv_arange
+                )
                 return causal_mask2
 
         inputs = batch_arange, head_arange, cache_position, kv_arange

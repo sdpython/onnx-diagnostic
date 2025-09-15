@@ -14,6 +14,7 @@ from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyVal
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     torch_export_patches,
 )
+from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 
 
@@ -305,7 +306,7 @@ class TestOnnxExportErrors(ExtTestCase):
                 model,
                 (),
                 kwargs=inputs,
-                dynamic_shapes=dyn_shapes,
+                dynamic_shapes=use_dyn_not_str(dyn_shapes),
                 strict=False,  # True works but then the it fails during the execution
             )
             # ep = ep.run_decompositions()
@@ -343,7 +344,7 @@ class TestOnnxExportErrors(ExtTestCase):
                 model,
                 (),
                 kwargs=inputs,
-                dynamic_shapes=dyn_shapes,
+                dynamic_shapes=use_dyn_not_str(dyn_shapes),
                 strict=False,  # True works but then the it fails during the execution
             )
             # ep = ep.run_decompositions()
