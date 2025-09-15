@@ -439,6 +439,28 @@ def torch_export_patches(
                 f_transformers__vmap_for_bhqkv = masking_utils._vmap_for_bhqkv
                 masking_utils._vmap_for_bhqkv = patch_transformers_list.patched__vmap_for_bhqkv
 
+                if verbose:
+                    print(
+                        "[torch_export_patches] patches "
+                        "transformers.masking_utils.sdpa_mask_recent_torch"
+                    )
+                f_transformers_sdpa_mask_recent_torch = masking_utils.sdpa_mask_recent_torch
+                masking_utils.sdpa_mask_recent_torch = (
+                    patch_transformers_list.patched_sdpa_mask_recent_torch
+                )
+                if masking_utils.sdpa_mask == f_transformers_sdpa_mask_recent_torch:
+                    if verbose:
+                        print(
+                            "[torch_export_patches] patches "
+                            "transformers.masking_utils.sdpa_mask"
+                        )
+                    f_transformers_sdpa_mask = masking_utils.sdpa_mask
+                    masking_utils.sdpa_mask = (
+                        patch_transformers_list.patched_sdpa_mask_recent_torch
+                    )
+                else:
+                    f_transformers_sdpa_mask = None
+
             if (
                 masking_utils
                 and patch_transformers_list.patch_masking_utils
@@ -456,8 +478,35 @@ def torch_export_patches(
                     and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"]
                     == f_transformers_eager_mask
                 ):
+                    if verbose:
+                        print(
+                            "[torch_export_patches] patches "
+                            "transformers.masking_utils.eager_mask "
+                            "in ALL_MASK_ATTENTION_FUNCTIONS"
+                        )
                     masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"] = (
                         patch_transformers_list.patched_eager_mask
+                    )
+
+            if (
+                masking_utils
+                and patch_transformers_list.patch_masking_utils
+                and hasattr(masking_utils, "sdpa_mask")
+                and f_transformers_sdpa_mask is not None
+            ):
+                if verbose:
+                    print(
+                        "[torch_export_patches] patches "
+                        "transformers.masking_utils.sdpa_mask "
+                        "in ALL_MASK_ATTENTION_FUNCTIONS"
+                    )
+                if (
+                    "sdpa" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
+                    and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"]
+                    == f_transformers_sdpa_mask
+                ):
+                    masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] = (
+                        patch_transformers_list.patched_sdpa_mask_recent_torch
                     )
 
         if custom_patches:
@@ -568,11 +617,30 @@ def torch_export_patches(
                     and hasattr(masking_utils, "_vmap_for_bhqkv")
                 ):
                     masking_utils._vmap_for_bhqkv = f_transformers__vmap_for_bhqkv
+
                     if verbose:
                         print(
                             "[torch_export_patches] restored "
                             "transformers.masking_utils._vmap_for_bhqkv"
                         )
+
+                    masking_utils.sdpa_mask_recent_torch = (
+                        f_transformers_sdpa_mask_recent_torch
+                    )
+
+                    if verbose:
+                        print(
+                            "[torch_export_patches] restored "
+                            "transformers.masking_utils.sdpa_mask_recent_torch"
+                        )
+
+                    if f_transformers_sdpa_mask is not None:
+                        masking_utils.sdpa_mask = f_transformers_sdpa_mask
+                        if verbose:
+                            print(
+                                "[torch_export_patches] restored "
+                                "transformers.masking_utils.sdpa_mask"
+                            )
 
                 if (
                     masking_utils
@@ -581,6 +649,11 @@ def torch_export_patches(
                 ):
                     f_transformers_eager_mask = masking_utils.eager_mask
                     masking_utils.eager_mask = f_transformers_eager_mask
+                    if verbose:
+                        print(
+                            "[torch_export_patches] restored "
+                            "transformers.masking_utils.eager_mask"
+                        )
                     if (
                         "eager" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
                         and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"]
@@ -589,11 +662,32 @@ def torch_export_patches(
                         masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"] = (
                             f_transformers_eager_mask
                         )
-                    if verbose:
-                        print(
-                            "[torch_export_patches] restored "
-                            "transformers.masking_utils.eager_mask"
+                        if verbose:
+                            print(
+                                "[torch_export_patches] restored "
+                                "transformers.masking_utils.eager_mask "
+                                "in ALL_MASK_ATTENTION_FUNCTIONS"
+                            )
+
+                if (
+                    masking_utils
+                    and patch_transformers_list.patch_masking_utils
+                    and hasattr(masking_utils, "sdpa_mask")
+                ):
+                    if (
+                        "sdpa" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
+                        and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"]
+                        == patch_transformers_list.patched_sdpa_mask_recent_torch
+                    ):
+                        masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] = (
+                            f_transformers_sdpa_mask
                         )
+                        if verbose:
+                            print(
+                                "[torch_export_patches] restored "
+                                "transformers.masking_utils.sdpa_mask "
+                                "in ALL_MASK_ATTENTION_FUNCTIONS"
+                            )
 
             ########
             # caches

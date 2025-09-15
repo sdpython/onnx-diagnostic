@@ -37,7 +37,14 @@ from ...helpers.torch_helper import is_torchdynamo_exporting
 
 if patch_masking_utils:
     # Introduced in 4.52
-    from transformers.masking_utils import causal_mask_function, sdpa_mask
+    from transformers.masking_utils import (
+        causal_mask_function,
+        sdpa_mask,
+        padding_mask_function,
+        and_masks,
+        _ignore_causal_mask_sdpa,
+        prepare_padding_mask,
+    )
 
     def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) -> Callable:
         """manual patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""
@@ -124,6 +131,35 @@ if patch_masking_utils:
         #   torch.where(mask, torch.tensor(0.0, device=mask.device, dtype=dtype), min_dtype)
         mask = (~mask).to(dtype) * min_dtype
         return mask
+
+    def patched_sdpa_mask_recent_torch(
+        batch_size: int,
+        cache_position: torch.Tensor,
+        kv_length: int,
+        kv_offset: int = 0,
+        mask_function: Callable = causal_mask_function,
+        attention_mask: Optional[torch.Tensor] = None,
+        local_size: Optional[int] = None,
+        allow_is_causal_skip: bool = True,
+        **kwargs,
+    ) -> Optional[torch.Tensor]:
+        """manual patch for function ``transformers.masking_utils.sdpa_mask_recent_torch``."""
+        q_length = cache_position.shape[0]
+        padding_mask = prepare_padding_mask(attention_mask, kv_length, kv_offset, _slice=False)
+        if allow_is_causal_skip and _ignore_causal_mask_sdpa(
+            padding_mask, q_length, kv_length, kv_offset, local_size
+        ):
+            return None
+        kv_arange = torch.arange(kv_length, device=cache_position.device)
+        kv_arange += kv_offset
+        if padding_mask is not None:
+            mask_function = and_masks(mask_function, padding_mask_function(padding_mask))
+        batch_arange = torch.arange(batch_size, device=cache_position.device)
+        head_arange = torch.arange(1, device=cache_position.device)
+        causal_mask = patched__vmap_for_bhqkv(mask_function)(
+            batch_arange, head_arange, cache_position, kv_arange
+        )
+        return causal_mask
 
 
 if patch_parse_processor_args:

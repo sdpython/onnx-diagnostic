@@ -258,9 +258,7 @@ class TestCacheHelpers(ExtTestCase):
                 self.string_type(unflat, with_shape=True),
             )
 
-    def test_cache_update_padding_mask_function(self):
-        from torch._dynamo._trace_wrapped_higher_order_op import TransformGetItemToIndex
-
+    def test_cache_update_padding_mask_function_vmap(self):
         def causal_mask_function(
             batch_idx: int, head_idx: int, q_idx: int, kv_idx: int
         ) -> bool:
@@ -303,11 +301,9 @@ class TestCacheHelpers(ExtTestCase):
                 head_arange = torch.arange(x.shape[3])
                 kv_arange = torch.arange(x.shape[1])
                 cache_position = torch.arange(x.shape[2])
-                with TransformGetItemToIndex():
-                    causal_mask = patched__vmap_for_bhqkv(mask_function)(
-                        batch_arange, head_arange, cache_position, kv_arange
-                    )
-                    return x + causal_mask.to(x.dtype)
+                f = patched__vmap_for_bhqkv(mask_function)
+                causal_mask = f(batch_arange, head_arange, cache_position, kv_arange)
+                return x + causal_mask.to(x.dtype)
 
         inputs = {
             "x": torch.rand((4, 4, 4, 4), dtype=torch.float32),
@@ -322,6 +318,28 @@ class TestCacheHelpers(ExtTestCase):
             (),
             kwargs=inputs,
             dynamic_shapes={"x": {0: DYN, 1: DYN, 2: DYN, 3: DYN}, "mask": {0: DYN, 1: DYN}},
+        )
+        self.assertNotEmpty(ep)
+
+    def test_simple_indices(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, i, j):
+                return x[i, j]
+
+        inputs = (
+            torch.rand((4, 4), dtype=torch.float32),
+            torch.randint(0, 4, (4, 4, 4, 4), dtype=torch.int64),
+            torch.randint(0, 4, (4, 4, 4, 4), dtype=torch.int64),
+        )
+        model = Model()
+        expected = model(*inputs)
+        self.assertEqual(expected.shape, (4, 4, 4, 4))
+        DYN = torch.export.Dim.DYNAMIC
+        sh = {0: DYN, 1: DYN, 2: DYN, 3: DYN}
+        ep = torch.export.export(
+            model,
+            inputs,
+            dynamic_shapes=({0: DYN, 1: DYN}, sh, sh),
         )
         self.assertNotEmpty(ep)
 
