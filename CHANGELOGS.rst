@@ -4,6 +4,8 @@ Change Logs
 0.7.11
 ++++++
 
+* :pr:`220`: adds a patch for PR `#40791 <https://github.com/huggingface/transformers/pull/40791>`_ in transformers
+
 0.7.10
 ++++++
 

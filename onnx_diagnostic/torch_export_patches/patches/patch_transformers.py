@@ -35,6 +35,9 @@ except ImportError:
 from ...ext_test_case import has_transformers
 from ...helpers.torch_helper import is_torchdynamo_exporting
 
+patch_is_initialized = pv.Version(transformers.__version__) > pv.Version("4.56.99")
+
+
 if patch_masking_utils:
     # Introduced in 4.52
     from transformers.masking_utils import (
@@ -213,6 +216,8 @@ if patch_DynamicLayer:
             new_shape[-2] = 0
             self.keys = torch.empty(new_shape, dtype=self.dtype, device=self.device)
             self.values = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+            if patch_is_initialized:
+                self.is_initialized = True
 
 
 def _patch_make_causal_mask(
