@@ -426,14 +426,6 @@ def torch_export_patches(
                 patch_transformers_list, verbose=verbose
             )
 
-            if patch_transformers_list.patch_is_initialized:
-                if verbose:
-                    print(
-                        "[torch_export_patches] patches "
-                        "transformers.cache_utils.CacheLayerMixin.is_initialized"
-                    )
-                patch_transformers_list.apply_patch_for_is_initialized()
-
             if (
                 masking_utils
                 and patch_transformers_list.patch_masking_utils
@@ -696,14 +688,6 @@ def torch_export_patches(
                                 "transformers.masking_utils.sdpa_mask "
                                 "in ALL_MASK_ATTENTION_FUNCTIONS"
                             )
-
-                if patch_transformers_list.patch_is_initialized:
-                    if verbose:
-                        print(
-                            "[torch_export_patches] restores "
-                            "transformers.cache_utils.CacheLayerMixin.is_initialized"
-                        )
-                    patch_transformers_list.disable_patch_for_is_initialized()
 
             ########
             # caches
