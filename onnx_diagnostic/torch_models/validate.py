@@ -1518,6 +1518,8 @@ def call_torch_export_custom(
         "default+onnxruntime+os_ort",
         None,
     }
+    if optimization == "none":
+        optimization = ""
     assert (
         optimization in available
     ), f"unexpected value for optimization={optimization}, available={available}"

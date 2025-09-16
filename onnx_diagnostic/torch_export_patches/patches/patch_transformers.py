@@ -35,6 +35,38 @@ except ImportError:
 from ...ext_test_case import has_transformers
 from ...helpers.torch_helper import is_torchdynamo_exporting
 
+patch_is_initialized = pv.Version(transformers.__version__) > pv.Version("4.56.99")
+
+
+def _get_is_initialized(self):
+    return self.keys is not None
+
+
+def _set_is_initialized(self, value):
+    assert (value and self.keys is not None) or (not value and self.keys is None), (
+        f"The patch does not set is_initialized but checks the it is consistent with "
+        f"``self.keys is not None``, value={value}, "
+        f"self.keys is not None={self.keys is not None}"
+    )
+
+
+def apply_patch_for_is_initialized():
+    """
+    Fixes export issues introduced by PR `40791 <https://github.com/huggingface/transformers/pull/40791>`_.
+    The attribute is_initialized does not seem to be captured by :func:`torch.export.export`.
+    """
+    if patch_is_initialized:
+        transformers.cache_utils.CacheLayerMixin.is_initialized = property(
+            _get_is_initialized, _set_is_initialized
+        )
+
+
+def disable_patch_for_is_initialized():
+    """Disables the patch applied by function :func:`applies_patch_for_is_initialized`."""
+    if patch_is_initialized:
+        delattr(transformers.cache_utils.CacheLayerMixin, "is_initialized")
+
+
 if patch_masking_utils:
     # Introduced in 4.52
     from transformers.masking_utils import (
