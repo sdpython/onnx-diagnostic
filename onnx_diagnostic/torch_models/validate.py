@@ -7,8 +7,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import time
 import numpy as np
 import onnx
-import onnxscript
-import onnxscript.rewriter.ort_fusions as ort_fusions
 import torch
 from ..export import CoupleInputsDynamicShapes
 from ..helpers import max_diff, string_type, string_diff
@@ -249,6 +247,7 @@ def _quiet_or_not_quiet(
         summary[f"time_{suffix}_latency_std"] = a.std()
         summary[f"time_{suffix}_latency_min"] = a.min()
         summary[f"time_{suffix}_latency_min"] = a.max()
+        summary[f"time_{suffix}_n"] = len(a)
     return res
 
 
@@ -337,7 +336,8 @@ def validate_model(
     :param subfolder: version or subfolders to uses when retrieving a model id
     :param opset: onnx opset to use for the conversion
     :param runtime: onnx runtime to use to check about discrepancies,
-        only if `do_run` is true
+        possible values ``onnxruntime``, ``torch``, ``orteval``,
+        ``orteval10``, ``ref`` only if `do_run` is true
     :param repeat: number of time to measure the model
     :param warmup: warmup the model first
     :param inputs2: checks that the second set of inputs is reunning as well,
@@ -364,7 +364,13 @@ def validate_model(
 
     The default runtime, :epkg:`onnxruntime` is used to validate a model and check the
     exported model returns the same outputs as the original one, otherwise,
-    :class:`onnx_diagnostic.reference.TorchOnnxEvaluator` is used.
+    :class:`onnx_diagnostic.reference.TorchOnnxEvaluator`
+    if ``runtime == 'torch'`` or
+    :class:`onnx_diagnostic.reference.OnnxruntimeEvaluator`
+    if ``runtime == 'orteval'`` or
+    :class:`onnx_diagnostic.reference.ExtendedReferenceEvaluator`
+    if ``runtime == 'ref'``,
+    ``orteval10`` increases the verbosity.
     """
     if isinstance(patch, bool):
         patch_kwargs = (
@@ -1155,7 +1161,7 @@ def validate_onnx_model(
     :param quiet: catch exception or not
     :param verbose: verbosity
     :param flavour: use a different version of the inputs
-    :param runtime: onnx runtime to use, onnxruntime or torch
+    :param runtime: onnx runtime to use, onnxruntime, torch, orteval, ref
     :param repeat: run that number of times the model
     :param warmup: warmup the model
     :param inputs2: to validate the model on the second input set
@@ -1202,23 +1208,66 @@ def validate_onnx_model(
             f"{providers}..., flavour={flavour!r}"
         )
 
-    if runtime != "onnxruntime":
+    if runtime == "onnxruntime":
+        if os.environ.get("DUMPORTOPT", "") in ("1", "true", "True"):
+            opts = onnxruntime.SessionOptions()
+            opts.optimized_model_filepath = f"{data['onnx_filename']}.rtopt.onnx"
+            if verbose:
+                print(
+                    f"[validate_onnx_model] saved optimized onnxruntime "
+                    f"in {opts.optimized_model_filepath!r}"
+                )
+            onnxruntime.InferenceSession(data["onnx_filename"], opts, providers=providers)
+            if verbose:
+                print("[validate_onnx_model] -- done")
+
+        if verbose:
+            print("[validate_onnx_model] runtime is onnxruntime")
+        cls_runtime = lambda model, providers: onnxruntime.InferenceSession(
+            (model.SerializeToString() if isinstance(model, onnx.ModelProto) else model),
+            providers=providers,
+        )
+    elif runtime == "torch":
         from ..reference import TorchOnnxEvaluator
 
-    cls_runtime = (
-        (
-            lambda model, providers: onnxruntime.InferenceSession(
-                (model.SerializeToString() if isinstance(model, onnx.ModelProto) else model),
-                providers=providers,
-            )
-        )
-        if runtime == "onnxruntime"
-        else (
+        if verbose:
+            print("[validate_onnx_model] runtime is TorchOnnxEvaluator")
+        cls_runtime = (
             lambda model, providers, _cls_=TorchOnnxEvaluator: _cls_(  # type: ignore[misc]
                 model, providers=providers, verbose=max(verbose - 1, 0)
             )
         )
-    )
+    elif runtime == "orteval":
+        from ..reference import OnnxruntimeEvaluator
+
+        if verbose:
+            print("[validate_onnx_model] runtime is OnnxruntimeEvaluator")
+        cls_runtime = (
+            lambda model, providers, _cls_=OnnxruntimeEvaluator: _cls_(  # type: ignore[misc]
+                model, providers=providers, verbose=max(verbose - 1, 0)
+            )
+        )
+    elif runtime == "orteval10":
+        from ..reference import OnnxruntimeEvaluator
+
+        if verbose:
+            print("[validate_onnx_model] runtime is OnnxruntimeEvaluator(verbose=10)")
+        cls_runtime = (
+            lambda model, providers, _cls_=OnnxruntimeEvaluator: _cls_(  # type: ignore[misc]
+                model, providers=providers, verbose=10
+            )
+        )
+    elif runtime == "ref":
+        from ..reference import ExtendedReferenceEvaluator
+
+        if verbose:
+            print("[validate_onnx_model] runtime is ExtendedReferenceEvaluator")
+        cls_runtime = lambda model, providers, _cls_=ExtendedReferenceEvaluator: _cls_(  # type: ignore[misc]
+            model, verbose=max(verbose - 1, 0)
+        )
+    else:
+        raise ValueError(f"Unexpecteed runtime={runtime!r}")
+
     sess = _quiet_or_not_quiet(
         quiet,
         _mk("create_onnx_ort"),
@@ -1399,6 +1448,8 @@ def call_torch_export_onnx(
         if optimization == "ir":
             label, f_optim = "export_onnx_opt_ir", (lambda epo=epo: epo.optimize())
         else:
+            import onnxscript
+            import onnxscript.rewriter.ort_fusions as ort_fusions
 
             def _os_ort_optim(epo):
                 onnxscript.optimizer.optimize_ir(epo.model)
@@ -1683,6 +1734,9 @@ def call_torch_export_custom(
         print("[call_torch_export_custom] done (export)")
 
     if os_ort:
+        import onnxscript
+        import onnxscript.rewriter.ort_fusions as ort_fusions
+
         if verbose:
             print("[call_torch_export_custom] conversion to IR...")
         begin = time.perf_counter()
