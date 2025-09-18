@@ -29,6 +29,10 @@ module = ["onnx_diagnostic.helpers.args_helper"]
 disable_error_code = ["arg-type", "call-overload", "index"]
 
 [[tool.mypy.overrides]]
+module = ["onnx_diagnostic.helpers.cache_helper"]
+disable_error_code = ["name-defined"]
+
+[[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.helper"]
 disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr"]
 
@@ -123,6 +127,7 @@ select = [
 "_doc/examples/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_doc/notebooks/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_doc/recipes/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
+"_scripts/compare_model_execution.py" = ["E402", "F401"]
 "_doc/technical/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_unittests/*/test*.py" = ["B008", "B904", "PIE808", "SIM117", "SIM105", "UP008"]
 "onnx_diagnostic/export/__init__.py" = ["F401"]
@@ -131,6 +136,7 @@ select = [
 "onnx_diagnostic/reference/torch_ops/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_models/hghub/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_models/hghub/hub_data_cached_configs.py" = ["PIE804"]
+"onnx_diagnostic/torch_models/validate.py" = ["E731"]
 "onnx_diagnostic/torch_export_patches/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_export_patches/patches/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_models/llms.py" = ["F401"]

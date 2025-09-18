@@ -4,11 +4,6 @@ import torch
 import transformers
 import transformers.cache_utils
 
-try:
-    from transformers.models.mamba.modeling_mamba import MambaCache
-except ImportError:
-    from transformers.cache_utils import MambaCache
-
 
 class CacheKeyValue:
     """
@@ -354,8 +349,15 @@ def make_encoder_decoder_cache(
     )
 
 
-def make_mamba_cache(key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]]) -> MambaCache:
+def make_mamba_cache(
+    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+) -> "MambaCache":  # noqa: F821
     "Creates a ``MambaCache``."
+    # import is moved here because this part is slow.
+    try:
+        from transformers.models.mamba.modeling_mamba import MambaCache
+    except ImportError:
+        from transformers.cache_utils import MambaCache
     dtype = key_value_pairs[0][0].dtype
 
     class _config:

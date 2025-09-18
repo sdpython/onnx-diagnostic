@@ -228,6 +228,8 @@ def get_untrained_model_with_inputs(
                     f"and use_pretrained=True."
                 )
 
+            seed = int(os.environ.get("SEED", "17"))
+            torch.manual_seed(seed)
             try:
                 if type(config) is dict:
                     model = cls_model(**config)
@@ -239,6 +241,8 @@ def get_untrained_model_with_inputs(
                 ) from e
 
     # input kwargs
+    seed = int(os.environ.get("SEED", "17")) + 1
+    torch.manual_seed(seed)
     kwargs, fct = random_input_kwargs(config, task)  # type: ignore[arg-type]
     if verbose:
         print(f"[get_untrained_model_with_inputs] use fct={fct}")
