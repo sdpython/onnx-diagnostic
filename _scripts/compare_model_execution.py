@@ -23,7 +23,7 @@ import huggingface_hub
 print("-- import onnx-diagnostic.helper")
 from onnx_diagnostic.helpers.helper import flatten_object, string_type, max_diff, string_diff
 
-print("-- import onnx-diagnostic.torch_models")
+print("-- import onnx-diagnostic.torch_models.hghub")
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 
 print("-- done")
