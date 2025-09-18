@@ -65,14 +65,14 @@ print(f"-- feeds: {string_type(feeds, with_shape=True)}")
 print(f"-- creating session 1 from {onnx1!r}")
 opts = onnxruntime.SessionOptions()
 opts.optimized_model_filepath = "debug1_full.onnx"
+opts.log_severity_level = 0
+opts.log_verbosity_level = 0
 sess1 = onnxruntime.InferenceSession(onnx1, opts, providers=providers)
 print(f"-- creating session 2 from {onnx2!r}")
 opts.optimized_model_filepath = "debug2_full.onnx"
+opts.log_severity_level = 0
+opts.log_verbosity_level = 0
 sess2 = onnxruntime.InferenceSession(onnx2, opts, providers=providers)
-
-for n in ["debug1_full.onnx", "debug2_full.onnx"]:
-    x = onnx.load(n, load_external_data=False)
-    onnx.save(x, n.replace(".onnx", "-ext.onnx"), save_as_external_data=True)
 
 print("-- run session1")
 expected1 = sess1.run(None, feeds)

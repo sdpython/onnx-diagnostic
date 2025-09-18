@@ -852,15 +852,24 @@ def compute_statistics(onnx_filename: str) -> Dict[str, Union[float, int]]:
             raise NotImplementedError(f"Unexpected type={type(proto)}")
 
     counts: Dict[str, Union[float, int]] = {}
+    n_nodes = 0
+    n_nodes_nocst = 0
     for proto in node_iter(onx):
         if isinstance(proto, onnx.NodeProto):
             key = f"n_node_{proto.op_type}"
+            n_nodes += 1
+            if proto.op_type != "Constant":
+                n_nodes_nocst += 1
         else:
             key = f"n_node_initializer_{proto.data_type}"
 
         if key not in counts:
             counts[key] = 0
         counts[key] += 1
+
+    counts["n_node_nodes"] = n_nodes
+    counts["n_node_nodes_nocst"] = n_nodes_nocst
+    counts["n_node_functions"] = len(onx.functions)
     return counts
 
 
