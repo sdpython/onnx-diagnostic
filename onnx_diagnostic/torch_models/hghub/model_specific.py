@@ -1,6 +1,33 @@
 from typing import Any, Dict, Tuple
 
 
+def instantiate_specific_model(cls_model: type, config: Any) -> object:
+    """
+    Instantiates some model requiring some specific code.
+    """
+    if cls_model.__name__ == "CosmosTransformer3DModel":
+        return instantiate_CosmosTransformer3DModel(cls_model, config)
+    return None
+
+
+def instantiate_CosmosTransformer3DModel(cls_model: type, config: Any) -> object:
+    kwargs = dict(
+        in_channels=config.in_channels,
+        out_channels=config.out_channels,
+        attention_head_dim=config.attention_head_dim,
+        mlp_ratio=config.mlp_ratio,
+        num_layers=config.num_layers,
+        text_embed_dim=config.text_embed_dim,
+        adaln_lora_dim=config.adaln_lora_dim,
+        max_size=config.max_size,
+        patch_size=config.patch_size,
+        rope_scale=config.rope_scale,
+        concat_padding_mask=config.concat_padding_mask,
+        extra_pos_embed_type=config.extra_pos_embed_type,
+    )
+    return cls_model(**kwargs)
+
+
 class SpecificConfig:
     """Creates a specific configuration for the loaded model."""
 

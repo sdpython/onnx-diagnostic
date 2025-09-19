@@ -5,6 +5,8 @@ from . import (
     fill_mask,
     image_classification,
     image_text_to_text,
+    image_to_video,
+    mask_generation,
     mixture_of_expert,
     object_detection,
     sentence_similarity,
@@ -14,7 +16,6 @@ from . import (
     text_to_image,
     text2text_generation,
     zero_shot_image_classification,
-    mask_generation,
 )
 
 __TASKS__ = [
@@ -23,6 +24,8 @@ __TASKS__ = [
     fill_mask,
     image_classification,
     image_text_to_text,
+    image_to_video,
+    mask_generation,
     mixture_of_expert,
     object_detection,
     sentence_similarity,
@@ -32,7 +35,6 @@ __TASKS__ = [
     text_to_image,
     text2text_generation,
     zero_shot_image_classification,
-    mask_generation,
 ]
 
 

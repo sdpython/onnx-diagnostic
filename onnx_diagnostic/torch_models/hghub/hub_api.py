@@ -177,6 +177,51 @@ def task_from_arch(
     return data[arch]
 
 
+def _trygetattr(config, attname):
+    try:
+        return getattr(config, attname)
+    except AttributeError:
+        return None
+
+
+def architecture_from_config(config) -> Optional[str]:
+    """Guesses the architecture (class) of the model described by this config."""
+    if isinstance(config, dict):
+        if "_class_name" in config:
+            return config["_class_name"]
+        if "architecture" in config:
+            return config["architecture"]
+        if config.get("architectures", []):
+            return config["architectures"][0]
+    if hasattr(config, "_class_name"):
+        return config._class_name
+    if hasattr(config, "architecture"):
+        return config.architecture
+    if hasattr(config, "architectures") and config.architectures:
+        return config.architectures[0]
+    if hasattr(config, "__dict__"):
+        if "_class_name" in config.__dict__:
+            return config.__dict__["_class_name"]
+        if "architecture" in config.__dict__:
+            return config.__dict__["architecture"]
+        if config.__dict__.get("architectures", []):
+            return config.__dict__["architectures"][0]
+    return None
+
+
+def find_package_source(config) -> Optional[str]:
+    """Guesses the package the class models from."""
+    if isinstance(config, dict):
+        if "_diffusers_version" in config:
+            return "diffusers"
+    if hasattr(config, "_diffusers_version"):
+        return "diffusers"
+    if hasattr(config, "__dict__"):
+        if "_diffusers_version" in config.__dict__:
+            return "diffusers"
+    return "transformers"
+
+
 def task_from_id(
     model_id: str,
     default_value: Optional[str] = None,
@@ -202,28 +247,30 @@ def task_from_id(
             if not fall_back_to_pretrained:
                 raise
     config = get_pretrained_config(model_id, subfolder=subfolder)
-    try:
-        return config.pipeline_tag
-    except AttributeError:
-        guess = _guess_task_from_config(config)
-        if guess is not None:
-            return guess
-        data = load_architecture_task()
-        if model_id in data:
-            return data[model_id]
-        if type(config) is dict and "_class_name" in config:
-            return task_from_arch(config["_class_name"], default_value=default_value)
-        if not config.architectures or not config.architectures:
-            # Some hardcoded values until a better solution is found.
-            if model_id.startswith("google/bert_"):
-                return "fill-mask"
-        assert config.architectures is not None and len(config.architectures) == 1, (
-            f"Cannot return the task of {model_id!r}, pipeline_tag is not setup, "
-            f"architectures={config.architectures} in config={config}. "
-            f"The task can be added in "
-            f"``onnx_diagnostic.torch_models.hghub.hub_data.__data_arch__``."
-        )
-        return task_from_arch(config.architectures[0], default_value=default_value)
+    tag = _trygetattr(config, "pipeline_tag")
+    if tag is not None:
+        return tag
+
+    guess = _guess_task_from_config(config)
+    if guess is not None:
+        return guess
+    data = load_architecture_task()
+    if subfolder:
+        full_id = f"{model_id}//{subfolder}"
+        if full_id in data:
+            return data[full_id]
+    if model_id in data:
+        return data[model_id]
+    arch = architecture_from_config(config)
+    if arch is None:
+        if model_id.startswith("google/bert_"):
+            return "fill-mask"
+    assert arch is not None, (
+        f"Cannot return the task of {model_id!r}, pipeline_tag is not setup, "
+        f"config={config}. The task can be added in "
+        f"``onnx_diagnostic.torch_models.hghub.hub_data.__data_arch__``."
+    )
+    return task_from_arch(arch, default_value=default_value)
 
 
 def task_from_tags(tags: Union[str, List[str]]) -> str:

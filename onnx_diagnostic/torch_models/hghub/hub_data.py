@@ -156,7 +156,8 @@ __data_arch__ = textwrap.dedent(
     YolosForObjectDetection,object-detection
     YolosModel,image-feature-extraction
     Alibaba-NLP/gte-large-en-v1.5,sentence-similarity
-    emilyalsentzer/Bio_ClinicalBERT,fill-mask"""
+    emilyalsentzer/Bio_ClinicalBERT,fill-mask
+    nvidia/Cosmos-Predict2-2B-Video2World//transformer,image-to-video"""
 )
 
 __data_tasks__ = [
