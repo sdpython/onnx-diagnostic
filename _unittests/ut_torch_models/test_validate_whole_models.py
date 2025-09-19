@@ -195,7 +195,7 @@ class TestValidateWholeModels(ExtTestCase):
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.51")
     def test_l_validate_model_modelbuilder(self):
-        mid = "arnir0/Tiny-LLM"
+        mid = "meta-llama/Llama-2-7b-hf"
         summary, data = validate_model(
             mid,
             do_run=True,
