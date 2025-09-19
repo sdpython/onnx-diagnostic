@@ -264,6 +264,16 @@ def shrink_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return new_cfg
 
 
+def _preprocess_model_id(model_id, subfolder):
+    if subfolder or "//" not in model_id:
+        return model_id, subfolder
+    spl = model_id.split("//")
+    if spl[-1] in {"transformer", "vae"}:
+        # known subfolder
+        return "//".join(spl[:-1]), spl[-1]
+    return model_id, subfolder
+
+
 def validate_model(
     model_id: str,
     task: Optional[str] = None,
@@ -374,6 +384,7 @@ def validate_model(
     if ``runtime == 'ref'``,
     ``orteval10`` increases the verbosity.
     """
+    model_id, subfolder = _preprocess_model_id(model_id, subfolder)
     if isinstance(patch, bool):
         patch_kwargs = (
             dict(patch_transformers=True, patch_diffusers=True, patch=True)
