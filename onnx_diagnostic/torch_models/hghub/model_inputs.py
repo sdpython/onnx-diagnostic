@@ -282,7 +282,7 @@ def get_untrained_model_with_inputs(
 
     # This line is important. Some models may produce different
     # outputs even with the same inputs in training mode.
-    model.eval()  # type: ignore[uion-attr]
+    model.eval()  # type: ignore[union-attr]
     res = fct(model, config, add_second_input=add_second_input, **kwargs)
 
     res["input_kwargs"] = kwargs
