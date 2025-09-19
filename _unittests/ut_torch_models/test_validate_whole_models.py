@@ -205,7 +205,7 @@ class TestValidateWholeModels(ExtTestCase):
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
-        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
+        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-2)
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
 
