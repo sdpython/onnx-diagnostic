@@ -6,6 +6,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     requires_diffusers,
     requires_torch,
+    requires_transformers,
 )
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -15,8 +16,9 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 class TestTasksImageToVideo(ExtTestCase):
     @hide_stdout()
     @requires_diffusers("0.35")
+    @requires_transformers("4.55")
     @requires_torch("2.8.99")
-    def test_cosmos_predict(self):
+    def test_image_to_video(self):
         kwargs = {
             "_diffusers_version": "0.34.0.dev0",
             "_class_name": "CosmosTransformer3DModel",
