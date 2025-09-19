@@ -474,7 +474,7 @@ def get_parser_validate() -> ArgumentParser:
     )
     parser.add_argument(
         "--runtime",
-        choices=["onnxruntime", "torch", "ref"],
+        choices=["onnxruntime", "torch", "ref", "orteval", "orteval10"],
         default="onnxruntime",
         help="onnx runtime to use, `onnxruntime` by default",
     )
@@ -542,6 +542,12 @@ def get_parser_validate() -> ArgumentParser:
         "the onnx exporter should use.",
         default="",
     )
+    parser.add_argument(
+        "--ort-logs",
+        default=False,
+        action=BooleanOptionalAction,
+        help="Enables onnxruntime logging when the session is created",
+    )
     return parser
 
 
@@ -601,6 +607,7 @@ def _cmd_validate(argv: List[Any]):
             repeat=args.repeat,
             warmup=args.warmup,
             inputs2=args.inputs2,
+            ort_logs=args.ort_logs,
             output_names=(
                 None if len(args.outnames.strip()) < 2 else args.outnames.strip().split(",")
             ),

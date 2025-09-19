@@ -30,6 +30,7 @@ __data_arch__ = textwrap.dedent(
     ConvBertModel,feature-extraction
     ConvNextForImageClassification,image-classification
     ConvNextV2Model,image-feature-extraction
+    CosmosTransformer3DModel,image-to-video
     CvtModel,feature-extraction
     DPTModel,image-feature-extraction
     Data2VecAudioModel,feature-extraction
@@ -156,7 +157,8 @@ __data_arch__ = textwrap.dedent(
     YolosForObjectDetection,object-detection
     YolosModel,image-feature-extraction
     Alibaba-NLP/gte-large-en-v1.5,sentence-similarity
-    emilyalsentzer/Bio_ClinicalBERT,fill-mask"""
+    emilyalsentzer/Bio_ClinicalBERT,fill-mask
+    nvidia/Cosmos-Predict2-2B-Video2World//transformer,image-to-video"""
 )
 
 __data_tasks__ = [

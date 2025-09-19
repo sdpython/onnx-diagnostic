@@ -7,8 +7,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import time
 import numpy as np
 import onnx
-import onnxscript
-import onnxscript.rewriter.ort_fusions as ort_fusions
 import torch
 from ..export import CoupleInputsDynamicShapes
 from ..helpers import max_diff, string_type, string_diff
@@ -249,6 +247,7 @@ def _quiet_or_not_quiet(
         summary[f"time_{suffix}_latency_std"] = a.std()
         summary[f"time_{suffix}_latency_min"] = a.min()
         summary[f"time_{suffix}_latency_min"] = a.max()
+        summary[f"time_{suffix}_n"] = len(a)
     return res
 
 
@@ -263,6 +262,16 @@ def shrink_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
             else (v.__class__("...") if isinstance(v, (list, tuple)) else "...")
         )
     return new_cfg
+
+
+def _preprocess_model_id(model_id, subfolder):
+    if subfolder or "//" not in model_id:
+        return model_id, subfolder
+    spl = model_id.split("//")
+    if spl[-1] in {"transformer", "vae"}:
+        # known subfolder
+        return "//".join(spl[:-1]), spl[-1]
+    return model_id, subfolder
 
 
 def validate_model(
@@ -293,6 +302,7 @@ def validate_model(
     warmup: int = 0,
     inputs2: int = 1,
     output_names: Optional[List[str]] = None,
+    ort_logs: bool = False,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -337,13 +347,15 @@ def validate_model(
     :param subfolder: version or subfolders to uses when retrieving a model id
     :param opset: onnx opset to use for the conversion
     :param runtime: onnx runtime to use to check about discrepancies,
-        only if `do_run` is true
+        possible values ``onnxruntime``, ``torch``, ``orteval``,
+        ``orteval10``, ``ref`` only if `do_run` is true
     :param repeat: number of time to measure the model
     :param warmup: warmup the model first
     :param inputs2: checks that the second set of inputs is reunning as well,
         this ensures that the model does support dynamism, the value is used
         as an increment to the first set of values (added to dimensions)
     :param output_names: output names the onnx exporter should use
+    :param ort_logs: increases onnxruntime verbosity when creating the session
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -364,8 +376,15 @@ def validate_model(
 
     The default runtime, :epkg:`onnxruntime` is used to validate a model and check the
     exported model returns the same outputs as the original one, otherwise,
-    :class:`onnx_diagnostic.reference.TorchOnnxEvaluator` is used.
+    :class:`onnx_diagnostic.reference.TorchOnnxEvaluator`
+    if ``runtime == 'torch'`` or
+    :class:`onnx_diagnostic.reference.OnnxruntimeEvaluator`
+    if ``runtime == 'orteval'`` or
+    :class:`onnx_diagnostic.reference.ExtendedReferenceEvaluator`
+    if ``runtime == 'ref'``,
+    ``orteval10`` increases the verbosity.
     """
+    model_id, subfolder = _preprocess_model_id(model_id, subfolder)
     if isinstance(patch, bool):
         patch_kwargs = (
             dict(patch_transformers=True, patch_diffusers=True, patch=True)
@@ -728,6 +747,7 @@ def validate_model(
             repeat=repeat,
             warmup=warmup,
             inputs2=inputs2,
+            ort_logs=ort_logs,
         )
         summary.update(summary_valid)
 
@@ -822,15 +842,24 @@ def compute_statistics(onnx_filename: str) -> Dict[str, Union[float, int]]:
             raise NotImplementedError(f"Unexpected type={type(proto)}")
 
     counts: Dict[str, Union[float, int]] = {}
+    n_nodes = 0
+    n_nodes_nocst = 0
     for proto in node_iter(onx):
         if isinstance(proto, onnx.NodeProto):
             key = f"n_node_{proto.op_type}"
+            n_nodes += 1
+            if proto.op_type != "Constant":
+                n_nodes_nocst += 1
         else:
             key = f"n_node_initializer_{proto.data_type}"
 
         if key not in counts:
             counts[key] = 0
         counts[key] += 1
+
+    counts["n_node_nodes"] = n_nodes
+    counts["n_node_nodes_nocst"] = n_nodes_nocst
+    counts["n_node_functions"] = len(onx.functions)
     return counts
 
 
@@ -1119,6 +1148,7 @@ def validate_onnx_model(
     repeat: int = 1,
     warmup: int = 0,
     inputs2: int = 1,
+    ort_logs: bool = False,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Verifies that an onnx model produces the same
@@ -1131,12 +1161,13 @@ def validate_onnx_model(
     :param quiet: catch exception or not
     :param verbose: verbosity
     :param flavour: use a different version of the inputs
-    :param runtime: onnx runtime to use, onnxruntime or torch
+    :param runtime: onnx runtime to use, onnxruntime, torch, orteval, ref
     :param repeat: run that number of times the model
     :param warmup: warmup the model
     :param inputs2: to validate the model on the second input set
         to make sure the exported model supports dynamism, the value is
         used as an increment added to the first set of inputs (added to dimensions)
+    :param ort_logs: triggers the logs for onnxruntime
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1178,23 +1209,71 @@ def validate_onnx_model(
             f"{providers}..., flavour={flavour!r}"
         )
 
-    if runtime != "onnxruntime":
+    if runtime == "onnxruntime":
+        if os.environ.get("DUMPORTOPT", "") in ("1", "true", "True"):
+            opts = onnxruntime.SessionOptions()
+            opts.optimized_model_filepath = f"{data['onnx_filename']}.rtopt.onnx"
+            if verbose:
+                print(
+                    f"[validate_onnx_model] saved optimized onnxruntime "
+                    f"in {opts.optimized_model_filepath!r}"
+                )
+            onnxruntime.InferenceSession(data["onnx_filename"], opts, providers=providers)
+            if verbose:
+                print("[validate_onnx_model] -- done")
+
+        if verbose:
+            print("[validate_onnx_model] runtime is onnxruntime")
+        sess_opts = onnxruntime.SessionOptions()
+        if ort_logs:
+            sess_opts.log_severity_level = 0
+            sess_opts.log_verbosity_level = 4
+        cls_runtime = lambda model, providers, _o=sess_opts: onnxruntime.InferenceSession(
+            (model.SerializeToString() if isinstance(model, onnx.ModelProto) else model),
+            _o,
+            providers=providers,
+        )
+    elif runtime == "torch":
         from ..reference import TorchOnnxEvaluator
 
-    cls_runtime = (
-        (
-            lambda model, providers: onnxruntime.InferenceSession(
-                (model.SerializeToString() if isinstance(model, onnx.ModelProto) else model),
-                providers=providers,
-            )
-        )
-        if runtime == "onnxruntime"
-        else (
+        if verbose:
+            print("[validate_onnx_model] runtime is TorchOnnxEvaluator")
+        cls_runtime = (
             lambda model, providers, _cls_=TorchOnnxEvaluator: _cls_(  # type: ignore[misc]
                 model, providers=providers, verbose=max(verbose - 1, 0)
             )
         )
-    )
+    elif runtime == "orteval":
+        from ..reference import OnnxruntimeEvaluator
+
+        if verbose:
+            print("[validate_onnx_model] runtime is OnnxruntimeEvaluator")
+        cls_runtime = (
+            lambda model, providers, _cls_=OnnxruntimeEvaluator: _cls_(  # type: ignore[misc]
+                model, providers=providers, verbose=max(verbose - 1, 0)
+            )
+        )
+    elif runtime == "orteval10":
+        from ..reference import OnnxruntimeEvaluator
+
+        if verbose:
+            print("[validate_onnx_model] runtime is OnnxruntimeEvaluator(verbose=10)")
+        cls_runtime = (
+            lambda model, providers, _cls_=OnnxruntimeEvaluator: _cls_(  # type: ignore[misc]
+                model, providers=providers, verbose=10
+            )
+        )
+    elif runtime == "ref":
+        from ..reference import ExtendedReferenceEvaluator
+
+        if verbose:
+            print("[validate_onnx_model] runtime is ExtendedReferenceEvaluator")
+        cls_runtime = lambda model, providers, _cls_=ExtendedReferenceEvaluator: _cls_(  # type: ignore[misc]
+            model, verbose=max(verbose - 1, 0)
+        )
+    else:
+        raise ValueError(f"Unexpecteed runtime={runtime!r}")
+
     sess = _quiet_or_not_quiet(
         quiet,
         _mk("create_onnx_ort"),
@@ -1375,6 +1454,8 @@ def call_torch_export_onnx(
         if optimization == "ir":
             label, f_optim = "export_onnx_opt_ir", (lambda epo=epo: epo.optimize())
         else:
+            import onnxscript
+            import onnxscript.rewriter.ort_fusions as ort_fusions
 
             def _os_ort_optim(epo):
                 onnxscript.optimizer.optimize_ir(epo.model)
@@ -1659,6 +1740,9 @@ def call_torch_export_custom(
         print("[call_torch_export_custom] done (export)")
 
     if os_ort:
+        import onnxscript
+        import onnxscript.rewriter.ort_fusions as ort_fusions
+
         if verbose:
             print("[call_torch_export_custom] conversion to IR...")
         begin = time.perf_counter()

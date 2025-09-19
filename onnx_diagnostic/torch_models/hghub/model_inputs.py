@@ -2,13 +2,21 @@ import copy
 import inspect
 import os
 import pprint
+import time
 from typing import Any, Dict, Optional, Tuple
 import torch
 import transformers
 from ...helpers.config_helper import update_config, build_diff_config
 from ...tasks import reduce_model_config, random_input_kwargs
-from .hub_api import task_from_arch, task_from_id, get_pretrained_config, download_code_modelid
-from .model_specific import HANDLED_MODELS, load_specific_model
+from .hub_api import (
+    task_from_arch,
+    task_from_id,
+    get_pretrained_config,
+    download_code_modelid,
+    architecture_from_config,
+    find_package_source,
+)
+from .model_specific import HANDLED_MODELS, load_specific_model, instantiate_specific_model
 
 
 def _code_needing_rewriting(model: Any) -> Any:
@@ -96,27 +104,18 @@ def get_untrained_model_with_inputs(
             model, task, config = load_specific_model(model_id, verbose=verbose)
 
     if model is None:
-        if hasattr(config, "architecture") and config.architecture:
-            archs = [config.architecture]
-        if type(config) is dict:
-            assert (
-                "_class_name" in config
-            ), f"Unable to get the architecture from config={config}"
-            archs = [config["_class_name"]]
-        else:
-            archs = config.architectures  # type: ignore
-        task = None
-        if archs is None:
-            task = task_from_id(model_id)
-        assert task is not None or (archs is not None and len(archs) == 1), (
+        arch = architecture_from_config(config)
+        if arch is None:
+            task = task_from_id(model_id, subfolder=subfolder)
+        assert task is not None or arch is not None, (
             f"Unable to determine the architecture for model {model_id!r}, "
-            f"architectures={archs!r}, conf={config}"
+            f"archs={arch!r}, conf={config}"
         )
         if verbose:
-            print(f"[get_untrained_model_with_inputs] architectures={archs!r}")
+            print(f"[get_untrained_model_with_inputs] architecture={arch!r}")
             print(f"[get_untrained_model_with_inputs] cls={config.__class__.__name__!r}")
         if task is None:
-            task = task_from_arch(archs[0], model_id=model_id, subfolder=subfolder)
+            task = task_from_arch(arch, model_id=model_id, subfolder=subfolder)
         if verbose:
             print(f"[get_untrained_model_with_inputs] task={task!r}")
 
@@ -170,36 +169,58 @@ def get_untrained_model_with_inputs(
                 f"{getattr(config, '_attn_implementation', '?')!r}"  # type: ignore[union-attr]
             )
 
-        if type(config) is dict and "_diffusers_version" in config:
+        if find_package_source(config) == "diffusers":
             import diffusers
 
             package_source = diffusers
         else:
             package_source = transformers
 
-        if use_pretrained:
-            model = transformers.AutoModel.from_pretrained(
-                model_id, trust_remote_code=True, **mkwargs
+        if verbose:
+            print(
+                f"[get_untrained_model_with_inputs] package_source={package_source.__name__} é"
+                f"from {package_source.__file__}"
             )
+        if use_pretrained:
+            begin = time.perf_counter()
+            if verbose:
+                print(
+                    f"[get_untrained_model_with_inputs] pretrained model_id {model_id!r}, "
+                    f"subfolder={subfolder!r}"
+                )
+            model = transformers.AutoModel.from_pretrained(
+                model_id, subfolder=subfolder, trust_remote_code=True, **mkwargs
+            )
+            if verbose:
+                print(
+                    f"[get_untrained_model_with_inputs] -- done in "
+                    f"{time.perf_counter() - begin}s"
+                )
         else:
-            if archs is not None:
+            begin = time.perf_counter()
+            if verbose:
+                print(
+                    f"[get_untrained_model_with_inputs] instantiate model_id {model_id!r}, "
+                    f"subfolder={subfolder!r}"
+                )
+            if arch is not None:
                 try:
-                    cls_model = getattr(package_source, archs[0])
+                    cls_model = getattr(package_source, arch)
                 except AttributeError as e:
                     # The code of the models is not in transformers but in the
                     # repository of the model. We need to download it.
                     pyfiles = download_code_modelid(model_id, verbose=verbose)
                     if pyfiles:
-                        if "." in archs[0]:
-                            cls_name = archs[0]
+                        if "." in arch:
+                            cls_name = arch
                         else:
                             modeling = [_ for _ in pyfiles if "/modeling_" in _]
                             assert len(modeling) == 1, (
                                 f"Unable to guess the main file implemented class "
-                                f"{archs[0]!r} from {pyfiles}, found={modeling}."
+                                f"{arch!r} from {pyfiles}, found={modeling}."
                             )
                             last_name = os.path.splitext(os.path.split(modeling[0])[-1])[0]
-                            cls_name = f"{last_name}.{archs[0]}"
+                            cls_name = f"{last_name}.{arch}"
                         if verbose:
                             print(
                                 f"[get_untrained_model_with_inputs] "
@@ -217,7 +238,7 @@ def get_untrained_model_with_inputs(
                         )
                     else:
                         raise AttributeError(
-                            f"Unable to find class 'tranformers.{archs[0]}'. "
+                            f"Unable to find class 'tranformers.{arch}'. "
                             f"The code needs to be downloaded, config="
                             f"\n{pprint.pformat(config)}."
                         ) from e
@@ -225,20 +246,31 @@ def get_untrained_model_with_inputs(
                 assert same_as_pretrained and use_pretrained, (
                     f"Model {model_id!r} cannot be built, the model cannot be built. "
                     f"It must be downloaded. Use same_as_pretrained=True "
-                    f"and use_pretrained=True."
+                    f"and use_pretrained=True, arch={arch!r}, config={config}"
+                )
+            if verbose:
+                print(
+                    f"[get_untrained_model_with_inputs] -- done in "
+                    f"{time.perf_counter() - begin}s"
                 )
 
-            try:
-                if type(config) is dict:
-                    model = cls_model(**config)
-                else:
-                    model = cls_model(config)
-            except RuntimeError as e:
-                raise RuntimeError(
-                    f"Unable to instantiate class {cls_model.__name__} with\n{config}"
-                ) from e
+            seed = int(os.environ.get("SEED", "17"))
+            torch.manual_seed(seed)
+            model = instantiate_specific_model(cls_model, config)
+            if model is None:
+                try:
+                    if type(config) is dict:
+                        model = cls_model(**config)
+                    else:
+                        model = cls_model(config)
+                except RuntimeError as e:
+                    raise RuntimeError(
+                        f"Unable to instantiate class {cls_model.__name__} with\n{config}"
+                    ) from e
 
     # input kwargs
+    seed = int(os.environ.get("SEED", "17")) + 1
+    torch.manual_seed(seed)
     kwargs, fct = random_input_kwargs(config, task)  # type: ignore[arg-type]
     if verbose:
         print(f"[get_untrained_model_with_inputs] use fct={fct}")
@@ -250,7 +282,7 @@ def get_untrained_model_with_inputs(
 
     # This line is important. Some models may produce different
     # outputs even with the same inputs in training mode.
-    model.eval()
+    model.eval()  # type: ignore[union-attr]
     res = fct(model, config, add_second_input=add_second_input, **kwargs)
 
     res["input_kwargs"] = kwargs
