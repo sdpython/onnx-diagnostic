@@ -493,30 +493,6 @@ def validate_model(
                 f.write(f"model_id: {model_id}\n------\n")
                 f.write(pprint.pformat(dump_info))
 
-    if exporter == "modelbuilder":
-        # Models used with ModelBuilder do not like batch size > 1.
-        # Let's change that.
-        for k in ["inputs", "inputs2"]:
-            if k not in data:
-                continue
-            if verbose:
-                print(f"[validate_model] set batch=1 for data[{k!r}]")
-                print(f"[validate_model] batch=1 === {string_type(data[k], with_shape=True)}")
-            cpl = CoupleInputsDynamicShapes(
-                tuple(), data[k], dynamic_shapes=data["dynamic_shapes"]
-            )
-            if patch_kwargs.get("patch", False):
-                with torch_export_patches(**patch_kwargs):  # type: ignore[arg-type]
-                    data[k] = cpl.change_dynamic_dimensions(
-                        desired_values=dict(batch=1), only_desired=True
-                    )
-            else:
-                data[k] = cpl.change_dynamic_dimensions(
-                    desired_values=dict(batch=1), only_desired=True
-                )
-            if verbose:
-                print(f"[validate_model] batch=1 --> {string_type(data[k], with_shape=True)}")
-
     data["input_options"] = iop
     data["model_options"] = mop
     data["model_dump_folder"] = dump_folder
