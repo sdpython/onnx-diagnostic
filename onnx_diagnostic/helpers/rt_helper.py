@@ -41,7 +41,7 @@ def make_feeds(
     """
     # NOTE: position_ids is a special case because ModelBuilder does not usually use it,
     # because it's fued into rotary embedding in GQA.
-    if isinstance(inputs, dict):
+    if is_modelbuilder and isinstance(inputs, dict):
         inputs.pop("position_ids", None)  # Ensure 'position_ids' absent before removing.
 
     flat = flatten_object(inputs, drop_keys=True)

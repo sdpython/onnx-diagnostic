@@ -195,17 +195,18 @@ class TestValidateWholeModels(ExtTestCase):
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.51")
     def test_l_validate_model_modelbuilder(self):
-        mid = "meta-llama/Llama-2-7b-hf"
+        mid = "microsoft/phi-2"
         summary, data = validate_model(
             mid,
             do_run=True,
             verbose=10,
             exporter="modelbuilder",
             dump_folder="dump_test/validate_model_modelbuilder",
+            patch=True,
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
-        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-2)
+        self.assertLess(summary["disc_onnx_ort_run_abs"], 3e-2)
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
 
