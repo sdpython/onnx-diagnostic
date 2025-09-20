@@ -7,6 +7,7 @@ Change Logs
 0.7.11
 ++++++
 
+* :pr:`224`: support model_id with // to specify a subfolder 
 * :pr:`223`: adds task image-to-video
 * :pr:`220`: adds option --ort-logs to display onnxruntime logs when creating the session
 * :pr:`220`: adds a patch for PR `#40791 <https://github.com/huggingface/transformers/pull/40791>`_ in transformers
