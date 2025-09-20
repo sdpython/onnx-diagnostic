@@ -112,19 +112,23 @@ def reorder_modelbuilder_cache_to_torch(past_kv: List[Any]) -> List[Any]:
     Reorders the past_kvs for ModelBuilder to match the expected order
     by PyTorch exported models.
 
-    NOTE: This function can take either the names or the actual tensors
-    as long as they are in a list.
+    .. note::
+        This function can take either the names or the actual tensors
+        as long as they are in a list.
 
     Conceptually,
 
-    From:
-    [past_key_values.0.key, past_key_values.0.value,
-     past_key_values.1.key, past_key_values.1.value, ...]
-    To:
-    [past_key_values.0.key, past_key_values.1.key,
-     ..., past_key_values.0.value, past_key_values.1.value, ...]
+    From::
 
-    :param flat: list of flattened inputs
+        [past_key_values.0.key, past_key_values.0.value,
+        past_key_values.1.key, past_key_values.1.value, ...]
+
+    To::
+
+        [past_key_values.0.key, past_key_values.1.key,
+        ..., past_key_values.0.value, past_key_values.1.value, ...]
+
+    :param past_kv: list of flattened inputs
     :return: reordered list of flattened inputs
     """
     total_len = len(past_kv)
