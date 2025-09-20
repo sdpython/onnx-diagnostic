@@ -11,7 +11,7 @@ import torch
 from ..export import CoupleInputsDynamicShapes
 from ..helpers import max_diff, string_type, string_diff
 from ..helpers.helper import flatten_object
-from ..helpers.rt_helper import make_feeds
+from ..helpers.rt_helper import make_feeds, reorder_modelbuilder_cache_to_torch
 from ..helpers.torch_helper import to_any, torch_deepcopy
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 from ..tasks import random_input_kwargs
@@ -536,6 +536,11 @@ def validate_model(
             if verbose:
                 print(f"[validate_model] batch=1 --> {string_type(data[k], with_shape=True)}")
 
+    # modelbuilder needs different treatments sometimes, so
+    # we mark it for later usage.
+    # for example, it has different past_kv ordering than
+    # flattened CacheObject
+    data["exporter"] = exporter
     data["input_options"] = iop
     data["model_options"] = mop
     data["model_dump_folder"] = dump_folder
@@ -1322,7 +1327,13 @@ def validate_onnx_model(
             print(
                 f"[validate_onnx_model] inputs={string_type(data[k_input], with_shape=True)}"
             )
-        feeds = make_feeds(sess, data[k_input], use_numpy=True, check_flatten=False)
+        feeds = make_feeds(
+            sess,
+            data[k_input],
+            use_numpy=True,
+            check_flatten=False,
+            is_modelbuilder=data["exporter"] == "modelbuilder",
+        )
         if verbose:
             print(f"[validate_onnx_model] ort inputs={string_type(feeds, with_shape=True)}")
         summary[_mk(f"onnx_ort_inputs{suffix}")] = string_type(feeds, with_shape=True)
@@ -1342,6 +1353,13 @@ def validate_onnx_model(
             repeat=repeat,
             warmup=warmup,
         )
+        # NOTE: modelbuilder has different order on past_kv outputs
+        if data["exporter"] == "modelbuilder":
+            logits = got[:1]
+            past_key_values = got[1:]
+            reorder_past_key_values = reorder_modelbuilder_cache_to_torch(past_key_values)
+            got = logits + reorder_past_key_values
+
         if f"ERR_{_mk(f'time_onnx_ort_run{suffix}')}" in summary:
             return summary, data
 
