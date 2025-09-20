@@ -4,6 +4,9 @@ Change Logs
 0.7.12
 ++++++
 
+* :pr:`226`: fix input order for models created with modelbuilder
+
+
 0.7.11
 ++++++
 
