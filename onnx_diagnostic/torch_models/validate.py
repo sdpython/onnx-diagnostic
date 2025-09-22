@@ -265,8 +265,8 @@ def shrink_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _preprocess_model_id(
-    model_id: str, subfolder: str, same_as_pretrained: bool, use_pretrained: bool
-) -> Tuple[str, str, bool, bool]:
+    model_id: str, subfolder: Optional[str], same_as_pretrained: bool, use_pretrained: bool
+) -> Tuple[str, Optional[str], bool, bool]:
     if subfolder or "//" not in model_id:
         return model_id, subfolder, same_as_pretrained, use_pretrained
     spl = model_id.split("//")
