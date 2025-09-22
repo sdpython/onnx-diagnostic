@@ -189,7 +189,7 @@ def get_untrained_model_with_inputs(
                     f"subfolder={subfolder!r}"
                 )
             model = transformers.AutoModel.from_pretrained(
-                model_id, subfolder=subfolder, trust_remote_code=True, **mkwargs
+                model_id, subfolder=subfolder or "", trust_remote_code=True, **mkwargs
             )
             if verbose:
                 print(

@@ -3,7 +3,6 @@ import numpy as np
 import onnx
 import torch
 from .helper import string_type, flatten_object
-from .onnx_helper import dtype_to_tensor_dtype
 from .cache_helper import is_cache_dynamic_registered
 
 
@@ -23,6 +22,7 @@ def make_feeds(
     use_numpy: bool = False,
     copy: bool = False,
     check_flatten: bool = True,
+    is_modelbuilder: bool = False,
 ) -> Dict[str, Union[torch.Tensor, np.ndarray]]:
     """
     Serializes the inputs to produce feeds expected
@@ -35,10 +35,15 @@ def make_feeds(
         by ``OrtValue``
     :param check_flatten: if True, checks the ``torch.utils._pytree.tree_flatten``
         returns the same number of outputs
+    :param is_modelbuilder: if True, the exporter is ModelBuilder, and we need to reorder
+        the past_key_values inputs to match the expected order, and get rid of position_ids.
     :return: feeds dictionary
     """
-    # position_ids is a special case because ModelBuilder does not usually use it.
-    # We use types to detect the best inputs.
+    # NOTE: position_ids is a special case because ModelBuilder does not usually use it,
+    # because it's fued into rotary embedding in GQA.
+    if is_modelbuilder and isinstance(inputs, dict):
+        inputs.pop("position_ids", None)  # Ensure 'position_ids' absent before removing.
+
     flat = flatten_object(inputs, drop_keys=True)
     assert (
         not check_flatten
@@ -76,39 +81,6 @@ def make_feeds(
         f"\n-- inputs={string_type(inputs, with_shape=True)}"
         f"\n-- names={names}"
     )
-    if len(names) < len(flat) and (
-        isinstance(proto, onnx.ModelProto) or hasattr(proto, "get_inputs")
-    ):
-
-        typed_names = (
-            [(i.name, i.type.tensor_type.elem_type) for i in proto.graph.input]
-            if isinstance(proto, onnx.ModelProto)
-            else [(i.name, name_type_to_onnx_dtype(i.type)) for i in proto.get_inputs()]
-        )
-
-        new_flat = []
-        pos = 0
-        for _name, dtype in typed_names:
-            assert isinstance(
-                dtype, int
-            ), f"Unexpected value for dtype={dtype!r}, type(proto)={type(proto)}"
-            itype = dtype_to_tensor_dtype(flat[pos].dtype)
-            while dtype != itype:
-                pos += 1
-                if pos >= len(flat):
-                    break
-                itype = dtype_to_tensor_dtype(flat[pos].dtype)
-            if pos >= len(flat):
-                break
-            new_flat.append(flat[pos])
-            pos += 1
-        assert len(new_flat) == len(names), (
-            f"Unable to align expected input {names} with the given input, "
-            f"type(proto)={type(proto)}"
-            f"\n-- inputs: {string_type(inputs, with_shape=True)}"
-            f"\n-- typed_names: {typed_names}"
-        )
-        flat = new_flat
 
     if copy:
         flat = [t.copy() if hasattr(t, "copy") else t.clone() for t in flat]
@@ -122,4 +94,49 @@ def make_feeds(
         elif isinstance(i, float):
             i = np.array(i, dtype=np.float32)
         new_flat.append(i)
+
+    # NOTE: model builder has a different order for past_key_values
+    #       we need to reorder them to match the expected order
+    if is_modelbuilder:
+        # We assume that if "past_key_values" is in the names when it's
+        # modelbuilder
+        non_past_kv_input_names = [n for n in names if "past_key_values" not in n]
+        past_kv_names = [n for n in names if "past_key_values" in n]
+        reorder_past_kv_names = reorder_modelbuilder_cache_to_torch(past_kv_names)
+        names = non_past_kv_input_names + reorder_past_kv_names
     return dict(zip(names, new_flat))
+
+
+def reorder_modelbuilder_cache_to_torch(past_kv: List[Any]) -> List[Any]:
+    """
+    Reorders the past_kvs for ModelBuilder to match the expected order
+    by PyTorch exported models.
+
+    .. note::
+        This function can take either the names or the actual tensors
+        as long as they are in a list.
+
+    Conceptually,
+
+    From::
+
+        [past_key_values.0.key, past_key_values.0.value,
+        past_key_values.1.key, past_key_values.1.value, ...]
+
+    To::
+
+        [past_key_values.0.key, past_key_values.1.key,
+        ..., past_key_values.0.value, past_key_values.1.value, ...]
+
+    :param past_kv: list of flattened inputs
+    :return: reordered list of flattened inputs
+    """
+    total_len = len(past_kv)
+    if total_len % 2 != 0:
+        raise ValueError("The length of past_key_values should be even.")
+    keys = []
+    values = []
+    for i in range(0, total_len, 2):
+        keys.append(past_kv[i])
+        values.append(past_kv[i + 1])
+    return keys + values

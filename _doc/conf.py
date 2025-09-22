@@ -122,6 +122,7 @@ nitpick_ignore = [
     ("py:class", "CacheProcessor"),
     ("py:class", "default=sklearn.utils.metadata_routing.UNCHANGED"),
     ("py:class", "diffusers.models.unets.unet_2d_condition.UNet2DConditionOutput"),
+    ("py:class", "MambaCache"),
     ("py:class", "ModelProto"),
     ("py:class", "Model"),
     ("py:class", "Module"),
