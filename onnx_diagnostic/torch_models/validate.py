@@ -521,6 +521,11 @@ def validate_model(
                 f.write(f"model_id: {model_id}\n------\n")
                 f.write(pprint.pformat(dump_info))
 
+    # modelbuilder needs different treatments sometimes, so
+    # we mark it for later usage.
+    # for example, it has different past_kv ordering than
+    # flattened CacheObject
+    data["exporter"] = exporter
     data["input_options"] = iop
     data["model_options"] = mop
     data["model_dump_folder"] = dump_folder
