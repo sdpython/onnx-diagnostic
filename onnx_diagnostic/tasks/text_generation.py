@@ -245,6 +245,7 @@ def get_inputs(
                 .to(torch.int64)
                 .expand((batch_size, -1)),
             )
+            # Caches are involved
             if past_sequence_length > 0:
                 inputs["past_key_values"] = make_cache(
                     [
