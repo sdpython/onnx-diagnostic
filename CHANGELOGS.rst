@@ -4,8 +4,8 @@ Change Logs
 0.7.12
 ++++++
 
+* :pr:`227`: better support for ``model_id//pretrained``, adds speed up when running command validate
 * :pr:`226`: fix input order for models created with modelbuilder
-
 
 0.7.11
 ++++++
