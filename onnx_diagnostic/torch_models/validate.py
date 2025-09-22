@@ -264,14 +264,18 @@ def shrink_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return new_cfg
 
 
-def _preprocess_model_id(model_id, subfolder):
+def _preprocess_model_id(
+    model_id: str, subfolder: str, same_as_pretrained: bool, use_pretrained: bool
+) -> Tuple[str, str, bool, bool]:
     if subfolder or "//" not in model_id:
-        return model_id, subfolder
+        return model_id, subfolder, same_as_pretrained, use_pretrained
     spl = model_id.split("//")
+    if spl[-1] == "pretrained":
+        return _preprocess_model_id("//".join(spl[:-1]), "", True, True)
     if spl[-1] in {"transformer", "vae"}:
         # known subfolder
-        return "//".join(spl[:-1]), spl[-1]
-    return model_id, subfolder
+        return "//".join(spl[:-1]), spl[-1], same_as_pretrained, use_pretrained
+    return model_id, subfolder, same_as_pretrained, use_pretrained
 
 
 def validate_model(
@@ -384,7 +388,12 @@ def validate_model(
     if ``runtime == 'ref'``,
     ``orteval10`` increases the verbosity.
     """
-    model_id, subfolder = _preprocess_model_id(model_id, subfolder)
+    model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
+        model_id,
+        subfolder,
+        same_as_pretrained=same_as_pretrained,
+        use_pretrained=use_pretrained,
+    )
     if isinstance(patch, bool):
         patch_kwargs = (
             dict(patch_transformers=True, patch_diffusers=True, patch=True)
