@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Callable, List, Optional, Tuple
 import packaging.version as pv
+from sklearn import logger
 import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
@@ -986,7 +987,7 @@ def patched_dynamic_rope_update(rope_forward):
     return wrapper
 
 
-def common_eager_attention_forward(
+def _common_eager_attention_forward(
     module: torch.nn.Module,
     query: torch.Tensor,
     key: torch.Tensor,
@@ -1033,7 +1034,7 @@ def patched_model_bart_eager_attention_forward(
     **kwargs,
 ):
     """[patch:transformers.models.bart.modeling_bart.eager_attention_forward]"""
-    return common_eager_attention_forward(
+    return _common_eager_attention_forward(
         module,
         query,
         key,
@@ -1058,7 +1059,7 @@ def patched_modeling_marian_eager_attention_forward(
     **kwargs,
 ):
     """[patch:transformers.models.marian.modeling_marian.eager_attention_forward]"""
-    return common_eager_attention_forward(
+    return _common_eager_attention_forward(
         module,
         query,
         key,
@@ -1629,3 +1630,103 @@ if patch_qwen3:
                 batch_size, sequence_length, hidden_dim
             )
             return final_hidden_states, router_logits
+
+
+##### Attention #####
+
+try:
+    import transformers.modeling_utils
+
+    patch_modeling_utils = True
+
+    from transformers.integrations.sdpa_attention import use_gqa_in_sdpa, repeat_kv
+
+except ImportError:
+    patch_modeling_utils = False
+
+if patch_modeling_utils:
+
+    def patched_sdpa_attention_forward(
+        module: torch.nn.Module,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
+        dropout: float = 0.0,
+        scaling: Optional[float] = None,
+        is_causal: Optional[bool] = None,
+        **kwargs,
+    ) -> tuple[torch.Tensor, None]:
+        """manual patch for function ```transformers.integrations.sdpa_attention.sdpa_attention_forward```."""
+        if kwargs.get("output_attentions", False) or kwargs.get("head_mask") is not None:
+            logger.warning_once(
+                "`sdpa` attention does not support `output_attentions=True` or `head_mask`."
+                " Please set your attention to `eager` if you want any of these features."
+            )
+        sdpa_kwargs = {}
+        if hasattr(module, "num_key_value_groups"):
+            if not use_gqa_in_sdpa(attention_mask, key):
+                key = repeat_kv(key, module.num_key_value_groups)
+                value = repeat_kv(value, module.num_key_value_groups)
+            else:
+                sdpa_kwargs = {"enable_gqa": True}
+
+        if attention_mask is not None and attention_mask.ndim == 4:
+            attention_mask = attention_mask[:, :, :, : key.shape[-2]]
+
+        # We dispatch to SDPA's Flash Attention or Efficient kernels via this `is_causal` if statement instead of an inline conditional assignment
+        # in SDPA to support both torch.compile's dynamic shapes and full graph options. An inline conditional prevents dynamic shapes from compiling.
+        # Note that it is important to check first for the shape, otherwise compile will fail with `argument 'is_causal' must be bool, not SymBool`
+        if is_causal is None:
+            # The last condition is for encoder (decoder) models which specify this by passing their own `is_causal` flag
+            # This is mainly due to those models having mixed implementations for encoder, decoder, and encoder-decoder attns
+            def is_causal_is_true(
+                query, key, value, attention_mask, dropout, scaling, **sdpa_kwargs
+            ):
+                return torch.nn.functional.scaled_dot_product_attention(
+                    query,
+                    key,
+                    value,
+                    attn_mask=attention_mask,
+                    dropout_p=dropout,
+                    scale=scaling,
+                    is_causal=True,
+                    **sdpa_kwargs,
+                )
+
+            def is_causal_is_false(
+                query, key, value, attention_mask, dropout, scaling, **sdpa_kwargs
+            ):
+                return torch.nn.functional.scaled_dot_product_attention(
+                    query,
+                    key,
+                    value,
+                    attn_mask=attention_mask,
+                    dropout_p=dropout,
+                    scale=scaling,
+                    is_causal=False,
+                    **sdpa_kwargs,
+                )
+
+            attn_output = torch.cond(
+                query.shape[2] > 1
+                and attention_mask is None
+                and getattr(module, "is_causal", True),
+                is_causal_is_true,
+                is_causal_is_false,
+                [query, key, value, attention_mask, dropout, scaling],
+            )
+        else:
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                dropout_p=dropout,
+                scale=scaling,
+                is_causal=is_causal,
+                **sdpa_kwargs,
+            )
+        attn_output = attn_output.transpose(1, 2).contiguous()
+
+        return attn_output, None

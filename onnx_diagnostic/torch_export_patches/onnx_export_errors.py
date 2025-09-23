@@ -415,6 +415,11 @@ def torch_export_patches(
             except ImportError:
                 masking_utils = None
 
+            try:
+                import transformers.modeling_utils as modeling_utils
+            except ImportError:
+                modeling_utils = None
+
             if verbose:
                 import transformers
 
@@ -508,6 +513,23 @@ def torch_export_patches(
                     masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] = (
                         patch_transformers_list.patched_sdpa_mask_recent_torch
                     )
+
+            if (
+                modeling_utils
+                and patch_transformers_list.patch_modeling_utils
+                and "sdpa" in modeling_utils.ALL_ATTENTION_FUNCTIONS
+            ):
+                if verbose:
+                    print(
+                        "[torch_export_patches] patches "
+                        "transformers.modeling_utils.sdpa_attention_forward"
+                    )
+                f_transformers_sdpa_attention_forward = modeling_utils.ALL_ATTENTION_FUNCTIONS[
+                    "sdpa"
+                ]
+                modeling_utils.ALL_ATTENTION_FUNCTIONS["sdpa"] = (
+                    patch_transformers_list.patched_sdpa_attention_forward
+                )
 
         if custom_patches:
             if verbose:
@@ -688,6 +710,19 @@ def torch_export_patches(
                                 "transformers.masking_utils.sdpa_mask "
                                 "in ALL_MASK_ATTENTION_FUNCTIONS"
                             )
+                if (
+                    modeling_utils
+                    and patch_transformers_list.patch_modeling_utils
+                    and "sdpa" in modeling_utils.ALL_ATTENTION_FUNCTIONS
+                ):
+                    modeling_utils.ALL_ATTENTION_FUNCTIONS["sdpa"] = (
+                        f_transformers_sdpa_attention_forward
+                    )
+                    if verbose:
+                        print(
+                            "[torch_export_patches] restored "
+                            "transformers.modeling_utils.sdpa_attention_forward"
+                        )
 
             ########
             # caches
