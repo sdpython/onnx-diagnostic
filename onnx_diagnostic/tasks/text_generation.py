@@ -247,7 +247,7 @@ def get_inputs(
                 )
                 .to(torch.int64)
                 .expand((batch_size, -1)),
-                past_key_values=make_cache(
+                past_key_values=make_cache(  # type: ignore[operator]
                     [
                         (
                             torch.randn(
