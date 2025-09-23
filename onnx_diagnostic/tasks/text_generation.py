@@ -230,8 +230,11 @@ def get_inputs(
                     0: batch,
                     1: seq_length,
                 },
+                "past_key_values": [
+                    [{0: batch, 2: past_seq_length} for _ in range(num_hidden_layers)],
+                    [{0: batch, 2: past_seq_length} for _ in range(num_hidden_layers)],
+                ],
             }
-
             inputs = dict(
                 input_ids=torch.randint(
                     0, dummy_max_token_id, (batch_size, sequence_length)
@@ -244,10 +247,7 @@ def get_inputs(
                 )
                 .to(torch.int64)
                 .expand((batch_size, -1)),
-            )
-            # Caches are involved
-            if past_sequence_length > 0:
-                inputs["past_key_values"] = make_cache(
+                past_key_values=make_cache(
                     [
                         (
                             torch.randn(
@@ -259,11 +259,10 @@ def get_inputs(
                         )
                         for i in range(num_hidden_layers)
                     ]
-                )
-                shapes["past_key_values"] = [
-                    [{0: batch, 2: past_seq_length} for _ in range(num_hidden_layers)],
-                    [{0: batch, 2: past_seq_length} for _ in range(num_hidden_layers)],
-                ]
+                ),
+            )
+        # NOTE: past_sequence_length can be 0 when testing prompt processing,
+        # which it becomes an empty tensor
         res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
         # prompt processing (prefill) testing

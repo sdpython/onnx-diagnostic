@@ -1657,7 +1657,7 @@ if patch_modeling_utils:
         is_causal: Optional[bool] = None,
         **kwargs,
     ) -> tuple[torch.Tensor, None]:
-        """manual patch for function ```transformers.integrations.sdpa_attention.sdpa_attention_forward```."""
+        """manual patch for function ```transformers.integrations.sdpa_attention.sdpa_attention_forward```."""  # noqa: E501
         if kwargs.get("output_attentions", False) or kwargs.get("head_mask") is not None:
             logger.warning_once(
                 "`sdpa` attention does not support `output_attentions=True` or `head_mask`."
@@ -1674,18 +1674,18 @@ if patch_modeling_utils:
         if attention_mask is not None and attention_mask.ndim == 4:
             attention_mask = attention_mask[:, :, :, : key.shape[-2]]
 
-        # We dispatch to SDPA's Flash Attention or Efficient kernels via this `is_causal` if statement instead of an inline conditional assignment
-        # in SDPA to support both torch.compile's dynamic shapes and full graph options. An inline conditional prevents dynamic shapes from compiling.
-        # Note that it is important to check first for the shape, otherwise compile will fail with `argument 'is_causal' must be bool, not SymBool`
+        # We dispatch to SDPA's Flash Attention or Efficient kernels via this `is_causal` if statement instead of an inline conditional assignment  # noqa: E501
+        # in SDPA to support both torch.compile's dynamic shapes and full graph options. An inline conditional prevents dynamic shapes from compiling.  # noqa: E501
+        # Note that it is important to check first for the shape, otherwise compile will fail with `argument 'is_causal' must be bool, not SymBool`  # noqa: E501
         if is_causal is None:
-            # The last condition is for encoder (decoder) models which specify this by passing their own `is_causal` flag
-            # This is mainly due to those models having mixed implementations for encoder, decoder, and encoder-decoder attns
-            # is_causal = query.shape[2] > 1 and attention_mask is None and getattr(module, "is_causal", True)
+            # The last condition is for encoder (decoder) models which specify this by passing their own `is_causal` flag  # noqa: E501
+            # This is mainly due to those models having mixed implementations for encoder, decoder, and encoder-decoder attns  # noqa: E501
+            # is_causal = query.shape[2] > 1 and attention_mask is None and getattr(module, "is_causal", True)  # noqa: E501
             # NOTE: query.shape[2] == 1 or > 1 should have the same output for causal attention
             # so we simplify the condition to:
             is_causal = attention_mask is None and getattr(module, "is_causal", True)
 
-        # Shapes (e.g. query.shape[2]) are tensors during jit tracing, resulting in `is_causal` being a tensor.
+        # Shapes (e.g. query.shape[2]) are tensors during jit tracing, resulting in `is_causal` being a tensor.  # noqa: E501
         # We convert it to a bool for the SDPA kernel that only accepts bools.
         if torch.jit.is_tracing() and isinstance(is_causal, torch.Tensor):
             is_causal = is_causal.item()
