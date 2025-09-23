@@ -1680,53 +1680,26 @@ if patch_modeling_utils:
         if is_causal is None:
             # The last condition is for encoder (decoder) models which specify this by passing their own `is_causal` flag
             # This is mainly due to those models having mixed implementations for encoder, decoder, and encoder-decoder attns
-            def is_causal_is_true(
-                query, key, value, attention_mask, dropout, scaling, **sdpa_kwargs
-            ):
-                return torch.nn.functional.scaled_dot_product_attention(
-                    query,
-                    key,
-                    value,
-                    attn_mask=attention_mask,
-                    dropout_p=dropout,
-                    scale=scaling,
-                    is_causal=True,
-                    **sdpa_kwargs,
-                )
+            # is_causal = query.shape[2] > 1 and attention_mask is None and getattr(module, "is_causal", True)
+            # NOTE: query.shape[2] == 1 or > 1 should have the same output for causal attention
+            # so we simplify the condition to:
+            is_causal = attention_mask is None and getattr(module, "is_causal", True)
 
-            def is_causal_is_false(
-                query, key, value, attention_mask, dropout, scaling, **sdpa_kwargs
-            ):
-                return torch.nn.functional.scaled_dot_product_attention(
-                    query,
-                    key,
-                    value,
-                    attn_mask=attention_mask,
-                    dropout_p=dropout,
-                    scale=scaling,
-                    is_causal=False,
-                    **sdpa_kwargs,
-                )
+        # Shapes (e.g. query.shape[2]) are tensors during jit tracing, resulting in `is_causal` being a tensor.
+        # We convert it to a bool for the SDPA kernel that only accepts bools.
+        if torch.jit.is_tracing() and isinstance(is_causal, torch.Tensor):
+            is_causal = is_causal.item()
 
-            attn_output = torch.cond(
-                query.shape[2] > 1
-                and attention_mask is None
-                and getattr(module, "is_causal", True),
-                is_causal_is_true,
-                is_causal_is_false,
-                [query, key, value, attention_mask, dropout, scaling],
-            )
-        else:
-            attn_output = torch.nn.functional.scaled_dot_product_attention(
-                query,
-                key,
-                value,
-                attn_mask=attention_mask,
-                dropout_p=dropout,
-                scale=scaling,
-                is_causal=is_causal,
-                **sdpa_kwargs,
-            )
+        attn_output = torch.nn.functional.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=attention_mask,
+            dropout_p=dropout,
+            scale=scaling,
+            is_causal=is_causal,
+            **sdpa_kwargs,
+        )
         attn_output = attn_output.transpose(1, 2).contiguous()
 
         return attn_output, None
