@@ -5,7 +5,7 @@ import transformers
 def get_tiny_llm(
     batch_size: int = 2,
     sequence_length: int = 30,
-    sequence_length2: int = 3,
+    past_sequence_length: int = 3,
     dynamic_rope: bool = False,
     use_static_cache: bool = False,
     **kwargs,
@@ -15,7 +15,7 @@ def get_tiny_llm(
 
     :param batch_size: batch size
     :param sequence_length: sequence length
-    :param sequence_length2: new sequence length
+    :param past_sequence_length: past sequence length
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :param use_static_cache: use StaticCache instead of DynamicCache
     :param kwargs: to overwrite the configuration, example ``num_hidden_layers=1``
@@ -62,7 +62,7 @@ def get_tiny_llm(
         num_hidden_layers=config["num_hidden_layers"],  # type: ignore[arg-type]
         batch_size=batch_size,
         sequence_length=sequence_length,
-        sequence_length2=sequence_length2,
+        past_sequence_length=past_sequence_length,
         dynamic_rope=dynamic_rope,
         num_key_value_heads=config["num_key_value_heads"],  # type: ignore[arg-type]
         cls_cache="StaticCache" if use_static_cache else "DynamicCache",

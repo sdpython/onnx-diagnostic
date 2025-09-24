@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Callable, List, Optional, Tuple
 import packaging.version as pv
-from sklearn import logger
 import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
@@ -1658,11 +1657,6 @@ if patch_modeling_utils:
         **kwargs,
     ) -> tuple[torch.Tensor, None]:
         """manual patch for function ```transformers.integrations.sdpa_attention.sdpa_attention_forward```."""  # noqa: E501
-        if kwargs.get("output_attentions", False) or kwargs.get("head_mask") is not None:
-            logger.warning_once(
-                "`sdpa` attention does not support `output_attentions=True` or `head_mask`."
-                " Please set your attention to `eager` if you want any of these features."
-            )
         sdpa_kwargs = {}
         if hasattr(module, "num_key_value_groups"):
             if not use_gqa_in_sdpa(attention_mask, key):
