@@ -173,37 +173,34 @@ def get_inputs(
             # static
             shapes = {
                 "input_ids": {0: batch, 1: seq_length},
-                "attention_mask": {0: batch, 2: "sequence_length+past_sequence_length"},
-                "cache_position": {0: "sequence_length+past_sequence_length"},
+                "attention_mask": {0: batch, 2: "past_sequence_length"},
+                "cache_position": {0: "past_sequence_length"},
                 "past_key_values": [
-                    # [{0: batch, 2: past_seq_length} for _ in range(num_hidden_layers)],
-                    # [{0: batch, 2: past_seq_length} for _ in range(num_hidden_layers)],
+                    # past_sequence_length is now static
                     [{0: batch} for _ in range(num_hidden_layers)],
                     [{0: batch} for _ in range(num_hidden_layers)],
                 ],
             }
             inputs = dict(
                 input_ids=torch.randint(
-                    0, dummy_max_token_id, (batch_size, sequence_length)
+                    0, dummy_max_token_id, (batch_size, past_sequence_length)
                 ).to(torch.int64),
                 attention_mask=torch.ones(
                     (
                         batch_size,
                         num_key_value_heads,
-                        past_sequence_length + sequence_length,
+                        past_sequence_length,
                         head_dim,
                     )
                 ).to(torch.bool),
-                cache_position=torch.arange(past_sequence_length + sequence_length).to(
-                    torch.int64
-                ),
+                cache_position=torch.arange(past_sequence_length).to(torch.int64),
                 past_key_values=make_static_cache(
                     [
                         (
                             torch.randn(
                                 batch_size,
                                 num_key_value_heads,
-                                past_sequence_length + sequence_length,
+                                sequence_length + past_sequence_length,
                                 head_dim,
                             ),
                             torch.randn(
@@ -215,7 +212,7 @@ def get_inputs(
                         )
                         for i in range(num_hidden_layers)
                     ],
-                    max_cache_len=max(sequence_length + past_sequence_length, head_dim),
+                    max_cache_len=max(past_sequence_length, head_dim),
                 ),
             )
         else:
