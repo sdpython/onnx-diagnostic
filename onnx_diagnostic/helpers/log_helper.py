@@ -877,7 +877,11 @@ class CubeLogs:
             print(f"[CubeLogs.view] key_columns={key_columns}")
         g = data[[*key_index, *key_columns]].copy()
         g["count"] = 1
-        r = g.groupby([*key_index, *key_columns], dropna=False).sum()
+        r = (
+            g.copy()
+            if not key_index and not key_columns
+            else g.groupby([*key_index, *key_columns], dropna=False).sum()
+        )
         not_unique = r[r["count"] > 1]
         assert not_unique.shape[0] == 0, (
             f"view_def.name={view_def.name!r}, "
@@ -1505,6 +1509,11 @@ class CubeLogsPerformance(CubeLogs):
             "n_model_faster3x",
             "n_model_faster4x",
             "n_node_attention",
+            "n_node_attention23",
+            "n_node_rotary_embedding",
+            "n_node_rotary_embedding23",
+            "n_node_layer_normalization",
+            "n_node_layer_normalization23",
             "n_node_control_flow",
             "n_node_scatter",
             "n_node_function",
@@ -1676,11 +1685,50 @@ class CubeLogsPerformance(CubeLogs):
                     "time_latency",
                     gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 3.98,
                 ),
+                n_node_attention23=lambda df: gpreserve(
+                    df, "op_onnx__Attention", gdf(df, "op_onnx__Attention")
+                ),
+                n_node_rotary_embedding23=lambda df: gpreserve(
+                    df, "op_onnx__RotaryEmbedding", gdf(df, "op_onnx__RotaryEmbedding")
+                ),
+                n_node_layer_normalization23=lambda df: gpreserve(
+                    df,
+                    "time_latency",
+                    gdf(df, "op_onnx__LayerNormalization", 0)
+                    + gdf(df, "op_onnx__RMSNormalization", 0)
+                    + gdf(df, "op_onnx__BatchNormlization", 0)
+                    + gdf(df, "op_onnx__InstanceNormlization", 0)
+                    + gdf(df, "op_onnx__GroupNormalization", 0),
+                ),
                 n_node_attention=lambda df: gpreserve(
                     df,
-                    "op_onnx_com.microsoft_Attention",
-                    gdf(df, "op_onnx_com.microsoft_Attention")
-                    + gdf(df, "op_onnx_com.microsoft_MultiHeadAttention"),
+                    "time_latency",
+                    gdf(df, "op_onnx_com.microsoft_Attention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_MultiHeadAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_PackedAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_PackedMultiHeadAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_GroupQueryAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_PagedAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_DecoderAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_LongformerAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_DecoderMaskedSelfAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_DecoderMaskedMultiHeadAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_SparseAttention", 0),
+                ),
+                n_node_layer_normalization=lambda df: gpreserve(
+                    df,
+                    "time_latency",
+                    gdf(df, "op_onnx_com.microsoft_EmbedLayerNormalization", 0)
+                    + gdf(df, "op_onnx_com.microsoft_SkipLayerNormalization", 0)
+                    + gdf(df, "op_onnx_com.microsoft_LayerNormalization", 0)
+                    + gdf(df, "op_onnx_com.microsoft_SkipSimplifiedLayerNormalization", 0)
+                    + gdf(df, "op_onnx_com.microsoft_SimplifiedLayerNormalization", 0),
+                ),
+                n_node_rotary_embedding=lambda df: gpreserve(
+                    df,
+                    "time_latency",
+                    gdf(df, "op_onnx_com.microsoft_GemmaRotaryEmbedding", 0)
+                    + gdf(df, "op_onnx_com.microsoft_RotaryEmbedding", 0),
                 ),
                 n_node_control_flow=lambda df: gpreserve(
                     df,
