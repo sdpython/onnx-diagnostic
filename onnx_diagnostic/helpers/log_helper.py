@@ -285,7 +285,8 @@ class CubePlot:
         nn = df.shape[1] // n_cols
         nn += int(df.shape[1] % n_cols != 0)
         ratio = float(os.environ.get("FIGSIZEH", "1"))
-        fig, axs = plt.subplots(nn, n_cols, figsize=(6 * n_cols, nn * df.shape[0] / 3 * ratio))
+        figsize = (6 * n_cols, nn * (2.5 + df.shape[0] / 15) * ratio)
+        fig, axs = plt.subplots(nn, n_cols, figsize=figsize)
         pos = 0
         imgs = []
         for c in self._make_loop(df.columns, verbose):
@@ -332,10 +333,12 @@ class CubePlot:
         n_cols = len(groups)
 
         title_suffix = f"\n{title_suffix}" if title_suffix else ""
+        ratio = float(os.environ.get("FIGSIZEH", "1"))
+        figsize = (5 * n_cols, max(len(g) for g in groups) * (2 + df.shape[1] / 2) * ratio)
         fig, axs = plt.subplots(
             df.shape[1],
             n_cols,
-            figsize=(5 * n_cols, max(len(g) for g in groups) * df.shape[1] / 2),
+            figsize=figsize,
             sharex=True,
             sharey="row" if n_cols > 1 else False,
         )
@@ -877,7 +880,11 @@ class CubeLogs:
             print(f"[CubeLogs.view] key_columns={key_columns}")
         g = data[[*key_index, *key_columns]].copy()
         g["count"] = 1
-        r = g.groupby([*key_index, *key_columns], dropna=False).sum()
+        r = (
+            g.copy()
+            if not key_index and not key_columns
+            else g.groupby([*key_index, *key_columns], dropna=False).sum()
+        )
         not_unique = r[r["count"] > 1]
         assert not_unique.shape[0] == 0, (
             f"view_def.name={view_def.name!r}, "
@@ -1505,6 +1512,11 @@ class CubeLogsPerformance(CubeLogs):
             "n_model_faster3x",
             "n_model_faster4x",
             "n_node_attention",
+            "n_node_attention23",
+            "n_node_rotary_embedding",
+            "n_node_rotary_embedding23",
+            "n_node_layer_normalization",
+            "n_node_layer_normalization23",
             "n_node_control_flow",
             "n_node_scatter",
             "n_node_function",
@@ -1568,7 +1580,9 @@ class CubeLogsPerformance(CubeLogs):
 
         def gdf(df, cname, default_value=np.nan):
             if cname in df.columns:
-                return df[cname]
+                if np.isnan(default_value):
+                    return df[cname]
+                return df[cname].fillna(default_value)
             return pandas.Series(default_value, index=df.index)
 
         def ghas_value(df, cname):
@@ -1676,15 +1690,54 @@ class CubeLogsPerformance(CubeLogs):
                     "time_latency",
                     gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 3.98,
                 ),
+                n_node_attention23=lambda df: gpreserve(
+                    df, "time_latency_eager", gdf(df, "op_onnx__Attention")
+                ),
+                n_node_rotary_embedding23=lambda df: gpreserve(
+                    df, "time_latency_eager", gdf(df, "op_onnx__RotaryEmbedding")
+                ),
+                n_node_layer_normalization23=lambda df: gpreserve(
+                    df,
+                    "time_latency_eager",
+                    gdf(df, "op_onnx__LayerNormalization", 0)
+                    + gdf(df, "op_onnx__RMSNormalization", 0)
+                    + gdf(df, "op_onnx__BatchNormlization", 0)
+                    + gdf(df, "op_onnx__InstanceNormlization", 0)
+                    + gdf(df, "op_onnx__GroupNormalization", 0),
+                ),
                 n_node_attention=lambda df: gpreserve(
                     df,
-                    "op_onnx_com.microsoft_Attention",
-                    gdf(df, "op_onnx_com.microsoft_Attention")
-                    + gdf(df, "op_onnx_com.microsoft_MultiHeadAttention"),
+                    "time_latency_eager",
+                    gdf(df, "op_onnx_com.microsoft_Attention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_MultiHeadAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_PackedAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_PackedMultiHeadAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_GroupQueryAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_PagedAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_DecoderAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_LongformerAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_DecoderMaskedSelfAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_DecoderMaskedMultiHeadAttention", 0)
+                    + gdf(df, "op_onnx_com.microsoft_SparseAttention", 0),
+                ),
+                n_node_layer_normalization=lambda df: gpreserve(
+                    df,
+                    "time_latency_eager",
+                    gdf(df, "op_onnx_com.microsoft_EmbedLayerNormalization", 0)
+                    + gdf(df, "op_onnx_com.microsoft_SkipLayerNormalization", 0)
+                    + gdf(df, "op_onnx_com.microsoft_LayerNormalization", 0)
+                    + gdf(df, "op_onnx_com.microsoft_SkipSimplifiedLayerNormalization", 0)
+                    + gdf(df, "op_onnx_com.microsoft_SimplifiedLayerNormalization", 0),
+                ),
+                n_node_rotary_embedding=lambda df: gpreserve(
+                    df,
+                    "time_latency_eager",
+                    gdf(df, "op_onnx_com.microsoft_GemmaRotaryEmbedding", 0)
+                    + gdf(df, "op_onnx_com.microsoft_RotaryEmbedding", 0),
                 ),
                 n_node_control_flow=lambda df: gpreserve(
                     df,
-                    "op_onnx__If",
+                    "time_latency_eager",
                     (
                         gdf(df, "op_onnx__If", 0)
                         + gdf(df, "op_onnx__Scan", 0)
@@ -1693,7 +1746,7 @@ class CubeLogsPerformance(CubeLogs):
                 ),
                 n_node_scatter=lambda df: gpreserve(
                     df,
-                    "op_onnx__ScatterND",
+                    "time_latency_eager",
                     gdf(df, "op_onnx__ScatterND", 0) + gdf(df, "op_onnx__ScatterElements", 0),
                 ),
                 n_node_function=lambda df: gpreserve(
@@ -1706,13 +1759,13 @@ class CubeLogsPerformance(CubeLogs):
                     df, "onnx_n_initializer", gdf(df, "onnx_n_initializer")
                 ),
                 n_node_constant=lambda df: gpreserve(
-                    df, "op_onnx__Constant", gdf(df, "op_onnx__Constant")
+                    df, "time_latency_eager", gdf(df, "op_onnx__Constant")
                 ),
                 n_node_shape=lambda df: gpreserve(
-                    df, "op_onnx__Shape", gdf(df, "op_onnx__Shape")
+                    df, "time_latency_eager", gdf(df, "op_onnx__Shape")
                 ),
                 n_node_expand=lambda df: gpreserve(
-                    df, "op_onnx__Expand", gdf(df, "op_onnx__Expand")
+                    df, "time_latency_eager", gdf(df, "op_onnx__Expand")
                 ),
             )
             assert (

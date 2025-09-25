@@ -39,7 +39,6 @@ class TestHuggingFaceHubApi(ExtTestCase):
                 verbose=1,
                 dump="test_enumerate_model_list.csv",
                 filter="image-classification",
-                library="transformers",
             )
         )
         self.assertEqual(len(models), 2)
