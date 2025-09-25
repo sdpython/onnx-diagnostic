@@ -412,7 +412,7 @@ def validate_model(
     assert not rewrite or patch_kwargs.get("patch", False), (
         f"rewrite={rewrite}, patch={patch}, patch_kwargs={patch_kwargs} "
         f"patch must be True to enable rewriting, "
-        f"if --no-patch was specified on the command line, --no-rewrite must be added."
+        f"if --patch=0 was specified on the command line, rewrites are disabled."
     )
     summary = version_summary()
     summary.update(
