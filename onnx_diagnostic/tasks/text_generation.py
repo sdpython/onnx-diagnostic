@@ -221,7 +221,7 @@ def get_inputs(
                 "input_ids": {0: batch, 1: seq_length},
                 "attention_mask": {
                     0: batch,
-                    1: "cache+seq",  # past_seq_length + seq_length
+                    1: "past_seq_length+seq_length",  # past_seq_length + seq_length
                 },
                 "position_ids": {
                     0: batch,

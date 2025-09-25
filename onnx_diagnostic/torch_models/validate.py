@@ -1105,16 +1105,24 @@ def call_torch_export_export(
         print("[call_torch_export_export] export...")
 
     model = data["model"]
+
+    def _run_torch_export():
+        with torch.fx.experimental._config.patch(backed_size_oblivious=True):
+            ep = torch.export.export(
+                model,
+                args,
+                kwargs=kwargs,
+                dynamic_shapes=dse,
+                strict=strict,
+            )
+        return ep
+
     ep = _quiet_or_not_quiet(
         quiet,
         "export_export",
         summary,
         data,
-        (
-            lambda m=model, args=args, kws=kwargs, dse=dse, s=strict: (
-                torch.export.export(m, args, kwargs=kws, dynamic_shapes=dse, strict=s)
-            )
-        ),
+        _run_torch_export,
     )
     if "ERR_export_export" in summary:
         return summary, data
@@ -1715,23 +1723,24 @@ def call_torch_export_custom(
         kws["target_opset"] = opset
     if output_names:
         kws["output_names"] = output_names
-
-    epo, opt_stats = _quiet_or_not_quiet(
-        quiet,
-        "export_export_onnx_c",
-        summary,
-        data,
-        (
-            lambda m=model, args=args, kwargs=kwargs, kws=kws: (
-                to_onnx(
-                    model,
-                    args,
-                    kwargs=kwargs,
-                    **kws,
+    # anti-specializing 0/1 during torch.export.export
+    with torch.fx.experimental._config.patch(backed_size_oblivious=True):
+        epo, opt_stats = _quiet_or_not_quiet(
+            quiet,
+            "export_export_onnx_c",
+            summary,
+            data,
+            (
+                lambda m=model, args=args, kwargs=kwargs, kws=kws: (
+                    to_onnx(
+                        model,
+                        args,
+                        kwargs=kwargs,
+                        **kws,
+                    )
                 )
-            )
-        ),
-    )
+            ),
+        )
     if "ERR_export_onnx_c" in summary:
         return summary, data
 
