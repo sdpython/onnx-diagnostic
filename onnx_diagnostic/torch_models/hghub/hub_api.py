@@ -289,21 +289,17 @@ def task_from_tags(tags: Union[str, List[str]]) -> str:
 
 def enumerate_model_list(
     n: int = 50,
-    task: Optional[str] = None,
-    library: Optional[str] = None,
-    tags: Optional[Union[str, List[str]]] = None,
+    pipeline_tag: Optional[str] = None,
     search: Optional[str] = None,
     dump: Optional[str] = None,
-    filter: Optional[str] = None,
+    filter: Optional[Union[str, List[str]]] = None,
     verbose: int = 0,
 ):
     """
     Enumerates models coming from :epkg:`huggingface_hub`.
 
     :param n: number of models to retrieve (-1 for all)
-    :param task: see :meth:`huggingface_hub.HfApi.list_models`
-    :param tags: see :meth:`huggingface_hub.HfApi.list_models`
-    :param library: see :meth:`huggingface_hub.HfApi.list_models`
+    :param pipeline_tag: see :meth:`huggingface_hub.HfApi.list_models`
     :param search: see :meth:`huggingface_hub.HfApi.list_models`
     :param filter: see :meth:`huggingface_hub.HfApi.list_models`
     :param dump: dumps the result in this csv file
@@ -311,9 +307,7 @@ def enumerate_model_list(
     """
     api = HfApi()
     models = api.list_models(
-        task=task,
-        library=library,
-        tags=tags,
+        pipeline_tag=pipeline_tag,
         search=search,
         full=True,
         filter=filter,

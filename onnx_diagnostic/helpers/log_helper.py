@@ -285,7 +285,8 @@ class CubePlot:
         nn = df.shape[1] // n_cols
         nn += int(df.shape[1] % n_cols != 0)
         ratio = float(os.environ.get("FIGSIZEH", "1"))
-        fig, axs = plt.subplots(nn, n_cols, figsize=(6 * n_cols, nn * df.shape[0] / 3 * ratio))
+        figsize = (6 * n_cols, nn * (2 + df.shape[0] / 15) * ratio)
+        fig, axs = plt.subplots(nn, n_cols, figsize=figsize)
         pos = 0
         imgs = []
         for c in self._make_loop(df.columns, verbose):
@@ -332,10 +333,12 @@ class CubePlot:
         n_cols = len(groups)
 
         title_suffix = f"\n{title_suffix}" if title_suffix else ""
+        ratio = float(os.environ.get("FIGSIZEH", "1"))
+        figsize = (5 * n_cols, max(len(g) for g in groups) * (2 + df.shape[1] / 2) * ratio)
         fig, axs = plt.subplots(
             df.shape[1],
             n_cols,
-            figsize=(5 * n_cols, max(len(g) for g in groups) * df.shape[1] / 2),
+            figsize=figsize,
             sharex=True,
             sharey="row" if n_cols > 1 else False,
         )
