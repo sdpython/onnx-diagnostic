@@ -878,6 +878,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
             model,
             dump_file=self.get_dump_file("test_imagetext2text_generation_gemma3_4b_it.onnx"),
             dump_drop={"attention_mask", "past_key_values", "pixel_values"},
+            save_as_external_data=False,
         ):
             generated_ids = model.generate(
                 **inputs, max_new_tokens=282, do_sample=False, cache_implementation="static"

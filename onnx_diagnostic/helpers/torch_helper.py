@@ -287,6 +287,7 @@ def steal_forward(
     submodules: bool = False,
     verbose: int = 0,
     storage_limit: int = 2**27,
+    save_as_external_data: bool = True,
     **kwargs,
 ):
     """
@@ -305,6 +306,8 @@ def steal_forward(
         they can be restored with :func:`create_input_tensors_from_onnx_model
         <onnx_diagnostic.helpers.mini_onnx_builder.create_input_tensors_from_onnx_model>`
     :param dump_drop: to drop some inputs too big (only if dump_file is specified)
+    :param save_as_external_data: True by default, but maybe better to have everything
+        in a single file if possible
     :param submodules: if True and model is a module, the list extended with all the submodules
         the module contains
     :param verbose: verbosity
@@ -414,8 +417,14 @@ def steal_forward(
                 size = torch_tensor_size(storage)
                 print(f"-- gather stored {len(storage)} objects, size={size // 2 ** 20} Mb")
             if dump_drop:
-                print(string_type(dump_drop))
-                stop
+                for k, v in storage.items():
+                    if k[-1] == "I":
+                        _args, kwargs = v
+                        ii = set(kwargs) & dump_drop
+                        if ii:
+                            for i in ii:
+                                print("---", i)
+                                del kwargs[i]
             proto = create_onnx_model_from_input_tensors(storage)
             if verbose:
                 print("-- dumps stored objects")
@@ -425,7 +434,7 @@ def steal_forward(
             onnx.save(
                 proto,
                 dump_file,
-                save_as_external_data=True,
+                save_as_external_data=save_as_external_data,
                 all_tensors_to_one_file=True,
                 location=location,
             )

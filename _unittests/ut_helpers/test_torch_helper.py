@@ -182,6 +182,39 @@ class TestTorchTestHelper(ExtTestCase):
         )
 
     @hide_stdout()
+    def test_steal_forward_dump_file_steal_append_drop(self):
+        class SubModel(torch.nn.Module):
+            def forward(self, x):
+                return x * x
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.s1 = SubModel()
+                self.s2 = SubModel()
+
+            def forward(self, x, y):
+                sx = self.s1(x)
+                steal_append("sx", sx)
+                return sx + self.s2(y)
+
+        inputs = dict(x=torch.rand(3, 4), y=torch.rand(3, 4))
+        model = Model()
+        dump_file = self.get_dump_file("test_steal_forward_dump_file_drop.onnx")
+        with steal_forward(model, dump_file=dump_file, dump_drop={"x"}):
+            model(**inputs)
+            model(**inputs)
+        self.assertExists(dump_file)
+        restored = create_input_tensors_from_onnx_model(dump_file)
+        self.assertEqual(
+            {("", 1, "I"), ("", 1, "O"), "sx", ("", 0, "O"), "sx_1", ("", 0, "I")},
+            set(restored),
+        )
+        first = restored[("", 0, "I")]
+        _a, kws = first
+        self.assertNotIn("x", kws)
+
+    @hide_stdout()
     def test_steal_forward_submodules(self):
         class SubModel(torch.nn.Module):
             def forward(self, x):
