@@ -1661,7 +1661,7 @@ def call_torch_export_model_builder(
     return summary, data
 
 
-def process_statistics(data: Sequence[Dict[str, float]]) -> Dict[str, float]:
+def process_statistics(data: Sequence[Dict[str, float]]) -> Dict[str, Any]:
     """
     Processes statistics coming from the exporters.
     It takes a sequence of dictionaries (like a data frame)
@@ -1695,11 +1695,11 @@ def process_statistics(data: Sequence[Dict[str, float]]) -> Dict[str, float]:
             else:
                 d[a] += v
 
-    counts = {}
-    applied_pattern_time = {}
-    applied_pattern_n = {}
-    matching_pattern_time = {}
-    matching_pattern_n = {}
+    counts: Dict[str, Any] = {}
+    applied_pattern_time: Dict[str, Any] = {}
+    applied_pattern_n: Dict[str, Any] = {}
+    matching_pattern_time: Dict[str, Any] = {}
+    matching_pattern_n: Dict[str, Any] = {}
 
     for obs in data:
         pattern = _simplify(obs["pattern"])
@@ -1875,7 +1875,7 @@ def call_torch_export_custom(
     if "ERR_export_onnx_c" in summary:
         return summary, data
 
-    new_stat = {k: v for k, v in opt_stats.items() if k.startswith("time_")}
+    new_stat: Dict[str, Any] = {k: v for k, v in opt_stats.items() if k.startswith("time_")}
     new_stat.update({k[5:]: v for k, v in opt_stats.items() if k.startswith("stat_time_")})
     if "optimization" in opt_stats:
         new_stat.update(process_statistics(opt_stats["optimization"]))
