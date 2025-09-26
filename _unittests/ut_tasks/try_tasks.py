@@ -1,3 +1,4 @@
+import os
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, never_test
@@ -799,17 +800,19 @@ class TestHuggingFaceHubModel(ExtTestCase):
         from transformers import AutoProcessor, Gemma3ForConditionalGeneration
 
         model_id = "google/gemma-3-4b-it"
-        # model_id = "google/gemma-3n-e4b-it"
-        # model_id = "qnaug/gemma-3-4b-med"
-        # model_id = "hf-internal-testing/tiny-random-Gemma3ForCausalLM"
-        # data = get_untrained_model_with_inputs(
-        #     model_id, verbose=1, add_second_input=True,
-        #     same_as_pretrained=True, use_pretrained=True
-        # )
-        # model = data["model"]
-        model = Gemma3ForConditionalGeneration.from_pretrained(
-            model_id, device_map="cpu"
-        ).eval()
+        if os.environ.get("PRETRAINED", ""):
+            model = Gemma3ForConditionalGeneration.from_pretrained(
+                model_id, device_map="cpu"
+            ).eval()
+        else:
+            data = get_untrained_model_with_inputs(
+                model_id,
+                verbose=1,
+                add_second_input=True,
+                # same_as_pretrained=True, #use_pretrained=True
+            )
+            model = data["model"]
+
         print(f"-- model.device={model.device}")
         processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
         print(f"-- processor={type(processor)}")
@@ -845,11 +848,39 @@ class TestHuggingFaceHubModel(ExtTestCase):
         # inputs.pop("token_type_ids", None)
         print(f"-- inputs={self.string_type(inputs)}")
 
+        # iteration 1
+        #   cache_position:T7s281,
+        #   past_key_values:StaticCache(key_cache=#0[], value_cache=#0[]),
+        #   input_ids:T7s1x281,
+        #   inputs_embeds:None,
+        #   token_type_ids:T7s1x281,
+        #   attention_mask:dict(sliding_attention:T9s1x1x281x580,
+        #                       full_attention:T9s1x1x281x580),
+        #   position_ids:None,
+        #   use_cache:bool,
+        #   logits_to_keep:None,
+        #   pixel_values:T16s1x3x896x896,
+        #   return_dict:bool)
+        # iteration 3
+        #   cache_position:T7s1,
+        #   past_key_values:StaticCache(key_cache=#34[T1s1x4x580x256,...],
+        #                               value_cache=#34[T1s1x4x580x256,...]),
+        #   input_ids:T7s1x1,
+        #   inputs_embeds:None,
+        #   token_type_ids:T7s1x1,
+        #   attention_mask:dict(sliding_attention:T9s1x1x1x580,full_attention:T9s1x1x1x580),
+        #   position_ids:None,
+        #   use_cache:bool,logits_to_keep:None,return_dict:bool)
+
         print()
         # steal forward creates a bug...
-        with steal_forward(model):  # , torch.inference_mode():
+        with steal_forward(
+            model,
+            dump_file=self.get_dump_file("test_imagetext2text_generation_gemma3_4b_it.onnx"),
+            dump_drop={"attention_mask", "past_key_values", "pixel_values"},
+        ):
             generated_ids = model.generate(
-                **inputs, max_new_tokens=300, do_sample=False, cache_implementation="hybrid"
+                **inputs, max_new_tokens=282, do_sample=False, cache_implementation="static"
             )
         output_text = processor.decode(
             generated_ids[0][inputs["input_ids"].shape[1] :], skip_special_tokens=False
