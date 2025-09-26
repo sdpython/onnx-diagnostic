@@ -118,6 +118,7 @@ class TestValidateWholeModels(ExtTestCase):
         self.assertExists(onnx_filename)
 
     @requires_torch("2.7")
+    @requires_transformers("4.55.4")  # modeling_units
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_experimental()
@@ -147,6 +148,7 @@ class TestValidateWholeModels(ExtTestCase):
         )
 
     @requires_torch("2.7")
+    @requires_transformers("4.55.4")  # modeling_units
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_experimental()

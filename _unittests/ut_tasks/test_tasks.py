@@ -35,6 +35,7 @@ class TestTasks(ExtTestCase):
             )
 
     @hide_stdout()
+    @requires_transformers("4.55.4")  # modeling_units
     def test_text_generation(self):
         mid = "arnir0/Tiny-LLM"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
