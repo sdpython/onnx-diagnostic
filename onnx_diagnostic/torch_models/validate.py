@@ -394,12 +394,9 @@ def validate_model(
         same_as_pretrained=same_as_pretrained,
         use_pretrained=use_pretrained,
     )
+    default_patch = dict(patch_transformers=True, patch_diffusers=True, patch=True)
     if isinstance(patch, bool):
-        patch_kwargs = (
-            dict(patch_transformers=True, patch_diffusers=True, patch=True)
-            if patch
-            else dict(patch=False)
-        )
+        patch_kwargs = default_patch if patch else dict(patch=False)
     elif isinstance(patch, str):
         patch_kwargs = {"patch": True, **{p: True for p in patch.split(",")}}  # noqa: C420
     else:
@@ -408,6 +405,8 @@ def validate_model(
         if "patch" not in patch_kwargs:
             if any(patch_kwargs.values()):
                 patch_kwargs["patch"] = True
+        elif len(patch) == 1 and patch.get("patch", False):
+            patch_kwargs.update(default_patch)
 
     assert not rewrite or patch_kwargs.get("patch", False), (
         f"rewrite={rewrite}, patch={patch}, patch_kwargs={patch_kwargs} "
