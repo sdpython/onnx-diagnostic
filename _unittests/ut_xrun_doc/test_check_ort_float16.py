@@ -10,6 +10,7 @@ from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     ignore_warnings,
     requires_cuda,
+    requires_onnxruntime,
 )
 
 
@@ -130,6 +131,7 @@ class TestCheckOrtFloat16(ExtTestCase):
 
     @requires_cuda()
     @ignore_warnings(DeprecationWarning)
+    @requires_onnxruntime("1.23")
     def test_scatterels_cuda(self):
         default_value = [
             "Cast",
@@ -143,6 +145,10 @@ class TestCheckOrtFloat16(ExtTestCase):
             (np.float16, "none"): default_value,
             (np.float32, "add"): default_value,
             (np.float16, "add"): default_value,
+            (np.float32, "min"): default_value,
+            (np.float16, "min"): default_value,
+            (np.float32, "max"): default_value,
+            (np.float16, "max"): default_value,
         }
         for opset, dtype, reduction in itertools.product(
             [16, 18], [np.float32, np.float16], ["none", "add", "min", "max"]
@@ -185,6 +191,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                 )
 
     @ignore_warnings(DeprecationWarning)
+    @requires_onnxruntime("1.23")
     def test_scatterels_cpu(self):
         default_value = [
             "Cast",
@@ -192,7 +199,6 @@ class TestCheckOrtFloat16(ExtTestCase):
             "Sub",
         ]
         default_value_16 = [
-            "Cast",
             "Cast",
             "ScatterElements",
             "Cast",
@@ -218,6 +224,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                 )
 
     @ignore_warnings(DeprecationWarning)
+    @requires_onnxruntime("1.23")
     def test_scatternd_cpu(self):
         default_value = [
             "Cast",
@@ -225,7 +232,6 @@ class TestCheckOrtFloat16(ExtTestCase):
             "Sub",
         ]
         default_value_16 = [
-            "Cast",
             "Cast",
             "ScatterND",
             "Cast",
