@@ -859,9 +859,9 @@ class TestDynamicShapes(ExtTestCase):
         )
         s = self.string_type(new_dims, with_shape=True)
         self.assertEqual(
-            "dict(input_ids:T7s1x3,attention_mask:T7s1x33,position_ids:T7s1x3,"
+            "dict(input_ids:T7s1x1,attention_mask:T7s1x33,position_ids:T7s1x1,"
             "past_key_values:DynamicCache("
-            "key_cache=#1[T1s1x1x30x96], value_cache=#1[T1s1x1x30x96]))",
+            "key_cache=#1[T1s1x1x32x96], value_cache=#1[T1s1x1x32x96]))",
             s,
         )
 
