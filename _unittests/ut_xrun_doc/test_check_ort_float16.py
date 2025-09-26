@@ -128,6 +128,7 @@ class TestCheckOrtFloat16(ExtTestCase):
         short_list = [(a, b) for a, b in exe_providers if a is not None and b is not None]
         self.assertEqual(short_list, [("CUDAExecutionProvider", o) for o in expected_names])
 
+    @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @requires_cuda()
     @ignore_warnings(DeprecationWarning)
     def test_scatterels_cuda(self):
@@ -156,6 +157,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                     expected[dtype, reduction],
                 )
 
+    @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @requires_cuda()
     @ignore_warnings(DeprecationWarning)
     def test_scatternd_cuda(self):
@@ -184,6 +186,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                     expected[dtype, reduction],
                 )
 
+    @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @ignore_warnings(DeprecationWarning)
     def test_scatterels_cpu(self):
         default_value = [
@@ -217,6 +220,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                     expected[dtype, reduction],
                 )
 
+    @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @ignore_warnings(DeprecationWarning)
     def test_scatternd_cpu(self):
         default_value = [
