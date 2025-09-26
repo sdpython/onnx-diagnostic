@@ -581,6 +581,7 @@ def _cmd_validate(argv: List[Any]):
         ):
             print(f"validate - unsupported args: export={args.export!r}, opt={args.opt!r}")
             return
+        patch_dict = args.patch if isinstance(args.patch, dict) else {"patch": args.patch}
         summary, _data = validate_model(
             model_id=args.mid,
             task=args.task,
@@ -591,8 +592,8 @@ def _cmd_validate(argv: List[Any]):
             use_pretrained=args.trained,
             dtype=args.dtype,
             device=args.device,
-            patch=args.patch,
-            rewrite=args.rewrite,
+            patch=patch_dict,
+            rewrite=args.rewrite and patch_dict.get("patch", True),
             stop_if_static=args.stop_if_static,
             optimization=args.opt,
             exporter=args.export,
