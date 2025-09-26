@@ -7,7 +7,6 @@ huggingface_hub
 matplotlib
 onnx-array-api>=0.3.1
 onnx
-ir-py
 onnxscript
 openpyxl
 packaging
