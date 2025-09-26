@@ -791,6 +791,71 @@ class TestHuggingFaceHubModel(ExtTestCase):
         scores = (embeddings[:1] @ embeddings[1:].T) * 100
         print(scores.tolist())
 
+    @never_test()
+    def test_imagetext2text_generation_gemma3_4b_it(self):
+        """
+        clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k gemma3_4b_it
+        """
+        from transformers import AutoProcessor, Gemma3ForConditionalGeneration
+
+        model_id = "google/gemma-3-4b-it"
+        # model_id = "google/gemma-3n-e4b-it"
+        # model_id = "qnaug/gemma-3-4b-med"
+        # model_id = "hf-internal-testing/tiny-random-Gemma3ForCausalLM"
+        # data = get_untrained_model_with_inputs(
+        #     model_id, verbose=1, add_second_input=True,
+        #     same_as_pretrained=True, use_pretrained=True
+        # )
+        # model = data["model"]
+        model = Gemma3ForConditionalGeneration.from_pretrained(
+            model_id, device_map="cpu"
+        ).eval()
+        print(f"-- model.device={model.device}")
+        processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
+        print(f"-- processor={type(processor)}")
+
+        messages = messages = [
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": "You are a helpful assistant."}],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "image": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/bee.jpg",
+                    },
+                    {"type": "text", "text": "Describe this image in detail."},
+                ],
+            },
+        ]
+        inputs = processor.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to(model.device, dtype=torch.bfloat16)
+        # if "token_type_ids" in inputs:
+        #    print(
+        #       f"-- remove token_type_ids: "
+        #       f"{self.string_type(inputs['token_type_ids'], with_shape=True)}"
+        #    )
+        # inputs.pop("token_type_ids", None)
+        print(f"-- inputs={self.string_type(inputs)}")
+
+        print()
+        # steal forward creates a bug...
+        with steal_forward(model):  # , torch.inference_mode():
+            generated_ids = model.generate(
+                **inputs, max_new_tokens=300, do_sample=False, cache_implementation="hybrid"
+            )
+        output_text = processor.decode(
+            generated_ids[0][inputs["input_ids"].shape[1] :], skip_special_tokens=False
+        )
+        print(output_text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
