@@ -1730,19 +1730,25 @@ def process_statistics(data: Sequence[Dict[str, float]]) -> Dict[str, Any]:
             _add(counts, f"opt_nodes_added_{pattern}", obs.get("added", 0))
             _add(counts, f"opt_nodes_removed_{pattern}", obs.get("removed", 0))
 
-    longest = max((v, k) for k, v in applied_pattern_time.items())
-    counts["opt_top_time_applied_pattern"], counts["opt_top_time_applied_pattern_arg"] = (
-        longest
-    )
-    longest = max((v, k) for k, v in applied_pattern_n.items())
-    counts["opt_top_n_applied_pattern"], counts["opt_top_n_applied_pattern_arg"] = longest
-    longest = max((v, k) for k, v in matching_pattern_time.items())
-    counts["opt_top_time_matching_pattern"], counts["opt_top_time_matching_pattern_arg"] = (
-        longest
-    )
-    longest = max((v, k) for k, v in matching_pattern_n.items())
-    counts["opt_top_n_matching_pattern"], counts["opt_top_n_matching_pattern_arg"] = longest
-    counts["onnx_opt_optimized"] = 1
+    if applied_pattern_time:
+        longest = max((v, k) for k, v in applied_pattern_time.items())
+        counts["opt_top_time_applied_pattern"], counts["opt_top_time_applied_pattern_arg"] = (
+            longest
+        )
+        longest = max((v, k) for k, v in applied_pattern_n.items())
+        counts["opt_top_n_applied_pattern"], counts["opt_top_n_applied_pattern_arg"] = longest
+
+    if matching_pattern_time:
+        longest = max((v, k) for k, v in matching_pattern_time.items())
+        (
+            counts["opt_top_time_matching_pattern"],
+            counts["opt_top_time_matching_pattern_arg"],
+        ) = longest
+        longest = max((v, k) for k, v in matching_pattern_n.items())
+        counts["opt_top_n_matching_pattern"], counts["opt_top_n_matching_pattern_arg"] = (
+            longest
+        )
+        counts["onnx_opt_optimized"] = 1
     return counts
 
 
