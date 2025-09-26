@@ -573,6 +573,7 @@ def validate_model(
         if verbose:
             print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
             print(f"[validate_model] new dynamic_hapes: {string_type(data['dynamic_shapes'])}")
+        # NOTE: The dynamic_shapes is always the same across inputs sets
         if inputs2:
             assert (
                 "inputs2" in data
@@ -583,6 +584,14 @@ def validate_model(
                 model=data["model"],
                 dynamic_shapes=data["dynamic_shapes"],
             )
+            # NOTE: text-generation tests 3rd inputs for multi-turn conversation
+            if "inputs3" in data:
+                data["inputs3"], _ = filter_inputs(
+                    data["inputs3"],
+                    drop_names=drop_inputs,
+                    model=data["model"],
+                    dynamic_shapes=data["dynamic_shapes"],
+                )
 
     if not empty(dtype):
         if isinstance(dtype, str):
@@ -594,6 +603,8 @@ def validate_model(
         summary["model_dtype"] = str(dtype)
         if "inputs2" in data:
             data["inputs2"] = to_any(data["inputs2"], dtype)  # type: ignore
+        if "inputs3" in data:
+            data["inputs3"] = to_any(data["inputs3"], dtype)  # type: ignore
 
     if not empty(device):
         if verbose:
@@ -603,6 +614,8 @@ def validate_model(
         summary["model_device"] = str(device)
         if "inputs2" in data:
             data["inputs2"] = to_any(data["inputs2"], device)  # type: ignore
+        if "inputs3" in data:
+            data["inputs3"] = to_any(data["inputs3"], device)  # type: ignore
 
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
@@ -638,10 +651,12 @@ def validate_model(
         _validate_do_run_model(
             data, summary, "inputs", "run", "run_expected", verbose, repeat, warmup, quiet
         )
-        if inputs2:
-            _validate_do_run_model(
-                data, summary, "inputs2", "run2", "run_expected2", verbose, 1, 0, quiet
-            )
+        _validate_do_run_model(
+            data, summary, "inputs2", "run2", "run_expected2", verbose, 1, 0, quiet
+        )
+        _validate_do_run_model(
+            data, summary, "inputs3", "run3", "run_expected3", verbose, 1, 0, quiet
+        )
 
     if exporter:
         print(
@@ -899,6 +914,10 @@ def _validate_do_run_model(
     if verbose:
         print(f"[validate_model] -- run the model inputs={key!r}...")
         print(f"[validate_model] {key}={string_type(data[key], with_shape=True)}")
+    if key not in data:
+        if verbose:
+            print(f"[validate_model] input; {key!r} not defined, skip.")
+        return
     # We make a copy of the input just in case the model modifies them inplace
     hash_inputs = string_type(data[key], with_shape=True)
     inputs = torch_deepcopy(data[key])
@@ -1329,6 +1348,9 @@ def validate_onnx_model(
     keys = [("inputs", "run_expected", "")]
     if inputs2:
         keys.append(("inputs2", "run_expected2", "2"))
+        # text-generation tests multi-turn conversation as 3rd inputs
+        if "inputs3" in data:
+            keys.append(("inputs3", "run_expected3", "3"))
     for k_input, k_expected, suffix in keys:
         # make_feeds
         if verbose:
