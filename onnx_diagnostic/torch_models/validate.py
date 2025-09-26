@@ -112,6 +112,7 @@ def _make_folder_name(
     device: Optional[Union[str, torch.device]] = None,
     subfolder: Optional[str] = None,
     opset: Optional[int] = None,
+    drop_inputs: Optional[List[str]] = None,
 ) -> str:
     "Creates a filename unique based on the given options."
     els = [model_id.replace("/", "_")]
@@ -137,6 +138,9 @@ def _make_folder_name(
         els.append(sdev)
     if opset is not None:
         els.append(f"op{opset}")
+    if drop_inputs:
+        ii = "-".join(f"{s[0]}{s[-1]}" for s in drop_inputs)
+        els.append(f"I-{ii.upper()}")
     return "-".join(els)
 
 
@@ -449,6 +453,7 @@ def validate_model(
             device=device,
             subfolder=subfolder,
             opset=opset,
+            drop_inputs=drop_inputs,
         )
         dump_folder = os.path.join(dump_folder, folder_name)
         if not os.path.exists(dump_folder):
