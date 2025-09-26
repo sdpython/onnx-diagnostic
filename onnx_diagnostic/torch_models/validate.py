@@ -112,6 +112,7 @@ def _make_folder_name(
     device: Optional[Union[str, torch.device]] = None,
     subfolder: Optional[str] = None,
     opset: Optional[int] = None,
+    drop_inputs: Optional[List[str]] = None,
 ) -> str:
     "Creates a filename unique based on the given options."
     els = [model_id.replace("/", "_")]
@@ -137,6 +138,9 @@ def _make_folder_name(
         els.append(sdev)
     if opset is not None:
         els.append(f"op{opset}")
+    if drop_inputs:
+        ii = "-".join(f"{s[0]}{s[-1]}" for s in drop_inputs)
+        els.append(f"I-{ii.upper()}")
     return "-".join(els)
 
 
@@ -394,12 +398,9 @@ def validate_model(
         same_as_pretrained=same_as_pretrained,
         use_pretrained=use_pretrained,
     )
+    default_patch = dict(patch_transformers=True, patch_diffusers=True, patch=True)
     if isinstance(patch, bool):
-        patch_kwargs = (
-            dict(patch_transformers=True, patch_diffusers=True, patch=True)
-            if patch
-            else dict(patch=False)
-        )
+        patch_kwargs = default_patch if patch else dict(patch=False)
     elif isinstance(patch, str):
         patch_kwargs = {"patch": True, **{p: True for p in patch.split(",")}}  # noqa: C420
     else:
@@ -408,6 +409,8 @@ def validate_model(
         if "patch" not in patch_kwargs:
             if any(patch_kwargs.values()):
                 patch_kwargs["patch"] = True
+        elif len(patch) == 1 and patch.get("patch", False):
+            patch_kwargs.update(default_patch)
 
     assert not rewrite or patch_kwargs.get("patch", False), (
         f"rewrite={rewrite}, patch={patch}, patch_kwargs={patch_kwargs} "
@@ -450,6 +453,7 @@ def validate_model(
             device=device,
             subfolder=subfolder,
             opset=opset,
+            drop_inputs=drop_inputs,
         )
         dump_folder = os.path.join(dump_folder, folder_name)
         if not os.path.exists(dump_folder):

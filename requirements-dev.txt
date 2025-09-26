@@ -7,7 +7,6 @@ huggingface_hub
 matplotlib
 onnx-array-api>=0.3.1
 onnx
-git+https://github.com/onnx/ir-py.git
 onnxscript
 openpyxl
 packaging
