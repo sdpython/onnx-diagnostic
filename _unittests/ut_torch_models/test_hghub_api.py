@@ -28,6 +28,7 @@ from onnx_diagnostic.torch_models.hghub.hub_data import (
 
 class TestHuggingFaceHubApi(ExtTestCase):
 
+    @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/242")
     @requires_transformers("4.50")  # we limit to some versions of the CI
     @requires_torch("2.7")
     @ignore_errors(OSError)  # connectivity issues

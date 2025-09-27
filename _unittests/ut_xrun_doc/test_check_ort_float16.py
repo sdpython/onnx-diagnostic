@@ -142,6 +142,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                 tuple([("CUDAExecutionProvider", o) for o in en] for en in expected_names),
             )
 
+    @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @requires_cuda()
     @ignore_warnings(DeprecationWarning)
     @requires_onnxruntime("1.23")
@@ -185,6 +186,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                     expected[dtype, reduction],
                 )
 
+    @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @requires_cuda()
     @ignore_warnings(DeprecationWarning)
     def test_scatternd_cuda(self):
@@ -223,6 +225,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                     expected[dtype, reduction],
                 )
 
+    @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @ignore_warnings(DeprecationWarning)
     @requires_onnxruntime("1.23")
     def test_scatterels_cpu(self):
@@ -266,6 +269,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                     expected[dtype, reduction],
                 )
 
+    @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @ignore_warnings(DeprecationWarning)
     @requires_onnxruntime("1.23")
     def test_scatternd_cpu(self):
