@@ -5,7 +5,7 @@ import os
 import sys
 import warnings
 from collections.abc import Iterable
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 import onnx
 from onnx.external_data_helper import load_external_data_for_tensor, uses_external_data
@@ -283,9 +283,11 @@ def steal_forward(
     ],
     fprint: Callable = string_type,
     dump_file: Optional[str] = None,
+    dump_drop: Optional[Set[str]] = None,
     submodules: bool = False,
     verbose: int = 0,
     storage_limit: int = 2**27,
+    save_as_external_data: bool = True,
     **kwargs,
 ):
     """
@@ -303,6 +305,9 @@ def steal_forward(
     :param dump_file: dumps stolen inputs and outputs in an onnx model,
         they can be restored with :func:`create_input_tensors_from_onnx_model
         <onnx_diagnostic.helpers.mini_onnx_builder.create_input_tensors_from_onnx_model>`
+    :param dump_drop: to drop some inputs too big (only if dump_file is specified)
+    :param save_as_external_data: True by default, but maybe better to have everything
+        in a single file if possible
     :param submodules: if True and model is a module, the list extended with all the submodules
         the module contains
     :param verbose: verbosity
@@ -411,6 +416,15 @@ def steal_forward(
             if verbose:
                 size = torch_tensor_size(storage)
                 print(f"-- gather stored {len(storage)} objects, size={size // 2 ** 20} Mb")
+            if dump_drop:
+                for k, v in storage.items():
+                    if k[-1] == "I":
+                        _args, kwargs = v
+                        ii = set(kwargs) & dump_drop
+                        if ii:
+                            for i in ii:
+                                print("---", i)
+                                del kwargs[i]
             proto = create_onnx_model_from_input_tensors(storage)
             if verbose:
                 print("-- dumps stored objects")
@@ -420,7 +434,7 @@ def steal_forward(
             onnx.save(
                 proto,
                 dump_file,
-                save_as_external_data=True,
+                save_as_external_data=save_as_external_data,
                 all_tensors_to_one_file=True,
                 location=location,
             )
@@ -794,9 +808,14 @@ def torch_deepcopy(value: Any) -> Any:
         from .cache_helper import CacheKeyValue
 
         ca = CacheKeyValue(value)
+        if len(ca.key_cache) == 0:
+            # Use of deepcopy.
+            import copy
+
+            return copy.deepcopy(value)
         return make_static_cache(
             torch_deepcopy(list(zip(ca.key_cache, ca.value_cache))),
-            max_cache_len=value.max_cache_len,
+            max_cache_len=max([value.max_cache_len, *[t.shape[2] for t in ca.key_cache]]),
         )
     if value.__class__.__name__ == "HybridCache":
         from .cache_helper import CacheKeyValue

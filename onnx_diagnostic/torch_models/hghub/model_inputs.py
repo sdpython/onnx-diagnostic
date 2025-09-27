@@ -193,7 +193,7 @@ def get_untrained_model_with_inputs(
             )
             if verbose:
                 print(
-                    f"[get_untrained_model_with_inputs] -- done in "
+                    f"[get_untrained_model_with_inputs] -- done(1) in "
                     f"{time.perf_counter() - begin}s"
                 )
         else:
@@ -250,14 +250,36 @@ def get_untrained_model_with_inputs(
                 )
             if verbose:
                 print(
-                    f"[get_untrained_model_with_inputs] -- done in "
+                    f"[get_untrained_model_with_inputs] -- done(2) in "
                     f"{time.perf_counter() - begin}s"
                 )
 
             seed = int(os.environ.get("SEED", "17"))
             torch.manual_seed(seed)
+
+            if verbose:
+                begin = time.perf_counter()
+                print(
+                    f"[get_untrained_model_with_inputs] "
+                    f"instantiate_specific_model {cls_model}"
+                )
+
             model = instantiate_specific_model(cls_model, config)
+
+            if verbose:
+                print(
+                    f"[get_untrained_model_with_inputs] -- done(3) in "
+                    f"{time.perf_counter() - begin}s (model is {type(model)})"
+                )
+
             if model is None:
+
+                if verbose:
+                    print(
+                        f"[get_untrained_model_with_inputs] "
+                        f"instantiate_specific_model(2) {cls_model}"
+                    )
+
                 try:
                     if type(config) is dict:
                         model = cls_model(**config)
@@ -267,6 +289,12 @@ def get_untrained_model_with_inputs(
                     raise RuntimeError(
                         f"Unable to instantiate class {cls_model.__name__} with\n{config}"
                     ) from e
+
+                if verbose:
+                    print(
+                        f"[get_untrained_model_with_inputs] -- done(4) in "
+                        f"{time.perf_counter() - begin}s (model is {type(model)})"
+                    )
 
     # input kwargs
     seed = int(os.environ.get("SEED", "17")) + 1

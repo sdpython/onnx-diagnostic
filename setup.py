@@ -10,7 +10,7 @@ from setuptools import setup
 here = os.path.dirname(__file__)
 if here == "":
     here = "."
-package_data = {"onnx_diagnostic.validation": ["*.css", "*.js"]}
+package_data = {"onnx_diagnostic.tasks.data": ["*.onnx"]}
 
 try:
     with open(os.path.join(here, "requirements.txt"), "r") as f:

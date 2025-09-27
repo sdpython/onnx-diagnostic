@@ -14,6 +14,27 @@ __TASK__ = "image-text-to-text"
 def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     kwargs: Dict[str, Any] = {}
+    if (
+        hasattr(config, "architectures")
+        and config.architectures
+        and config.architectures[0] == "Gemma3ForConditionalGeneration"
+    ):
+        if hasattr(config, "vision_config"):
+            if hasattr(config.vision_config, "num_hidden_layers"):
+                config.vision_config.num_hidden_layers = min(
+                    config.vision_config.num_hidden_layers, nhl()
+                )
+        if hasattr(config, "text_config"):
+            if hasattr(config.text_config, "intermediate_size"):
+                config.text_config.intermediate_size = min(
+                    config.text_config.intermediate_size, 10240 // 10 * 5 // 2
+                )
+                config.text_config.hidden_size = min(
+                    config.text_config.hidden_size, 2560 // 10 * 5 // 2
+                )
+        update_config(config, kwargs)
+        return kwargs
+
     if hasattr(config, "num_hidden_layers"):
         config.num_hidden_layers = min(config.num_hidden_layers, nhl())
     if hasattr(config, "mm_tokens_per_image"):
