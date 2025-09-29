@@ -240,6 +240,7 @@ class TestTorchTestHelper(ExtTestCase):
                 "_DimHint(type=<_DimHintType.DYNAMIC:3>,min=None,max=None,_factory=True)",
                 "DYN",
             )
+            .replace("DimHint(DYNAMIC)", "DYN")
         )
         self.assertEqual(
             "{'input_ids':{0:DYN,1:DYN},'attention_mask':({0:DYN,1:DYN},),'position_ids':[{0:DYN,1:DYN}]}",
