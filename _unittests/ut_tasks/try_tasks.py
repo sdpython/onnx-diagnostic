@@ -6,6 +6,7 @@ from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 from onnx_diagnostic.helpers.torch_helper import steal_forward
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestHuggingFaceHubModel(ExtTestCase):
@@ -873,15 +874,19 @@ class TestHuggingFaceHubModel(ExtTestCase):
         #   use_cache:bool,logits_to_keep:None,return_dict:bool)
 
         print()
-        # steal forward creates a bug...
-        with steal_forward(
+        with torch_export_patches(
+            patch_torch=False, patch_sympy=False, patch_transformers=True
+        ), steal_forward(
             model,
             dump_file=self.get_dump_file("test_imagetext2text_generation_gemma3_4b_it.onnx"),
             dump_drop={"attention_mask", "past_key_values", "pixel_values"},
             save_as_external_data=False,
         ):
             generated_ids = model.generate(
-                **inputs, max_new_tokens=282, do_sample=False, cache_implementation="static"
+                **inputs,
+                max_new_tokens=282,
+                do_sample=False,
+                cache_implementation="static",
             )
         output_text = processor.decode(
             generated_ids[0][inputs["input_ids"].shape[1] :], skip_special_tokens=False

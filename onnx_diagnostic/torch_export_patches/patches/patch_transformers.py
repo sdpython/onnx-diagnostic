@@ -1,8 +1,9 @@
 import inspect
 import math
+import os
 from dataclasses import dataclass
 from functools import wraps
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Union
 import packaging.version as pv
 import torch
 import transformers
@@ -114,6 +115,7 @@ if patch_masking_utils:
         """manual patch for function ``transformers.masking_utils.eager_mask``."""
         # The masks for eager attention are simply boolean mask from sdpa, casted to 0 and -inf
         _ = kwargs.pop("allow_is_causal_skip", None)
+        # PATCHED: this line called the patched version of sdpa_mask
         mask = patched_sdpa_mask_recent_torch(
             batch_size=batch_size,
             cache_position=cache_position,
@@ -126,7 +128,7 @@ if patch_masking_utils:
             **kwargs,
         )
         min_dtype = torch.finfo(dtype).min
-        # The patched line.
+        # PATCHED: the following line
         # we need 0s where the tokens should be taken into account,
         # and -inf otherwise (mask is already of boolean type)
         # mask =
@@ -158,6 +160,7 @@ if patch_masking_utils:
             mask_function = and_masks(mask_function, padding_mask_function(padding_mask))
         batch_arange = torch.arange(batch_size, device=cache_position.device)
         head_arange = torch.arange(1, device=cache_position.device)
+        # PATCHED: this line calls the patched version of vmap_for_bhqkv
         causal_mask = patched__vmap_for_bhqkv(mask_function)(
             batch_arange, head_arange, cache_position, kv_arange
         )
@@ -214,6 +217,7 @@ if patch_DynamicLayer:
             self.dtype, self.device = key_states.dtype, key_states.device
             new_shape = list(key_states.shape)
             new_shape[-2] = 0
+            # PATCHED: used a tensor with an empty shape and not en empty list to initialize
             self.keys = torch.empty(new_shape, dtype=self.dtype, device=self.device)
             self.values = torch.empty(new_shape, dtype=self.dtype, device=self.device)
             if patch_is_initialized:
@@ -248,6 +252,8 @@ def _patch_make_causal_mask(
         diagonal = past_key_values_length - sliding_window - 1
 
         context_mask = torch.tril(torch.ones_like(mask, dtype=torch.bool), diagonal=diagonal)
+        # PATCHED: removed if is_torchdynamo_compiling(): mask = mask.clone()
+        # and used masked_fill instead of masked_fill_
         # In this case, the current implementation of torch fails (17/12/2024).
         # Try model Phi-3.5-Mini-Instruct.
         mask = mask.masked_fill(context_mask, torch.finfo(dtype).min)
@@ -453,10 +459,18 @@ class patched_GenerationMixin:
     """
 
     _PATCHES_ = [
-        "_cache_dependant_input_preparation",
-        "_cache_dependant_input_preparation_exporting",
-        "prepare_inputs_for_generation",
-        "_sample",
+        name
+        for name in [
+            "_cache_dependant_input_preparation",
+            "_cache_dependant_input_preparation_exporting",
+            (
+                None
+                if pv.Version(transformers.__version__) >= pv.Version("4.56")
+                else "prepare_inputs_for_generation"
+            ),
+            "_sample",
+        ]
+        if name is not None
     ]
     _PATCHED_CLASS_ = transformers.generation.utils.GenerationMixin
 
@@ -732,13 +746,13 @@ class patched_GenerationMixin:
     def _sample(
         self,
         input_ids: torch.LongTensor,
-        logits_processor: LogitsProcessorList,
-        stopping_criteria: StoppingCriteriaList,
-        generation_config: GenerationConfig,
+        logits_processor: "LogitsProcessorList",  # noqa: F821
+        stopping_criteria: "StoppingCriteriaList",  # noqa: F821
+        generation_config: "GenerationConfig",  # noqa: F821
         synced_gpus: bool = False,
-        streamer: Optional["BaseStreamer"] = None,
+        streamer: Optional["BaseStreamer"] = None,  # noqa: F821
         **model_kwargs,
-    ) -> Union[GenerateNonBeamOutput, torch.LongTensor]:
+    ) -> Union["GenerateNonBeamOutput", torch.LongTensor]:  # noqa: F821
         """
         2025/09/29: updates for Gemma3 models, fix for eager mode as well as the export.
         """
@@ -749,7 +763,9 @@ class patched_GenerationMixin:
         output_scores = generation_config.output_scores
         output_logits = generation_config.output_logits
         return_dict_in_generate = generation_config.return_dict_in_generate
-        has_eos_stopping_criteria = any(hasattr(criteria, "eos_token_id") for criteria in stopping_criteria)
+        has_eos_stopping_criteria = any(
+            hasattr(criteria, "eos_token_id") for criteria in stopping_criteria
+        )
         do_sample = generation_config.do_sample
 
         # init attention / hidden states / scores tuples
@@ -757,20 +773,32 @@ class patched_GenerationMixin:
         raw_logits = () if (return_dict_in_generate and output_logits) else None
         decoder_attentions = () if (return_dict_in_generate and output_attentions) else None
         cross_attentions = () if (return_dict_in_generate and output_attentions) else None
-        decoder_hidden_states = () if (return_dict_in_generate and output_hidden_states) else None
+        decoder_hidden_states = (
+            () if (return_dict_in_generate and output_hidden_states) else None
+        )
 
         # if model is an encoder-decoder, retrieve encoder attention weights and hidden states
         if return_dict_in_generate and self.config.is_encoder_decoder:
-            encoder_attentions = model_kwargs["encoder_outputs"].get("attentions") if output_attentions else None
+            encoder_attentions = (
+                model_kwargs["encoder_outputs"].get("attentions")
+                if output_attentions
+                else None
+            )
             encoder_hidden_states = (
-                model_kwargs["encoder_outputs"].get("hidden_states") if output_hidden_states else None
+                model_kwargs["encoder_outputs"].get("hidden_states")
+                if output_hidden_states
+                else None
             )
 
         # keep track of which sequences are already finished
         batch_size, cur_len = input_ids.shape[:2]
         this_peer_finished = False
-        unfinished_sequences = torch.ones(batch_size, dtype=torch.long, device=input_ids.device)
-        model_kwargs = self._get_initial_cache_position(cur_len, input_ids.device, model_kwargs)
+        unfinished_sequences = torch.ones(
+            batch_size, dtype=torch.long, device=input_ids.device
+        )
+        model_kwargs = self._get_initial_cache_position(
+            cur_len, input_ids.device, model_kwargs
+        )
 
         model_forward = self.__call__
         compile_forward = self._valid_auto_compile_criteria(model_kwargs, generation_config)
@@ -779,11 +807,10 @@ class patched_GenerationMixin:
             # If we use FA2 and a static cache, we cannot compile with fullgraph
             if self.config._attn_implementation == "flash_attention_2":
                 # only raise warning if the user passed an explicit compile-config
-                if generation_config.compile_config is not None and generation_config.compile_config.fullgraph:
-                    logger.warning_once(
-                        "When using Flash Attention 2 and a static cache, you cannot use the option `CompileConfig(fullgraph=True)` as "
-                        "FA2 introduces graph breaks. We overrode the option with `fullgraph=False`."
-                    )
+                if (
+                    generation_config.compile_config is not None
+                    and generation_config.compile_config.fullgraph
+                ):
                     generation_config.compile_config.fullgraph = False
             model_forward = self.get_compiled_call(generation_config.compile_config)
 
@@ -793,7 +820,9 @@ class patched_GenerationMixin:
         else:
             is_prefill = True
 
-        while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
+        while self._has_unfinished_sequences(
+            this_peer_finished, synced_gpus, device=input_ids.device
+        ):
             # prepare model inputs
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
@@ -803,7 +832,8 @@ class patched_GenerationMixin:
             else:
                 outputs = model_forward(**model_inputs, return_dict=True)
 
-            # synced_gpus: don't waste resources running the code we don't need; kwargs must be updated before skipping
+            # synced_gpus: don't waste resources running the code we don't need;
+            # kwargs must be updated before skipping
             model_kwargs = self._update_model_kwargs_for_generation(
                 outputs,
                 model_kwargs,
@@ -812,9 +842,12 @@ class patched_GenerationMixin:
             if synced_gpus and this_peer_finished:
                 continue
 
-            # Copy is needed to avoid keeping a hanging ref to outputs.logits which may be very large for first iteration
+            # Copy is needed to avoid keeping a hanging ref to outputs.logits
+            # which may be very large for first iteration
             # (the clone itself is always small)
-            next_token_logits = outputs.logits[:, -1, :].to(copy=True, dtype=torch.float32, device=input_ids.device)
+            next_token_logits = outputs.logits[:, -1, :].to(
+                copy=True, dtype=torch.float32, device=input_ids.device
+            )
 
             # pre-process distribution
             next_token_scores = logits_processor(input_ids, next_token_logits)
@@ -827,7 +860,9 @@ class patched_GenerationMixin:
                     raw_logits += (next_token_logits,)
                 if output_attentions:
                     decoder_attentions += (
-                        (outputs.decoder_attentions,) if self.config.is_encoder_decoder else (outputs.attentions,)
+                        (outputs.decoder_attentions,)
+                        if self.config.is_encoder_decoder
+                        else (outputs.attentions,)
                     )
                     if self.config.is_encoder_decoder:
                         cross_attentions += (outputs.cross_attentions,)
@@ -841,18 +876,23 @@ class patched_GenerationMixin:
 
             # token selection
             if do_sample:
-                probs = nn.functional.softmax(next_token_scores, dim=-1)
-                # TODO (joao): this OP throws "skipping cudagraphs due to ['incompatible ops']", find solution
+                probs = torch.nn.functional.softmax(next_token_scores, dim=-1)
                 next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
             else:
                 next_tokens = torch.argmax(next_token_scores, dim=-1)
 
             # finished sentences should have their next token be a padding token
             if has_eos_stopping_criteria:
-                next_tokens = next_tokens * unfinished_sequences + pad_token_id * (1 - unfinished_sequences)
+                next_tokens = next_tokens * unfinished_sequences + pad_token_id * (
+                    1 - unfinished_sequences
+                )
 
             # update generated ids, model inputs, and length for next step
-            input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
+            # PATCHED: the two following lines, next_tokens can 2D already for this model
+            next_tokens_2d = (
+                next_tokens if len(next_tokens.shape) == 2 else next_tokens[:, None]
+            )
+            input_ids = torch.cat([input_ids, next_tokens_2d], dim=-1)
             if streamer is not None:
                 streamer.put(next_tokens.cpu())
 
@@ -860,8 +900,10 @@ class patched_GenerationMixin:
             this_peer_finished = unfinished_sequences.max() == 0
             cur_len += 1
 
-            # This is needed to properly delete outputs.logits which may be very large for first iteration
-            # Otherwise a reference to outputs is kept which keeps the logits alive in the next iteration
+            # This is needed to properly delete outputs.logits which may be very large
+            # for first iteration
+            # Otherwise a reference to outputs is kept which keeps
+            # the logits alive in the next iteration
             del outputs
 
         if streamer is not None:
@@ -869,7 +911,7 @@ class patched_GenerationMixin:
 
         if return_dict_in_generate:
             if self.config.is_encoder_decoder:
-                return GenerateEncoderDecoderOutput(
+                return transformers.generation.utils.GenerateEncoderDecoderOutput(
                     sequences=input_ids,
                     scores=scores,
                     logits=raw_logits,
@@ -881,7 +923,7 @@ class patched_GenerationMixin:
                     past_key_values=model_kwargs.get("past_key_values"),
                 )
             else:
-                return GenerateDecoderOnlyOutput(
+                return transformers.generation.utils.GenerateDecoderOnlyOutput(
                     sequences=input_ids,
                     scores=scores,
                     logits=raw_logits,
@@ -955,6 +997,7 @@ def patched__compute_dynamic_ntk_parameters(
     if seq_len is None:
         seq_len = max_position_embeddings
     else:
+        # PATCHED: remove the line using max
         torch._check(isinstance(seq_len, torch.Tensor))
         seq_len = torch.maximum(
             seq_len,
@@ -1060,6 +1103,7 @@ def patched_dynamic_rope_update(rope_forward):
         )
         original_inv_freq = self.original_inv_freq.to(device)
 
+        # PATCHED: uses torch.cond instead of a test
         cond = (seq_len > original_max_position_embeddings).item()
         inv_freq = torch.cond(
             cond,
@@ -1131,6 +1175,7 @@ def patched_dynamic_rope_update(rope_forward):
 
         original_inv_freq = self.original_inv_freq.to(device)
         cond = (seq_len >= self.original_max_seq_len).item()
+        # PATCHED: uses torch.cond instead of a test
         inv_freq = torch.cond(
             cond,
             (lambda x, y: x.clone()),
@@ -1166,6 +1211,7 @@ def common_eager_attention_forward(
 
     attn_weights = torch.matmul(query, key.transpose(2, 3)) * scaling
     if attention_mask is not None:
+        # PATCHED
         # The two following lines were added.
         if attention_mask is not None and attention_mask.ndim == 4:
             attention_mask = attention_mask[:, :, :, : key.shape[-2]]
@@ -1238,6 +1284,7 @@ def patched_modeling_marian_eager_attention_forward(
 class common_RotaryEmbedding(torch.nn.Module):
     # This may cause some issues.
     # @torch.no_grad()
+    # PATCHED: the decorator
     @patched_dynamic_rope_update
     def forward(self, x, position_ids):
         inv_freq_expanded = (
