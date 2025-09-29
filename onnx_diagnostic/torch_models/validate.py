@@ -915,13 +915,13 @@ def compute_statistics(onnx_filename: str) -> Dict[str, Union[float, int]]:
 def _validate_do_run_model(
     data, summary, key, tag, expected_tag, verbose, repeat, warmup, quiet
 ):
-    if verbose:
-        print(f"[validate_model] -- run the model inputs={key!r}...")
-        print(f"[validate_model] {key}={string_type(data[key], with_shape=True)}")
     if key not in data:
         if verbose:
             print(f"[validate_model] input; {key!r} not defined, skip.")
         return
+    if verbose:
+        print(f"[validate_model] -- run the model inputs={key!r}...")
+        print(f"[validate_model] {key}={string_type(data[key], with_shape=True)}")
     # We make a copy of the input just in case the model modifies them inplace
     hash_inputs = string_type(data[key], with_shape=True)
     inputs = torch_deepcopy(data[key])
