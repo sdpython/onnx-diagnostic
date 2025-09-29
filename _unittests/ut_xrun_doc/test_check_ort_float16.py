@@ -10,6 +10,7 @@ from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     ignore_warnings,
     requires_cuda,
+    requires_onnxruntime,
 )
 
 
@@ -18,7 +19,9 @@ class TestCheckOrtFloat16(ExtTestCase):
         import onnxruntime
         from onnxruntime import InferenceSession, SessionOptions
 
-        op_type = "ScatterElements" if "ScatterElements" in expected_names else "ScatterND"
+        op_type = (
+            "ScatterElements" if "ScatterElements" in str(expected_names) else "ScatterND"
+        )
         ndim = 2 if op_type == "ScatterElements" else 3
 
         assert dtype in (np.float16, np.float32)
@@ -61,7 +64,10 @@ class TestCheckOrtFloat16(ExtTestCase):
             # onnxruntime might introduces some intermediate cast.
             if pv.Version(onnxruntime.__version__) <= pv.Version("1.17.1"):
                 raise unittest.SkipTest("float16 not supported on cpu")
-        self.assertEqual(expected_names, names)
+        if isinstance(expected_names, list):
+            self.assertEqual(names, expected_names)
+        else:
+            self.assertIn(names, expected_names)
 
         sonx = str(onx).replace(" ", "").replace("\n", "|")
         sexp = 'op_type:"Cast"|attribute{|name:"to"|type:INT|i:%d|}' % itype
@@ -126,24 +132,47 @@ class TestCheckOrtFloat16(ExtTestCase):
                 (row.get("args_provider", None), row.get("args_op_name", None))
             )
         short_list = [(a, b) for a, b in exe_providers if a is not None and b is not None]
-        self.assertEqual(short_list, [("CUDAExecutionProvider", o) for o in expected_names])
+        if isinstance(expected_names, list):
+            self.assertEqual(
+                short_list, [("CUDAExecutionProvider", o) for o in expected_names]
+            )
+        else:
+            self.assertIn(
+                short_list,
+                tuple([("CUDAExecutionProvider", o) for o in en] for en in expected_names),
+            )
 
     @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @requires_cuda()
     @ignore_warnings(DeprecationWarning)
+    @requires_onnxruntime("1.23")
     def test_scatterels_cuda(self):
-        default_value = [
-            "Cast",
-            # "MemcpyToHost",
-            "ScatterElements",
-            # "MemcpyFromHost",
-            "Sub",
-        ]
+        default_value = (
+            [
+                "Cast",
+                # "MemcpyToHost",
+                "ScatterElements",
+                # "MemcpyFromHost",
+                "Sub",
+            ],
+            [
+                "Cast",
+                "Cast",
+                # "MemcpyToHost",
+                "ScatterElements",
+                # "MemcpyFromHost",
+                "Sub",
+            ],
+        )
         expected = {
             (np.float32, "none"): default_value,
             (np.float16, "none"): default_value,
             (np.float32, "add"): default_value,
             (np.float16, "add"): default_value,
+            (np.float32, "min"): default_value,
+            (np.float16, "min"): default_value,
+            (np.float32, "max"): default_value,
+            (np.float16, "max"): default_value,
         }
         for opset, dtype, reduction in itertools.product(
             [16, 18], [np.float32, np.float16], ["none", "add", "min", "max"]
@@ -161,13 +190,23 @@ class TestCheckOrtFloat16(ExtTestCase):
     @requires_cuda()
     @ignore_warnings(DeprecationWarning)
     def test_scatternd_cuda(self):
-        default_value = [
-            "Cast",
-            # "MemcpyToHost",
-            "ScatterND",
-            # "MemcpyFromHost",
-            "Sub",
-        ]
+        default_value = (
+            [
+                "Cast",
+                # "MemcpyToHost",
+                "ScatterND",
+                # "MemcpyFromHost",
+                "Sub",
+            ],
+            [
+                "Cast",
+                "Cast",
+                # "MemcpyToHost",
+                "ScatterND",
+                # "MemcpyFromHost",
+                "Sub",
+            ],
+        )
         expected = {
             (np.float32, "none"): default_value,
             (np.float16, "none"): default_value,
@@ -188,20 +227,30 @@ class TestCheckOrtFloat16(ExtTestCase):
 
     @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @ignore_warnings(DeprecationWarning)
+    @requires_onnxruntime("1.23")
     def test_scatterels_cpu(self):
         default_value = [
             "Cast",
             "ScatterElements",
             "Sub",
         ]
-        default_value_16 = [
-            "Cast",
-            "Cast",
-            "ScatterElements",
-            "Cast",
-            "Sub",
-            "Cast",
-        ]
+        default_value_16 = (
+            [
+                "Cast",
+                "ScatterElements",
+                "Cast",
+                "Sub",
+                "Cast",
+            ],
+            [
+                "Cast",
+                "Cast",
+                "ScatterElements",
+                "Cast",
+                "Sub",
+                "Cast",
+            ],
+        )
         expected = {
             (np.float32, "none"): default_value,
             (np.float16, "none"): default_value_16,
@@ -222,20 +271,30 @@ class TestCheckOrtFloat16(ExtTestCase):
 
     @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @ignore_warnings(DeprecationWarning)
+    @requires_onnxruntime("1.23")
     def test_scatternd_cpu(self):
         default_value = [
             "Cast",
             "ScatterND",
             "Sub",
         ]
-        default_value_16 = [
-            "Cast",
-            "Cast",
-            "ScatterND",
-            "Cast",
-            "Sub",
-            "Cast",
-        ]
+        default_value_16 = (
+            [
+                "Cast",
+                "ScatterND",
+                "Cast",
+                "Sub",
+                "Cast",
+            ],
+            [
+                "Cast",
+                "Cast",
+                "ScatterND",
+                "Cast",
+                "Sub",
+                "Cast",
+            ],
+        )
         expected = {
             (np.float32, "none"): default_value,
             (np.float16, "none"): default_value_16,

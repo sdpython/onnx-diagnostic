@@ -1,9 +1,14 @@
 Change Logs
 ===========
 
+0.7.13
+++++++
+
 0.7.12
 ++++++
 
+* :pr:`232`: fixes ``--patch`` argument so that ``--patch=0`` works
+* :pr:`231`: better statistics about fusions
 * :pr:`227`: better support for ``model_id//pretrained``, adds speed up when running command validate
 * :pr:`226`: fix input order for models created with modelbuilder
 

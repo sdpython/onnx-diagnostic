@@ -254,6 +254,17 @@ def torch_export_patches(
     may appear ``AssertionError: Mutating module attribute _seen_tokens during export.``.
     It can be avoided by setting ``strict=False`` when call :func:`torch.export.export`.
     """
+    if verbose:
+        print(f"[torch_export_patches] patch_sympy={patch_sympy!r}")
+        print(f"                     . patch_torch={patch_torch!r}")
+        print(f"                     . patch_transformers={patch_transformers!r}")
+        print(f"                     . patch_diffusers={patch_diffusers!r}")
+        print(f"                     . catch_constraints={catch_constraints!r}")
+        print(f"                     . stop_if_static={stop_if_static!r}")
+        print(f"                     . patch={patch!r}")
+        print(f"                     . custom_patches={custom_patches!r}")
+        print(f"[torch_export_patches] dump_rewriting={dump_rewriting!r}")
+
     if rewrite:
         from .patch_module import torch_export_rewrite
 
