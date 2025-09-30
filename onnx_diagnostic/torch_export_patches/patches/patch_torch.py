@@ -170,7 +170,7 @@ def patched__broadcast_shapes(*_shapes):
                 if guard_or_false(shape[idx] == common_shape[idx]):
                     continue
             # PATCHED: two cases, if == for sure, no broadcast,
-            # otherwise maybe broadcase with max(dimensions)
+            # otherwise maybe broadcast with max(dimensions)
             if guard_size_oblivious(common_shape[idx] == 1):
                 if shape[idx] < 0:
                     raise ValueError(
