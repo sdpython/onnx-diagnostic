@@ -1672,13 +1672,9 @@ if patch_modeling_utils:
         # in SDPA to support both torch.compile's dynamic shapes and full graph options. An inline conditional prevents dynamic shapes from compiling.  # noqa: E501
         # Note that it is important to check first for the shape, otherwise compile will fail with `argument 'is_causal' must be bool, not SymBool`  # noqa: E501
         if is_causal is None:
-            # The last condition is for encoder (decoder) models which specify this by passing their own `is_causal` flag  # noqa: E501
-            # This is mainly due to those models having mixed implementations for encoder, decoder, and encoder-decoder attns  # noqa: E501
-            # is_causal = query.shape[2] > 1 and attention_mask is None and getattr(module, "is_causal", True)  # noqa: E501
-            # NOTE: query.shape[2] == 1 or > 1 should have the same output for causal attention
-            # so we simplify the condition to:
-            is_causal = attention_mask is None and getattr(module, "is_causal", True)
-
+            # NOTE: attention_mask should always be not None
+            # https://github.com/huggingface/transformers/blob/def4a37e19601b597f170e81684c8b0b5f84db39/src/transformers/masking_utils.py#L240-L243
+            is_causal = False
         # Shapes (e.g. query.shape[2]) are tensors during jit tracing, resulting in `is_causal` being a tensor.  # noqa: E501
         # We convert it to a bool for the SDPA kernel that only accepts bools.
         if torch.jit.is_tracing() and isinstance(is_causal, torch.Tensor):

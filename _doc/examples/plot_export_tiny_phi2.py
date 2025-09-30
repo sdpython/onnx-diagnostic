@@ -88,7 +88,9 @@ print(f"expected: {string_type(expected, with_shape=True, with_min_max=True)}")
 # Shapes may not match on the second call with the modified inputs.
 
 
-with torch_export_patches(patch_transformers=True):
+with torch_export_patches(patch_transformers=True), torch.fx.experimental._config.patch(
+    backed_size_oblivious=True
+):
 
     # Two unnecessary steps but useful in case of an error
     # We check the cache is registered.
