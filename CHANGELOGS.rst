@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.7.13
+++++++
+
+* :pr:`244`: add a patch to bypass the exception raised when the dynamic dimension is in {0,1}
+
 0.7.12
 ++++++
 
