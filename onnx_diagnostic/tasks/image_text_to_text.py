@@ -7,6 +7,8 @@ from ..helpers.config_helper import (
     _pick,
     default_num_hidden_layers as nhl,
 )
+from ..helpers.mini_onnx_builder import create_input_tensors_from_onnx_model
+from .data import get_data
 
 __TASK__ = "image-text-to-text"
 
@@ -124,13 +126,39 @@ def _get_inputs_gemma3(
             token_type_ids:T7s1x1,
             cache_position:T7s1,
             logits_to_keep:1)
+
+    **google/gemma-3-4b-it**
+
+    iteration 1
+
+    ::
+           cache_position:T7s281,
+           input_ids:T7s1x281,
+           token_type_ids:T7s1x281,
+           attention_mask:dict(sliding_attention:T9s1x1x281x580,
+                               full_attention:T9s1x1x281x580),
+           pixel_values:T16s1x3x896x896,
+
+    iteration 2
+
+    ::
+
+           cache_position:T7s1,
+           past_key_values:StaticCache(key_cache=#34[T1s1x4x580x256,...],
+                                       value_cache=#34[T1s1x4x580x256,...]),
+           input_ids:T7s1x1,
+           inputs_embeds:None,
+           token_type_ids:T7s1x1,
+           attention_mask:dict(sliding_attention:T9s1x1x1x580,full_attention:T9s1x1x1x580),
+           position_ids:None,
+           use_cache:bool,logits_to_keep:None,return_dict:bool)
+
     """
     assert (
         "cls_cache" not in kwargs
     ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     batch = "batch"
-    seq_length = "seq_length"  # torch.export.Dim("seq_length", min=1, max=4096)
-    # cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
+    seq_length = "seq_length"
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
@@ -149,13 +177,15 @@ def _get_inputs_gemma3(
         "use_cache": None,
     }
 
-    input_ids = torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
-        torch.int64
+    # first iteration
+    dummies = create_input_tensors_from_onnx_model(
+        get_data("dummies_imagetext2text_generation_gemma3.onnx")
     )
-    input_ids[:, 1] = image_token_index
-    # input_ids[input_ids == image_token_index] = pad_token_id
-    token_type_ids = torch.zeros_like(input_ids)
-    token_type_ids[input_ids == image_token_index] = 1
+    dummies = {k: v for k, v in dummies.items() if k in shapes}
+    expected = {"input_ids", "token_type_ids", "position_ids", "cache_position"}
+    assert expected & set(
+        dummies
+    ), f"Unable to find expected inputs {expected} in loaded inputs {set(dummines)}"
 
     inputs = dict(
         input_ids=input_ids,

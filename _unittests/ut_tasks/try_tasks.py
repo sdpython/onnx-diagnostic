@@ -849,7 +849,8 @@ class TestHuggingFaceHubModel(ExtTestCase):
         # inputs.pop("token_type_ids", None)
         print(f"-- inputs={self.string_type(inputs)}")
 
-        # iteration 1
+        # iteration merge = sequence > 1, cache not empty
+        # iteration 1 = sequence > 1, no cache
         #   cache_position:T7s281,
         #   past_key_values:StaticCache(key_cache=#0[], value_cache=#0[]),
         #   input_ids:T7s1x281,
@@ -862,7 +863,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         #   logits_to_keep:None,
         #   pixel_values:T16s1x3x896x896,
         #   return_dict:bool)
-        # iteration 3
+        # iteration 2 = sequence = 1, cache not empty
         #   cache_position:T7s1,
         #   past_key_values:StaticCache(key_cache=#34[T1s1x4x580x256,...],
         #                               value_cache=#34[T1s1x4x580x256,...]),
