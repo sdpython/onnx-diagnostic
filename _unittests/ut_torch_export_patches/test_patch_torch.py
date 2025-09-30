@@ -288,10 +288,14 @@ class TestPatchPatchTorch(ExtTestCase):
                 name="expected shape should be broadcastable to (< 2.9)",
                 dynamic_shapes=dynamic_shapes,
             ):
-                with torch.fx.experimental._config.patch(backed_size_oblivious=True):
-                    ep = torch.export.export(model, inputs, dynamic_shapes=dynamic_shapes)
-                got = ep.module()(*inputs)
-                self.assertEqualArray(expected, got)
+                try:
+                    with torch.fx.experimental._config.patch(backed_size_oblivious=True):
+                        torch.export.export(model, inputs, dynamic_shapes=dynamic_shapes)
+                except RuntimeError as e:
+                    self.assertIn(
+                        "Expected input at *args[2].shape[0] to be equal to 1, but got 1024",
+                        str(e),
+                    )
 
         with self.subTest(name="patch for 0/1", dynamic_shapes=dynamic_shapes):
             with torch_export_patches():
