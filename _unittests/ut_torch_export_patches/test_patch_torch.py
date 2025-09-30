@@ -3,6 +3,8 @@ from typing import Callable
 import torch
 from torch._dynamo._trace_wrapped_higher_order_op import TransformGetItemToIndex
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch, requires_transformers
+from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
 class TestPatchPatchTorch(ExtTestCase):
@@ -235,6 +237,42 @@ class TestPatchPatchTorch(ExtTestCase):
         DYN = torch.export.Dim.DYNAMIC
         ep = torch.export.export(Model(), (x,), dynamic_shapes=({0: DYN},))
         self.assertEqualArray(Model()(x), ep.module()(x))
+
+    def test_oblivious_for_dimension_01(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, ind1, ind2):
+                return x[ind1, ind2]
+
+        inputs = (
+            torch.randn(2, 1024),
+            torch.tensor([[0, 1]], dtype=torch.int64).T,
+            torch.arange(1024, dtype=torch.int64),
+        )
+        model = Model()
+        expected = model(*inputs)
+
+        dynamic_string = ({0: "A", 1: "B"}, {0: "C", 1: "D"}, {0: "E"})
+        dynamic_shapes = use_dyn_not_str(dynamic_string)
+        with self.subTest(name="export 0/1 specialized due to hint of 1 for dimension"):
+            try:
+                torch.export.export(model, inputs, dynamic_shapes=dynamic_shapes)
+                raise AssertionError("torch fixed that case")
+            except ValueError as e:
+                self.assertIn("export 0/1 specialized due to hint of 1 for dimension", str(e))
+
+        with self.subTest(name="expected shape should be broadcastable to"):
+            try:
+                with torch.fx.experimental._config.patch(backed_size_oblivious=True):
+                    torch.export.export(model, inputs, dynamic_shapes=dynamic_shapes)
+                raise AssertionError("torch fixed that case")
+            except RuntimeError as e:
+                self.assertIn("expected shape should be broadcastable to", str(e))
+
+        with self.subTest(name="patch for 0/1"):
+            with torch_export_patches():
+                ep = torch.export.export(model, inputs, dynamic_shapes=dynamic_shapes)
+            got = ep.module()(*inputs)
+            self.assertEqualArray(expected, got)
 
 
 if __name__ == "__main__":

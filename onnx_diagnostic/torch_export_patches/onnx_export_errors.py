@@ -341,6 +341,7 @@ def torch_export_patches(
                 patched_infer_size,
                 patched_vmap,
                 patched__broadcast_shapes,
+                patched__constrain_user_specified_dimhint_range,
                 _catch_produce_guards_and_solve_constraints,
                 patch__check_input_constraints_for_graph,
             )
@@ -370,6 +371,14 @@ def torch_export_patches(
             f__broadcast_shapes = torch._refs._broadcast_shapes
             torch._refs._broadcast_shapes = patched__broadcast_shapes
             torch._meta_registrations._broadcast_shapes = patched__broadcast_shapes
+
+            # torch._export.non_strict_utils._constrain_user_specified_dimhint_range
+            f___constrain_user_specified_dimhint_range = (
+                torch._export.non_strict_utils._constrain_user_specified_dimhint_range
+            )
+            torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
+                patched__constrain_user_specified_dimhint_range
+            )
 
         # torch._export.non_strict_utils.produce_guards_and_solve_constraints
         if patch_torch and catch_constraints:
@@ -569,6 +578,9 @@ def torch_export_patches(
                 torch._subclasses.fake_impls.infer_size = f_infer_size
                 torch._refs._broadcast_shapes = f__broadcast_shapes
                 torch._meta_registrations._broadcast_shapes = f__broadcast_shapes
+                torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
+                    f___constrain_user_specified_dimhint_range
+                )
 
                 if verbose:
                     print("[torch_export_patches] restored pytorch functions")
