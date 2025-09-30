@@ -1,7 +1,7 @@
 import inspect
 import os
 import traceback
-from typing import Any, Callable, Dict, List, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import torch
 from torch._subclasses.fake_tensor import FakeTensorMode
 
@@ -65,6 +65,8 @@ def patch__check_input_constraints_for_graph(
     verbose: int = 0,
 ) -> None:
     try:
+        # PATCHED: catches exception and prints out the information instead of
+        # stopping the conversion.
         return previous_function(input_placeholders, flat_args_with_path, range_constraints)
     except Exception as e:
         if not int(os.environ.get("SKIP_SOLVE_CONSTRAINTS", "1")):
@@ -122,8 +124,7 @@ def patched_infer_size(a, b):
         if b1 or b2 or b3:
             expandedSizes[i] = sizeB if guard_size_oblivious(sizeA == 1) else sizeA
         else:
-            # In this case, the current implementation of torch fails (17/12/2024).
-            # Try model SmolLM.
+            # PATCHED: generic case, the dimension is known, no need to assert
             expandedSizes[i] = torch.sym_max(sizeA, sizeB)
     return tuple(expandedSizes)
 
@@ -132,7 +133,11 @@ def patched__broadcast_shapes(*_shapes):
     """Patches ``torch._refs._broadcast_shapes``."""
     from functools import reduce
     from torch._prims_common import IntLike
-    from torch.fx.experimental.symbolic_shapes import guard_size_oblivious
+    from torch.fx.experimental.symbolic_shapes import (
+        guard_size_oblivious,
+        guard_or_false,
+        is_nested_int,
+    )
 
     shapes = tuple(
         (x,) if isinstance(x, IntLike) else x for x in filter(lambda x: x is not None, _shapes)
@@ -142,17 +147,30 @@ def patched__broadcast_shapes(*_shapes):
     if len(shapes) == 0:
         return None
 
-    # Type checking
-    # TODO: make common validations available as utils
     for shape in shapes:
-        assert isinstance(shape, Sequence)
+        if not isinstance(shape, Sequence):
+            raise RuntimeError(
+                "Input shapes should be of type ints, a tuple of ints, "
+                "or a list of ints, got ",
+                shape,
+            )
 
     # Computes common shape
-    common_shape = [  # List[Union[int, torch.SymInt]]
-        1,
-    ] * reduce(max, (len(shape) for shape in shapes))
+    common_shape = [1] * reduce(max, (len(shape) for shape in shapes))
     for _arg_idx, shape in enumerate(shapes):
         for idx in range(-1, -1 - len(shape), -1):
+            if is_nested_int(shape[idx]):
+                # Broadcasting is allowed for (j0, 1) or (j0, j0);
+                # not (j0, j1), (j0, 5), etc.
+                if is_nested_int(common_shape[idx]) and guard_or_false(
+                    shape[idx] == common_shape[idx]
+                ):
+                    continue
+            else:
+                if guard_or_false(shape[idx] == common_shape[idx]):
+                    continue
+            # PATCHED: two cases, if == for sure, no broadcast,
+            # otherwise maybe broadcast with max(dimensions)
             if guard_size_oblivious(common_shape[idx] == 1):
                 if shape[idx] < 0:
                     raise ValueError(
@@ -172,6 +190,7 @@ class patched_ShapeEnv:
     ) -> None:
         if self.frozen:
             self.counter["ignored_backward_guard"] += 1
+            # PATCHED: raised an exception instead of logging.
             raise AssertionError(
                 f"[patched_ShapeEnv] Ignored guard {expr} == {concrete_val}, "
                 f"this could result in accuracy problems"
@@ -338,11 +357,13 @@ class patched_ShapeEnv:
                 },
             )
 
+            # PATCHED: removed lines
             # if config.print_specializations:
             #    self.log.warning(
             #         "Specializing %s to %s", self.var_to_sources[a][0].name(), tgt
             #     )
             #     self.log.debug("SPECIALIZATION", stack_info=True)
+        # PATCHED: replaces logging by raising an exception
         assert msg != "range_refined_to_singleton", (
             f"patched_ShapeEnv: A dynamic dimension becomes static! "
             f"a={a!r}, tgt={tgt!r}, msg={msg!r}, tgt_bound={tgt_bound}"
@@ -364,6 +385,7 @@ class patched_ShapeEnv:
         self, prefix: str, g: "SympyBoolean", forcing_spec: bool  # noqa: F821
     ) -> None:
         self._log_guard_remember(prefix=prefix, g=g, forcing_spec=forcing_spec)
+        # PATCHED: removed
         # It happens too often to be relevant.
         # sloc, _maybe_extra_debug = self._get_stack_summary(True)
         # warnings.warn(
@@ -464,3 +486,87 @@ def patched_vmap(func, in_dims=0, out_dims=0):
             return results
 
     return wrapped
+
+
+def patched__constrain_user_specified_dimhint_range(
+    symint: torch.SymInt,
+    hint: int,
+    dim: "_DimHint",  # noqa: F821
+    range_constraints,
+    shape_env,
+    keypath: "KeyPath",  # noqa: F821
+    i: Optional[int] = None,
+) -> Optional[str]:
+    """Patches ``torch._export.non_strict_utils._constrain_user_specified_dimhint_range``."""
+    from torch._export.non_strict_utils import is_int, int_oo, _DimHintType, ValueRanges
+
+    trace_vr = (
+        range_constraints[symint.node.expr]
+        if not is_int(symint)
+        else ValueRanges(int(symint), int(symint))
+    )
+    # warn on 0/1 specialization for Dim.AUTO; not an actual error
+    # PATCHED: remove logging
+    # if dim.type == _DimHintType.AUTO and trace_vr.is_singleton() and hint in (0, 1):
+    #    pathstr = f"inputs{pytree.keystr(keypath)}"
+    #    if i is not None:
+    #        pathstr += f".shape[{i}]"
+    #    msg = (
+    #        f"dimension {pathstr} 0/1 specialized; Dim.AUTO was specified along "
+    #        f"with a sample input with hint = {hint}."
+    #    )
+    #    log.warning(msg)
+
+    try:
+        user_vr = ValueRanges(
+            lower=0 if dim.min is None else dim.min,
+            upper=int_oo if dim.max is None else dim.max,
+        )
+        if is_int(symint):
+            out_vr = trace_vr & user_vr
+        else:
+            range_constraints[symint.node.expr] &= user_vr
+            shape_env.var_to_range[symint.node._expr] &= user_vr
+            out_vr = range_constraints[symint.node.expr]
+
+        # check for Dim.DYNAMIC specializations; special case error message on 0/1
+        if dim.type == _DimHintType.DYNAMIC and out_vr.is_singleton():
+            path = f"inputs{torch.utils._pytree.keystr(keypath)}"
+            if i is not None:
+                path += f".shape[{i}]"
+            if (
+                trace_vr.is_singleton()
+                and hint in (0, 1)
+                # PATCHED: line removed
+                # and not torch.fx.experimental._config.backed_size_oblivious
+            ):
+                return None
+                # PATCHED: line removed
+                # msg = (
+                #     f"- Received user-specified dim hint "
+                #     f"Dim.DYNAMIC(min={dim.min}, max={dim.max}), "
+                #     f"but export 0/1 specialized due to hint of "
+                #     f"{hint} for dimension {path}."
+                # )
+            else:
+                msg = (
+                    f"- Received user-specified dim hint "
+                    f"Dim.DYNAMIC(min={dim.min}, max={dim.max}), "
+                    f"but tracing inferred a static shape of "
+                    f"{out_vr.lower} for dimension {path}."
+                )
+            return msg
+
+    except torch.utils._sympy.value_ranges.ValueRangeError:
+        path = f"inputs{torch.utils._pytree.keystr(keypath)}"
+        if i is not None:
+            path += f".shape[{i}]"
+        msg = (
+            f"- Received user-specified min/max range of [{dim.min}, {dim.max}], "
+            f"conflicting with the inferred min/max range of "
+            f"[{trace_vr.lower}, {trace_vr.upper}], "
+            f"for {path}."
+        )
+        return msg
+
+    return None
