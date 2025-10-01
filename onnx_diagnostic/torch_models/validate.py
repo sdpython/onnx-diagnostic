@@ -1,3 +1,4 @@
+import gc
 import datetime
 import inspect
 import os
@@ -113,6 +114,8 @@ def _make_folder_name(
     subfolder: Optional[str] = None,
     opset: Optional[int] = None,
     drop_inputs: Optional[List[str]] = None,
+    same_as_pretrained: bool = False,
+    use_pretrained: bool = False,
 ) -> str:
     "Creates a filename unique based on the given options."
     els = [model_id.replace("/", "_")]
@@ -141,6 +144,10 @@ def _make_folder_name(
     if drop_inputs:
         ii = "-".join(f"{s[0]}{s[-1]}" for s in drop_inputs)
         els.append(f"I-{ii.upper()}")
+    if use_pretrained:
+        els.append("TRAINED")
+    elif same_as_pretrained:
+        els.append("SAMESIZE")
     return "-".join(els)
 
 
@@ -246,12 +253,21 @@ def _quiet_or_not_quiet(
             begin = time.perf_counter()
             t = fct()
             times.append(time.perf_counter() - begin)
-        a = np.array(times)
+        a = np.array(times, dtype=np.float64)
+        a.sort()
+        i5 = max(1, a.shape[0] * 5 // 100)
+        i2 = max(1, a.shape[0] * 2 // 100)
         summary[f"time_{suffix}_latency"] = a.mean()
         summary[f"time_{suffix}_latency_std"] = a.std()
         summary[f"time_{suffix}_latency_min"] = a.min()
-        summary[f"time_{suffix}_latency_min"] = a.max()
+        summary[f"time_{suffix}_latency_max"] = a.max()
+        summary[f"time_{suffix}_latency_098"] = a[-i2]
+        summary[f"time_{suffix}_latency_095"] = a[-i5]
+        summary[f"time_{suffix}_latency_005"] = a[i5]
+        summary[f"time_{suffix}_latency_002"] = a[i2]
         summary[f"time_{suffix}_n"] = len(a)
+        summary[f"time_{suffix}_latency_098"] = a[i2:-i2].mean()
+
     return res
 
 
@@ -392,12 +408,14 @@ def validate_model(
     if ``runtime == 'ref'``,
     ``orteval10`` increases the verbosity.
     """
+    validation_begin = time.perf_counter()
     model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
         model_id,
         subfolder,
         same_as_pretrained=same_as_pretrained,
         use_pretrained=use_pretrained,
     )
+    time_preprocess_model_id = time.perf_counter() - validation_begin
     default_patch = dict(patch_transformers=True, patch_diffusers=True, patch=True)
     if isinstance(patch, bool):
         patch_kwargs = default_patch if patch else dict(patch=False)
@@ -438,6 +456,7 @@ def validate_model(
             version_exporter=exporter or "",
             version_runtime=runtime,
             version_inputs2=inputs2,
+            time_preprocess_model_id=time_preprocess_model_id,
         )
     )
     if opset:
@@ -454,6 +473,8 @@ def validate_model(
             subfolder=subfolder,
             opset=opset,
             drop_inputs=drop_inputs,
+            use_pretrained=use_pretrained,
+            same_as_pretrained=same_as_pretrained,
         )
         dump_folder = os.path.join(dump_folder, folder_name)
         if not os.path.exists(dump_folder):
@@ -486,7 +507,7 @@ def validate_model(
     mop = model_options or {}
     data = _quiet_or_not_quiet(
         quiet,
-        "create",
+        "create_torch_model",
         summary,
         None,
         (
@@ -663,6 +684,8 @@ def validate_model(
         print("[validate_model] --")
 
     if do_run:
+        validation_begin = time.perf_counter()
+
         _validate_do_run_model(
             data, summary, "inputs", "run", "run_expected", verbose, repeat, warmup, quiet
         )
@@ -670,12 +693,14 @@ def validate_model(
             _validate_do_run_model(
                 data, summary, "inputs2", "run2", "run_expected2", verbose, 1, 0, quiet
             )
+        summary["time_total_validation_torch"] = time.perf_counter() - validation_begin
 
     if exporter:
         print(
             f"[validate_model] -- export the model with {exporter!r}, "
             f"optimization={optimization!r}"
         )
+        exporter_begin = time.perf_counter()
         if patch_kwargs:
             if verbose:
                 print(
@@ -718,7 +743,9 @@ def validate_model(
                 dump_folder=dump_folder,
                 output_names=output_names,
             )
+
         summary.update(summary_export)
+        summary["time_total_exporter"] = time.perf_counter() - exporter_begin
 
     dump_stats = None
     if dump_folder:
@@ -759,6 +786,8 @@ def validate_model(
             data["onnx_filename"] = onnx_filename
             summary["time_onnx_save"] = duration
             summary.update(compute_statistics(onnx_filename))
+            del epo
+
         if verbose:
             print(f"[validate_model] dumps statistics in {dump_folder!r}...")
         dump_stats = os.path.join(dump_folder, f"{folder_name}.stats")
@@ -781,6 +810,20 @@ def validate_model(
         return summary, data
 
     if do_run:
+        # Let's move the model to CPU to make sure it frees GPU memory.
+        if verbose:
+            # It does not really work for the time being and the model
+            # gets loaded twice, one by torch, one by onnxruntime
+            print("[validation_model] -- delete the model")
+            for key in ["model", "onnx_program", "config"]:
+                if key in data:
+                    del data[key]
+            if "cuda" in device.lower():
+                torch.cuda.empty_cache()
+            gc.collect()
+            print("[validation_model] -- done")
+
+        validation_begin = time.perf_counter()
         summary_valid, data = validate_onnx_model(
             data=data,
             quiet=quiet,
@@ -792,6 +835,7 @@ def validate_model(
             ort_logs=ort_logs,
         )
         summary.update(summary_valid)
+        summary["time_total_validation_onnx"] = time.perf_counter() - validation_begin
 
     if ortfusiontype and "onnx_filename" in data:
         assert (
@@ -855,10 +899,12 @@ def validate_model(
                 summary.update(summary_valid)
 
     _compute_final_statistics(summary)
+    summary["time_total"] = time.perf_counter() - validation_begin
 
     if verbose:
         print("[validate_model] -- done (final)")
     if dump_stats:
+        # Dumps again the statistics.
         with open(dump_stats, "w") as f:
             for k, v in sorted(summary.items()):
                 f.write(f":{k}:{v};\n")
@@ -2019,5 +2065,8 @@ def _compute_final_statistics(summary: Dict[str, Any]):
     ):
         stats["stat_estimated_speedup_ort"] = (
             summary["time_run_latency"] / summary["time_run_onnx_ort_latency"]
+        )
+        stats["stat_estimated_speedup_ort_098"] = (
+            summary["time_run_latency_098"] / summary["time_run_onnx_ort_latency_098"]
         )
     summary.update(stats)

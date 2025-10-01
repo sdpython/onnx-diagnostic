@@ -183,9 +183,9 @@ def _get_inputs_gemma3(
     )
     dummies = {k: v for k, v in dummies.items() if k in shapes}
     expected = {"input_ids", "token_type_ids", "position_ids", "cache_position"}
-    assert expected & set(
-        dummies
-    ), f"Unable to find expected inputs {expected} in loaded inputs {set(dummines)}"
+    assert expected & set(dummies), (
+        f"Unable to find expected inputs {expected} in loaded inputs {set(dummies)}"
+    )
 
     inputs = dict(
         input_ids=input_ids,
