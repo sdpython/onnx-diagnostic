@@ -139,8 +139,9 @@ class TestHuggingFaceHubModel(ExtTestCase):
         import torch
         from transformers import RobertaTokenizer, T5ForConditionalGeneration
 
-        tokenizer = RobertaTokenizer.from_pretrained("microsoft/Phi-4-mini-instruct")
-        model = T5ForConditionalGeneration.from_pretrained("microsoft/Phi-4-mini-instruct")
+        model_id = "microsoft/Phi-4-mini-instruct"
+        tokenizer = RobertaTokenizer.from_pretrained(model_id)
+        model = T5ForConditionalGeneration.from_pretrained(model_id)
 
         text = "def greet(user): print(f'hello <extra_id_0>!')"
         input_ids = tokenizer(text, return_tensors="pt").input_ids
@@ -156,6 +157,41 @@ class TestHuggingFaceHubModel(ExtTestCase):
             generated_ids = model.generate(
                 decoder_input_ids=input_ids, attention_mask=mask, max_length=100
             )
+        print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
+
+    @never_test()
+    def test_text_generation_phi3_mini(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k phi3_mini
+
+        from transformers import Phi3ForCausalLM, AutoTokenizer
+
+        model_id = "microsoft/Phi-3-mini-4k-instruct"
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = Phi3ForCausalLM.from_pretrained(model_id)
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful digital assistant. Please provide safe, "
+                    "ethical and accurate information to the user."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Can you provide ways to eat combinations of bananas and dragonfruits?"
+                ),
+            },
+        ]
+        inputs = tokenizer.apply_chat_template(
+            messages, add_generation_prompt=True, return_tensors="pt"
+        )
+
+        # simply generate a single sequence
+        print()
+        with steal_forward(model):
+            generated_ids = model.generate(inputs, max_length=100)
         print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
 
     @never_test()
