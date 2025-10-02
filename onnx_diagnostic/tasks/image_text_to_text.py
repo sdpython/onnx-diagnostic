@@ -7,7 +7,6 @@ from ..helpers.config_helper import (
     _pick,
     default_num_hidden_layers as nhl,
 )
-from ..helpers.mini_onnx_builder import create_input_tensors_from_onnx_model
 from .data import get_data
 
 __TASK__ = "image-text-to-text"
@@ -95,37 +94,15 @@ def _get_inputs_gemma3(
     width: int,
     height: int,
     num_channels: int,
-    batch_size: int = 2,
-    sequence_length: int = 43,
-    sequence_length2: int = 43,
-    n_images: int = 2,
-    dynamic_rope: bool = False,
-    max_sequence_length: int = 380,
+    batch_size: int = 1,
+    sequence_length: int = 281,
+    n_images: int = 1,
+    max_sequence_length: int = 580,
+    total_sequence_length: int = 860,
     **kwargs,  # unused
 ):
     """
-    ::
-
-        dict(input_ids:T7s1x281,
-            pixel_values:T16s1x3x896x896,
-            attention_mask:dict(full_attention:T9s1x1x281x380,sliding_attention:T9s1x1x281x380),
-            position_ids:T7s1x281,
-            past_key_values:HybridCache(
-                key_cache=#34[T1s1x4x380x256,...],
-                value_cache=#34[T1s1x4x380x256,...]),
-            token_type_ids:T7s1x281,
-            cache_position:T7s281,
-            logits_to_keep:1)
-        dict(input_ids:T7s1x1,
-            pixel_values:None,
-            attention_mask:dict(full_attention:T9s1x1x1x380,sliding_attention:T9s1x1x1x380),
-            position_ids:T7s1x1,
-            past_key_values:HybridCache(
-                key_cache=#34[T1s1x4x380x256,...],
-                value_cache=#34[T1s1x4x380x256,...]),
-            token_type_ids:T7s1x1,
-            cache_position:T7s1,
-            logits_to_keep:1)
+    The functions uses predefined values for input_ids and token_type_ids.
 
     **google/gemma-3-4b-it**
 
@@ -151,21 +128,20 @@ def _get_inputs_gemma3(
            token_type_ids:T7s1x1,
            attention_mask:dict(sliding_attention:T9s1x1x1x580,full_attention:T9s1x1x1x580),
            position_ids:None,
-           use_cache:bool,logits_to_keep:None,return_dict:bool)
-
     """
     assert (
         "cls_cache" not in kwargs
     ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
     batch = "batch"
     seq_length = "seq_length"
+    tot_length = "total_length"
 
     shapes = {
         "input_ids": {0: batch, 1: seq_length},
         "token_type_ids": {0: batch, 1: seq_length},
         "attention_mask": {
-            "full_attention": {0: batch, 2: seq_length},
-            "sliding_attention": {0: batch, 2: seq_length},
+            "full_attention": {0: batch, 2: seq_length, 3: tot_length},
+            "sliding_attention": {0: batch, 2: seq_length, 3: tot_length},
         },
         "position_ids": {0: batch, 1: seq_length},
         "cache_position": {1: seq_length},
@@ -177,22 +153,46 @@ def _get_inputs_gemma3(
         "use_cache": None,
     }
 
-    # first iteration
-    dummies = create_input_tensors_from_onnx_model(
-        get_data("dummies_imagetext2text_generation_gemma3.onnx")
-    )
+    # retrieve specific inputs to keep the consistency between
+    # ids and images
+    dummies = get_data("dummies_imagetext2text_generation_gemma3.onnx")
+    dummies = dummies[("", 0, "I")][1]
     dummies = {k: v for k, v in dummies.items() if k in shapes}
     expected = {"input_ids", "token_type_ids", "position_ids", "cache_position"}
     assert expected & set(
         dummies
     ), f"Unable to find expected inputs {expected} in loaded inputs {set(dummies)}"
+    assert sequence_length == dummies["input_ids"].shape[-1], (
+        f"sequence_length={sequence_length} != {dummies['input_ids'].shape[-1]} for "
+        f"model class {model.__class__.__name__}"
+    )
+    assert batch_size == dummies["input_ids"].shape[0], (
+        f"batch_size={batch_size} != {dummies['input_ids'].shape[0]} for "
+        f"model class {model.__class__.__name__}"
+    )
+    assert max_sequence_length == 580, (
+        f"max_sequence_length={max_sequence_length} != 580 "
+        f"for model {model.__class__.__name__}"
+    )
+    assert total_sequence_length == 860, (
+        f"total_sequence_length={total_sequence_length} != 860 "
+        f"for model {model.__class__.__name__}"
+    )
+    assert head_dim == 256, f"head_dim={head_dim} != 256 for model {model.__class__.__name__}"
+    assert n_images == 1, f"n_images={n_images} != 1 for model {model.__class__.__name__}"
+    assert num_key_value_heads == 4, (
+        f"num_key_value_heads={num_key_value_heads} != 256 "
+        f"for this model {model.__class__.__name__}"
+    )
 
     inputs = dict(
-        input_ids=input_ids,
-        token_type_ids=token_type_ids,
+        input_ids=dummies["input_ids"],
+        token_type_ids=dummies["token_type_ids"],
         attention_mask=dict(
-            full_attention=torch.randn(batch_size, 1, sequence_length, max_sequence_length),
-            sliding_attention=torch.randn(batch_size, 1, sequence_length, max_sequence_length),
+            full_attention=torch.randn(batch_size, 1, sequence_length, total_sequence_length),
+            sliding_attention=torch.randn(
+                batch_size, 1, sequence_length, total_sequence_length
+            ),
         ),
         cache_position=torch.arange(0, sequence_length).to(torch.int64),
         position_ids=torch.arange(0, sequence_length).to(torch.int64).expand((batch_size, -1)),
@@ -210,9 +210,9 @@ def _get_inputs_gemma3(
             ]
         ),
         pixel_values=torch.randn(n_images, num_channels, width, height).clamp(-1, 1),
-        image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
-            torch.int64
-        ),
+        # image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
+        #    torch.int64
+        # ),
         use_cache=True,  # Gemma3 does not set this value to true when a cache is provided
     )
     return dict(inputs=inputs, dynamic_shapes=shapes)
@@ -230,12 +230,12 @@ def get_inputs(
     width: int,
     height: int,
     num_channels: int,
-    batch_size: int = 2,
-    sequence_length: int = 43,
-    sequence_length2: int = 43,
-    n_images: int = 2,
-    dynamic_rope: bool = False,
-    add_second_input: int = 1,
+    batch_size: int = 1,
+    sequence_length: int = 281,
+    n_images: int = 1,
+    max_sequence_length: int = 580,
+    total_sequence_length: int = 860,
+    add_second_input: int = 0,
     **kwargs,  # unused
 ):
     """
@@ -249,13 +249,19 @@ def get_inputs(
     :param image_token_index: image_token_index
     :param batch_size: batch size
     :param sequence_length: sequence length
-    :param sequence_length2: new sequence length
+    :param max_sequence_length: for the cache
+    :param total_sequence_length: for the mask
     :param n_images: number of images
     :param width: width of the image
     :param height: height of the image
     :param num_channels: number of channels
-    :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :return: dictionary
+
+    .. note::
+
+        The content of the input_ids and its shape is correlated to the images.
+        The function uses a predefined values. The function raises an exception
+        if dimension are not the expected ones.
     """
     if model.__class__.__name__.startswith("Gemma3"):
         res = _get_inputs_gemma3(
@@ -272,9 +278,9 @@ def get_inputs(
             num_channels=num_channels,
             batch_size=batch_size,
             sequence_length=sequence_length,
-            sequence_length2=sequence_length2,
+            max_sequence_length=max_sequence_length,
+            total_sequence_length=total_sequence_length,
             n_images=n_images,
-            dynamic_rope=dynamic_rope,
             **kwargs,
         )
     else:
@@ -306,9 +312,9 @@ def get_inputs(
             "use_cache": None,
         }
 
-        input_ids = torch.randint(0, dummy_max_token_id, (batch_size, sequence_length2)).to(
-            torch.int64
-        )
+        input_ids = torch.randint(
+            0, dummy_max_token_id, (batch_size, total_sequence_length)
+        ).to(torch.int64)
         input_ids[0, 0] = image_token_index
         input_ids[1, 1] = image_token_index
         # input_ids[input_ids == image_token_index] = pad_token_id
@@ -329,7 +335,7 @@ def get_inputs(
                 ],
                 axis=-1,
             ),
-            position_ids=torch.arange(0, sequence_length2)
+            position_ids=torch.arange(0, total_sequence_length)
             .to(torch.int64)
             .expand((batch_size, -1)),
             past_key_values=make_dynamic_cache(
@@ -350,9 +356,9 @@ def get_inputs(
                 if model.__class__.__name__ == "IdeficsForVisionText2Text"
                 else torch.randn(n_images, num_channels, width, height).clamp(-1, 1)
             ),
-            image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
-                torch.int64
-            ),
+            # image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
+            #     torch.int64
+            # ),
             token_type_ids=token_type_ids,
             image_grid_thw=image_grid_thw,
             use_cache=True,  # Gemma3 does not set this value to true when a cache is provided
@@ -373,10 +379,10 @@ def get_inputs(
             height=height,
             num_channels=num_channels,
             batch_size=batch_size + 1,
-            sequence_length=sequence_length + add_second_input,
-            sequence_length2=sequence_length2 + 1,
-            n_images=n_images + 1,
-            dynamic_rope=dynamic_rope,
+            sequence_length=0,
+            max_sequence_length=0,
+            total_sequence_length=0,
+            n_images=0,
             pad_token_id=pad_token_id,
             image_token_index=image_token_index,
             add_second_input=0,
@@ -419,9 +425,9 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
             text_config = False
         check_hasattr(config.vision_config, ("num_channels", "in_chans", "in_channels"))
     kwargs = dict(
-        batch_size=2,
-        sequence_length=43,
-        sequence_length2=43,
+        sequence_length=281,
+        max_sequence_length=580,
+        total_sequence_length=860,
         head_dim=(
             16
             if config is None

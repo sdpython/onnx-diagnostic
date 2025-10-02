@@ -845,8 +845,14 @@ class TestHuggingFaceHubModel(ExtTestCase):
             data = get_untrained_model_with_inputs(
                 model_id,
                 verbose=1,
-                add_second_input=True,
+                add_second_input=False,
                 # same_as_pretrained=True, #use_pretrained=True
+                inputs_kwargs={
+                    "sequence_length": 281,
+                    "batch_size": 1,
+                    "max_sequence_length": 580,
+                    "n_images": 1,
+                },
             )
             model = data["model"]
 
@@ -921,6 +927,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
         ):
             generated_ids = model.generate(
                 **inputs,
+                # 282 = value high enough to trigger multiple iterations of the model
                 max_new_tokens=282,
                 do_sample=False,
                 cache_implementation="static",

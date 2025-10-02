@@ -31,14 +31,13 @@ class TestTasksImageTextToText(ExtTestCase):
     @hide_stdout()
     @requires_transformers("4.57.99")
     @requires_torch("2.7.99")
-    def test_image_text_to_text_gemma3(self):
+    def test_image_text_to_text_tiny_gemma3(self):
         """
         If the model tails because of
         ``if inputs_embeds[special_image_mask].numel() != image_features.numel():```,
         make sure this PR was merged:
         https://github.com/huggingface/transformers/pull/39962.
         """
-        # mid = "google/gemma-3-4b-it"
         mid = "tiny-random/gemma-3"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "image-text-to-text")
@@ -47,6 +46,33 @@ class TestTasksImageTextToText(ExtTestCase):
         print("--", self.string_type(data["inputs"], with_shape=True))
         model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
+        with torch_export_patches(patch_transformers=True, verbose=10):
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
+
+    @hide_stdout()
+    @requires_transformers("4.56.2")
+    @requires_torch("2.7.99")
+    def test_image_text_to_text_gemma3_4b_it(self):
+        mid = "google/gemma-3-4b-it"
+        data = get_untrained_model_with_inputs(
+            mid,
+            verbose=1,
+            add_second_input=False,
+            # inputs_kwargs={
+            #    "sequence_length": 281,
+            #    "batch_size": 1,
+            #    "max_sequence_length": 580,
+            #    "n_images": 1,
+            # },
+        )
+        self.assertEqual(data["task"], "image-text-to-text")
+        # self.assertIn((data["size"], data["n_weights"]), [(17248576, 4312144)])
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        # inputs.pop("attention_mask")
+        # ds.pop("attention_mask")
+        model(**torch_deepcopy(inputs))
         with torch_export_patches(patch_transformers=True, verbose=10):
             torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
