@@ -1856,6 +1856,8 @@ def call_torch_export_custom(
         "custom-nostrict-noinline",
         "custom-nostrict-default-noinline",
         "custom-nostrict-all-noinline",
+        "custom-dec",
+        "custom-decall",
     }
     assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
@@ -1892,7 +1894,9 @@ def call_torch_export_custom(
     export_options = ExportOptions(
         strict=strict,
         decomposition_table=(
-            "default" if "-default" in exporter else ("all" if "-all" in exporter else None)
+            "default"
+            if ("-default" in exporter or "-dec" in exporter)
+            else ("all" if ("-all" in exporter or "-decall" in exporter) else None)
         ),
         save_ep=(os.path.join(dump_folder, f"{exporter}.ep") if dump_folder else None),
     )
