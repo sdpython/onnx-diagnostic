@@ -823,7 +823,7 @@ def validate_model(
             for key in ["model", "onnx_program", "config"]:
                 if key in data:
                     del data[key]
-            if "cuda" in device.lower():
+            if device is not None and "cuda" in str(device).lower():
                 torch.cuda.empty_cache()
             gc.collect()
             print("[validation_model] -- done")

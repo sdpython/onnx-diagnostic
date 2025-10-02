@@ -144,7 +144,7 @@ def _get_inputs_gemma3(
             "sliding_attention": {0: batch, 2: seq_length, 3: tot_length},
         },
         "position_ids": {0: batch, 1: seq_length},
-        "cache_position": {1: seq_length},
+        "cache_position": {0: seq_length},
         "past_key_values": [
             [{0: batch} for _ in range(num_hidden_layers)],
             [{0: batch} for _ in range(num_hidden_layers)],
@@ -159,31 +159,37 @@ def _get_inputs_gemma3(
     dummies = dummies[("", 0, "I")][1]
     dummies = {k: v for k, v in dummies.items() if k in shapes}
     expected = {"input_ids", "token_type_ids", "position_ids", "cache_position"}
-    assert expected & set(
-        dummies
-    ), f"Unable to find expected inputs {expected} in loaded inputs {set(dummies)}"
-    assert sequence_length == dummies["input_ids"].shape[-1], (
-        f"sequence_length={sequence_length} != {dummies['input_ids'].shape[-1]} for "
-        f"model class {model.__class__.__name__}"
-    )
-    assert batch_size == dummies["input_ids"].shape[0], (
-        f"batch_size={batch_size} != {dummies['input_ids'].shape[0]} for "
-        f"model class {model.__class__.__name__}"
-    )
-    assert max_sequence_length == 580, (
-        f"max_sequence_length={max_sequence_length} != 580 "
-        f"for model {model.__class__.__name__}"
-    )
-    assert total_sequence_length == 860, (
-        f"total_sequence_length={total_sequence_length} != 860 "
-        f"for model {model.__class__.__name__}"
-    )
-    assert head_dim == 256, f"head_dim={head_dim} != 256 for model {model.__class__.__name__}"
-    assert n_images == 1, f"n_images={n_images} != 1 for model {model.__class__.__name__}"
-    assert num_key_value_heads == 4, (
-        f"num_key_value_heads={num_key_value_heads} != 256 "
-        f"for this model {model.__class__.__name__}"
-    )
+
+    def _check_():
+        assert expected & set(
+            dummies
+        ), f"Unable to find expected inputs {expected} in loaded inputs {set(dummies)}"
+        assert sequence_length == dummies["input_ids"].shape[-1], (
+            f"sequence_length={sequence_length} != {dummies['input_ids'].shape[-1]} for "
+            f"model class {model.__class__.__name__}"
+        )
+        assert batch_size == dummies["input_ids"].shape[0], (
+            f"batch_size={batch_size} != {dummies['input_ids'].shape[0]} for "
+            f"model class {model.__class__.__name__}"
+        )
+        assert max_sequence_length == 580, (
+            f"max_sequence_length={max_sequence_length} != 580 "
+            f"for model {model.__class__.__name__}"
+        )
+        assert total_sequence_length == 860, (
+            f"total_sequence_length={total_sequence_length} != 860 "
+            f"for model {model.__class__.__name__}"
+        )
+        assert (
+            head_dim == 256
+        ), f"head_dim={head_dim} != 256 for model {model.__class__.__name__}"
+        assert n_images == 1, f"n_images={n_images} != 1 for model {model.__class__.__name__}"
+        assert num_key_value_heads == 4, (
+            f"num_key_value_heads={num_key_value_heads} != 256 "
+            f"for this model {model.__class__.__name__}"
+        )
+
+    _check_()
 
     inputs = dict(
         input_ids=dummies["input_ids"],
