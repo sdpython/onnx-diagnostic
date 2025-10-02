@@ -244,9 +244,14 @@ def _quiet_or_not_quiet(
         summary[f"{suffix}_output"] = string_type(res, with_shape=True, with_min_max=True)
         summary[f"{suffix}_warmup"] = warmup
         summary[f"{suffix}_repeat"] = repeat
-        for _w in range(max(0, warmup - 1)):
+        last_ = None
+        end_w = max(0, warmup - 1)
+        for _w in range(end_w):
             t = fct()
-            summary[f"io_{suffix}_{_w+1}"] = string_type(t, with_shape=True, with_min_max=True)
+            _ = string_type(t, with_shape=True, with_min_max=True)
+            if _ != last_ or _w == end_w - 1:
+                summary[f"io_{suffix}_{_w+1}"] = _
+                last_ = _
         summary[f"time_{suffix}_warmup"] = time.perf_counter() - begin
         times = []
         for _r in range(repeat):
@@ -266,7 +271,7 @@ def _quiet_or_not_quiet(
         summary[f"time_{suffix}_latency_005"] = a[i5]
         summary[f"time_{suffix}_latency_002"] = a[i2]
         summary[f"time_{suffix}_n"] = len(a)
-        summary[f"time_{suffix}_latency_098"] = a[i2:-i2].mean()
+        summary[f"time_{suffix}_latency_m98"] = a[i2:-i2].mean()
 
     return res
 
@@ -1725,6 +1730,7 @@ def process_statistics(data: Sequence[Dict[str, float]]) -> Dict[str, Any]:
             "check",
             "build_graph_for_pattern",
             "pattern_optimization",
+            "topological_sort",
         ]:
             if s in p or s.replace("_", "-") in p:
                 return s
@@ -2066,7 +2072,7 @@ def _compute_final_statistics(summary: Dict[str, Any]):
         stats["stat_estimated_speedup_ort"] = (
             summary["time_run_latency"] / summary["time_run_onnx_ort_latency"]
         )
-        stats["stat_estimated_speedup_ort_098"] = (
-            summary["time_run_latency_098"] / summary["time_run_onnx_ort_latency_098"]
+        stats["stat_estimated_speedup_ort_m98"] = (
+            summary["time_run_latency_m98"] / summary["time_run_onnx_ort_latency_m98"]
         )
     summary.update(stats)
