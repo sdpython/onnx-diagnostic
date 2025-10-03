@@ -227,7 +227,7 @@ class TestValidateWholeModels(ExtTestCase):
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
         self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-3)
-        self.assertLess(summary["disc_onnx_ort_run2_abs"], 1e-3)
+        self.assertLess(summary["disc_onnx_ort_run22_abs"], 1e-3)
         self.assertEqual("dict(pixel_values:A1s2x3x30x30)", summary["run_feeds_inputs"])
         self.assertEqual("dict(pixel_values:A1s3x3x31x31)", summary["run_feeds_inputs2"])
         self.assertEqual("#1[A1s2x2]", summary["run_output_inputs"])

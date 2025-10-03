@@ -57,7 +57,7 @@ def get_untrained_model_with_inputs(
         to get a smaller model
     :param use_pretrained: download the pretrained weights as well
     :param use_preinstalled: use preinstalled configurations
-    :param add_second_input: provides a second inputs to check a model
+    :param add_second_input: provides others inputs to check a model
         supports different shapes
     :param subfolder: subfolder to use for this model id
     :param use_only_preinstalled: use only preinstalled version

@@ -9,6 +9,12 @@ import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.cache_utils import StaticCache, Cache
+from transformers.generation.utils import (
+    GenerateNonBeamOutput,
+    GenerationConfig,
+    StoppingCriteriaList,
+    LogitsProcessorList,
+)
 
 try:
     from transformers.cache_utils import parse_processor_args  # noqa: F401
@@ -459,18 +465,18 @@ class patched_GenerationMixin:
     """
 
     _PATCHES_ = [
-        name
-        for name in [
-            "_cache_dependant_input_preparation",
-            "_cache_dependant_input_preparation_exporting",
-            (
-                None
-                if pv.Version(transformers.__version__) >= pv.Version("4.56")
-                else "prepare_inputs_for_generation"
-            ),
-            "_sample",
-        ]
-        if name is not None
+        "_cache_dependant_input_preparation",
+        "_cache_dependant_input_preparation_exporting",
+        (
+            None
+            if pv.Version(transformers.__version__) >= pv.Version("4.56")
+            else "prepare_inputs_for_generation"
+        ),
+        (
+            "_sample"
+            if pv.Version(transformers.__version__) == pv.Version("4.57.0.dev0")
+            else None
+        ),
     ]
     _PATCHED_CLASS_ = transformers.generation.utils.GenerationMixin
 
@@ -603,7 +609,7 @@ class patched_GenerationMixin:
         model_inputs = {}
         # - some models don't have `Cache` support
         # (which implies they don't expect `cache_position` in `forward`)
-        if self._supports_cache_class:
+        if getattr(self, "_supports_cache_class", False):
             model_inputs["cache_position"] = cache_position
         # - `cache_position` was not a mandatory input in
         # `prepare_inputs_for_generation` for those models, and this
@@ -832,8 +838,6 @@ class patched_GenerationMixin:
             else:
                 outputs = model_forward(**model_inputs, return_dict=True)
 
-            # synced_gpus: don't waste resources running the code we don't need;
-            # kwargs must be updated before skipping
             model_kwargs = self._update_model_kwargs_for_generation(
                 outputs,
                 model_kwargs,
@@ -842,9 +846,6 @@ class patched_GenerationMixin:
             if synced_gpus and this_peer_finished:
                 continue
 
-            # Copy is needed to avoid keeping a hanging ref to outputs.logits
-            # which may be very large for first iteration
-            # (the clone itself is always small)
             next_token_logits = outputs.logits[:, -1, :].to(
                 copy=True, dtype=torch.float32, device=input_ids.device
             )
