@@ -56,6 +56,14 @@ class CoupleInputsDynamicShapes:
         self.kwargs = kwargs
         self.dynamic_shapes = dynamic_shapes
         self.args_names = args_names
+        if not self.kwargs and isinstance(self.dynamic_shapes, dict):
+            # This assumes the dicionary for the dynamic shapes is ordered
+            # the same way the args are. The input names are not known.
+            assert len(self.dynamic_shapes) == len(self.args), (
+                f"Length mismatch, kwargs is empty, len(dynamic_shapes)="
+                f"{len(self.dynamic_shapes)}, len(args)={len(self.args)}"
+            )
+            self.dynamic_shapes = tuple(self.dynamic_shapes.values())
 
     def __str__(self) -> str:
         return "\n".join(

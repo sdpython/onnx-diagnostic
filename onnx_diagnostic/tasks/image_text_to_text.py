@@ -256,6 +256,7 @@ def get_inputs_default(
     max_sequence_length = 43 if max_sequence_length is None else max_sequence_length
     total_sequence_length = 43 if total_sequence_length is None else total_sequence_length
 
+    assert batch_size > 0, "batch_size cannot be null"
     assert (
         "cls_cache" not in kwargs
     ), f"Not yet implemented for cls_cache={kwargs['cls_cache']!r}."
@@ -287,19 +288,22 @@ def get_inputs_default(
     input_ids = torch.randint(0, dummy_max_token_id, (batch_size, total_sequence_length)).to(
         torch.int64
     )
-    input_ids[0, 0] = image_token_index
-    input_ids[1, 1] = image_token_index
+    if total_sequence_length > 0:
+        input_ids[0, 0] = image_token_index
+        input_ids[1, 1] = image_token_index
     # input_ids[input_ids == image_token_index] = pad_token_id
     token_type_ids = torch.zeros_like(input_ids)
     token_type_ids[input_ids == image_token_index] = 1
     image_grid_thw = torch.zeros((n_images, 3), dtype=torch.int64)
-    image_grid_thw[:, 1] = height
-    image_grid_thw[:, 2] = width
-    image_grid_thw[0, :] //= 2
-    image_grid_thw[:, 0] = torch.arange(n_images, dtype=image_grid_thw.dtype)
+    if n_images > 0:
+        image_grid_thw[:, 1] = height
+        image_grid_thw[:, 2] = width
+        image_grid_thw[0, :] //= 2
+        image_grid_thw[:, 0] = torch.arange(n_images, dtype=image_grid_thw.dtype)
 
     inputs = dict(
         input_ids=input_ids,
+        token_type_ids=token_type_ids,
         attention_mask=torch.cat(
             [
                 torch.ones((batch_size, sequence_length), dtype=torch.int64),
@@ -324,10 +328,9 @@ def get_inputs_default(
             if model.__class__.__name__ == "IdeficsForVisionText2Text"
             else torch.randn(n_images, num_channels, width, height).clamp(-1, 1)
         ),
-        # image_attention_mask=torch.ones((batch_size, sequence_length2, n_images)).to(
-        #     torch.int64
-        # ),
-        token_type_ids=token_type_ids,
+        image_attention_mask=torch.ones((batch_size, total_sequence_length, n_images)).to(
+            torch.int64
+        ),
         image_grid_thw=image_grid_thw,
         use_cache=True,  # Gemma3 does not set this value to true when a cache is provided
     )
