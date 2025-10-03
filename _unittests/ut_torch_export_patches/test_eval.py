@@ -86,6 +86,22 @@ class TestEval(ExtTestCase):
             dynamic=False,
         )
 
+    def test_run_exporter_dimension0(self):
+        evaluation(
+            cases="ExportWithDimension0",
+            exporters="export-nostrict-oblivious",
+            quiet=False,
+            dynamic=True,
+        )
+
+    def test_run_exporter_dimension1(self):
+        evaluation(
+            cases="ExportWithDimension1",
+            exporters="export-nostrict-oblivious",
+            quiet=False,
+            dynamic=True,
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

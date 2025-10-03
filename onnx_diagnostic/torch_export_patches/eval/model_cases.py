@@ -881,3 +881,21 @@ class VmapPython(torch.nn.Module):
 
     _inputs = [(torch.tensor([1.0, 2.0, 3.0]), torch.tensor([0.1, 0.2, 0.3]))]
     _dynamic = {"x": {0: DYN}, "y": {0: DYN}}
+
+
+class ExportWithDimension0(torch.nn.Module):
+    def forward(self, x):
+        return x @ torch.arange(x.shape[1], dtype=torch.float32).reshape((-1, 1))
+
+    _inputs = [(torch.empty((0, 3), dtype=torch.float32),)]
+    _dynamic = {"x": {0: DYN, 1: DYN}}
+    _valid = [(torch.rand((2, 3), dtype=torch.float32),)]
+
+
+class ExportWithDimension1(torch.nn.Module):
+    def forward(self, x):
+        return x @ torch.arange(x.shape[1], dtype=torch.float32).reshape((-1, 1))
+
+    _inputs = [(torch.zeros((1, 3), dtype=torch.float32),)]
+    _dynamic = {"x": {0: DYN, 1: DYN}}
+    _valid = [(torch.rand((2, 3), dtype=torch.float32),)]
