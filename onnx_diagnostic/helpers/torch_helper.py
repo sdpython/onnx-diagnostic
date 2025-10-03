@@ -765,7 +765,12 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
 
 
 def torch_deepcopy(value: Any) -> Any:
-    """Makes a deepcopy."""
+    """
+    Makes a deep copy.
+
+    :param value: any value
+    :return: a deep copy
+    """
     if value is None:
         return None
     if isinstance(value, (int, float, str)):

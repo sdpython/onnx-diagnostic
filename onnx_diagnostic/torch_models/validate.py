@@ -359,9 +359,10 @@ def validate_model(
         ``orteval10``, ``ref`` only if `do_run` is true
     :param repeat: number of time to measure the model
     :param warmup: warmup the model first
-    :param inputs2: checks that the second set of inputs is reunning as well,
+    :param inputs2: checks that other sets of inputs are running as well,
         this ensures that the model does support dynamism, the value is used
-        as an increment to the first set of values (added to dimensions)
+        as an increment to the first set of values (added to dimensions),
+        or an empty cache for example
     :param output_names: output names the onnx exporter should use
     :param ort_logs: increases onnxruntime verbosity when creating the session
     :return: two dictionaries, one with some metrics,
@@ -391,6 +392,10 @@ def validate_model(
     :class:`onnx_diagnostic.reference.ExtendedReferenceEvaluator`
     if ``runtime == 'ref'``,
     ``orteval10`` increases the verbosity.
+
+    .. versionchanged:: 0.7.13
+        *inputs2* not only means a second set of inputs such as ``input_empty_cache``
+        which refers to a set of inputs using an empty cache.
     """
     model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
         model_id,
@@ -505,10 +510,9 @@ def validate_model(
             )
         ),
     )
-    assert not inputs2 or "inputs2" in data, (
-        f"inputs2 is True but second set is missing in data for "
-        f"model id {model_id!r}: {sorted(data)}"
-    )
+
+    second_input_keys = [k for k in data if k.startswith("inputs") and k != "inputs"]
+
     if dump_folder:
         with open(os.path.join(dump_folder, "model_config.txt"), "w") as f:
             f.write(f"model_id: {model_id}\n------\n")
@@ -601,16 +605,14 @@ def validate_model(
         if verbose:
             print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
             print(f"[validate_model] new dynamic_hapes: {string_type(data['dynamic_shapes'])}")
-        if inputs2:
-            assert (
-                "inputs2" in data
-            ), "Cannot test a second set of inputs as it was not defined."
-            data["inputs2"], _ = filter_inputs(
-                data["inputs2"],
-                drop_names=drop_inputs,
-                model=data["model"],
-                dynamic_shapes=data["dynamic_shapes"],
-            )
+        if second_input_keys:
+            for k in second_input_keys:
+                data[k], _ = filter_inputs(
+                    data[k],
+                    drop_names=drop_inputs,
+                    model=data["model"],
+                    dynamic_shapes=data["dynamic_shapes"],
+                )
 
     if not empty(dtype):
         if isinstance(dtype, str):
@@ -620,8 +622,9 @@ def validate_model(
         data["model"] = to_any(data["model"], dtype)  # type: ignore
         data["inputs"] = to_any(data["inputs"], dtype)  # type: ignore
         summary["model_dtype"] = str(dtype)
-        if "inputs2" in data:
-            data["inputs2"] = to_any(data["inputs2"], dtype)  # type: ignore
+        if second_input_keys:
+            for k in second_input_keys:
+                data[k] = to_any(data[k], dtype)  # type: ignore
 
     if not empty(device):
         if verbose:
@@ -629,11 +632,13 @@ def validate_model(
         data["model"] = to_any(data["model"], device)  # type: ignore
         data["inputs"] = to_any(data["inputs"], device)  # type: ignore
         summary["model_device"] = str(device)
-        if "inputs2" in data:
-            data["inputs2"] = to_any(data["inputs2"], device)  # type: ignore
+        if second_input_keys:
+            for k in second_input_keys:
+                data[k] = to_any(data[k], device)  # type: ignore
 
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
+    summary["second_input_keys"] = ",".join(second_input_keys)
     summary["model_inputs_options"] = str(input_options or "")
     summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
     summary["model_shapes"] = string_type(data["dynamic_shapes"])
@@ -660,16 +665,26 @@ def validate_model(
             print(f"[validate_model] +INPUT {k}={string_type(v, with_shape=True)}")
         for k, v in data["dynamic_shapes"].items():
             print(f"[validate_model] +SHAPE {k}={string_type(v)}")
+        print(f"[validate_model] second_input_keys={second_input_keys}")
         print("[validate_model] --")
 
     if do_run:
         _validate_do_run_model(
             data, summary, "inputs", "run", "run_expected", verbose, repeat, warmup, quiet
         )
-        if inputs2:
-            _validate_do_run_model(
-                data, summary, "inputs2", "run2", "run_expected2", verbose, 1, 0, quiet
-            )
+        if second_input_keys:
+            for k in second_input_keys:
+                _validate_do_run_model(
+                    data,
+                    summary,
+                    k,
+                    f"run2{k[6:]}",
+                    f"run_expected2{k[6:]}",
+                    verbose,
+                    1,
+                    0,
+                    quiet,
+                )
 
     if exporter:
         print(
@@ -788,7 +803,7 @@ def validate_model(
             runtime=runtime,
             repeat=repeat,
             warmup=warmup,
-            inputs2=inputs2,
+            second_input_keys=second_input_keys,
             ort_logs=ort_logs,
         )
         summary.update(summary_valid)
@@ -1232,7 +1247,7 @@ def validate_onnx_model(
     runtime: str = "onnxruntime",
     repeat: int = 1,
     warmup: int = 0,
-    inputs2: int = 1,
+    second_input_keys: Optional[List[str]] = None,
     ort_logs: bool = False,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
@@ -1249,7 +1264,7 @@ def validate_onnx_model(
     :param runtime: onnx runtime to use, onnxruntime, torch, orteval, ref
     :param repeat: run that number of times the model
     :param warmup: warmup the model
-    :param inputs2: to validate the model on the second input set
+    :param second_input_keys: to validate the model on other input sets
         to make sure the exported model supports dynamism, the value is
         used as an increment added to the first set of inputs (added to dimensions)
     :param ort_logs: triggers the logs for onnxruntime
@@ -1374,10 +1389,12 @@ def validate_onnx_model(
         print(f"[validate_onnx_model] done (ort_session) flavour={flavour!r}")
 
     keys = [("inputs", "run_expected", "")]
-    if inputs2:
-        keys.append(("inputs2", "run_expected2", "2"))
+    if second_input_keys:
+        keys.extend([(k, f"run_expected2{k[6:]}", f"2{k[6:]}") for k in second_input_keys])
     for k_input, k_expected, suffix in keys:
         # make_feeds
+        assert k_input in data, f"Unable to find {k_input!r} in {sorted(data)}"
+        assert k_expected in data, f"Unable to find {k_expected!r} in {sorted(data)}"
         if verbose:
             print(f"[validate_onnx_model] -- make_feeds for {k_input!r}...")
             print(

@@ -48,6 +48,26 @@ class TestTasks(ExtTestCase):
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
 
+    def test_text_generation_empty_cache(self):
+        mid = "arnir0/Tiny-LLM"
+        data = get_untrained_model_with_inputs(mid, add_second_input=True)
+        model, inputs = data["model"], data["inputs"]
+        self.assertIn("inputs_empty_cache", data)
+        empty_inputs = torch_deepcopy(data["inputs_empty_cache"])
+        expected = model(**empty_inputs)
+        self.assertEqual(
+            {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
+        )
+        with torch_export_patches(patch_transformers=True, verbose=1):
+            ep = torch.export.export(
+                model,
+                (),
+                kwargs=inputs,
+                dynamic_shapes=use_dyn_not_str(data["dynamic_shapes"]),
+            )
+            got = ep.module()(**inputs)
+            self.assertEqualArrayAny(expected, got)
+
     @hide_stdout()
     def test_automatic_speech_recognition_float32(self):
         mid = "openai/whisper-tiny"

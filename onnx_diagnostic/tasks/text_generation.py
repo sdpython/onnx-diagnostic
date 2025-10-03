@@ -269,6 +269,21 @@ def get_inputs(
             add_second_input=0,
             **kwargs,
         )["inputs"]
+        res["inputs_empty_cache"] = get_inputs(
+            model=model,
+            config=config,
+            dummy_max_token_id=dummy_max_token_id,
+            num_hidden_layers=num_hidden_layers,
+            batch_size=batch_size,
+            sequence_length=0,
+            sequence_length2=sequence_length2,
+            dynamic_rope=dynamic_rope,
+            num_key_value_heads=num_key_value_heads,
+            head_dim=head_dim,
+            cls_cache=cls_cache,
+            add_second_input=0,
+            **kwargs,
+        )["inputs"]
     return res
 
 

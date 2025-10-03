@@ -1,13 +1,22 @@
 import inspect
 import math
+import os
 from dataclasses import dataclass
 from functools import wraps
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Union
 import packaging.version as pv
 import torch
 import transformers
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.cache_utils import StaticCache, Cache
+from transformers.generation.utils import (
+    GenerateDecoderOnlyOutput,
+    GenerateEncoderDecoderOutput,
+    GenerateNonBeamOutput,
+    GenerationConfig,
+    StoppingCriteriaList,
+    LogitsProcessorList,
+)
 
 try:
     from transformers.cache_utils import parse_processor_args  # noqa: F401
@@ -456,6 +465,11 @@ class patched_GenerationMixin:
         "_cache_dependant_input_preparation",
         "_cache_dependant_input_preparation_exporting",
         "prepare_inputs_for_generation",
+        (
+            "_sample"
+            if pv.Version(transformers.__version__) == pv.Version("4.57.0.dev0")
+            else None
+        ),
     ]
     _PATCHED_CLASS_ = transformers.generation.utils.GenerationMixin
 
@@ -588,7 +602,7 @@ class patched_GenerationMixin:
         model_inputs = {}
         # - some models don't have `Cache` support
         # (which implies they don't expect `cache_position` in `forward`)
-        if self._supports_cache_class:
+        if getattr(self, "_supports_cache_class", False):
             model_inputs["cache_position"] = cache_position
         # - `cache_position` was not a mandatory input in
         # `prepare_inputs_for_generation` for those models, and this
@@ -727,6 +741,174 @@ class patched_GenerationMixin:
         # 8. Remove unexpected `generate` inputs (TODO @joao: fix trainer and examples)
         model_inputs.pop("labels", None)
         return model_inputs
+
+    def _sample(
+        self,
+        input_ids: torch.LongTensor,
+        logits_processor: LogitsProcessorList,
+        stopping_criteria: StoppingCriteriaList,
+        generation_config: GenerationConfig,
+        synced_gpus: bool = False,
+        streamer: Optional["BaseStreamer"] = None,  # noqa: F821
+        **model_kwargs,
+    ) -> Union[GenerateNonBeamOutput, torch.LongTensor]:
+        # init values
+        pad_token_id = generation_config._pad_token_tensor
+        output_attentions = generation_config.output_attentions
+        output_hidden_states = generation_config.output_hidden_states
+        output_scores = generation_config.output_scores
+        output_logits = generation_config.output_logits
+        return_dict_in_generate = generation_config.return_dict_in_generate
+        has_eos_stopping_criteria = any(
+            hasattr(criteria, "eos_token_id") for criteria in stopping_criteria
+        )
+        do_sample = generation_config.do_sample
+
+        # init attention / hidden states / scores tuples
+        scores = () if (return_dict_in_generate and output_scores) else None
+        raw_logits = () if (return_dict_in_generate and output_logits) else None
+        decoder_attentions = () if (return_dict_in_generate and output_attentions) else None
+        cross_attentions = () if (return_dict_in_generate and output_attentions) else None
+        decoder_hidden_states = (
+            () if (return_dict_in_generate and output_hidden_states) else None
+        )
+
+        # if model is an encoder-decoder, retrieve encoder attention weights and hidden states
+        if return_dict_in_generate and self.config.is_encoder_decoder:
+            encoder_attentions = (
+                model_kwargs["encoder_outputs"].get("attentions")
+                if output_attentions
+                else None
+            )
+            encoder_hidden_states = (
+                model_kwargs["encoder_outputs"].get("hidden_states")
+                if output_hidden_states
+                else None
+            )
+
+        # keep track of which sequences are already finished
+        batch_size, cur_len = input_ids.shape[:2]
+        this_peer_finished = False
+        unfinished_sequences = torch.ones(
+            batch_size, dtype=torch.long, device=input_ids.device
+        )
+        model_kwargs = self._get_initial_cache_position(
+            cur_len, input_ids.device, model_kwargs
+        )
+
+        model_forward = self.__call__
+        compile_forward = self._valid_auto_compile_criteria(model_kwargs, generation_config)
+        if compile_forward:
+            os.environ["TOKENIZERS_PARALLELISM"] = "0"
+            # If we use FA2 and a static cache, we cannot compile with fullgraph
+            model_forward = self.get_compiled_call(generation_config.compile_config)
+
+        if generation_config.prefill_chunk_size is not None:
+            model_kwargs = self._prefill_chunking(input_ids, generation_config, **model_kwargs)
+            is_prefill = False
+        else:
+            is_prefill = True
+
+        while self._has_unfinished_sequences(
+            this_peer_finished, synced_gpus, device=input_ids.device
+        ):
+            # prepare model inputs
+            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+
+            if is_prefill:
+                outputs = self(**model_inputs, return_dict=True)
+                is_prefill = False
+            else:
+                outputs = model_forward(**model_inputs, return_dict=True)
+
+            model_kwargs = self._update_model_kwargs_for_generation(
+                outputs,
+                model_kwargs,
+                is_encoder_decoder=self.config.is_encoder_decoder,
+            )
+            if synced_gpus and this_peer_finished:
+                continue
+
+            next_token_logits = outputs.logits[:, -1, :].to(
+                copy=True, dtype=torch.float32, device=input_ids.device
+            )
+
+            # pre-process distribution
+            next_token_scores = logits_processor(input_ids, next_token_logits)
+
+            # Store scores, attentions and hidden_states when required
+            if return_dict_in_generate:
+                if output_scores:
+                    scores += (next_token_scores,)
+                if output_logits:
+                    raw_logits += (next_token_logits,)
+                if output_attentions:
+                    decoder_attentions += (
+                        (outputs.decoder_attentions,)
+                        if self.config.is_encoder_decoder
+                        else (outputs.attentions,)
+                    )
+                    if self.config.is_encoder_decoder:
+                        cross_attentions += (outputs.cross_attentions,)
+
+                if output_hidden_states:
+                    decoder_hidden_states += (
+                        (outputs.decoder_hidden_states,)
+                        if self.config.is_encoder_decoder
+                        else (outputs.hidden_states,)
+                    )
+
+            # token selection
+            if do_sample:
+                probs = torch.nn.functional.softmax(next_token_scores, dim=-1)
+                next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
+            else:
+                next_tokens = torch.argmax(next_token_scores, dim=-1)
+
+            # finished sentences should have their next token be a padding token
+            if has_eos_stopping_criteria:
+                next_tokens = next_tokens * unfinished_sequences + pad_token_id * (
+                    1 - unfinished_sequences
+                )
+
+            # update generated ids, model inputs, and length for next step
+            # PATCHED: dimension issues when calling generate method
+            input_ids = torch.cat([input_ids, next_tokens], dim=-1)
+            if streamer is not None:
+                streamer.put(next_tokens.cpu())
+
+            unfinished_sequences = unfinished_sequences & ~stopping_criteria(input_ids, scores)
+            this_peer_finished = unfinished_sequences.max() == 0
+            cur_len += 1
+            del outputs
+
+        if streamer is not None:
+            streamer.end()
+
+        if return_dict_in_generate:
+            if self.config.is_encoder_decoder:
+                return GenerateEncoderDecoderOutput(
+                    sequences=input_ids,
+                    scores=scores,
+                    logits=raw_logits,
+                    encoder_attentions=encoder_attentions,
+                    encoder_hidden_states=encoder_hidden_states,
+                    decoder_attentions=decoder_attentions,
+                    cross_attentions=cross_attentions,
+                    decoder_hidden_states=decoder_hidden_states,
+                    past_key_values=model_kwargs.get("past_key_values"),
+                )
+            else:
+                return GenerateDecoderOnlyOutput(
+                    sequences=input_ids,
+                    scores=scores,
+                    logits=raw_logits,
+                    attentions=decoder_attentions,
+                    hidden_states=decoder_hidden_states,
+                    past_key_values=model_kwargs.get("past_key_values"),
+                )
+        else:
+            return input_ids
 
 
 def patched__compute_dynamic_ntk_parameters(

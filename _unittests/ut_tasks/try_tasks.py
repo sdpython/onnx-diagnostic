@@ -4,6 +4,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, never_test
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 from onnx_diagnostic.helpers.torch_helper import steal_forward
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 
 
@@ -127,6 +128,49 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 attention_mask=mask,
                 max_new_tokens=117,
                 cache_implementation="static",
+            )
+        print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
+
+    @never_test()
+    def test_text_generation_tiny_llm(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k tiny_llm
+        """
+        dict(cache_position:T7s21,
+             past_key_values:DynamicCache(key_cache=#0[], value_cache=#0[]),
+             input_ids:T7s1x21,
+             position_ids:T7s1x21
+             attention_mask:T1s1x21)
+        dict(cache_position:T7s1,
+             past_key_values:DynamicCache(key_cache=#32[T1s1x8x21x128,...],
+                                          value_cache=#32[T1s1x8x21x128,...]),
+             input_ids:T7s1x21,
+             position_ids:T7s1x1
+             attention_mask:T1s1x1)
+        """
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+
+        tokenizer = AutoTokenizer.from_pretrained("arnir0/Tiny-LLM")
+        model = AutoModelForCausalLM.from_pretrained("microsoft/Phi-4-mini-instruct")
+
+        text = "def greet(user): print(f'hello <extra_id_0>!')"
+        input_ids = tokenizer(text, return_tensors="pt").input_ids.reshape((1, -1))
+        mask = (
+            torch.tensor([1 for i in range(input_ids.shape[1])])
+            .to(torch.int64)
+            .reshape((1, -1))
+        )
+        position_ids = torch.arange(input_ids.shape[1], dtype=torch.int64).reshape((1, -1))
+
+        # simply generate a single sequence
+        print()
+        with torch_export_patches(
+            patch_transformers=True, patch_torch=False, patch_sympy=False
+        ), steal_forward(model):
+            generated_ids = model.generate(
+                input_ids=input_ids,
+                max_length=100,
+                attention_mask=mask,
+                position_ids=position_ids,
             )
         print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
 
