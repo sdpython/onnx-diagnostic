@@ -203,6 +203,7 @@ def create_model_builder(
         "ChatGLMModel": builder.ChatGLMModel,
         "Ernie4_5_ForCausalLM": builder.ErnieModel,
         "GemmaForCausalLM": builder.Gemma2Model,
+        "Gemma2ForCausalLM": builder.Gemma2Model,
         "Gemma3ForCausalLM": builder.Gemma3Model,
         "Gemma3ForConditionalGeneration": builder.Gemma3Model,
         "GraniteForCausalLM": builder.GraniteModel,

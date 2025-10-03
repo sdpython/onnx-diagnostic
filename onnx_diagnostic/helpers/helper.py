@@ -516,8 +516,10 @@ def string_type(
                 print(f"[string_type] V2:{type(obj)}")
             return "OV(NOTENSOR)"
         if with_min_max:
+            from .torch_helper import to_numpy
+
             try:
-                t = obj.numpy()
+                t = to_numpy(obj)
             except Exception:
                 # pass unable to convert into numpy (bfloat16, ...)
                 if verbose:
@@ -1233,9 +1235,13 @@ def max_diff(
 
     if isinstance(expected, np.ndarray) or isinstance(got, np.ndarray):
         if isinstance(expected, torch.Tensor):
-            expected = expected.detach().cpu().numpy()
+            from .torch_helper import to_numpy
+
+            expected = to_numpy(expected)
         if isinstance(got, torch.Tensor):
-            got = got.detach().cpu().numpy()
+            from .torch_helper import to_numpy
+
+            got = to_numpy(got)
         if verbose >= 6:
             print(f"[max_diff] tensor: {string_type(expected)} ? {string_type(got)}")
 
