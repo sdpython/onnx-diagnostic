@@ -39,6 +39,9 @@ def evaluation(
         "export-strict",
         "export-nostrict",
         "export-nostrict-decall",
+        "export-strict-oblivious",
+        "export-nostrict-oblivious",
+        "export-nostrict-decall-oblivious",
     ),
     dynamic: Tuple[bool] = (False, True),
     cases: Optional[Union[str, Dict[str, type]]] = None,
@@ -105,9 +108,7 @@ def evaluation(
 
 
 def _flatten_inputs(x: Any) -> List["torch.Tensor"]:  # noqa: F821
-    """
-    Flatten inputs.
-    """
+    """Flatten inputs."""
     if x is None:
         return x
     import torch
@@ -173,6 +174,15 @@ def _clone(x):
     raise TypeError(f"Unable to clone type {type(x)}, x={x} into numpy")
 
 
+def _wrap_torch_export(*args, backed_size_oblivious=False, **kwargs):
+    import torch
+
+    if backed_size_oblivious:
+        with torch.fx.experimental._config.patch(backed_size_oblivious=True):
+            return torch.export.export(*args, **kwargs)
+    return torch.export.export(*args, **kwargs)
+
+
 def _make_exporter_export(
     exporter: str,
     model: "torch.nn.Module",  # noqa: F821
@@ -183,18 +193,35 @@ def _make_exporter_export(
 ) -> Union[Dict, Callable]:
     import torch
 
-    if exporter == "export-strict":
+    backed_size_oblivious = "-oblivious" in exporter
+    strict = "-nostrict" not in exporter
+
+    if exporter in (
+        "export-strict",
+        "export-strict-oblivious",
+        "export-nostrict",
+        "export-nostrict-oblivious",
+        "export-oblivious",
+    ):
         try:
             if verbose >= 2:
-                exported = torch.export.export(
-                    model, inputs, dynamic_shapes=dynamic_shapes, strict=True
+                exported = _wrap_torch_export(
+                    model,
+                    inputs,
+                    dynamic_shapes=dynamic_shapes,
+                    strict=strict,
+                    backed_size_oblivious=backed_size_oblivious,
                 )
             else:
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
                     io.StringIO()
                 ):
-                    exported = torch.export.export(
-                        model, inputs, dynamic_shapes=dynamic_shapes, strict=True
+                    exported = _wrap_torch_export(
+                        model,
+                        inputs,
+                        dynamic_shapes=dynamic_shapes,
+                        strict=strict,
+                        backed_size_oblivious=backed_size_oblivious,
                     )
         except Exception as e:
             if not quiet:
@@ -204,11 +231,25 @@ def _make_exporter_export(
             print("-- graph")
             print(exported.graph)
         return exported.module()
-    if exporter in ("export-strict-dec", "export-strict-decall"):
+
+    if exporter in (
+        "export-strict-dec",
+        "export-strict-decall",
+        "export-strict-dec-oblivious",
+        "export-strict-decall-oblivious",
+        "export-nostrict-dec",
+        "export-nostrict-decall",
+        "export-nostrict-dec-oblivious",
+        "export-nostrict-decall-oblivious",
+    ):
         try:
             if verbose >= 2:
-                exported = torch.export.export(
-                    model, inputs, dynamic_shapes=dynamic_shapes, strict=True
+                exported = _wrap_torch_export(
+                    model,
+                    inputs,
+                    dynamic_shapes=dynamic_shapes,
+                    strict=strict,
+                    backed_size_oblivious=backed_size_oblivious,
                 )
                 if verbose >= 9:
                     print("-- graph before decomposition")
@@ -222,8 +263,12 @@ def _make_exporter_export(
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
                     io.StringIO()
                 ):
-                    exported = torch.export.export(
-                        model, inputs, dynamic_shapes=dynamic_shapes, strict=True
+                    exported = _wrap_torch_export(
+                        model,
+                        inputs,
+                        dynamic_shapes=dynamic_shapes,
+                        strict=strict,
+                        backed_size_oblivious=backed_size_oblivious,
                     )
                     if verbose >= 9:
                         print("-- graph before decomposition")
@@ -241,64 +286,7 @@ def _make_exporter_export(
             print("-- graph after decomposition")
             print(exported.graph)
         return exported.module()
-    if exporter == "export-nostrict":
-        try:
-            if verbose >= 2:
-                exported = torch.export.export(
-                    model, inputs, dynamic_shapes=dynamic_shapes, strict=False
-                )
-            else:
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-                    io.StringIO()
-                ):
-                    exported = torch.export.export(
-                        model, inputs, dynamic_shapes=dynamic_shapes, strict=False
-                    )
-        except Exception as e:
-            if not quiet:
-                raise
-            return dict(error=str(e), success=0, error_step="export")
-        if verbose >= 9:
-            print("-- graph")
-            print(exported.graph)
-        return exported.module()
-    if exporter in ("export-nostrict-dec", "export-nostrict-decall"):
-        try:
-            if verbose >= 2:
-                exported = torch.export.export(
-                    model, inputs, dynamic_shapes=dynamic_shapes, strict=False
-                )
-                if verbose >= 9:
-                    print("-- graph before decomposition")
-                    print(exported.graph)
-                exported = (
-                    exported.run_decompositions()
-                    if "decall" in exporter
-                    else exported.run_decompositions({})
-                )
-            else:
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-                    io.StringIO()
-                ):
-                    exported = torch.export.export(
-                        model, inputs, dynamic_shapes=dynamic_shapes, strict=False
-                    )
-                    if verbose >= 9:
-                        print("-- graph before decomposition")
-                        print(exported.graph)
-                    exported = (
-                        exported.run_decompositions()
-                        if "decall" in exporter
-                        else exported.run_decompositions({})
-                    )
-        except Exception as e:
-            if not quiet:
-                raise
-            return dict(error=str(e), success=0, error_step="export")
-        if verbose >= 9:
-            print("-- graph after decomposition")
-            print(exported.graph)
-        return exported.module()
+
     if exporter == "export-tracing":
         from experimental_experiment.torch_interpreter.tracing import CustomTracer
 
@@ -446,6 +434,74 @@ def _make_exporter_onnx(
     raise AssertionError(f"Unexpected exporter={exporter!r}")
 
 
+def _compares_on_one_example(
+    model: Callable, inputs: Tuple[Any, ...], mod: Callable, verbose: int, quiet: bool
+) -> Tuple[Any, Any, Dict]:
+    from onnx_diagnostic.helpers import max_diff, string_type
+
+    try:
+        expected = model(*_clone(inputs))
+    except Exception as e:
+        if not quiet:
+            raise RuntimeError(
+                f"eager mode failed=\n{string_type(inputs, with_shape=True)} "
+                f"\nmodel=\n{type(model)}"
+            ) from e
+        res = dict(error=str(e), success=0, error_step="eager")
+        return None, None, res
+    try:
+        got = mod(*inputs)
+    except Exception as e:
+        if not quiet:
+            raise RuntimeError(
+                f"onnxruntime failed, feeds=\n{string_type(inputs, with_shape=True)}"
+            ) from e
+        res = dict(error=str(e), success=0, error_step="run.0")
+        return expected, None, res
+
+    try:
+        disc = max_diff(expected, got)
+    except Exception as e:
+        if not quiet:
+            raise
+        res = dict(error=str(e), success=0, error_step="discrepancy")
+        return expected, got, res
+
+    if verbose >= 5 and np.isinf(disc["abs"]):
+        print("[run_exporter] comparison issues with")
+        print(f"--   inputs={string_type(inputs[0], with_shape=True, limit=20)}")
+        print(f"-- expected={string_type(expected, with_shape=True, limit=20)}")
+        print(f"--      got={string_type(got, with_shape=True, limit=20)}")
+    elif verbose >= 9:
+        print("[run_exporter] inputs and outputs")
+        print(
+            f"--   inputs="
+            f"{string_type(inputs[0], with_shape=True, with_min_max=True, limit=20)}"
+        )
+        print(
+            f"-- expected="
+            f"{string_type(expected, with_shape=True, with_min_max=True, limit=20)}"
+        )
+        print(f"--      got={string_type(got, with_shape=True, with_min_max=True, limit=20)}")
+    del disc["n"]
+    del disc["sum"]
+    disc.update(
+        dict(
+            success=1 if disc["abs"] < 0.1 else 0,
+            model_cls=model.__class__,  # type: ignore[dict-item]
+            exported=mod,  # type: ignore[dict-item]
+        )
+    )
+    if disc["abs"] >= 0.1:
+        disc["error"] = "diff.0"
+        disc["error_step"] = "diff.0"
+        if verbose >= 9:
+            max_diff(expected, got, verbose=verbose)
+    else:
+        disc["success"] = 1
+    return expected, got, disc
+
+
 def run_exporter(
     exporter: str,
     cls_model: type,
@@ -473,6 +529,7 @@ def run_exporter(
 
     model = cls_model()
     inputs = cls_model._inputs
+    valid = getattr(cls_model, "_valid", None)
     if isinstance(inputs, tuple):
         inputs = [inputs]
     if dynamic:
@@ -566,74 +623,38 @@ def run_exporter(
         mod = lambda *args, names=names: sess.run(None, _make_feeds(names, args))  # noqa: E731
 
     # we need to clone for models modifying the inputs
-    try:
-        expected = model(*_clone(inputs[0]))
-    except Exception as e:
-        if not quiet:
-            raise RuntimeError(
-                f"eager mode failed=\n{string_type(inputs[0], with_shape=True)} "
-                f"\nmodel=\n{type(model)}"
-            ) from e
-        res = dict(error=str(e), success=0, error_step="eager")
-        res.update(base)
-        return res
-    try:
-        got = mod(*inputs[0])
-    except Exception as e:
-        if not quiet:
-            raise RuntimeError(
-                f"onnxruntime failed, feeds=\n{string_type(inputs[0], with_shape=True)} "
-                f"\nmodel=\n{pretty_onnx(onx)}"
-            ) from e
-        res = dict(error=str(e), success=0, error_step="run.0")
-        res.update(base)
-        return res
+    expected, got, disc = _compares_on_one_example(model, inputs[0], mod, verbose, quiet)
+    if expected is not None:
+        base["expected"] = expected
+    if got is not None:
+        base["obtained"] = got
+    disc.update(base)
+    disc["onnx"] = onx  # type: ignore[dict-item]
 
-    base["expected"] = expected
-    base["obtained"] = got
-
-    try:
-        disc = max_diff(expected, got)
-    except Exception as e:
-        if not quiet:
-            raise
-        res = dict(error=str(e), success=0, error_step="discrepancy")
-        res.update(base)
-        return res
-
-    if verbose >= 5 and np.isinf(disc["abs"]):
-        print("[run_exporter] comparison issues with")
-        print(f"--   inputs={string_type(inputs[0], with_shape=True, limit=20)}")
-        print(f"-- expected={string_type(expected, with_shape=True, limit=20)}")
-        print(f"--      got={string_type(got, with_shape=True, limit=20)}")
-    elif verbose >= 9:
-        print("[run_exporter] inputs and outputs")
-        print(
-            f"--   inputs="
-            f"{string_type(inputs[0], with_shape=True, with_min_max=True, limit=20)}"
-        )
-        print(
-            f"-- expected="
-            f"{string_type(expected, with_shape=True, with_min_max=True, limit=20)}"
-        )
-        print(f"--      got={string_type(got, with_shape=True, with_min_max=True, limit=20)}")
-    del disc["n"]
-    del disc["sum"]
-    disc.update(
-        dict(
-            success=1 if disc["abs"] < 0.1 else 0,
-            model_cls=model.__class__,
-            exported=mod,  # type: ignore[dict-item]
-            onnx=onx,  # type: ignore[dict-item]
-        )
-    )
-    if disc["abs"] >= 0.1:
-        disc["error"] = "diff.0"
-        disc["error_step"] = "diff.0"
-        if verbose >= 9:
-            max_diff(expected, got, verbose=verbose)
-    else:
-        disc["success"] = 1
+    if valid is not None:
+        for valid_inputs in valid:
+            expected, got, _disc = _compares_on_one_example(
+                model, valid_inputs, mod, verbose, quiet
+            )
+            if "abs" not in disc and (np.isnan(disc["abs"]) or disc["abs"] > 1e-3):
+                _disc["issue-abs"] = disc["abs"]
+                _disc["issue-rel"] = disc["rel"]
+                _disc["issue-inputs"] = string_type(
+                    valid_inputs, with_shape=True, with_min_max=True
+                )
+                _disc["issue-expected"] = string_type(
+                    expected, with_shape=True, with_min_max=True
+                )
+                _disc["issue-obtained"] = string_type(got, with_shape=True, with_min_max=True)
+                if not quiet:
+                    raise RuntimeError(
+                        f"validation failed,"
+                        f"\n-- inputs=\n{string_type(_disc['issue-inputs'])} "
+                        f"\n-- exporter={exporter!r}\n-- dynamic_shapes={dynamic_shapes}, "
+                        f"\n-- expected={_disc['issue-expected']}"
+                        f"\n-- obtained={_disc['issue-obtained']}"
+                    )
+                break
 
     if dynamic and onx is not None:
         ds = []
