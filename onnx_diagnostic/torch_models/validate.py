@@ -525,30 +525,6 @@ def validate_model(
                 f.write(f"model_id: {model_id}\n------\n")
                 f.write(pprint.pformat(dump_info))
 
-    if exporter == "modelbuilder":
-        # Models used with ModelBuilder do not like batch size > 1.
-        # Let's change that.
-        for k in ["inputs", "inputs2"]:
-            if k not in data:
-                continue
-            if verbose:
-                print(f"[validate_model] set batch=1 for data[{k!r}]")
-                print(f"[validate_model] batch=1 === {string_type(data[k], with_shape=True)}")
-            cpl = CoupleInputsDynamicShapes(
-                tuple(), data[k], dynamic_shapes=data["dynamic_shapes"]
-            )
-            if patch_kwargs.get("patch", False):
-                with torch_export_patches(**patch_kwargs):  # type: ignore[arg-type]
-                    data[k] = cpl.change_dynamic_dimensions(
-                        desired_values=dict(batch=1), only_desired=True
-                    )
-            else:
-                data[k] = cpl.change_dynamic_dimensions(
-                    desired_values=dict(batch=1), only_desired=True
-                )
-            if verbose:
-                print(f"[validate_model] batch=1 --> {string_type(data[k], with_shape=True)}")
-
     # modelbuilder needs different treatments sometimes, so
     # we mark it for later usage.
     # for example, it has different past_kv ordering than
@@ -601,6 +577,7 @@ def validate_model(
         if verbose:
             print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
             print(f"[validate_model] new dynamic_hapes: {string_type(data['dynamic_shapes'])}")
+        # NOTE: The dynamic_shapes is always the same across inputs sets
         if inputs2:
             assert (
                 "inputs2" in data
@@ -611,6 +588,14 @@ def validate_model(
                 model=data["model"],
                 dynamic_shapes=data["dynamic_shapes"],
             )
+            # NOTE: text-generation tests 3rd inputs for multi-turn conversation
+            if "inputs3" in data:
+                data["inputs3"], _ = filter_inputs(
+                    data["inputs3"],
+                    drop_names=drop_inputs,
+                    model=data["model"],
+                    dynamic_shapes=data["dynamic_shapes"],
+                )
 
     if not empty(dtype):
         if isinstance(dtype, str):
@@ -622,6 +607,8 @@ def validate_model(
         summary["model_dtype"] = str(dtype)
         if "inputs2" in data:
             data["inputs2"] = to_any(data["inputs2"], dtype)  # type: ignore
+        if "inputs3" in data:
+            data["inputs3"] = to_any(data["inputs3"], dtype)  # type: ignore
 
     if not empty(device):
         if verbose:
@@ -631,6 +618,8 @@ def validate_model(
         summary["model_device"] = str(device)
         if "inputs2" in data:
             data["inputs2"] = to_any(data["inputs2"], device)  # type: ignore
+        if "inputs3" in data:
+            data["inputs3"] = to_any(data["inputs3"], device)  # type: ignore
 
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
@@ -666,10 +655,12 @@ def validate_model(
         _validate_do_run_model(
             data, summary, "inputs", "run", "run_expected", verbose, repeat, warmup, quiet
         )
-        if inputs2:
-            _validate_do_run_model(
-                data, summary, "inputs2", "run2", "run_expected2", verbose, 1, 0, quiet
-            )
+        _validate_do_run_model(
+            data, summary, "inputs2", "run2", "run_expected2", verbose, 1, 0, quiet
+        )
+        _validate_do_run_model(
+            data, summary, "inputs3", "run3", "run_expected3", verbose, 1, 0, quiet
+        )
 
     if exporter:
         print(
@@ -924,6 +915,10 @@ def compute_statistics(onnx_filename: str) -> Dict[str, Union[float, int]]:
 def _validate_do_run_model(
     data, summary, key, tag, expected_tag, verbose, repeat, warmup, quiet
 ):
+    if key not in data:
+        if verbose:
+            print(f"[validate_model] input; {key!r} not defined, skip.")
+        return
     if verbose:
         print(f"[validate_model] -- run the model inputs={key!r}...")
         print(f"[validate_model] {key}={string_type(data[key], with_shape=True)}")
@@ -1160,16 +1155,24 @@ def call_torch_export_export(
         print("[call_torch_export_export] export...")
 
     model = data["model"]
+
+    def _run_torch_export():
+        with torch.fx.experimental._config.patch(backed_size_oblivious=True):
+            ep = torch.export.export(
+                model,
+                args,
+                kwargs=kwargs,
+                dynamic_shapes=dse,
+                strict=strict,
+            )
+        return ep
+
     ep = _quiet_or_not_quiet(
         quiet,
         "export_export",
         summary,
         data,
-        (
-            lambda m=model, args=args, kws=kwargs, dse=dse, s=strict: (
-                torch.export.export(m, args, kwargs=kws, dynamic_shapes=dse, strict=s)
-            )
-        ),
+        _run_torch_export,
     )
     if "ERR_export_export" in summary:
         return summary, data
@@ -1376,6 +1379,9 @@ def validate_onnx_model(
     keys = [("inputs", "run_expected", "")]
     if inputs2:
         keys.append(("inputs2", "run_expected2", "2"))
+        # text-generation tests multi-turn conversation as 3rd inputs
+        if "inputs3" in data:
+            keys.append(("inputs3", "run_expected3", "3"))
     for k_input, k_expected, suffix in keys:
         # make_feeds
         if verbose:
@@ -1861,23 +1867,24 @@ def call_torch_export_custom(
         kws["target_opset"] = opset
     if output_names:
         kws["output_names"] = output_names
-
-    epo, opt_stats = _quiet_or_not_quiet(
-        quiet,
-        "export_export_onnx_c",
-        summary,
-        data,
-        (
-            lambda m=model, args=args, kwargs=kwargs, kws=kws: (
-                to_onnx(
-                    model,
-                    args,
-                    kwargs=kwargs,
-                    **kws,
+    # anti-specializing 0/1 during torch.export.export
+    with torch.fx.experimental._config.patch(backed_size_oblivious=True):
+        epo, opt_stats = _quiet_or_not_quiet(
+            quiet,
+            "export_export_onnx_c",
+            summary,
+            data,
+            (
+                lambda m=model, args=args, kwargs=kwargs, kws=kws: (
+                    to_onnx(
+                        model,
+                        args,
+                        kwargs=kwargs,
+                        **kws,
+                    )
                 )
-            )
-        ),
-    )
+            ),
+        )
     if "ERR_export_onnx_c" in summary:
         return summary, data
 

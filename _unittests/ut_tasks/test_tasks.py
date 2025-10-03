@@ -35,6 +35,7 @@ class TestTasks(ExtTestCase):
             )
 
     @hide_stdout()
+    @requires_transformers("4.55.4")  # modeling_units
     def test_text_generation(self):
         mid = "arnir0/Tiny-LLM"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
@@ -43,7 +44,9 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         model(**data["inputs2"])
-        with torch_export_patches(patch_transformers=True, verbose=10):
+        with torch_export_patches(
+            patch_transformers=True, verbose=10
+        ), torch.fx.experimental._config.patch(backed_size_oblivious=True):
             torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
