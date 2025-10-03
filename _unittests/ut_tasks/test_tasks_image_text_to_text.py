@@ -22,6 +22,7 @@ class TestTasksImageTextToText(ExtTestCase):
         self.assertEqual(data["task"], "image-text-to-text")
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**torch_deepcopy(inputs))
+        print("***", self.string_type(data["inputs2"], with_shape=True))
         model(**data["inputs2"])
         with torch_export_patches(patch_transformers=True, verbose=10):
             torch.export.export(

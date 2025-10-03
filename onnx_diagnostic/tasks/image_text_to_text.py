@@ -290,7 +290,8 @@ def get_inputs_default(
     )
     if total_sequence_length > 0:
         input_ids[0, 0] = image_token_index
-        input_ids[1, 1] = image_token_index
+        if min(input_ids.shape) > 1:
+            input_ids[1, 1] = image_token_index
     # input_ids[input_ids == image_token_index] = pad_token_id
     token_type_ids = torch.zeros_like(input_ids)
     token_type_ids[input_ids == image_token_index] = 1
@@ -439,9 +440,9 @@ def get_inputs(
             height=height,
             num_channels=num_channels,
             batch_size=3,
-            sequence_length=0,
-            max_sequence_length=0,
-            total_sequence_length=0,
+            sequence_length=1,
+            max_sequence_length=1,
+            total_sequence_length=1,
             n_images=0,
             pad_token_id=pad_token_id,
             image_token_index=image_token_index,
