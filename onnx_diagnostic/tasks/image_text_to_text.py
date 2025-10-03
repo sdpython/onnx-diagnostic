@@ -206,8 +206,8 @@ def _get_inputs_gemma3(
                 batch_size, 1, sequence_length, total_sequence_length
             ),
         ),
-        cache_position=torch.arange(0, sequence_length).to(torch.int64),
         position_ids=torch.arange(0, sequence_length).to(torch.int64).expand((batch_size, -1)),
+        cache_position=torch.arange(0, sequence_length).to(torch.int64),
         past_key_values=make_hybrid_cache(
             [
                 (

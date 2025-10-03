@@ -232,8 +232,9 @@ class CoupleInputsDynamicShapes:
         """
         if not self.args:
             assert isinstance(self.kwargs, dict) and isinstance(self.dynamic_shapes, dict), (
-                f"Type mismatch, args={string_type(self.args)} and "
-                f"dynamic_shapes={self.dynamic_shapes} should have the same type."
+                f"Type mismatch, args={string_type(self.args)}, "
+                f"kwargs={string_type(self.kwargs)} and dynamic_shapes="
+                f"{string_type(self.dynamic_shapes)} should have the same type."
             )
             res = self._generic_walker_step(
                 processor,
