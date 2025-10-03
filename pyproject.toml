@@ -1,3 +1,25 @@
+[project]
+name = "onnx-diagnostic"
+version = "0.7.13"
+description = "Tools to help converting pytorch models into ONNX."
+readme = "README.rst"
+authors = [
+    { name = "Xavier Dupré", email = "xavier.dupre@gmail.com" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+Homepage = "https://sdpython.github.io/doc/onnx-diagnostic/dev/"
+Repository = "https://github.com/sdpython/onnx-diagnostic/"
+
+[tool.setuptools.dynamic]
+dependencies = {file = "requirements.txt"}
+
+[tool.setuptools.package-data]
+onnx_diagnostic = ["tasks/data/*.onnx"]
+
 [tool.black]
 line-length = 95
 extend-exclude = '''.*clones.*'''

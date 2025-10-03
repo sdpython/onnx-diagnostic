@@ -309,8 +309,9 @@ class TestPatchPatchTorch(ExtTestCase):
             with self.subTest(
                 name="patch for 0/1 with oblivious", dynamic_shapes=dynamic_shapes
             ):
-                with torch_export_patches(), torch.fx.experimental._config.patch(
-                    backed_size_oblivious=True
+                with (
+                    torch_export_patches(),
+                    torch.fx.experimental._config.patch(backed_size_oblivious=True),
                 ):
                     ep = torch.export.export(model, inputs, dynamic_shapes=dynamic_shapes)
                 got = ep.module()(*inputs)

@@ -56,6 +56,14 @@ class CoupleInputsDynamicShapes:
         self.kwargs = kwargs
         self.dynamic_shapes = dynamic_shapes
         self.args_names = args_names
+        if not self.kwargs and isinstance(self.dynamic_shapes, dict):
+            # This assumes the dictionary for the dynamic shapes is ordered
+            # the same way the args are. The input names are not known.
+            assert len(self.dynamic_shapes) == len(self.args), (
+                f"Length mismatch, kwargs is empty, len(dynamic_shapes)="
+                f"{len(self.dynamic_shapes)}, len(args)={len(self.args)}"
+            )
+            self.dynamic_shapes = tuple(self.dynamic_shapes.values())
 
     def __str__(self) -> str:
         return "\n".join(
@@ -232,8 +240,9 @@ class CoupleInputsDynamicShapes:
         """
         if not self.args:
             assert isinstance(self.kwargs, dict) and isinstance(self.dynamic_shapes, dict), (
-                f"Type mismatch, args={string_type(self.args)} and "
-                f"dynamic_shapes={self.dynamic_shapes} should have the same type."
+                f"Type mismatch, args={string_type(self.args)}, "
+                f"kwargs={string_type(self.kwargs)} and dynamic_shapes="
+                f"{string_type(self.dynamic_shapes)} should have the same type."
             )
             res = self._generic_walker_step(
                 processor,

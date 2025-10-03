@@ -5,6 +5,7 @@ Change Logs
 ++++++
 
 * :pr:`256`: add a set of inputs checking models works for an empty cache on task text-generation
+* :pr:`237`: dummy inputs for google/gemma-3-4b-it
 * :pr:`244`: add a patch to bypass the exception raised when the dynamic dimension is in {0,1}
 
 0.7.12

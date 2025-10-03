@@ -268,19 +268,22 @@ def torch_export_patches(
     if rewrite:
         from .patch_module import torch_export_rewrite
 
-        with torch_export_rewrite(
-            rewrite=rewrite, dump_rewriting=dump_rewriting, verbose=verbose
-        ), torch_export_patches(  # type: ignore[var-annotated]
-            patch_sympy=patch_sympy,
-            patch_torch=patch_torch,
-            patch_transformers=patch_transformers,
-            patch_diffusers=patch_diffusers,
-            catch_constraints=catch_constraints,
-            stop_if_static=stop_if_static,
-            verbose=verbose,
-            patch=patch,
-            custom_patches=custom_patches,
-        ) as f:
+        with (
+            torch_export_rewrite(
+                rewrite=rewrite, dump_rewriting=dump_rewriting, verbose=verbose
+            ),
+            torch_export_patches(  # type: ignore[var-annotated]
+                patch_sympy=patch_sympy,
+                patch_torch=patch_torch,
+                patch_transformers=patch_transformers,
+                patch_diffusers=patch_diffusers,
+                catch_constraints=catch_constraints,
+                stop_if_static=stop_if_static,
+                verbose=verbose,
+                patch=patch,
+                custom_patches=custom_patches,
+            ) as f,
+        ):
             try:
                 yield f
             finally:
