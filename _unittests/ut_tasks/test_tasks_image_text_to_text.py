@@ -53,7 +53,7 @@ class TestTasksImageTextToText(ExtTestCase):
             )
 
     @hide_stdout()
-    @requires_transformers("4.56.2")
+    @requires_transformers("4.56.99")
     @requires_torch("2.8.99")
     def test_image_text_to_text_gemma3_4b_it(self):
         mid = "google/gemma-3-4b-it"
