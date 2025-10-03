@@ -54,7 +54,8 @@ class TestTasks(ExtTestCase):
         model, inputs = data["model"], data["inputs"]
         self.assertIn("inputs_empty_cache", data)
         empty_inputs = torch_deepcopy(data["inputs_empty_cache"])
-        expected = model(**empty_inputs)
+        model(**torch_deepcopy(empty_inputs))
+        expected = model(**torch_deepcopy(inputs))
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
@@ -62,10 +63,10 @@ class TestTasks(ExtTestCase):
             ep = torch.export.export(
                 model,
                 (),
-                kwargs=inputs,
+                kwargs=torch_deepcopy(inputs),
                 dynamic_shapes=use_dyn_not_str(data["dynamic_shapes"]),
             )
-            got = ep.module()(**inputs)
+            got = ep.module()(**torch_deepcopy(inputs))
             self.assertEqualArrayAny(expected, got)
 
     @hide_stdout()

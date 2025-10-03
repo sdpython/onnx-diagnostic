@@ -415,7 +415,8 @@ def validate_model(
     ``orteval10`` increases the verbosity.
 
     .. versionchanged:: 0.7.13
-        *inputs2* not only means a second set of inputs such as ``input_empty_cache``
+        *inputs2* not only means a second set of inputs but many
+        such as ``input_empty_cache``
         which refers to a set of inputs using an empty cache.
     """
     validation_begin = time.perf_counter()
