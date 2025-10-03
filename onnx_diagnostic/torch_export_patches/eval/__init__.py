@@ -213,8 +213,9 @@ def _make_exporter_export(
                     backed_size_oblivious=backed_size_oblivious,
                 )
             else:
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-                    io.StringIO()
+                with (
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
                 ):
                     exported = _wrap_torch_export(
                         model,
@@ -260,8 +261,9 @@ def _make_exporter_export(
                     else exported.run_decompositions({})
                 )
             else:
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-                    io.StringIO()
+                with (
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
                 ):
                     exported = _wrap_torch_export(
                         model,
@@ -295,8 +297,9 @@ def _make_exporter_export(
                 graph = CustomTracer().trace(model)
                 mod = torch.fx.GraphModule(model, graph)
             else:
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-                    io.StringIO()
+                with (
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
                 ):
                     graph = CustomTracer().trace(model)
                     mod = torch.fx.GraphModule(model, graph)
@@ -341,8 +344,9 @@ def _make_exporter_onnx(
                     return_builder=True,
                 )
             else:
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-                    io.StringIO()
+                with (
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
                 ):
                     onx, builder = to_onnx(
                         model,
@@ -375,8 +379,9 @@ def _make_exporter_onnx(
                     report=True,
                 ).model_proto
             else:
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-                    io.StringIO()
+                with (
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
                 ):
                     onx = torch.onnx.export(
                         model,
@@ -410,8 +415,9 @@ def _make_exporter_onnx(
                 ep.optimize()
                 onx = ep.model_proto
             else:
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-                    io.StringIO()
+                with (
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
                 ):
                     ep = torch.onnx.export(
                         model,

@@ -33,9 +33,10 @@ class TestLlmPhi(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with torch.fx.experimental._config.patch(
-            backed_size_oblivious=True
-        ), torch_export_patches(patch_transformers=True):
+        with (
+            torch.fx.experimental._config.patch(backed_size_oblivious=True),
+            torch_export_patches(patch_transformers=True),
+        ):
             ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
             )
