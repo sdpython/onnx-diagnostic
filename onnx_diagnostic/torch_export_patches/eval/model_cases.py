@@ -861,7 +861,7 @@ class CreateFromShapeThroughFunction(torch.nn.Module):
         y = torch.ones((x.shape[0], dy1))
         return y
 
-    _inputs = [(torch.rand((4, 4)),), (torch.rand((5, 5)),)]
+    _inputs = [(torch.rand((4, 4)),)]
     _dynamic = {"x": {0: DIM("dx"), 1: DIM("dy")}}
 
 

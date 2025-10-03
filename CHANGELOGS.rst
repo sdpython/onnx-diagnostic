@@ -4,6 +4,7 @@ Change Logs
 0.7.13
 ++++++
 
+* :pr:`237`: dummy inputs for google/gemma-3-4b-it
 * :pr:`244`: add a patch to bypass the exception raised when the dynamic dimension is in {0,1}
 
 0.7.12

@@ -1,3 +1,4 @@
+import os
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, never_test
@@ -5,6 +6,7 @@ from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 from onnx_diagnostic.helpers.torch_helper import steal_forward
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestHuggingFaceHubModel(ExtTestCase):
@@ -137,8 +139,9 @@ class TestHuggingFaceHubModel(ExtTestCase):
         import torch
         from transformers import RobertaTokenizer, T5ForConditionalGeneration
 
-        tokenizer = RobertaTokenizer.from_pretrained("microsoft/Phi-4-mini-instruct")
-        model = T5ForConditionalGeneration.from_pretrained("microsoft/Phi-4-mini-instruct")
+        model_id = "microsoft/Phi-4-mini-instruct"
+        tokenizer = RobertaTokenizer.from_pretrained(model_id)
+        model = T5ForConditionalGeneration.from_pretrained(model_id)
 
         text = "def greet(user): print(f'hello <extra_id_0>!')"
         input_ids = tokenizer(text, return_tensors="pt").input_ids
@@ -154,6 +157,41 @@ class TestHuggingFaceHubModel(ExtTestCase):
             generated_ids = model.generate(
                 decoder_input_ids=input_ids, attention_mask=mask, max_length=100
             )
+        print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
+
+    @never_test()
+    def test_text_generation_phi3_mini(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k phi3_mini
+
+        from transformers import Phi3ForCausalLM, AutoTokenizer
+
+        model_id = "microsoft/Phi-3-mini-4k-instruct"
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = Phi3ForCausalLM.from_pretrained(model_id)
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful digital assistant. Please provide safe, "
+                    "ethical and accurate information to the user."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Can you provide ways to eat combinations of bananas and dragonfruits?"
+                ),
+            },
+        ]
+        inputs = tokenizer.apply_chat_template(
+            messages, add_generation_prompt=True, return_tensors="pt"
+        )
+
+        # simply generate a single sequence
+        print()
+        with steal_forward(model):
+            generated_ids = model.generate(inputs, max_length=100)
         print(tokenizer.decode(generated_ids[0], skip_special_tokens=True))
 
     @never_test()
@@ -790,6 +828,119 @@ class TestHuggingFaceHubModel(ExtTestCase):
         embeddings = F.normalize(embeddings, p=2, dim=1)
         scores = (embeddings[:1] @ embeddings[1:].T) * 100
         print(scores.tolist())
+
+    @never_test()
+    def test_imagetext2text_generation_gemma3_4b_it(self):
+        """
+        clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k gemma3_4b_it
+        """
+        from transformers import AutoProcessor, Gemma3ForConditionalGeneration
+
+        model_id = "google/gemma-3-4b-it"
+        if os.environ.get("PRETRAINED", ""):
+            model = Gemma3ForConditionalGeneration.from_pretrained(
+                model_id, device_map="cpu"
+            ).eval()
+        else:
+            data = get_untrained_model_with_inputs(
+                model_id,
+                verbose=1,
+                add_second_input=False,
+                # same_as_pretrained=True, #use_pretrained=True
+                inputs_kwargs={
+                    "sequence_length": 281,
+                    "batch_size": 1,
+                    "max_sequence_length": 580,
+                    "n_images": 1,
+                },
+            )
+            model = data["model"]
+
+        print(f"-- model.device={model.device}")
+        processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
+        print(f"-- processor={type(processor)}")
+
+        messages = messages = [
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": "You are a helpful assistant."}],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "image": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/bee.jpg",
+                    },
+                    {"type": "text", "text": "Describe this image in detail."},
+                ],
+            },
+        ]
+        inputs = processor.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to(model.device, dtype=torch.bfloat16)
+        # if "token_type_ids" in inputs:
+        #    print(
+        #       f"-- remove token_type_ids: "
+        #       f"{self.string_type(inputs['token_type_ids'], with_shape=True)}"
+        #    )
+        # inputs.pop("token_type_ids", None)
+        print(f"-- inputs={self.string_type(inputs)}")
+
+        # iteration merge = sequence > 1, cache not empty
+        # iteration 1 = sequence > 1, no cache
+        #   cache_position:T7s281,
+        #   past_key_values:StaticCache(key_cache=#0[], value_cache=#0[]),
+        #   input_ids:T7s1x281,
+        #   inputs_embeds:None,
+        #   token_type_ids:T7s1x281,
+        #   attention_mask:dict(sliding_attention:T9s1x1x281x580,
+        #                       full_attention:T9s1x1x281x580),
+        #   position_ids:None,
+        #   use_cache:bool,
+        #   logits_to_keep:None,
+        #   pixel_values:T16s1x3x896x896,
+        #   return_dict:bool)
+        # iteration 2 = sequence = 1, cache not empty
+        #   cache_position:T7s1,
+        #   past_key_values:StaticCache(key_cache=#34[T1s1x4x580x256,...],
+        #                               value_cache=#34[T1s1x4x580x256,...]),
+        #   input_ids:T7s1x1,
+        #   inputs_embeds:None,
+        #   token_type_ids:T7s1x1,
+        #   attention_mask:dict(sliding_attention:T9s1x1x1x580,full_attention:T9s1x1x1x580),
+        #   position_ids:None,
+        #   use_cache:bool,logits_to_keep:None,return_dict:bool)
+
+        print()
+        with (
+            torch_export_patches(
+                patch_torch=False, patch_sympy=False, patch_transformers=True
+            ),
+            steal_forward(
+                model,
+                dump_file=self.get_dump_file(
+                    "test_imagetext2text_generation_gemma3_4b_it.onnx"
+                ),
+                dump_drop={"attention_mask", "past_key_values", "pixel_values"},
+                save_as_external_data=False,
+            ),
+        ):
+            generated_ids = model.generate(
+                **inputs,
+                # 282 = value high enough to trigger multiple iterations of the model
+                max_new_tokens=282,
+                do_sample=False,
+                cache_implementation="static",
+            )
+        output_text = processor.decode(
+            generated_ids[0][inputs["input_ids"].shape[1] :], skip_special_tokens=False
+        )
+        print(output_text)
 
 
 if __name__ == "__main__":

@@ -397,7 +397,7 @@ def string_type(
             return "AUTO"
         if verbose:
             print(f"[string_type] Y7:{type(obj)}")
-        return str(obj)
+        return str(obj).replace("DimHint(DYNAMIC)", "DYNAMIC").replace("DimHint(AUTO)", "AUTO")
 
     if isinstance(obj, bool):
         if with_min_max:
@@ -941,7 +941,7 @@ def flatten_object(x: Any, drop_keys: bool = False) -> Any:
             return flatten_object(list(x.values()), drop_keys=drop_keys)
         return flatten_object(list(x.items()), drop_keys=drop_keys)
 
-    if x.__class__.__name__ in {"DynamicCache", "StaticCache"}:
+    if x.__class__.__name__ in {"DynamicCache", "StaticCache", "HybridCache"}:
         from .cache_helper import CacheKeyValue
 
         kc = CacheKeyValue(x)
