@@ -1843,7 +1843,7 @@ if patch_qwen3:
 
 
 try:
-    import transformers.models.gemma3.modeling_gemma3
+    from transformers.models.gemma3.modeling_gemma3 import Gemma3Model  # noqa: F401
 
     patch_gemma3 = True
 except ImportError:
