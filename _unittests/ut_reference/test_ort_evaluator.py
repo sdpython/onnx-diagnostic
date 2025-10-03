@@ -239,6 +239,16 @@ class TestOnnxruntimeEvaluatoruator(ExtTestCase):
         self.assertIsInstance(got[0], np.ndarray)
         self.assertEqualArray(expected[0], got[0])
 
+    def test_init_numpy_bfloat16_whole(self):
+        model, feeds, expected = self._get_model_init(TensorProto.BFLOAT16)
+        wrap = OnnxruntimeEvaluator(model, providers="cpu", whole=True)
+        got = wrap.run(
+            None, {k: v.to(float).numpy().astype(ml_dtypes.bfloat16) for k, v in feeds.items()}
+        )
+        self.assertIsInstance(got[0], np.ndarray)
+        self.assertEqualArray(expected[0], got[0])
+        self.assertEqual(got[0].dtype, ml_dtypes.bfloat16)
+
     @hide_stdout()
     def test_init_torch_afloat32(self):
         model, feeds, expected = self._get_model_init(TensorProto.FLOAT)

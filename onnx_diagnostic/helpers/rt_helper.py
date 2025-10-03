@@ -3,6 +3,7 @@ import numpy as np
 import onnx
 import torch
 from .helper import string_type, flatten_object
+from .torch_helper import to_numpy
 from .cache_helper import is_cache_dynamic_registered
 
 
@@ -56,7 +57,7 @@ def make_feeds(
         f"{string_type(torch.utils._pytree.tree_flatten(inputs)[0], with_shape=True)}"
     )
     if use_numpy:
-        flat = [t.detach().cpu().numpy() if isinstance(t, torch.Tensor) else t for t in flat]
+        flat = [to_numpy(t) if isinstance(t, torch.Tensor) else t for t in flat]
     names = (
         [i.name for i in proto.graph.input]
         if isinstance(proto, onnx.ModelProto)
