@@ -488,7 +488,7 @@ def _compares_on_one_example(
     disc.update(
         dict(
             success=1 if disc["abs"] < 0.1 else 0,
-            model_cls=model.__class__,
+            model_cls=model.__class__,  # type: ignore[dict-item]
             exported=mod,  # type: ignore[dict-item]
         )
     )
