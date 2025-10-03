@@ -83,7 +83,7 @@ def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Call
             continue
 
         original = cls._PATCHED_CLASS_
-        methods = cls._PATCHES_
+        methods = [_ for _ in cls._PATCHES_ if _ is not None]
         if verbose:
             print(f"[patch_module_or_classes] {name}.{cls.__name__}: {', '.join(methods)}")
 

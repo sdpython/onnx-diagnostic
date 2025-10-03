@@ -4,6 +4,7 @@ Change Logs
 0.7.13
 ++++++
 
+* :pr:`256`: add a set of inputs checking models works for an empty cache on task text-generation
 * :pr:`244`: add a patch to bypass the exception raised when the dynamic dimension is in {0,1}
 
 0.7.12

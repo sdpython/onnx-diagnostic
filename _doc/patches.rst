@@ -91,7 +91,10 @@ Here is the list of available patches:
 
     for name, cls in p.__dict__.items():
         if name.startswith("patched_") and hasattr(cls, "_PATCHES_"):
-            print(f"{cls._PATCHED_CLASS_.__name__}: {', '.join(cls._PATCHES_)}")
+            print(
+                f"{cls._PATCHED_CLASS_.__name__}: "
+                f"{', '.join([_ for _ in cls._PATCHES_ if _ is not None])}"
+            )
 
 Cache serialization
 ===================

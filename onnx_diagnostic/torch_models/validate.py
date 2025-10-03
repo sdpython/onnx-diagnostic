@@ -865,7 +865,7 @@ def validate_model(
                     runtime=runtime,
                     repeat=repeat,
                     warmup=warmup,
-                    inputs2=inputs2,
+                    second_input_keys=second_input_keys,
                 )
                 summary.update(summary_valid)
 
