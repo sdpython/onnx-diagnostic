@@ -1855,6 +1855,7 @@ if patch_gemma3:
     class patched_Gemma3Model(torch.nn.Module):
         _PATCHES_ = ["get_placeholder_mask"]
         _PATCHED_CLASS_ = transformers.models.gemma3.modeling_gemma3.Gemma3Model
+        _PATCHED_PR_ = "https://github.com/huggingface/transformers/pull/41319"
 
         def get_placeholder_mask(
             self,
