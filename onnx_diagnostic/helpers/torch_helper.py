@@ -464,10 +464,10 @@ def is_torchdynamo_exporting() -> bool:
             return False
 
 
-def to_numpy(tensor: "torch.Tensor"):  # noqa: F821
+def to_numpy(tensor: "torch.Tensor") -> np.ndarray:  # noqa: F821
     """Converts a :class:`torch.Tensor` to :class:`numpy.ndarray`."""
     try:
-        return tensor.numpy()
+        return tensor.detach().cpu().numpy()
     except TypeError:
         # We try with ml_dtypes
         pass
@@ -476,7 +476,7 @@ def to_numpy(tensor: "torch.Tensor"):  # noqa: F821
 
     conv = {torch.bfloat16: ml_dtypes.bfloat16}
     assert tensor.dtype in conv, f"Unsupported type {tensor.dtype}, not in {conv}"
-    return tensor.to(torch.float32).numpy().astype(conv[tensor.dtype])
+    return tensor.detach().to(torch.float32).cpu().numpy().astype(conv[tensor.dtype])
 
 
 def replace_string_by_dynamic(dynamic_shapes: Any) -> Any:
