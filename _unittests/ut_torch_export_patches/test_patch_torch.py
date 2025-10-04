@@ -6,6 +6,7 @@ from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     requires_torch,
     requires_transformers,
+    has_transformers,
     has_torch,
 )
 from onnx_diagnostic.helpers.cache_helper import CacheKeyValue, make_dynamic_cache
@@ -361,6 +362,8 @@ class TestPatchPatchTorch(ExtTestCase):
             self.assertEqualArrayAny(expected, got)
 
         with self.subTest(input="no01", backed_size_oblivious=True):
+            if not has_transformers("4.55"):
+                raise unittest.SkipIf("test not working with transformers<4.55")
             with (
                 torch.fx.experimental._config.patch(backed_size_oblivious=True),
                 torch_export_patches(patch_transformers=True),
