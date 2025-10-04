@@ -676,7 +676,13 @@ def run_exporter(
 
     if dynamic and len(inputs) > 1:
         for index, i in enumerate(inputs):
-            expected = model(*_clone(i))
+            if quiet:
+                try:
+                    expected = model(*_clone(i))
+                except Exception as e:
+                    return dict(error=str(e), success=0, error_step=f"run0.{index}")
+            else:
+                expected = model(*_clone(i))
             try:
                 got = mod(*i)
             except Exception as e:
