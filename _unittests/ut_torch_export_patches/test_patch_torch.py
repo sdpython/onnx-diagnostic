@@ -8,6 +8,8 @@ from onnx_diagnostic.ext_test_case import (
     requires_transformers,
     has_torch,
 )
+from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
+from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
@@ -340,6 +342,19 @@ class TestPatchPatchTorch(ExtTestCase):
                 dynamic_shapes=use_dyn_not_str(({0: "A", 1: "B"}, {0: "C", 1: "D"}, {0: "E"})),
             )
         self.assertEqualArray(expected, ep.module()(*inputs), atol=1e-2)
+
+    @requires_torch("2.7.9999")
+    @requires_transformers("4.49.9999")
+    def test_export_tiny_llm_dim_meta(self):
+        data = get_untrained_model_with_inputs("arnir0/Tiny-LLM", verbose=0)
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        expected = model(**torch_deepcopy(inputs))
+        with torch_export_patches(patch_transformers=True):
+            ep = torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+            )
+        got = ep.module()(**inputs)
+        self.assertEqualArrayAny(expected, got)
 
 
 if __name__ == "__main__":

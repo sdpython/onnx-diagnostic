@@ -386,8 +386,10 @@ def torch_export_patches(
             )
 
             # torch._prims._broadcast_in_dim_meta
+            f_broadcast_in_dim = torch._prims.broadcast_in_dim
             f__broadcast_in_dim_meta = torch._prims._broadcast_in_dim_meta
             torch._prims._broadcast_in_dim_meta = patched__broadcast_in_dim_meta
+            torch._prims.broadcast_in_dim = patched__broadcast_in_dim_meta
 
             # torch._refs._maybe_broadcast
             f__maybe_broadcast = torch._refs._maybe_broadcast
@@ -595,6 +597,7 @@ def torch_export_patches(
                     f___constrain_user_specified_dimhint_range
                 )
                 torch._prims._broadcast_in_dim_meta = f__broadcast_in_dim_meta
+                torch._prims.broadcast_in_dim = f_broadcast_in_dim
                 torch._refs._maybe_broadcast = f__maybe_broadcast
 
                 if verbose:
@@ -735,9 +738,7 @@ def torch_export_patches(
 
 
 def replacement_before_exporting(args: Any) -> Any:
-    """
-    Does replacements on the given inputs if needed.
-    """
+    """Does replacements on the given inputs if needed."""
     if args is None:
         return None
     if isinstance(args, (int, float)):

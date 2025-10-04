@@ -608,7 +608,7 @@ def patched__maybe_broadcast(*args, preserve_cpu_scalar_tensors=True):
 
             # u0==u1 assume the same, no broadcasting!
             # PATCHED: avoid errors
-            return x != y
+            return True  # guard_or_true(x != y)
             # torch._check(
             #    x == y,
             #    lambda x=x, y=y: (
@@ -665,12 +665,13 @@ def patched__broadcast_in_dim_meta(
     # (no relative reordering of dims) of integers and
     # each dimension must be within the new shape
     def _greater_than_reduce(acc, x):
-        assert isinstance(x, torch.export.Dim)
+        assert isinstance(x, (int, torch.export.Dim)), f"unexpected type {type(x)} for x"
         assert x > acc
         assert x < len(shape)
 
         return x
 
+    print("****", broadcast_dimensions)
     reduce(_greater_than_reduce, broadcast_dimensions, -1)
 
     # shape must be broadcastable to
@@ -694,13 +695,14 @@ def patched__broadcast_in_dim_meta(
                 else:
                     new_strides.append(0)
             else:
-                torch._check(
-                    a.shape[original_idx] == shape[idx],
-                    lambda idx=idx, original_idx=original_idx: (
-                        f"non-broadcasting semantics require "
-                        f"{a.shape[original_idx]} == {shape[idx]}"
-                    ),
-                )
+                # PATCHED: disabled this check
+                # torch._check(
+                #    a.shape[original_idx] == shape[idx],
+                #    lambda idx=idx, original_idx=original_idx: (
+                #        f"non-broadcasting semantics require "
+                #        f"{a.shape[original_idx]} == {shape[idx]}"
+                #    ),
+                # )
                 new_strides.append(a.stride()[original_idx])
             original_idx = original_idx + 1
         else:
