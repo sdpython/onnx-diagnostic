@@ -1,6 +1,7 @@
 import inspect
 import os
 import traceback
+from functools import reduce
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import torch
 from torch._subclasses.fake_tensor import FakeTensorMode
@@ -570,3 +571,145 @@ def patched__constrain_user_specified_dimhint_range(
         return msg
 
     return None
+
+
+def patched__maybe_broadcast(*args, preserve_cpu_scalar_tensors=True):
+    """Patches ``torch._refs._maybe_broadcast``."""
+    from torch._prims_common import ShapeType, TensorLike, Number
+
+    # Computes common shape
+    common_shape = patched__broadcast_shapes(
+        *(t.shape if isinstance(t, TensorLike) else None for t in args)
+    )
+
+    def should_expand(a: ShapeType, b: ShapeType) -> bool:
+        from torch.fx.experimental.symbolic_shapes import (
+            guard_or_false,
+            sym_and,
+            sym_or,
+        )
+
+        if len(a) != len(b):
+            return True
+
+        for x, y in zip(a, b):
+            if guard_or_false(x != y):
+                # We know they are not the same.
+                return True
+
+            # They are the same or we do not know if they are the same or not.
+            # 1==1 no-broadcast
+            # u0==1 and 1==u0 cases. We broadcast!
+            if guard_or_false(sym_and(x == 1, y == 1)):
+                pass
+            elif guard_or_false(sym_or(x == 1, y == 1)):
+                # assume broadcasting.
+                return True
+
+            # u0==u1 assume the same, no broadcasting!
+            # PATCHED: avoid errors
+            return x != y
+            # torch._check(
+            #    x == y,
+            #    lambda x=x, y=y: (
+            #        f"sizes assumed to be the same due to unbacked "
+            #        f"broadcasting semantics x={x!r}, y={y!r}"
+            #    ),
+            # )
+
+        return False
+
+    def __maybe_broadcast(x, shape):
+        if x is None:
+            return None
+        elif isinstance(x, Number):
+            return x
+        elif isinstance(x, TensorLike):
+            if preserve_cpu_scalar_tensors and torch._prims_common.is_cpu_scalar_tensor(x):
+                return x
+
+            if should_expand(x.shape, common_shape):
+                return x.expand(common_shape)
+
+            return x
+        else:
+            raise RuntimeError(f"Unexpected type when broadcasting: {str(type(x))}!")
+
+    return tuple(__maybe_broadcast(x, common_shape) for x in args)
+
+
+def patched__broadcast_in_dim_meta(
+    a: torch._prims_common.TensorLikeType,
+    shape: torch._prims_common.ShapeType,
+    broadcast_dimensions: Sequence[int],
+):
+    """Patches ``torch._prims._broadcast_in_dim_meta``."""
+    from torch.fx.experimental.symbolic_shapes import (
+        guard_or_false,
+        guard_or_true,
+        sym_or,
+    )
+
+    # Type checks
+    assert isinstance(a, torch._prims_common.TensorLike)
+    assert isinstance(shape, Sequence)
+    assert isinstance(broadcast_dimensions, Sequence)
+
+    # every dimension must be accounted for
+    assert a.ndim == len(broadcast_dimensions)
+
+    # broadcast shape must have weakly more dimensions
+    assert len(shape) >= a.ndim
+
+    # broadcast_dimensions must be an ascending sequence
+    # (no relative reordering of dims) of integers and
+    # each dimension must be within the new shape
+    def _greater_than_reduce(acc, x):
+        assert isinstance(x, torch.export.Dim)
+        assert x > acc
+        assert x < len(shape)
+
+        return x
+
+    reduce(_greater_than_reduce, broadcast_dimensions, -1)
+
+    # shape must be broadcastable to
+    for idx, new_idx in enumerate(broadcast_dimensions):
+        torch._check(
+            sym_or(a.shape[idx] == 1, shape[new_idx] == a.shape[idx]),
+            lambda idx=idx, new_idx=new_idx: (
+                f"{a.shape[idx]} must be broadcastable to {shape[new_idx]}"
+            ),
+        )
+
+    new_strides = []
+    original_idx = 0
+    for idx in range(len(shape)):
+        if idx in broadcast_dimensions:
+            # Assigns a stride of zero to dimensions
+            # which were actually broadcast
+            if guard_or_false(a.shape[original_idx] == 1):
+                if guard_or_false(a.shape[original_idx] == shape[idx]):
+                    new_strides.append(a.stride()[original_idx])
+                else:
+                    new_strides.append(0)
+            else:
+                torch._check(
+                    a.shape[original_idx] == shape[idx],
+                    lambda idx=idx, original_idx=original_idx: (
+                        f"non-broadcasting semantics require "
+                        f"{a.shape[original_idx]} == {shape[idx]}"
+                    ),
+                )
+                new_strides.append(a.stride()[original_idx])
+            original_idx = original_idx + 1
+        else:
+            if guard_or_true(shape[idx] != 1):
+                # consistent with previous use of guard_size_oblivious
+                new_strides.append(0)
+            elif original_idx == a.ndim:
+                new_strides.append(1)
+            else:
+                new_strides.append(a.stride()[original_idx] * a.size()[original_idx])
+
+    return a.as_strided(shape, new_strides, a.storage_offset())

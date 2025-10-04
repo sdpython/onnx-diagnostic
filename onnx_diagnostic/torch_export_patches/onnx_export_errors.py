@@ -347,6 +347,8 @@ def torch_export_patches(
                 patched__constrain_user_specified_dimhint_range,
                 _catch_produce_guards_and_solve_constraints,
                 patch__check_input_constraints_for_graph,
+                patched__broadcast_in_dim_meta,
+                patched__maybe_broadcast,
             )
 
             if verbose:
@@ -382,6 +384,14 @@ def torch_export_patches(
             torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
                 patched__constrain_user_specified_dimhint_range
             )
+
+            # torch._prims._broadcast_in_dim_meta
+            f__broadcast_in_dim_meta = torch._prims._broadcast_in_dim_meta
+            torch._prims._broadcast_in_dim_meta = patched__broadcast_in_dim_meta
+
+            # torch._refs._maybe_broadcast
+            f__maybe_broadcast = torch._refs._maybe_broadcast
+            torch._refs._maybe_broadcast = patched__maybe_broadcast
 
         # torch._export.non_strict_utils.produce_guards_and_solve_constraints
         if patch_torch and catch_constraints:
@@ -584,6 +594,8 @@ def torch_export_patches(
                 torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
                     f___constrain_user_specified_dimhint_range
                 )
+                torch._prims._broadcast_in_dim_meta = f__broadcast_in_dim_meta
+                torch._refs._maybe_broadcast = f__maybe_broadcast
 
                 if verbose:
                     print("[torch_export_patches] restored pytorch functions")

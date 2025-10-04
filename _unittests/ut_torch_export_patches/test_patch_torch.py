@@ -317,6 +317,30 @@ class TestPatchPatchTorch(ExtTestCase):
                 got = ep.module()(*inputs)
                 self.assertEqualArray(expected, got)
 
+    def test_patched__broadcast_in_dim_meta(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, ind1, ind2):
+                return x[ind1, ind2]
+
+        inputs = (
+            torch.randn(2, 1024),
+            torch.tensor([[0, 1]], dtype=torch.int64).T,
+            torch.arange(1024, dtype=torch.int64),
+        )
+        model = Model()
+        expected = model(*inputs)
+
+        with (
+            torch.fx.experimental._config.patch(backed_size_oblivious=True),
+            torch_export_patches(),
+        ):
+            ep = torch.export.export(
+                model,
+                inputs,
+                dynamic_shapes=use_dyn_not_str(({0: "A", 1: "B"}, {0: "C", 1: "D"}, {0: "E"})),
+            )
+        self.assertEqualArray(expected, ep.module()(*inputs), atol=1e-2)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
