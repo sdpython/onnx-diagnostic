@@ -671,7 +671,6 @@ def patched__broadcast_in_dim_meta(
 
         return x
 
-    print("****", broadcast_dimensions)
     reduce(_greater_than_reduce, broadcast_dimensions, -1)
 
     # shape must be broadcastable to

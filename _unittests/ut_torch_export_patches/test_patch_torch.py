@@ -8,6 +8,7 @@ from onnx_diagnostic.ext_test_case import (
     requires_transformers,
     has_torch,
 )
+from onnx_diagnostic.helpers.cache_helper import CacheKeyValue, make_dynamic_cache
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -345,16 +346,92 @@ class TestPatchPatchTorch(ExtTestCase):
 
     @requires_torch("2.7.9999")
     @requires_transformers("4.49.9999")
-    def test_export_tiny_llm_dim_meta(self):
+    def test_export_with_patch_tiny_llm_dim_meta(self):
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM", verbose=0)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        order = ["input_ids", "attention_mask", "position_ids", "past_key_values"]
+        self.assertEqual(list(inputs), order)
         expected = model(**torch_deepcopy(inputs))
-        with torch_export_patches(patch_transformers=True):
-            ep = torch.export.export(
-                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
-            )
-        got = ep.module()(**inputs)
-        self.assertEqualArrayAny(expected, got)
+        with self.subTest(input="no01", backed_size_oblivious=False):
+            with torch_export_patches(patch_transformers=True):
+                ep = torch.export.export(
+                    model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+                )
+            got = ep.module()(**torch_deepcopy(inputs))
+            self.assertEqualArrayAny(expected, got)
+
+        with self.subTest(input="no01", backed_size_oblivious=True):
+            with (
+                torch.fx.experimental._config.patch(backed_size_oblivious=True),
+                torch_export_patches(patch_transformers=True),
+            ):
+                ep = torch.export.export(
+                    model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+                )
+            got = ep.module()(**torch_deepcopy(inputs))
+            self.assertEqualArrayAny(expected, got)
+
+        def _batch1(t):
+            if t.__class__.__name__ == "DynamicCache":
+                kv = CacheKeyValue(t)
+                keys = [t[:1] for t in kv.key_cache]
+                values = [t[:1] for t in kv.value_cache]
+                return make_dynamic_cache(tuple(zip(keys, values)))
+            if t.ndim > 1:
+                return t[:1]
+            return t
+
+        export_inputs = {k: _batch1(v) for k, v in inputs.items()}
+
+        # with self.subTest(input="batch1", backed_size_oblivious=False):
+        #    with torch_export_patches(patch_transformers=True):
+        #        ep = torch.export.export(
+        #            model, (), kwargs=export_inputs, dynamic_shapes=use_dyn_not_str(ds)
+        #        )
+        #    got = ep.module()(**torch_deepcopy(inputs))
+        #    self.assertEqualArrayAny(expected, got)
+
+        with self.subTest(input="batch1", backed_size_oblivious=True):
+            with (
+                torch.fx.experimental._config.patch(backed_size_oblivious=True),
+                torch_export_patches(patch_transformers=True),
+            ):
+                ep = torch.export.export(
+                    model, (), kwargs=export_inputs, dynamic_shapes=use_dyn_not_str(ds)
+                )
+            try:
+                got = ep.module()(**torch_deepcopy(inputs))
+            except AssertionError as e:
+                got = None
+                if "Guard failed: position_ids.size()[0] == 1" not in str(e):
+                    raise
+
+            if got is not None:
+                self.assertEqualArrayAny(expected, got)
+
+        if "inputs_empty_cache" not in data:
+            return
+
+        export_inputs = data["inputs_empty_cache"]
+
+        # with self.subTest(input="cache0", backed_size_oblivious=False):
+        #    with torch_export_patches(patch_transformers=True):
+        #        ep = torch.export.export(
+        #            model, (), kwargs=export_inputs, dynamic_shapes=use_dyn_not_str(ds)
+        #        )
+        #    got = ep.module()(**torch_deepcopy(inputs))
+        #    self.assertEqualArrayAny(expected, got)
+
+        with self.subTest(input="cache0", backed_size_oblivious=True):
+            with (
+                torch.fx.experimental._config.patch(backed_size_oblivious=True),
+                torch_export_patches(patch_transformers=True),
+            ):
+                ep = torch.export.export(
+                    model, (), kwargs=export_inputs, dynamic_shapes=use_dyn_not_str(ds)
+                )
+            got = ep.module()(**torch_deepcopy(inputs))
+            self.assertEqualArrayAny(expected, got)
 
 
 if __name__ == "__main__":
