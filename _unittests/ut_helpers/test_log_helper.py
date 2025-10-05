@@ -268,7 +268,7 @@ class TestLogHelper(ExtTestCase):
         cube = CubeLogsPerformance(dfs, keep_last_date=True)
         cube.load()
         ct = cube.clone()
-        self.assertEqual((52, 111), ct.shape)
+        self.assertEqual((52, 116), ct.shape)
 
     def test_duplicate(self):
         df = pandas.DataFrame(

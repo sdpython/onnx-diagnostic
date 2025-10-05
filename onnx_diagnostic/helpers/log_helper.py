@@ -1517,6 +1517,7 @@ class CubeLogsPerformance(CubeLogs):
             "n_node_control_flow",
             "n_node_expand",
             "n_node_function",
+            "n_node_gqa",
             "n_node_initializer",
             "n_node_initializer_small",
             "n_node_layer_normalization",
@@ -1726,6 +1727,11 @@ class CubeLogsPerformance(CubeLogs):
                     + gdf(df, "op_onnx_com.microsoft_DecoderMaskedSelfAttention", 0)
                     + gdf(df, "op_onnx_com.microsoft_DecoderMaskedMultiHeadAttention", 0)
                     + gdf(df, "op_onnx_com.microsoft_SparseAttention", 0),
+                ),
+                n_node_gqa=lambda df: gpreserve(
+                    df,
+                    "time_latency_eager",
+                    gdf(df, "op_onnx_com.microsoft_GroupQueryAttention", 0),
                 ),
                 n_node_layer_normalization=lambda df: gpreserve(
                     df,
