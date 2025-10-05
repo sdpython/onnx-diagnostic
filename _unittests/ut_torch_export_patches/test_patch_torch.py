@@ -428,6 +428,8 @@ class TestPatchPatchTorch(ExtTestCase):
         #    self.assertEqualArrayAny(expected, got)
 
         with self.subTest(input="cache0", backed_size_oblivious=True):
+            if not has_transformers("4.55"):
+                raise unittest.SkipTest("test not working with transformers<4.55")
             with (
                 torch.fx.experimental._config.patch(backed_size_oblivious=True),
                 torch_export_patches(patch_transformers=True),
