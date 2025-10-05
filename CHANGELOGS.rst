@@ -4,7 +4,7 @@ Change Logs
 0.7.14
 ++++++
 
-* :pr:`250`: add veriable to track sequence nodes
+* :pr:`250`: add variables to track sequence nodes
 * :pr:`249`: patches _maybe_broadcast to support a corner case
 
 0.7.13
