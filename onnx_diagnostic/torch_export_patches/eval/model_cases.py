@@ -353,12 +353,9 @@ class ControlFlowCondNonZero(torch.nn.Module):
 
 
 class ControlFlowCondIdentity_153832(torch.nn.Module):
-    """
-    `#153832 <https://github.com/pytorch/pytorch/issues/153832>`_
-    """
+    """`#153832 <https://github.com/pytorch/pytorch/issues/153832>`_"""
 
     def forward(self, x, y):
-
         def branch_cond_then_1(x):
             x = torch.abs(x) + 1
             return x

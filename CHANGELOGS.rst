@@ -4,6 +4,8 @@ Change Logs
 0.7.14
 ++++++
 
+* :pr:`249`: patches _maybe_broadcast to support a corner case
+
 0.7.13
 ++++++
 
