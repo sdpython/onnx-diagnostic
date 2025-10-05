@@ -1744,6 +1744,7 @@ def process_statistics(data: Sequence[Dict[str, float]]) -> Dict[str, Any]:
             "constant_folding",
             "remove_identity",
             "remove_duplicated_initializer",
+            "remove_duplicated_shape",
             "dynamic_dimension_naming",
             "inline",
             "check",
