@@ -141,11 +141,8 @@ backend_test.exclude("test_gradient")
 
 backend_test.exclude("(test_adagrad|test_adam|test_add_uint8)")
 
-if pv.Version(onnxruntime.__version__) < pv.Version("1.24"):
-    backend_test.exclude(
-        "(test_attention_4d_with_qk|test_attention_4d_gqa|"
-        "test_attention_4d_with_past_and_present_qk)"
-    )
+if pv.Version(onnxruntime.__version__) <= pv.Version("1.24"):
+    backend_test.exclude("(test_attention_4d_with|test_attention_4d_gqa)")
 
 
 # import all test cases at global scope to make them visible to python.unittest
