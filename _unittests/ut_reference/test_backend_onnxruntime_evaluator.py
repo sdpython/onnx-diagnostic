@@ -1,6 +1,7 @@
 import unittest
 import warnings
 from typing import Any
+import packaging.version as pv
 import numpy
 import onnx.backend.base
 import onnx.backend.test
@@ -9,6 +10,7 @@ import onnx.version_converter
 from onnx import ModelProto
 from onnx.backend.base import Device, DeviceType
 from onnx.defs import onnx_opset_version
+import onnxruntime
 from onnx_diagnostic.reference import OnnxruntimeEvaluator
 
 ORT_OPSET = max(21, onnx_opset_version() - 2)
@@ -95,10 +97,12 @@ class OnnxruntimeEvaluatorBackend(onnx.backend.base.Backend):
 dft_atol = 1e-3
 stft_atol = 1e-4
 ql_atol = 1e-5
+fp16_atol = 1e-3
 backend_test = onnx.backend.test.BackendTest(
     OnnxruntimeEvaluatorBackend,
     __name__,
     test_kwargs={
+        "test_attention_4d_fp16": {"atol": fp16_atol},
         "test_dft": {"atol": dft_atol, "rtol": numpy.inf},
         "test_dft_axis": {"atol": dft_atol, "rtol": numpy.inf},
         "test_dft_axis_opset19": {"atol": dft_atol, "rtol": numpy.inf},
@@ -286,6 +290,9 @@ if onnx_opset_version() <= 25:
         ]
     )
     backend_test.exclude(f"({exc})")
+
+if pv.Version(onnxruntime.__version__) <= pv.Version("1.24"):
+    backend_test.exclude("(test_attention_4d_with|test_attention_4d_gqa)")
 
 # import all test cases at global scope to make them visible to python.unittest
 globals().update(backend_test.test_cases)
