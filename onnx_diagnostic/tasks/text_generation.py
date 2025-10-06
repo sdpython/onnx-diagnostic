@@ -262,8 +262,9 @@ def get_inputs(
         # which it becomes an empty tensor
         res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
+        # TODO(titaiwang): Make input key more informative
         # prompt processing (prefill) testing
-        res["prompt_processing"] = get_inputs(
+        res["inputs2"] = get_inputs(
             model=model,
             config=config,
             dummy_max_token_id=dummy_max_token_id,
