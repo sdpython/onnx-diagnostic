@@ -514,7 +514,7 @@ class TestLogHelper(ExtTestCase):
         cube = CubeLogs(
             df, keys=["^m_*", "exporter", "opt"], values=["time_p", "perf"], time="date"
         ).load()
-        sbs, sbs_agg = cube.sbs(
+        sbs, sbs_agg, _ = cube.sbs(
             dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))
         )
         self.assertEqual(sbs.shape, (4, 9))
@@ -604,7 +604,7 @@ class TestLogHelper(ExtTestCase):
         cube = CubeLogs(
             df, keys=["^m_*", "exporter", "opt"], values=["time_p", "perf"], time="date"
         ).load()
-        sbs, sbs_agg = cube.sbs(
+        sbs, sbs_agg, _ = cube.sbs(
             dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))
         )
         self.assertEqual(sbs.shape, (8, 9))

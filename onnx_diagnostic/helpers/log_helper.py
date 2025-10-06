@@ -1210,7 +1210,7 @@ class CubeLogs:
                     for k, v in sbs.items():
                         print(f"[CubeLogs.to_excel] sbs {k}: {v}")
                 name = "∧".join(sbs)
-                sbs_raw, sbs_agg = self.sbs(sbs)
+                sbs_raw, sbs_agg, sbs_col = self.sbs(sbs)
                 if verbose:
                     print(f"[CubeLogs.to_excel] add sheet {name!r} with shape {sbs_raw.shape}")
                     print(
@@ -1232,6 +1232,14 @@ class CubeLogs:
                     freeze_panes=(
                         sbs_agg.columns.nlevels + 1,
                         sbs_agg.index.nlevels,
+                    ),
+                )
+                sbs_col.to_excel(
+                    writer,
+                    sheet_name=f"{name}-COL",
+                    freeze_panes=(
+                        sbs_col.columns.nlevels + 1,
+                        sbs_col.index.nlevels,
                     ),
                 )
 
@@ -1314,7 +1322,7 @@ class CubeLogs:
 
     def sbs(
         self, configs: Dict[str, Dict[str, Any]], column_name: str = "CONF"
-    ) -> Tuple[pandas.DataFrame, pandas.DataFrame]:
+    ) -> Tuple[pandas.DataFrame, pandas.DataFrame, pandas.DataFrame]:
         """
         Creates a side-by-side for two configurations.
         Every configuration a dictionary column:value which filters in
@@ -1325,7 +1333,7 @@ class CubeLogs:
         :param configs: example
             ``dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))``
         :param column_name: column to add with the name of the configuration
-        :return: data and aggregated date
+        :return: data, aggregated date, data with a row per model
         """
         assert (
             len(configs) >= 2
@@ -1433,6 +1441,8 @@ class CubeLogs:
                             _mkc(m, f"{n1}<{n2}"): (si < sj).astype(int),
                             _mkc(m, f"{n1}=={n2}"): (si == sj).astype(int),
                             _mkc(m, f"{n1}>{n2}"): (si > sj).astype(int),
+                            _mkc(m, f"{n1}*({n1}∧{n2})"): si * (~sinan & ~sjnan).astype(float),
+                            _mkc(m, f"{n2}*({n1}∧{n2})"): sj * (~sinan & ~sjnan).astype(float),
                         }
                     )
                     nas.columns.names = view_res.columns.names
@@ -1452,7 +1462,7 @@ class CubeLogs:
         }
         flat = view_res.groupby(self.time).agg(aggs)
         flat = flat.stack("METRICS", future_stack=True)
-        return res, flat
+        return res, flat, view_res.T.sort_index().T
 
 
 class CubeLogsPerformance(CubeLogs):
