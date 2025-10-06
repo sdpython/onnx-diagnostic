@@ -381,6 +381,23 @@ def _flatten_iterator(obj: Any, sep: str) -> Iterator:
                 else:
                     for p, o in _flatten_iterator(getattr(obj, att), sep):
                         yield f"DynamicCache_{att}{sep}{p}", o
+        elif obj.__class__.__name__ == "StaticCache":
+            # transformers
+            import transformers
+            from .cache_helper import CacheKeyValue
+
+            assert isinstance(
+                obj, transformers.cache_utils.StaticCache
+            ), f"Unexpected type {type(obj)}"
+            obj = CacheKeyValue(obj)
+            atts = ["key_cache", "value_cache"]
+            for i, att in enumerate(atts):
+                if i == len(atts) - 1:
+                    for p, o in _flatten_iterator(getattr(obj, att), sep):
+                        yield f"StaticCache._{att}{sep}{p}", o
+                else:
+                    for p, o in _flatten_iterator(getattr(obj, att), sep):
+                        yield f"StaticCache_{att}{sep}{p}", o
         else:
             raise NotImplementedError(f"Unexpected type {type(obj)}")
 

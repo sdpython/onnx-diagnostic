@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 import onnx
 import torch
-from ..helpers.torch_helper import to_tensor
+from ..helpers.torch_helper import to_tensor, to_numpy
 from ..torch_onnx.runtime_info import first_used_last_used, RuntimeValue
 from .report_results_comparison import ReportResultComparison
 from . import torch_ops
@@ -578,7 +578,7 @@ class TorchOnnxEvaluator:
                 print(f"- clean {o}")
 
         if use_numpy:
-            return [None if a is None else a.detach().cpu().numpy() for a in fres]
+            return [None if a is None else to_numpy(a) for a in fres]
         return fres
 
     def run_with_values(

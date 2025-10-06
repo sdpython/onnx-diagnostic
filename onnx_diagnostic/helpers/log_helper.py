@@ -1167,7 +1167,7 @@ class CubeLogs:
                     df.to_excel(
                         writer,
                         sheet_name=name,
-                        freeze_panes=(df.columns.nlevels + df.index.nlevels, df.index.nlevels),
+                        freeze_panes=(df.columns.nlevels + 1, df.index.nlevels),
                     )
                     f_highlights[name] = tview.f_highlight
                     if tview.plots:
@@ -1210,7 +1210,7 @@ class CubeLogs:
                     for k, v in sbs.items():
                         print(f"[CubeLogs.to_excel] sbs {k}: {v}")
                 name = "∧".join(sbs)
-                sbs_raw, sbs_agg = self.sbs(sbs)
+                sbs_raw, sbs_agg, sbs_col = self.sbs(sbs)
                 if verbose:
                     print(f"[CubeLogs.to_excel] add sheet {name!r} with shape {sbs_raw.shape}")
                     print(
@@ -1222,7 +1222,7 @@ class CubeLogs:
                     writer,
                     sheet_name=name,
                     freeze_panes=(
-                        sbs_raw.columns.nlevels + sbs_raw.index.nlevels,
+                        sbs_raw.columns.nlevels + 1,
                         sbs_raw.index.nlevels,
                     ),
                 )
@@ -1230,8 +1230,16 @@ class CubeLogs:
                     writer,
                     sheet_name=f"{name}-AGG",
                     freeze_panes=(
-                        sbs_agg.columns.nlevels + sbs_agg.index.nlevels,
+                        sbs_agg.columns.nlevels + 1,
                         sbs_agg.index.nlevels,
+                    ),
+                )
+                sbs_col.to_excel(
+                    writer,
+                    sheet_name=f"{name}-COL",
+                    freeze_panes=(
+                        sbs_col.columns.nlevels + 1,
+                        sbs_col.index.nlevels,
                     ),
                 )
 
@@ -1314,7 +1322,7 @@ class CubeLogs:
 
     def sbs(
         self, configs: Dict[str, Dict[str, Any]], column_name: str = "CONF"
-    ) -> Tuple[pandas.DataFrame, pandas.DataFrame]:
+    ) -> Tuple[pandas.DataFrame, pandas.DataFrame, pandas.DataFrame]:
         """
         Creates a side-by-side for two configurations.
         Every configuration a dictionary column:value which filters in
@@ -1325,7 +1333,7 @@ class CubeLogs:
         :param configs: example
             ``dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))``
         :param column_name: column to add with the name of the configuration
-        :return: data and aggregated date
+        :return: data, aggregated date, data with a row per model
         """
         assert (
             len(configs) >= 2
@@ -1433,6 +1441,8 @@ class CubeLogs:
                             _mkc(m, f"{n1}<{n2}"): (si < sj).astype(int),
                             _mkc(m, f"{n1}=={n2}"): (si == sj).astype(int),
                             _mkc(m, f"{n1}>{n2}"): (si > sj).astype(int),
+                            _mkc(m, f"{n1}*({n1}∧{n2})"): si * (~sinan & ~sjnan).astype(float),
+                            _mkc(m, f"{n2}*({n1}∧{n2})"): sj * (~sinan & ~sjnan).astype(float),
                         }
                     )
                     nas.columns.names = view_res.columns.names
@@ -1452,13 +1462,11 @@ class CubeLogs:
         }
         flat = view_res.groupby(self.time).agg(aggs)
         flat = flat.stack("METRICS", future_stack=True)
-        return res, flat
+        return res, flat, view_res.T.sort_index().T
 
 
 class CubeLogsPerformance(CubeLogs):
-    """
-    Processes logs coming from experiments.
-    """
+    """Processes logs coming from experiments."""
 
     def __init__(
         self,
@@ -1511,20 +1519,25 @@ class CubeLogsPerformance(CubeLogs):
             "n_model_faster2x",
             "n_model_faster3x",
             "n_model_faster4x",
+            "n_model_faster5x",
             "n_node_attention",
             "n_node_attention23",
-            "n_node_rotary_embedding",
-            "n_node_rotary_embedding23",
-            "n_node_layer_normalization",
-            "n_node_layer_normalization23",
+            "n_node_causal_mask",
+            "n_node_constant",
             "n_node_control_flow",
-            "n_node_scatter",
+            "n_node_expand",
             "n_node_function",
+            "n_node_gqa",
             "n_node_initializer",
             "n_node_initializer_small",
-            "n_node_constant",
+            "n_node_layer_normalization",
+            "n_node_layer_normalization23",
+            "n_node_reshape",
+            "n_node_rotary_embedding",
+            "n_node_rotary_embedding23",
+            "n_node_scatter",
+            "n_node_sequence",
             "n_node_shape",
-            "n_node_expand",
             "onnx_n_nodes_no_cst",
             "peak_gpu_torch",
             "peak_gpu_nvidia",
@@ -1690,6 +1703,11 @@ class CubeLogsPerformance(CubeLogs):
                     "time_latency",
                     gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 3.98,
                 ),
+                n_model_faster5x=lambda df: gpreserve(
+                    df,
+                    "time_latency",
+                    gdf(df, "time_latency_eager") > gdf(df, "time_latency", np.inf) * 4.98,
+                ),
                 n_node_attention23=lambda df: gpreserve(
                     df, "time_latency_eager", gdf(df, "op_onnx__Attention")
                 ),
@@ -1719,6 +1737,11 @@ class CubeLogsPerformance(CubeLogs):
                     + gdf(df, "op_onnx_com.microsoft_DecoderMaskedSelfAttention", 0)
                     + gdf(df, "op_onnx_com.microsoft_DecoderMaskedMultiHeadAttention", 0)
                     + gdf(df, "op_onnx_com.microsoft_SparseAttention", 0),
+                ),
+                n_node_gqa=lambda df: gpreserve(
+                    df,
+                    "time_latency_eager",
+                    gdf(df, "op_onnx_com.microsoft_GroupQueryAttention", 0),
                 ),
                 n_node_layer_normalization=lambda df: gpreserve(
                     df,
@@ -1764,8 +1787,21 @@ class CubeLogsPerformance(CubeLogs):
                 n_node_shape=lambda df: gpreserve(
                     df, "time_latency_eager", gdf(df, "op_onnx__Shape")
                 ),
+                n_node_reshape=lambda df: gpreserve(
+                    df, "time_latency_eager", gdf(df, "op_onnx__Reshape")
+                ),
                 n_node_expand=lambda df: gpreserve(
                     df, "time_latency_eager", gdf(df, "op_onnx__Expand")
+                ),
+                n_node_causal_mask=lambda df: gpreserve(
+                    df,
+                    "time_latency_eager",
+                    gdf(df, "op_onnx__CausalMask", 0),
+                ),
+                n_node_sequence=lambda df: gpreserve(
+                    df,
+                    "time_latency_eager",
+                    gdf(df, "op_onnx__SequenceAt", 0) + gdf(df, "op_onnx__SplitToSequence", 0),
                 ),
             )
             assert (

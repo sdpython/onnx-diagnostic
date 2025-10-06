@@ -3,6 +3,7 @@ import onnx
 import torch
 from ..helpers import string_type, string_diff, max_diff
 from ..helpers.onnx_helper import to_array_extended
+from ..helpers.torch_helper import to_numpy
 
 
 def validate_fx_tensor(
@@ -296,7 +297,7 @@ def run_aligned(
             )
 
     for inp, v in zip(onx.graph.input, args):
-        onnx_results[inp.name] = v.cpu().numpy()
+        onnx_results[inp.name] = to_numpy(v)
         if verbose:
             print(
                 f"[run_aligned] +onnx-input: {inp.name}: "

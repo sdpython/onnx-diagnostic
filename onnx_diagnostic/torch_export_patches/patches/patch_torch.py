@@ -1,7 +1,8 @@
 import inspect
 import os
 import traceback
-from typing import Any, Callable, Dict, List, Sequence, Tuple, Union
+from functools import reduce
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import torch
 from torch._subclasses.fake_tensor import FakeTensorMode
 
@@ -65,6 +66,8 @@ def patch__check_input_constraints_for_graph(
     verbose: int = 0,
 ) -> None:
     try:
+        # PATCHED: catches exception and prints out the information instead of
+        # stopping the conversion.
         return previous_function(input_placeholders, flat_args_with_path, range_constraints)
     except Exception as e:
         if not int(os.environ.get("SKIP_SOLVE_CONSTRAINTS", "1")):
@@ -122,8 +125,7 @@ def patched_infer_size(a, b):
         if b1 or b2 or b3:
             expandedSizes[i] = sizeB if guard_size_oblivious(sizeA == 1) else sizeA
         else:
-            # In this case, the current implementation of torch fails (17/12/2024).
-            # Try model SmolLM.
+            # PATCHED: generic case, the dimension is known, no need to assert
             expandedSizes[i] = torch.sym_max(sizeA, sizeB)
     return tuple(expandedSizes)
 
@@ -132,7 +134,11 @@ def patched__broadcast_shapes(*_shapes):
     """Patches ``torch._refs._broadcast_shapes``."""
     from functools import reduce
     from torch._prims_common import IntLike
-    from torch.fx.experimental.symbolic_shapes import guard_size_oblivious
+    from torch.fx.experimental.symbolic_shapes import (
+        guard_size_oblivious,
+        guard_or_false,
+        is_nested_int,
+    )
 
     shapes = tuple(
         (x,) if isinstance(x, IntLike) else x for x in filter(lambda x: x is not None, _shapes)
@@ -142,17 +148,30 @@ def patched__broadcast_shapes(*_shapes):
     if len(shapes) == 0:
         return None
 
-    # Type checking
-    # TODO: make common validations available as utils
     for shape in shapes:
-        assert isinstance(shape, Sequence)
+        if not isinstance(shape, Sequence):
+            raise RuntimeError(
+                "Input shapes should be of type ints, a tuple of ints, "
+                "or a list of ints, got ",
+                shape,
+            )
 
     # Computes common shape
-    common_shape = [  # List[Union[int, torch.SymInt]]
-        1,
-    ] * reduce(max, (len(shape) for shape in shapes))
+    common_shape = [1] * reduce(max, (len(shape) for shape in shapes))
     for _arg_idx, shape in enumerate(shapes):
         for idx in range(-1, -1 - len(shape), -1):
+            if is_nested_int(shape[idx]):
+                # Broadcasting is allowed for (j0, 1) or (j0, j0);
+                # not (j0, j1), (j0, 5), etc.
+                if is_nested_int(common_shape[idx]) and guard_or_false(
+                    shape[idx] == common_shape[idx]
+                ):
+                    continue
+            else:
+                if guard_or_false(shape[idx] == common_shape[idx]):
+                    continue
+            # PATCHED: two cases, if == for sure, no broadcast,
+            # otherwise maybe broadcast with max(dimensions)
             if guard_size_oblivious(common_shape[idx] == 1):
                 if shape[idx] < 0:
                     raise ValueError(
@@ -172,6 +191,7 @@ class patched_ShapeEnv:
     ) -> None:
         if self.frozen:
             self.counter["ignored_backward_guard"] += 1
+            # PATCHED: raised an exception instead of logging.
             raise AssertionError(
                 f"[patched_ShapeEnv] Ignored guard {expr} == {concrete_val}, "
                 f"this could result in accuracy problems"
@@ -338,11 +358,13 @@ class patched_ShapeEnv:
                 },
             )
 
+            # PATCHED: removed lines
             # if config.print_specializations:
             #    self.log.warning(
             #         "Specializing %s to %s", self.var_to_sources[a][0].name(), tgt
             #     )
             #     self.log.debug("SPECIALIZATION", stack_info=True)
+        # PATCHED: replaces logging by raising an exception
         assert msg != "range_refined_to_singleton", (
             f"patched_ShapeEnv: A dynamic dimension becomes static! "
             f"a={a!r}, tgt={tgt!r}, msg={msg!r}, tgt_bound={tgt_bound}"
@@ -364,6 +386,7 @@ class patched_ShapeEnv:
         self, prefix: str, g: "SympyBoolean", forcing_spec: bool  # noqa: F821
     ) -> None:
         self._log_guard_remember(prefix=prefix, g=g, forcing_spec=forcing_spec)
+        # PATCHED: removed
         # It happens too often to be relevant.
         # sloc, _maybe_extra_debug = self._get_stack_summary(True)
         # warnings.warn(
@@ -464,3 +487,230 @@ def patched_vmap(func, in_dims=0, out_dims=0):
             return results
 
     return wrapped
+
+
+def patched__constrain_user_specified_dimhint_range(
+    symint: torch.SymInt,
+    hint: int,
+    dim: "_DimHint",  # noqa: F821
+    range_constraints,
+    shape_env,
+    keypath: "KeyPath",  # noqa: F821
+    i: Optional[int] = None,
+) -> Optional[str]:
+    """Patches ``torch._export.non_strict_utils._constrain_user_specified_dimhint_range``."""
+    from torch._export.non_strict_utils import is_int, int_oo, _DimHintType, ValueRanges
+
+    trace_vr = (
+        range_constraints[symint.node.expr]
+        if not is_int(symint)
+        else ValueRanges(int(symint), int(symint))
+    )
+    # warn on 0/1 specialization for Dim.AUTO; not an actual error
+    # PATCHED: remove logging
+    # if dim.type == _DimHintType.AUTO and trace_vr.is_singleton() and hint in (0, 1):
+    #    pathstr = f"inputs{pytree.keystr(keypath)}"
+    #    if i is not None:
+    #        pathstr += f".shape[{i}]"
+    #    msg = (
+    #        f"dimension {pathstr} 0/1 specialized; Dim.AUTO was specified along "
+    #        f"with a sample input with hint = {hint}."
+    #    )
+    #    log.warning(msg)
+
+    try:
+        user_vr = ValueRanges(
+            lower=0 if dim.min is None else dim.min,
+            upper=int_oo if dim.max is None else dim.max,
+        )
+        if is_int(symint):
+            out_vr = trace_vr & user_vr
+        else:
+            range_constraints[symint.node.expr] &= user_vr
+            shape_env.var_to_range[symint.node._expr] &= user_vr
+            out_vr = range_constraints[symint.node.expr]
+
+        # check for Dim.DYNAMIC specializations; special case error message on 0/1
+        if dim.type == _DimHintType.DYNAMIC and out_vr.is_singleton():
+            path = f"inputs{torch.utils._pytree.keystr(keypath)}"
+            if i is not None:
+                path += f".shape[{i}]"
+            if (
+                trace_vr.is_singleton()
+                and hint in (0, 1)
+                # PATCHED: line removed
+                # and not torch.fx.experimental._config.backed_size_oblivious
+            ):
+                return None
+                # PATCHED: line removed
+                # msg = (
+                #     f"- Received user-specified dim hint "
+                #     f"Dim.DYNAMIC(min={dim.min}, max={dim.max}), "
+                #     f"but export 0/1 specialized due to hint of "
+                #     f"{hint} for dimension {path}."
+                # )
+            else:
+                msg = (
+                    f"- Received user-specified dim hint "
+                    f"Dim.DYNAMIC(min={dim.min}, max={dim.max}), "
+                    f"but tracing inferred a static shape of "
+                    f"{out_vr.lower} for dimension {path}."
+                )
+            return msg
+
+    except torch.utils._sympy.value_ranges.ValueRangeError:
+        path = f"inputs{torch.utils._pytree.keystr(keypath)}"
+        if i is not None:
+            path += f".shape[{i}]"
+        msg = (
+            f"- Received user-specified min/max range of [{dim.min}, {dim.max}], "
+            f"conflicting with the inferred min/max range of "
+            f"[{trace_vr.lower}, {trace_vr.upper}], "
+            f"for {path}."
+        )
+        return msg
+
+    return None
+
+
+def patched__maybe_broadcast(*args, preserve_cpu_scalar_tensors=True):
+    """Patches ``torch._refs._maybe_broadcast``."""
+    from torch._prims_common import ShapeType, TensorLike, Number
+
+    # Computes common shape
+    common_shape = patched__broadcast_shapes(
+        *(t.shape if isinstance(t, TensorLike) else None for t in args)
+    )
+
+    def should_expand(a: ShapeType, b: ShapeType) -> bool:
+        from torch.fx.experimental.symbolic_shapes import (
+            guard_or_false,
+            sym_and,
+            sym_or,
+        )
+
+        if len(a) != len(b):
+            return True
+
+        for x, y in zip(a, b):
+            if guard_or_false(x != y):
+                # We know they are not the same.
+                return True
+
+            # They are the same or we do not know if they are the same or not.
+            # 1==1 no-broadcast
+            # u0==1 and 1==u0 cases. We broadcast!
+            if guard_or_false(sym_and(x == 1, y == 1)):
+                pass
+            elif guard_or_false(sym_or(x == 1, y == 1)):
+                # assume broadcasting.
+                return True
+
+            # u0==u1 assume the same, no broadcasting!
+            # PATCHED: avoid errors
+            return True  # guard_or_true(x != y)
+            # torch._check(
+            #    x == y,
+            #    lambda x=x, y=y: (
+            #        f"sizes assumed to be the same due to unbacked "
+            #        f"broadcasting semantics x={x!r}, y={y!r}"
+            #    ),
+            # )
+
+        return False
+
+    def __maybe_broadcast(x, shape):
+        if x is None:
+            return None
+        elif isinstance(x, Number):
+            return x
+        elif isinstance(x, TensorLike):
+            if preserve_cpu_scalar_tensors and torch._prims_common.is_cpu_scalar_tensor(x):
+                return x
+
+            if should_expand(x.shape, common_shape):
+                return x.expand(common_shape)
+
+            return x
+        else:
+            raise RuntimeError(f"Unexpected type when broadcasting: {str(type(x))}!")
+
+    return tuple(__maybe_broadcast(x, common_shape) for x in args)
+
+
+def patched__broadcast_in_dim_meta(
+    a: torch._prims_common.TensorLikeType,
+    shape: torch._prims_common.ShapeType,
+    broadcast_dimensions: Sequence[int],
+):
+    """Patches ``torch._prims._broadcast_in_dim_meta``."""
+    from torch.fx.experimental.symbolic_shapes import (
+        guard_or_false,
+        guard_or_true,
+        sym_or,
+    )
+
+    # Type checks
+    assert isinstance(a, torch._prims_common.TensorLike)
+    assert isinstance(shape, Sequence)
+    assert isinstance(broadcast_dimensions, Sequence)
+
+    # every dimension must be accounted for
+    assert a.ndim == len(broadcast_dimensions)
+
+    # broadcast shape must have weakly more dimensions
+    assert len(shape) >= a.ndim
+
+    # broadcast_dimensions must be an ascending sequence
+    # (no relative reordering of dims) of integers and
+    # each dimension must be within the new shape
+    def _greater_than_reduce(acc, x):
+        assert isinstance(x, (int, torch.export.Dim)), f"unexpected type {type(x)} for x"
+        assert x > acc
+        assert x < len(shape)
+
+        return x
+
+    reduce(_greater_than_reduce, broadcast_dimensions, -1)
+
+    # shape must be broadcastable to
+    for idx, new_idx in enumerate(broadcast_dimensions):
+        torch._check(
+            sym_or(a.shape[idx] == 1, shape[new_idx] == a.shape[idx]),
+            lambda idx=idx, new_idx=new_idx: (
+                f"{a.shape[idx]} must be broadcastable to {shape[new_idx]}"
+            ),
+        )
+
+    new_strides = []
+    original_idx = 0
+    for idx in range(len(shape)):
+        if idx in broadcast_dimensions:
+            # Assigns a stride of zero to dimensions
+            # which were actually broadcast
+            if guard_or_false(a.shape[original_idx] == 1):
+                if guard_or_false(a.shape[original_idx] == shape[idx]):
+                    new_strides.append(a.stride()[original_idx])
+                else:
+                    new_strides.append(0)
+            else:
+                # PATCHED: disabled this check
+                # torch._check(
+                #    a.shape[original_idx] == shape[idx],
+                #    lambda idx=idx, original_idx=original_idx: (
+                #        f"non-broadcasting semantics require "
+                #        f"{a.shape[original_idx]} == {shape[idx]}"
+                #    ),
+                # )
+                new_strides.append(a.stride()[original_idx])
+            original_idx = original_idx + 1
+        else:
+            if guard_or_true(shape[idx] != 1):
+                # consistent with previous use of guard_size_oblivious
+                new_strides.append(0)
+            elif original_idx == a.ndim:
+                new_strides.append(1)
+            else:
+                new_strides.append(a.stride()[original_idx] * a.size()[original_idx])
+
+    return a.as_strided(shape, new_strides, a.storage_offset())

@@ -263,7 +263,7 @@ def get_inputs(
         res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
         # prompt processing (prefill) testing
-        res["inputs2"] = get_inputs(
+        res["prompt_processing"] = get_inputs(
             model=model,
             config=config,
             dummy_max_token_id=dummy_max_token_id,
@@ -278,17 +278,16 @@ def get_inputs(
             add_second_input=0,
             **kwargs,
         )["inputs"]
-        # multi-turn conversation
-        # prompt-processing -> token-generation(loop output) ->
-        # prompt-processing from the loop output
-        res["inputs3"] = get_inputs(
+        # Token generation (decode) testing
+        # NOTE: We have to export model in decode mode to preserve the cache
+        res["token_generation"] = get_inputs(
             model=model,
             config=config,
             dummy_max_token_id=dummy_max_token_id,
             num_hidden_layers=num_hidden_layers,
-            batch_size=1,
+            batch_size=2,
             past_sequence_length=32,
-            sequence_length=8,
+            sequence_length=1,
             dynamic_rope=dynamic_rope,
             num_key_value_heads=num_key_value_heads,
             head_dim=head_dim,
@@ -344,12 +343,16 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
             conv_kernel=8 if config is None else getattr(config, "conv_kernel", None),
         )
     else:
+        # multi-turn conversation
+        # prompt-processing -> token-generation(loop output) ->
+        # prompt-processing from the loop output
         # Token generation (decode) testing
         # NOTE: We have to export model in decode mode to preserve the cache
+        # NOTE: batch_size=1 for ORT GQA to run
         kwargs = dict(
-            batch_size=2,
+            batch_size=1,
             past_sequence_length=32,
-            sequence_length=1,
+            sequence_length=16,
             head_dim=(
                 16
                 if config is None

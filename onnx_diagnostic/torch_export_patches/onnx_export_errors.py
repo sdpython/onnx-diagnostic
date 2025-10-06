@@ -83,7 +83,7 @@ def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Call
             continue
 
         original = cls._PATCHED_CLASS_
-        methods = cls._PATCHES_
+        methods = [_ for _ in cls._PATCHES_ if _ is not None]
         if verbose:
             print(f"[patch_module_or_classes] {name}.{cls.__name__}: {', '.join(methods)}")
 
@@ -268,19 +268,22 @@ def torch_export_patches(
     if rewrite:
         from .patch_module import torch_export_rewrite
 
-        with torch_export_rewrite(
-            rewrite=rewrite, dump_rewriting=dump_rewriting, verbose=verbose
-        ), torch_export_patches(  # type: ignore[var-annotated]
-            patch_sympy=patch_sympy,
-            patch_torch=patch_torch,
-            patch_transformers=patch_transformers,
-            patch_diffusers=patch_diffusers,
-            catch_constraints=catch_constraints,
-            stop_if_static=stop_if_static,
-            verbose=verbose,
-            patch=patch,
-            custom_patches=custom_patches,
-        ) as f:
+        with (
+            torch_export_rewrite(
+                rewrite=rewrite, dump_rewriting=dump_rewriting, verbose=verbose
+            ),
+            torch_export_patches(  # type: ignore[var-annotated]
+                patch_sympy=patch_sympy,
+                patch_torch=patch_torch,
+                patch_transformers=patch_transformers,
+                patch_diffusers=patch_diffusers,
+                catch_constraints=catch_constraints,
+                stop_if_static=stop_if_static,
+                verbose=verbose,
+                patch=patch,
+                custom_patches=custom_patches,
+            ) as f,
+        ):
             try:
                 yield f
             finally:
@@ -341,8 +344,11 @@ def torch_export_patches(
                 patched_infer_size,
                 patched_vmap,
                 patched__broadcast_shapes,
+                patched__constrain_user_specified_dimhint_range,
                 _catch_produce_guards_and_solve_constraints,
                 patch__check_input_constraints_for_graph,
+                patched__broadcast_in_dim_meta,
+                patched__maybe_broadcast,
             )
 
             if verbose:
@@ -370,6 +376,24 @@ def torch_export_patches(
             f__broadcast_shapes = torch._refs._broadcast_shapes
             torch._refs._broadcast_shapes = patched__broadcast_shapes
             torch._meta_registrations._broadcast_shapes = patched__broadcast_shapes
+
+            # torch._export.non_strict_utils._constrain_user_specified_dimhint_range
+            f___constrain_user_specified_dimhint_range = (
+                torch._export.non_strict_utils._constrain_user_specified_dimhint_range
+            )
+            torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
+                patched__constrain_user_specified_dimhint_range
+            )
+
+            # torch._prims._broadcast_in_dim_meta
+            f_broadcast_in_dim = torch._prims.broadcast_in_dim
+            f__broadcast_in_dim_meta = torch._prims._broadcast_in_dim_meta
+            torch._prims._broadcast_in_dim_meta = patched__broadcast_in_dim_meta
+            torch._prims.broadcast_in_dim = patched__broadcast_in_dim_meta
+
+            # torch._refs._maybe_broadcast
+            f__maybe_broadcast = torch._refs._maybe_broadcast
+            torch._refs._maybe_broadcast = patched__maybe_broadcast
 
         # torch._export.non_strict_utils.produce_guards_and_solve_constraints
         if patch_torch and catch_constraints:
@@ -591,6 +615,12 @@ def torch_export_patches(
                 torch._subclasses.fake_impls.infer_size = f_infer_size
                 torch._refs._broadcast_shapes = f__broadcast_shapes
                 torch._meta_registrations._broadcast_shapes = f__broadcast_shapes
+                torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
+                    f___constrain_user_specified_dimhint_range
+                )
+                torch._prims._broadcast_in_dim_meta = f__broadcast_in_dim_meta
+                torch._prims.broadcast_in_dim = f_broadcast_in_dim
+                torch._refs._maybe_broadcast = f__maybe_broadcast
 
                 if verbose:
                     print("[torch_export_patches] restored pytorch functions")
@@ -743,9 +773,7 @@ def torch_export_patches(
 
 
 def replacement_before_exporting(args: Any) -> Any:
-    """
-    Does replacements on the given inputs if needed.
-    """
+    """Does replacements on the given inputs if needed."""
     if args is None:
         return None
     if isinstance(args, (int, float)):

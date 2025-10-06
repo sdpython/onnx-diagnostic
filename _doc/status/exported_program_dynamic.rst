@@ -53,6 +53,7 @@ with different options. This steps happens before converting into ONNX.
         for exporter in (
             "export-strict",
             "export-nostrict",
+            "export-nostrict-oblivious",
             "export-nostrict-decall",
             "export-tracing",
         ):

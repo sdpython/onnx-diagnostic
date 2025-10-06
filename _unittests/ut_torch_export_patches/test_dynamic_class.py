@@ -307,9 +307,10 @@ class TestOnnxExportErrors(ExtTestCase):
             str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
         )
 
-        with torch_export_patches(
-            patch_transformers=True
-        ), torch.fx.experimental._config.patch(backed_size_oblivious=True):
+        with (
+            torch_export_patches(patch_transformers=True),
+            torch.fx.experimental._config.patch(backed_size_oblivious=True),
+        ):
             ep = torch.export.export(
                 model,
                 (),
@@ -348,9 +349,10 @@ class TestOnnxExportErrors(ExtTestCase):
             str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
         )
 
-        with torch_export_patches(
-            patch_transformers=True, verbose=1
-        ), torch.fx.experimental._config.patch(backed_size_oblivious=True):
+        with (
+            torch_export_patches(patch_transformers=True, verbose=1),
+            torch.fx.experimental._config.patch(backed_size_oblivious=True),
+        ):
             if masking_utils is not None:
                 self.assertEqual(
                     masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"],

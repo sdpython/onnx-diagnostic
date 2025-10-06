@@ -397,7 +397,7 @@ def string_type(
             return "AUTO"
         if verbose:
             print(f"[string_type] Y7:{type(obj)}")
-        return str(obj)
+        return str(obj).replace("DimHint(DYNAMIC)", "DYNAMIC").replace("DimHint(AUTO)", "AUTO")
 
     if isinstance(obj, bool):
         if with_min_max:
@@ -516,8 +516,10 @@ def string_type(
                 print(f"[string_type] V2:{type(obj)}")
             return "OV(NOTENSOR)"
         if with_min_max:
+            from .torch_helper import to_numpy
+
             try:
-                t = obj.numpy()
+                t = to_numpy(obj)
             except Exception:
                 # pass unable to convert into numpy (bfloat16, ...)
                 if verbose:
@@ -939,7 +941,7 @@ def flatten_object(x: Any, drop_keys: bool = False) -> Any:
             return flatten_object(list(x.values()), drop_keys=drop_keys)
         return flatten_object(list(x.items()), drop_keys=drop_keys)
 
-    if x.__class__.__name__ in {"DynamicCache", "StaticCache"}:
+    if x.__class__.__name__ in {"DynamicCache", "StaticCache", "HybridCache"}:
         from .cache_helper import CacheKeyValue
 
         kc = CacheKeyValue(x)
@@ -1203,9 +1205,13 @@ def max_diff(
 
     if isinstance(expected, np.ndarray) or isinstance(got, np.ndarray):
         if isinstance(expected, torch.Tensor):
-            expected = expected.detach().cpu().numpy()
+            from .torch_helper import to_numpy
+
+            expected = to_numpy(expected)
         if isinstance(got, torch.Tensor):
-            got = got.detach().cpu().numpy()
+            from .torch_helper import to_numpy
+
+            got = to_numpy(got)
         if verbose >= 6:
             print(f"[max_diff] tensor: {string_type(expected)} ? {string_type(got)}")
 

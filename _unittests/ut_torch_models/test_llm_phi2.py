@@ -8,7 +8,10 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.torch_models.llms import get_phi2
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.torch_export_patches import (
+    torch_export_patches,
+    register_additional_serialization_functions,
+)
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
@@ -21,8 +24,8 @@ class TestLlmPhi(ExtTestCase):
 
     @ignore_warnings(UserWarning)
     @requires_transformers("4.54")
-    @requires_torch("2.9.99")
-    def test_export_phi2_1_batch_size_1(self):
+    @requires_torch("2.10.99")
+    def test_export_phi2_1_batch_size_1_oblivious(self):
         # exporting vmap does not work
         data = get_phi2(num_hidden_layers=2, batch_size=1)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
@@ -30,13 +33,48 @@ class TestLlmPhi(ExtTestCase):
         self.assertEqual(
             {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
         )
-        with torch.fx.experimental._config.patch(
-            backed_size_oblivious=True
-        ), torch_export_patches(patch_transformers=True):
+        with (
+            torch.fx.experimental._config.patch(backed_size_oblivious=True),
+            torch_export_patches(patch_transformers=True),
+        ):
             ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
             )
         assert ep
+
+    @ignore_warnings(UserWarning)
+    @requires_transformers("4.54")
+    @requires_torch("2.9.99")
+    def test_export_phi2_1_batch_size_1_not_oblivious(self):
+        # exporting vmap does not work
+        data = get_phi2(num_hidden_layers=2, batch_size=1)
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        self.assertEqual(inputs["input_ids"].shape[0], 1)
+        self.assertEqual(
+            {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
+        )
+        with torch_export_patches(patch_transformers=True):
+            ep = torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+            )
+        assert ep
+
+    @ignore_warnings(UserWarning)
+    @requires_transformers("4.54")
+    @requires_torch("2.12")
+    def test_export_phi2_1_batch_size_1_no_patch(self):
+        # exporting vmap does not work
+        data = get_phi2(num_hidden_layers=2, batch_size=1)
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        self.assertEqual(inputs["input_ids"].shape[0], 1)
+        self.assertEqual(
+            {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
+        )
+        with register_additional_serialization_functions(patch_transformers=True):
+            ep = torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+            )
+            assert ep
 
     @ignore_warnings(UserWarning)
     @requires_transformers("4.54")

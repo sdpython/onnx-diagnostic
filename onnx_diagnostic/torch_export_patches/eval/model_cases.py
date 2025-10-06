@@ -353,12 +353,9 @@ class ControlFlowCondNonZero(torch.nn.Module):
 
 
 class ControlFlowCondIdentity_153832(torch.nn.Module):
-    """
-    `#153832 <https://github.com/pytorch/pytorch/issues/153832>`_
-    """
+    """`#153832 <https://github.com/pytorch/pytorch/issues/153832>`_"""
 
     def forward(self, x, y):
-
         def branch_cond_then_1(x):
             x = torch.abs(x) + 1
             return x
@@ -861,7 +858,7 @@ class CreateFromShapeThroughFunction(torch.nn.Module):
         y = torch.ones((x.shape[0], dy1))
         return y
 
-    _inputs = [(torch.rand((4, 4)),), (torch.rand((5, 5)),)]
+    _inputs = [(torch.rand((4, 4)),)]
     _dynamic = {"x": {0: DIM("dx"), 1: DIM("dy")}}
 
 
@@ -881,3 +878,21 @@ class VmapPython(torch.nn.Module):
 
     _inputs = [(torch.tensor([1.0, 2.0, 3.0]), torch.tensor([0.1, 0.2, 0.3]))]
     _dynamic = {"x": {0: DYN}, "y": {0: DYN}}
+
+
+class ExportWithDimension0(torch.nn.Module):
+    def forward(self, x):
+        return x @ torch.arange(x.shape[1], dtype=torch.float32).reshape((-1, 1))
+
+    _inputs = [(torch.empty((0, 3), dtype=torch.float32),)]
+    _dynamic = {"x": {0: DYN, 1: DYN}}
+    _valid = [(torch.rand((2, 3), dtype=torch.float32),)]
+
+
+class ExportWithDimension1(torch.nn.Module):
+    def forward(self, x):
+        return x @ torch.arange(x.shape[1], dtype=torch.float32).reshape((-1, 1))
+
+    _inputs = [(torch.zeros((1, 3), dtype=torch.float32),)]
+    _dynamic = {"x": {0: DYN, 1: DYN}}
+    _valid = [(torch.rand((2, 3), dtype=torch.float32),)]

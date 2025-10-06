@@ -1,3 +1,4 @@
+import gc
 import datetime
 import inspect
 import os
@@ -113,6 +114,8 @@ def _make_folder_name(
     subfolder: Optional[str] = None,
     opset: Optional[int] = None,
     drop_inputs: Optional[List[str]] = None,
+    same_as_pretrained: bool = False,
+    use_pretrained: bool = False,
 ) -> str:
     "Creates a filename unique based on the given options."
     els = [model_id.replace("/", "_")]
@@ -141,6 +144,10 @@ def _make_folder_name(
     if drop_inputs:
         ii = "-".join(f"{s[0]}{s[-1]}" for s in drop_inputs)
         els.append(f"I-{ii.upper()}")
+    if use_pretrained:
+        els.append("TRAINED")
+    elif same_as_pretrained:
+        els.append("SAMESIZE")
     return "-".join(els)
 
 
@@ -237,21 +244,35 @@ def _quiet_or_not_quiet(
         summary[f"{suffix}_output"] = string_type(res, with_shape=True, with_min_max=True)
         summary[f"{suffix}_warmup"] = warmup
         summary[f"{suffix}_repeat"] = repeat
-        for _w in range(max(0, warmup - 1)):
+        last_ = None
+        end_w = max(0, warmup - 1)
+        for _w in range(end_w):
             t = fct()
-            summary[f"io_{suffix}_{_w+1}"] = string_type(t, with_shape=True, with_min_max=True)
+            _ = string_type(t, with_shape=True, with_min_max=True)
+            if _ != last_ or _w == end_w - 1:
+                summary[f"io_{suffix}_{_w+1}"] = _
+                last_ = _
         summary[f"time_{suffix}_warmup"] = time.perf_counter() - begin
         times = []
         for _r in range(repeat):
             begin = time.perf_counter()
             t = fct()
             times.append(time.perf_counter() - begin)
-        a = np.array(times)
+        a = np.array(times, dtype=np.float64)
+        a.sort()
+        i5 = max(1, a.shape[0] * 5 // 100)
+        i2 = max(1, a.shape[0] * 2 // 100)
         summary[f"time_{suffix}_latency"] = a.mean()
         summary[f"time_{suffix}_latency_std"] = a.std()
         summary[f"time_{suffix}_latency_min"] = a.min()
-        summary[f"time_{suffix}_latency_min"] = a.max()
+        summary[f"time_{suffix}_latency_max"] = a.max()
+        summary[f"time_{suffix}_latency_098"] = a[-i2]
+        summary[f"time_{suffix}_latency_095"] = a[-i5]
+        summary[f"time_{suffix}_latency_005"] = a[i5]
+        summary[f"time_{suffix}_latency_002"] = a[i2]
         summary[f"time_{suffix}_n"] = len(a)
+        summary[f"time_{suffix}_latency_m98"] = a[i2:-i2].mean()
+
     return res
 
 
@@ -359,9 +380,10 @@ def validate_model(
         ``orteval10``, ``ref`` only if `do_run` is true
     :param repeat: number of time to measure the model
     :param warmup: warmup the model first
-    :param inputs2: checks that the second set of inputs is reunning as well,
+    :param inputs2: checks that other sets of inputs are running as well,
         this ensures that the model does support dynamism, the value is used
-        as an increment to the first set of values (added to dimensions)
+        as an increment to the first set of values (added to dimensions),
+        or an empty cache for example
     :param output_names: output names the onnx exporter should use
     :param ort_logs: increases onnxruntime verbosity when creating the session
     :return: two dictionaries, one with some metrics,
@@ -391,13 +413,20 @@ def validate_model(
     :class:`onnx_diagnostic.reference.ExtendedReferenceEvaluator`
     if ``runtime == 'ref'``,
     ``orteval10`` increases the verbosity.
+
+    .. versionchanged:: 0.7.13
+        *inputs2* not only means a second set of inputs but many
+        such as ``input_empty_cache``
+        which refers to a set of inputs using an empty cache.
     """
+    validation_begin = time.perf_counter()
     model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
         model_id,
         subfolder,
         same_as_pretrained=same_as_pretrained,
         use_pretrained=use_pretrained,
     )
+    time_preprocess_model_id = time.perf_counter() - validation_begin
     default_patch = dict(patch_transformers=True, patch_diffusers=True, patch=True)
     if isinstance(patch, bool):
         patch_kwargs = default_patch if patch else dict(patch=False)
@@ -438,6 +467,7 @@ def validate_model(
             version_exporter=exporter or "",
             version_runtime=runtime,
             version_inputs2=inputs2,
+            time_preprocess_model_id=time_preprocess_model_id,
         )
     )
     if opset:
@@ -454,6 +484,8 @@ def validate_model(
             subfolder=subfolder,
             opset=opset,
             drop_inputs=drop_inputs,
+            use_pretrained=use_pretrained,
+            same_as_pretrained=same_as_pretrained,
         )
         dump_folder = os.path.join(dump_folder, folder_name)
         if not os.path.exists(dump_folder):
@@ -486,7 +518,7 @@ def validate_model(
     mop = model_options or {}
     data = _quiet_or_not_quiet(
         quiet,
-        "create",
+        "create_torch_model",
         summary,
         None,
         (
@@ -505,10 +537,9 @@ def validate_model(
             )
         ),
     )
-    assert not inputs2 or "inputs2" in data, (
-        f"inputs2 is True but second set is missing in data for "
-        f"model id {model_id!r}: {sorted(data)}"
-    )
+
+    second_input_keys = [k for k in data if k.startswith("inputs") and k != "inputs"]
+
     if dump_folder:
         with open(os.path.join(dump_folder, "model_config.txt"), "w") as f:
             f.write(f"model_id: {model_id}\n------\n")
@@ -577,21 +608,10 @@ def validate_model(
         if verbose:
             print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
             print(f"[validate_model] new dynamic_hapes: {string_type(data['dynamic_shapes'])}")
-        # NOTE: The dynamic_shapes is always the same across inputs sets
-        if inputs2:
-            assert (
-                "inputs2" in data
-            ), "Cannot test a second set of inputs as it was not defined."
-            data["inputs2"], _ = filter_inputs(
-                data["inputs2"],
-                drop_names=drop_inputs,
-                model=data["model"],
-                dynamic_shapes=data["dynamic_shapes"],
-            )
-            # NOTE: text-generation tests 3rd inputs for multi-turn conversation
-            if "inputs3" in data:
-                data["inputs3"], _ = filter_inputs(
-                    data["inputs3"],
+        if second_input_keys:
+            for k in second_input_keys:
+                data[k], _ = filter_inputs(
+                    data[k],
                     drop_names=drop_inputs,
                     model=data["model"],
                     dynamic_shapes=data["dynamic_shapes"],
@@ -605,10 +625,9 @@ def validate_model(
         data["model"] = to_any(data["model"], dtype)  # type: ignore
         data["inputs"] = to_any(data["inputs"], dtype)  # type: ignore
         summary["model_dtype"] = str(dtype)
-        if "inputs2" in data:
-            data["inputs2"] = to_any(data["inputs2"], dtype)  # type: ignore
-        if "inputs3" in data:
-            data["inputs3"] = to_any(data["inputs3"], dtype)  # type: ignore
+        if second_input_keys:
+            for k in second_input_keys:
+                data[k] = to_any(data[k], dtype)  # type: ignore
 
     if not empty(device):
         if verbose:
@@ -616,13 +635,13 @@ def validate_model(
         data["model"] = to_any(data["model"], device)  # type: ignore
         data["inputs"] = to_any(data["inputs"], device)  # type: ignore
         summary["model_device"] = str(device)
-        if "inputs2" in data:
-            data["inputs2"] = to_any(data["inputs2"], device)  # type: ignore
-        if "inputs3" in data:
-            data["inputs3"] = to_any(data["inputs3"], device)  # type: ignore
+        if second_input_keys:
+            for k in second_input_keys:
+                data[k] = to_any(data[k], device)  # type: ignore
 
     for k in ["task", "size", "n_weights"]:
         summary[f"model_{k.replace('_','')}"] = data[k]
+    summary["second_input_keys"] = ",".join(second_input_keys)
     summary["model_inputs_options"] = str(input_options or "")
     summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
     summary["model_shapes"] = string_type(data["dynamic_shapes"])
@@ -649,24 +668,37 @@ def validate_model(
             print(f"[validate_model] +INPUT {k}={string_type(v, with_shape=True)}")
         for k, v in data["dynamic_shapes"].items():
             print(f"[validate_model] +SHAPE {k}={string_type(v)}")
+        print(f"[validate_model] second_input_keys={second_input_keys}")
         print("[validate_model] --")
 
     if do_run:
+        validation_begin = time.perf_counter()
+
         _validate_do_run_model(
             data, summary, "inputs", "run", "run_expected", verbose, repeat, warmup, quiet
         )
-        _validate_do_run_model(
-            data, summary, "inputs2", "run2", "run_expected2", verbose, 1, 0, quiet
-        )
-        _validate_do_run_model(
-            data, summary, "inputs3", "run3", "run_expected3", verbose, 1, 0, quiet
-        )
+        if second_input_keys:
+            for k in second_input_keys:
+                _validate_do_run_model(
+                    data,
+                    summary,
+                    k,
+                    f"run2{k[6:]}",
+                    f"run_expected2{k[6:]}",
+                    verbose,
+                    1,
+                    0,
+                    quiet,
+                )
+
+        summary["time_total_validation_torch"] = time.perf_counter() - validation_begin
 
     if exporter:
         print(
             f"[validate_model] -- export the model with {exporter!r}, "
             f"optimization={optimization!r}"
         )
+        exporter_begin = time.perf_counter()
         if patch_kwargs:
             if verbose:
                 print(
@@ -709,7 +741,9 @@ def validate_model(
                 dump_folder=dump_folder,
                 output_names=output_names,
             )
+
         summary.update(summary_export)
+        summary["time_total_exporter"] = time.perf_counter() - exporter_begin
 
     dump_stats = None
     if dump_folder:
@@ -750,6 +784,8 @@ def validate_model(
             data["onnx_filename"] = onnx_filename
             summary["time_onnx_save"] = duration
             summary.update(compute_statistics(onnx_filename))
+            del epo
+
         if verbose:
             print(f"[validate_model] dumps statistics in {dump_folder!r}...")
         dump_stats = os.path.join(dump_folder, f"{folder_name}.stats")
@@ -772,6 +808,20 @@ def validate_model(
         return summary, data
 
     if do_run:
+        # Let's move the model to CPU to make sure it frees GPU memory.
+        if verbose:
+            # It does not really work for the time being and the model
+            # gets loaded twice, one by torch, one by onnxruntime
+            print("[validation_model] -- delete the model")
+            for key in ["model", "onnx_program", "config"]:
+                if key in data:
+                    del data[key]
+            if device is not None and "cuda" in str(device).lower():
+                torch.cuda.empty_cache()
+            gc.collect()
+            print("[validation_model] -- done")
+
+        validation_begin = time.perf_counter()
         summary_valid, data = validate_onnx_model(
             data=data,
             quiet=quiet,
@@ -779,10 +829,11 @@ def validate_model(
             runtime=runtime,
             repeat=repeat,
             warmup=warmup,
-            inputs2=inputs2,
+            second_input_keys=second_input_keys,
             ort_logs=ort_logs,
         )
         summary.update(summary_valid)
+        summary["time_total_validation_onnx"] = time.perf_counter() - validation_begin
 
     if ortfusiontype and "onnx_filename" in data:
         assert (
@@ -841,15 +892,17 @@ def validate_model(
                     runtime=runtime,
                     repeat=repeat,
                     warmup=warmup,
-                    inputs2=inputs2,
+                    second_input_keys=second_input_keys,
                 )
                 summary.update(summary_valid)
 
     _compute_final_statistics(summary)
+    summary["time_total"] = time.perf_counter() - validation_begin
 
     if verbose:
         print("[validate_model] -- done (final)")
     if dump_stats:
+        # Dumps again the statistics.
         with open(dump_stats, "w") as f:
             for k, v in sorted(summary.items()):
                 f.write(f":{k}:{v};\n")
@@ -1235,7 +1288,7 @@ def validate_onnx_model(
     runtime: str = "onnxruntime",
     repeat: int = 1,
     warmup: int = 0,
-    inputs2: int = 1,
+    second_input_keys: Optional[List[str]] = None,
     ort_logs: bool = False,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
@@ -1252,7 +1305,7 @@ def validate_onnx_model(
     :param runtime: onnx runtime to use, onnxruntime, torch, orteval, ref
     :param repeat: run that number of times the model
     :param warmup: warmup the model
-    :param inputs2: to validate the model on the second input set
+    :param second_input_keys: to validate the model on other input sets
         to make sure the exported model supports dynamism, the value is
         used as an increment added to the first set of inputs (added to dimensions)
     :param ort_logs: triggers the logs for onnxruntime
@@ -1377,13 +1430,12 @@ def validate_onnx_model(
         print(f"[validate_onnx_model] done (ort_session) flavour={flavour!r}")
 
     keys = [("inputs", "run_expected", "")]
-    if inputs2:
-        keys.append(("inputs2", "run_expected2", "2"))
-        # text-generation tests multi-turn conversation as 3rd inputs
-        if "inputs3" in data:
-            keys.append(("inputs3", "run_expected3", "3"))
+    if second_input_keys:
+        keys.extend([(k, f"run_expected2{k[6:]}", f"2{k[6:]}") for k in second_input_keys])
     for k_input, k_expected, suffix in keys:
         # make_feeds
+        assert k_input in data, f"Unable to find {k_input!r} in {sorted(data)}"
+        assert k_expected in data, f"Unable to find {k_expected!r} in {sorted(data)}"
         if verbose:
             print(f"[validate_onnx_model] -- make_feeds for {k_input!r}...")
             print(
@@ -1680,11 +1732,13 @@ def process_statistics(data: Sequence[Dict[str, float]]) -> Dict[str, Any]:
             "constant_folding",
             "remove_identity",
             "remove_duplicated_initializer",
+            "remove_duplicated_shape",
             "dynamic_dimension_naming",
             "inline",
             "check",
             "build_graph_for_pattern",
             "pattern_optimization",
+            "topological_sort",
         ]:
             if s in p or s.replace("_", "-") in p:
                 return s
@@ -1810,6 +1864,8 @@ def call_torch_export_custom(
         "custom-nostrict-noinline",
         "custom-nostrict-default-noinline",
         "custom-nostrict-all-noinline",
+        "custom-dec",
+        "custom-decall",
     }
     assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
@@ -1846,7 +1902,9 @@ def call_torch_export_custom(
     export_options = ExportOptions(
         strict=strict,
         decomposition_table=(
-            "default" if "-default" in exporter else ("all" if "-all" in exporter else None)
+            "default"
+            if ("-default" in exporter or "-dec" in exporter)
+            else ("all" if ("-all" in exporter or "-decall" in exporter) else None)
         ),
         save_ep=(os.path.join(dump_folder, f"{exporter}.ep") if dump_folder else None),
     )
@@ -2026,5 +2084,8 @@ def _compute_final_statistics(summary: Dict[str, Any]):
     ):
         stats["stat_estimated_speedup_ort"] = (
             summary["time_run_latency"] / summary["time_run_onnx_ort_latency"]
+        )
+        stats["stat_estimated_speedup_ort_m98"] = (
+            summary["time_run_latency_m98"] / summary["time_run_onnx_ort_latency_m98"]
         )
     summary.update(stats)

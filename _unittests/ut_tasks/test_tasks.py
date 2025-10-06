@@ -44,12 +44,34 @@ class TestTasks(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
         model(**data["inputs2"])
-        with torch_export_patches(
-            patch_transformers=True, verbose=10
-        ), torch.fx.experimental._config.patch(backed_size_oblivious=True):
+        with (
+            torch_export_patches(patch_transformers=True, verbose=10),
+            torch.fx.experimental._config.patch(backed_size_oblivious=True),
+        ):
             torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+
+    def test_text_generation_empty_cache(self):
+        mid = "arnir0/Tiny-LLM"
+        data = get_untrained_model_with_inputs(mid, add_second_input=True)
+        model, inputs = data["model"], data["inputs"]
+        self.assertIn("inputs_empty_cache", data)
+        empty_inputs = torch_deepcopy(data["inputs_empty_cache"])
+        model(**torch_deepcopy(empty_inputs))
+        expected = model(**torch_deepcopy(inputs))
+        self.assertEqual(
+            {"attention_mask", "past_key_values", "input_ids", "position_ids"}, set(inputs)
+        )
+        with torch_export_patches(patch_transformers=True, verbose=1):
+            ep = torch.export.export(
+                model,
+                (),
+                kwargs=torch_deepcopy(inputs),
+                dynamic_shapes=use_dyn_not_str(data["dynamic_shapes"]),
+            )
+            got = ep.module()(**torch_deepcopy(inputs))
+            self.assertEqualArrayAny(expected, got)
 
     @hide_stdout()
     def test_automatic_speech_recognition_float32(self):
@@ -252,7 +274,7 @@ class TestTasks(ExtTestCase):
         model(**inputs)
         model(**data["inputs2"])
         self.assertIn((data["size"], data["n_weights"]), [(274958336, 68739584)])
-        if not has_transformers("4.57"):
+        if not has_transformers("4.57.99"):
             raise unittest.SkipTest("The model has control flow.")
         with torch_export_patches(patch_transformers=True, verbose=10, stop_if_static=1):
             torch.export.export(

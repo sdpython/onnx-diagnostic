@@ -3,6 +3,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
     rewrite_loop_for_square_mask,
 )
+from onnx_diagnostic.torch_export_patches.patch_module_helper import code_needing_rewriting
 
 
 class TestPatchRewriting(ExtTestCase):
@@ -32,6 +33,10 @@ class TestPatchRewriting(ExtTestCase):
                 m1 = apply_mask(mask, seq)
                 m2 = rewrite_loop_for_square_mask(mask, seq)
                 self.assertEqualArray(m1, m2)
+
+    def test_code_needing_rewriting(self):
+        res = code_needing_rewriting("BartModel")
+        self.assertEqual(len(res), 2)
 
 
 if __name__ == "__main__":
