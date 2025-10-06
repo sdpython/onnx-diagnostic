@@ -414,10 +414,10 @@ class TestPatchPatchTorch(ExtTestCase):
             if got is not None:
                 self.assertEqualArrayAny(expected, got)
 
-        if "inputs_empty_cache" not in data:
+        # inputs2 is prompt_processing (no cache)
+        if "inputs2" not in data:
             return
-
-        export_inputs = data["inputs_empty_cache"]
+        export_inputs = data["inputs2"]
 
         # with self.subTest(input="cache0", backed_size_oblivious=False):
         #    with torch_export_patches(patch_transformers=True):

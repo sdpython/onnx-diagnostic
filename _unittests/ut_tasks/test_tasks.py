@@ -52,12 +52,11 @@ class TestTasks(ExtTestCase):
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
 
-    def test_text_generation_empty_cache(self):
+    def test_text_generation_prompt_processing(self):
         mid = "arnir0/Tiny-LLM"
         data = get_untrained_model_with_inputs(mid, add_second_input=True)
         model, inputs = data["model"], data["inputs"]
-        self.assertIn("inputs_empty_cache", data)
-        empty_inputs = torch_deepcopy(data["inputs_empty_cache"])
+        empty_inputs = torch_deepcopy(data["inputs2"])
         model(**torch_deepcopy(empty_inputs))
         expected = model(**torch_deepcopy(inputs))
         self.assertEqual(
