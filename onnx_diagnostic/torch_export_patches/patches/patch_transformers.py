@@ -1901,10 +1901,7 @@ if patch_gemma3:
 try:
     import transformers.modeling_utils
 
-    # TODO(titaiwang): This is not ready yet.
-    # Using multi-turn conversation to export, we don't need to rewrite the attention
-    # as sequence_length is not restricted to 1.
-    patch_modeling_utils = False
+    patch_modeling_utils = True
 
     from transformers.integrations.sdpa_attention import use_gqa_in_sdpa, repeat_kv
 
@@ -1947,6 +1944,10 @@ if patch_modeling_utils:
         # We convert it to a bool for the SDPA kernel that only accepts bools.
         if torch.jit.is_tracing() and isinstance(is_causal, torch.Tensor):
             is_causal = is_causal.item()
+
+        # From causal_mask generation, attention_mask is 4D, and the last dim
+        # should be the same as key's seq_len
+        torch._check(attention_mask.shape[3] == key.shape[2])
 
         attn_output = torch.nn.functional.scaled_dot_product_attention(
             query,
