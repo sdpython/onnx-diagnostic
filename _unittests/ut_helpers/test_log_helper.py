@@ -517,10 +517,10 @@ class TestLogHelper(ExtTestCase):
         sbs, sbs_agg, _ = cube.sbs(
             dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))
         )
-        self.assertEqual(sbs.shape, (4, 9))
+        self.assertEqual(sbs.shape, (4, 11))
         self.assertEqual(sbs.index.names, ["METRICS", "m_name", "date"])
         self.assertEqual(sorted(sbs.columns.names), ["CONF", "exporter"])
-        self.assertEqual(sbs_agg.shape, (2, 9))
+        self.assertEqual(sbs_agg.shape, (2, 11))
         self.assertEqual(sbs_agg.index.names, ["date", "METRICS"])
         self.assertEqual(sorted(sbs_agg.columns.names), ["CONF", "exporter"])
 
@@ -607,10 +607,10 @@ class TestLogHelper(ExtTestCase):
         sbs, sbs_agg, _ = cube.sbs(
             dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))
         )
-        self.assertEqual(sbs.shape, (8, 9))
+        self.assertEqual(sbs.shape, (8, 11))
         self.assertEqual(sbs.index.names, ["METRICS", "m_name", "date"])
         self.assertEqual(sorted(sbs.columns.names), ["CONF", "exporter"])
-        self.assertEqual(sbs_agg.shape, (4, 9))
+        self.assertEqual(sbs_agg.shape, (4, 11))
         self.assertEqual(sbs_agg.index.names, ["date", "METRICS"])
         self.assertEqual(sorted(sbs_agg.columns.names), ["CONF", "exporter"])
 
