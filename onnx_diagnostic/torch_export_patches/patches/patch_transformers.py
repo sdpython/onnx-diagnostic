@@ -1947,7 +1947,9 @@ if patch_modeling_utils:
 
         # From causal_mask generation, attention_mask is 4D, and the last dim
         # should be the same as key's seq_len
-        torch._check(attention_mask.shape[3] == key.shape[2])
+        torch._check(
+            attention_mask.shape[3] == key.shape[2] if attention_mask is not None else True
+        )
 
         attn_output = torch.nn.functional.scaled_dot_product_attention(
             query,
