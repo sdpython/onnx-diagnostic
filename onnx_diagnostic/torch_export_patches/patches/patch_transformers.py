@@ -1901,7 +1901,10 @@ if patch_gemma3:
 try:
     import transformers.modeling_utils
 
-    patch_modeling_utils = True
+    # TODO(titaiwang): This is not ready yet.
+    # Using multi-turn conversation to export, we don't need to rewrite the attention
+    # as sequence_length is not restricted to 1.
+    patch_modeling_utils = False
 
     from transformers.integrations.sdpa_attention import use_gqa_in_sdpa, repeat_kv
 
