@@ -400,12 +400,17 @@ def get_parser_validate() -> ArgumentParser:
 
             position_ids is usually not needed, they can be removed by adding:
 
-            --drop position_ids
+                --drop position_ids
 
             The behaviour may be modified compare the original configuration,
             the following argument can be rope_scaling to dynamic:
 
-            --mop \"rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}\""
+                --mop \"rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}\""
+
+            You can profile the command line by running:
+
+                pyinstrument -m onnx_diagnostic validate ...
+                pyinstrument -r html -o profile.html -m onnx_diagnostic validate ...
             """
         ),
         formatter_class=RawTextHelpFormatter,
