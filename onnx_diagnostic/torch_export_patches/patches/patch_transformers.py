@@ -1950,7 +1950,6 @@ if patch_modeling_utils:
         torch._check(
             attention_mask.shape[3] == key.shape[2] if attention_mask is not None else True
         )
-
         attn_output = torch.nn.functional.scaled_dot_product_attention(
             query,
             key,

@@ -41,7 +41,7 @@ class TestValidateModel(ExtTestCase):
     @requires_transformers("4.53")
     @requires_torch("2.7.99")
     @requires_experimental()
-    @hide_stdout()
+    # @hide_stdout()
     def test_validate_microsoft_phi4_reasoning(self):
         # python -m onnx_diagnostic validate -m microsoft/Phi-4-mini-reasoning
         #       --run -v 1 --export custom  -o dump_test --no-quiet --device cuda --patch

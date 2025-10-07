@@ -24,11 +24,11 @@ class TestTasksMaskGeneration(ExtTestCase):
             patch=True,
         )
         self.assertIsInstance(summary, dict)
-        # token generation
+        # multi-turn conversation
         self.assertLess(summary["disc_onnx_ort_run_abs"], 3e-2)
         # prompt processing
         self.assertLess(summary["disc_onnx_ort_run2_abs"], 3e-2)
-        # multi-turn conversation
+        # token generation
         self.assertLess(summary["disc_onnx_ort_run3_abs"], 3e-2)
         self.assertIsInstance(data, dict)
         onnx_filename = data["onnx_filename"]

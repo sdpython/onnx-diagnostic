@@ -683,8 +683,8 @@ def validate_model(
                     data,
                     summary,
                     k,
-                    f"run2{k[6:]}",
-                    f"run_expected2{k[6:]}",
+                    f"run{k[6:]}",
+                    f"run_expected{k[6:]}",
                     verbose,
                     1,
                     0,
@@ -1431,7 +1431,7 @@ def validate_onnx_model(
 
     keys = [("inputs", "run_expected", "")]
     if second_input_keys:
-        keys.extend([(k, f"run_expected2{k[6:]}", f"2{k[6:]}") for k in second_input_keys])
+        keys.extend([(k, f"run_expected{k[6:]}", f"{k[6:]}") for k in second_input_keys])
     for k_input, k_expected, suffix in keys:
         # make_feeds
         assert k_input in data, f"Unable to find {k_input!r} in {sorted(data)}"

@@ -281,7 +281,7 @@ def get_inputs(
         )["inputs"]
         # Token generation (decode) testing
         # NOTE: We have to export model in decode mode to preserve the cache
-        res["token_generation"] = get_inputs(
+        res["inputs3"] = get_inputs(
             model=model,
             config=config,
             dummy_max_token_id=dummy_max_token_id,
