@@ -178,7 +178,7 @@ def get_untrained_model_with_inputs(
 
         if verbose:
             print(
-                f"[get_untrained_model_with_inputs] package_source={package_source.__name__} é"
+                f"[get_untrained_model_with_inputs] package_source={package_source.__name__} "
                 f"from {package_source.__file__}"
             )
         if use_pretrained:
