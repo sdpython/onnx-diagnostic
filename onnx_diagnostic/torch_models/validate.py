@@ -419,14 +419,14 @@ def validate_model(
         such as ``input_empty_cache``
         which refers to a set of inputs using an empty cache.
     """
-    validation_begin = time.perf_counter()
+    main_validation_begin = time.perf_counter()
     model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
         model_id,
         subfolder,
         same_as_pretrained=same_as_pretrained,
         use_pretrained=use_pretrained,
     )
-    time_preprocess_model_id = time.perf_counter() - validation_begin
+    time_preprocess_model_id = time.perf_counter() - main_validation_begin
     default_patch = dict(patch_transformers=True, patch_diffusers=True, patch=True)
     if isinstance(patch, bool):
         patch_kwargs = default_patch if patch else dict(patch=False)
@@ -921,7 +921,7 @@ def validate_model(
                 summary.update(summary_valid)
 
     _compute_final_statistics(summary)
-    summary["time_total"] = time.perf_counter() - validation_begin
+    summary["time_total"] = time.perf_counter() - main_validation_begin
 
     if verbose:
         print("[validate_model] -- done (final)")
