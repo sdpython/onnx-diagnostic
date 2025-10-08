@@ -89,7 +89,10 @@ def export_model(
         with register_additional_serialization_functions(patch_transformers=True):
             return export_model(model, dynamic_shapes, inputs, oblivious=oblivious, rt=rt)
     if cache_patch:
-        with torch_export_patches(patch_transformers=True):
+        with torch_export_patches(
+            patch_torch=cache_patch in ("all", "torch", True, 1),
+            patch_transformers=cache_patch in ("all", "transformers", True, 1),
+        ):
             return export_model(model, dynamic_shapes, inputs, oblivious=oblivious, rt=rt)
     if oblivious:
         with torch.fx.experimental._config.patch(backed_size_oblivious=True):
@@ -138,13 +141,16 @@ def validation(ep, input_sets, expected):
 results = []
 
 possibilities = [*[[0, 1] for _ in range(4)], list(input_sets)]
+possibilities[1] = [0, "all", "torch", "transformers"]
 with tqdm(list(itertools.product(*possibilities))) as pbar:
     for cache, cache_patch, oblivious, rt, inputs in pbar:
         if cache_patch and not cache:
             # patches include caches.
             continue
         kwargs = dict(cache=cache, cache_patch=cache_patch, oblivious=oblivious, rt=rt)
-        legend = "-".join(k for k, v in kwargs.items() if v)
+        legend = "-".join(
+            (k if isinstance(v, int) else f"{k}:{v}") for k, v in kwargs.items() if v
+        )
         legend = f"{legend}/{inputs}"
         pbar.set_description(f"{legend} EXPORT")
 
