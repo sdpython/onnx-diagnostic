@@ -10,8 +10,8 @@ to be dynamic. The latest versions offers more options. Let's check it works.
 The experiments consists in exporting the model with different sets of inputs
 and checking the exported models works with all set of inputs.
 
-Availabe input sets
-+++++++++++++++++++
+Available input sets
+++++++++++++++++++++
 
 """
 
@@ -132,7 +132,8 @@ def validation(ep, input_sets, expected):
 
 
 # %%
-# The main loop.
+# The main loop
+# +++++++++++++
 
 results = []
 

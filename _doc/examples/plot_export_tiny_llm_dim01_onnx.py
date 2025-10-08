@@ -8,8 +8,8 @@ This duplicates the example :ref:`l-plot-tiny-llm-export-dim01` but for
 :func:`torch.onnx.export`. It checks what inputs can be used to export
 and with which inputs it can work.
 
-Availabe input sets
-+++++++++++++++++++
+Available input sets
+++++++++++++++++++++
 
 """
 
@@ -146,7 +146,8 @@ assert res[0][1]["abs"] < 1e-5, f"Unexpected issue with res={res}"
 
 
 # %%
-# The main loop.
+# The main loop
+# +++++++++++++
 
 results = []
 
