@@ -34,6 +34,15 @@ from onnx_diagnostic.torch_export_patches import (
 data = get_untrained_model_with_inputs("arnir0/Tiny-LLM", add_second_input=True)
 model, dynamic_shapes = data["model"], data["dynamic_shapes"]
 
+# %%
+# The trained model can be obtained with:
+#
+# .. code-block:: python
+#
+#   MODEL_NAME = "arnir0/Tiny-LLM"
+#   tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL_NAME)
+#   model = transformers.AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+
 input_sets = {k: v for k, v in data.items() if k.startswith("inputs")}
 
 for k, v in input_sets.items():
@@ -221,6 +230,6 @@ success
 
 # %%
 # If you have any error, then look at example
-# :ref:`l-plot-tiny-llm-export-cache_patched`.
+# :ref:`l-plot-tiny-llm-export-patched`.
 
 doc.plot_legend("Tiny-LLM\nexport with\ndimension in {0,1}", "torch.onnx.export", "tomato")
