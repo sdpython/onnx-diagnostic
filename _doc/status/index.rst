@@ -12,6 +12,12 @@ what works and what does not with :func:`torch.export.export`.
     exporter_dynamic
     patches_coverage
 
+Examples checking about dynamic dimensions:
+
+* :ref:`l-plot-tiny-llm-export-dim01`
+* :ref:`l-plot-tiny-llm-export-dim01-onnx`
+* :ref:`l-plot-tiny-llm-export-dim01-onnx-custom`
+
 Some PRs in :epkg:`transformers` to keep in mind when it comes to export
 a model using a cache or a custom class:
 
