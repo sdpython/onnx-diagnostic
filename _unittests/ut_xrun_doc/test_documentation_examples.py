@@ -111,13 +111,6 @@ class TestDocumentationExamples(ExtTestCase):
 
             if (
                 not reason
-                and name in {"plot_export_tiny_llm_dim01.py"}
-                and not has_torch("2.9")
-            ):
-                reason = "torch<2.9"
-
-            if (
-                not reason
                 and name in {"plot_dump_intermediate_results.py"}
                 and not has_torch("2.9.1")
             ):
@@ -131,6 +124,7 @@ class TestDocumentationExamples(ExtTestCase):
                 reason = "unstable, let's wait for the next version"
 
             if not reason and name in {
+                "plot_export_tiny_llm_dim01.py",
                 "plot_export_tiny_llm_dim01_onnx.py",
                 "plot_export_tiny_llm_dim01_onnx_custom.py",
             }:
