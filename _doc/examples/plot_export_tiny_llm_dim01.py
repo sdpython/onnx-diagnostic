@@ -72,10 +72,14 @@ for k, v in input_sets.items():
 # +++++++++++++++++++
 #
 # We try to export with the following options:
+#
 # - cache registration: register cache serialization with
 #   :func:`onnx_diagnostic.torch_export_patches.register_additional_serialization_functions`
+#
 # - oblivious: an option to remove some the exception raises by the exporter
+#
 # - rt: see ``prefer_deferred_runtime_asserts_over_guards`` in :func:`torch.export.export`
+#
 # - cache_patch: patches the model before exporting with
 #   :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
 #
