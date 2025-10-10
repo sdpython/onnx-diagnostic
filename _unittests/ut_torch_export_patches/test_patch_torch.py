@@ -345,7 +345,7 @@ class TestPatchPatchTorch(ExtTestCase):
             )
         self.assertEqualArray(expected, ep.module()(*inputs), atol=1e-2)
 
-    @requires_torch("2.7.9999")
+    @requires_torch("2.8.9999")
     @requires_transformers("4.49.9999")
     def test_export_with_patch_tiny_llm_dim_meta(self):
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM", verbose=0)

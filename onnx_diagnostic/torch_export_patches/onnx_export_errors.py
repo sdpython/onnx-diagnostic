@@ -340,6 +340,7 @@ def torch_export_patches(
         ###############
 
         if patch_torch:
+            from torch.fx.experimental.symbolic_shapes import ShapeEnv
             from .patches.patch_torch import (
                 patched_infer_size,
                 patched_vmap,
@@ -349,6 +350,7 @@ def torch_export_patches(
                 patch__check_input_constraints_for_graph,
                 patched__broadcast_in_dim_meta,
                 patched__maybe_broadcast,
+                patched_ShapeEnv,
             )
 
             if verbose:
@@ -395,6 +397,10 @@ def torch_export_patches(
             f__maybe_broadcast = torch._refs._maybe_broadcast
             torch._refs._maybe_broadcast = patched__maybe_broadcast
 
+            # ShapeEnv
+            f_shape_env__evaluate_expr = ShapeEnv._evaluate_expr
+            ShapeEnv._evaluate_expr = patched_ShapeEnv._evaluate_expr
+
         # torch._export.non_strict_utils.produce_guards_and_solve_constraints
         if patch_torch and catch_constraints:
             if verbose:
@@ -417,9 +423,6 @@ def torch_export_patches(
             )
 
         if stop_if_static:
-            from torch.fx.experimental.symbolic_shapes import ShapeEnv
-            from .patches.patch_torch import patched_ShapeEnv
-
             ShapeEnv._log_guard_remember = ShapeEnv._log_guard
 
             if verbose:
@@ -599,6 +602,7 @@ def torch_export_patches(
                 torch._prims._broadcast_in_dim_meta = f__broadcast_in_dim_meta
                 torch._prims.broadcast_in_dim = f_broadcast_in_dim
                 torch._refs._maybe_broadcast = f__maybe_broadcast
+                ShapeEnv._evaluate_expr = f_shape_env__evaluate_expr
 
                 if verbose:
                     print("[torch_export_patches] restored pytorch functions")
