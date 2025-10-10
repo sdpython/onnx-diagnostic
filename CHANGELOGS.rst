@@ -4,6 +4,7 @@ Change Logs
 0.7.14
 ++++++
 
+* :pr:`257`: patch to disable one exception in pytorch
 * :pr:`256`: extract subfolder from modelid//subfolder
 * :pr:`252`: adds new sets of inputs for task texgt-generation
 * :pr:`250`: add variables to track sequence nodes
