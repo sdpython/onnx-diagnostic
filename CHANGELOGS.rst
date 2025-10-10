@@ -4,7 +4,8 @@ Change Logs
 0.7.14
 ++++++
 
-* :pr:`252`: adds new set of inputs for task texgt-generation
+* :pr:`256`: extract subfolder from modelid//subfolder
+* :pr:`252`: adds new sets of inputs for task texgt-generation
 * :pr:`250`: add variables to track sequence nodes
 * :pr:`249`: patches _maybe_broadcast to support a corner case
 

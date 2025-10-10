@@ -25,6 +25,20 @@ def _code_needing_rewriting(model: Any) -> Any:
     return code_needing_rewriting(model)
 
 
+def _preprocess_model_id(
+    model_id: str, subfolder: Optional[str], same_as_pretrained: bool, use_pretrained: bool
+) -> Tuple[str, Optional[str], bool, bool]:
+    if subfolder or "//" not in model_id:
+        return model_id, subfolder, same_as_pretrained, use_pretrained
+    spl = model_id.split("//")
+    if spl[-1] == "pretrained":
+        return _preprocess_model_id("//".join(spl[:-1]), "", True, True)
+    if spl[-1] in {"transformer", "vae"}:
+        # known subfolder
+        return "//".join(spl[:-1]), spl[-1], same_as_pretrained, use_pretrained
+    return model_id, subfolder, same_as_pretrained, use_pretrained
+
+
 def get_untrained_model_with_inputs(
     model_id: str,
     config: Optional[Any] = None,
@@ -85,8 +99,16 @@ def get_untrained_model_with_inputs(
         f"model_id={model_id!r}, preinstalled model is only available "
         f"if use_only_preinstalled is False."
     )
+    model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
+        model_id,
+        subfolder,
+        same_as_pretrained=same_as_pretrained,
+        use_pretrained=use_pretrained,
+    )
     if verbose:
-        print(f"[get_untrained_model_with_inputs] model_id={model_id!r}")
+        print(
+            f"[get_untrained_model_with_inputs] model_id={model_id!r}, subfolder={subfolder!r}"
+        )
         if use_preinstalled:
             print(f"[get_untrained_model_with_inputs] use preinstalled {model_id!r}")
     if config is None:
