@@ -1,8 +1,10 @@
+import functools
 import inspect
+import operator
 import os
 import traceback
 from functools import reduce
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, cast, Dict, List, Optional, Sequence, Tuple, Union
 import torch
 from torch._subclasses.fake_tensor import FakeTensorMode
 
@@ -396,6 +398,284 @@ class patched_ShapeEnv:
         #     RuntimeWarning,
         #     stacklevel=0,
         # )
+
+    def _evaluate_expr(
+        self,
+        orig_expr: "sympy.Basic",  # noqa: F821
+        hint: Optional[Union[bool, int, float]] = None,
+        fx_node: Optional[torch.fx.Node] = None,
+        size_oblivious: bool = False,
+        fallback_value: Optional[bool] = None,
+        *,
+        forcing_spec: bool = False,
+    ) -> "sympy.Basic":  # noqa: F821
+        # TODO: split conjunctions and evaluate them separately
+        import sympy
+        from torch.fx.experimental import _config as config
+        from torch.fx.experimental.symbolic_shapes import (
+            SympyBoolean,
+            log,
+            SymT,
+            symbol_is_type,
+        )
+        from torch._guards import ShapeGuard
+
+        if isinstance(
+            orig_expr,
+            (sympy.logic.boolalg.BooleanTrue, sympy.logic.boolalg.BooleanFalse),
+        ):
+            return orig_expr
+
+        # Don't track this one. (Because this cache is inside this function the
+        # cache only lasts for the invocation of this function call)
+        @functools.cache
+        def compute_concrete_val() -> sympy.Basic:
+            if hint is None:
+                # This is only ever called for expressions WITHOUT unbacked
+                # symbols
+                r = self.size_hint(orig_expr)
+                assert r is not None
+                return r
+            else:
+                return sympy.sympify(hint)
+
+        concrete_val: Optional[sympy.Basic]
+
+        # Check if:
+        #   1. 'translation_validation' is set
+        #   2. the corresponding 'fx_node' is not 'None'
+        #   3. the guard should not be suppressed
+        #   4. the guard doesn't contain backed symfloat symbols
+        #      since z3 can't handle floats
+        #   5. fallback_value is none.
+        # If all of the above check, we create an FX node representing the
+        # actual expression to be guarded.
+        node = None
+        fresh = False
+        if (
+            self._translation_validation_enabled
+            and fx_node is not None
+            and not self._suppress_guards_tls()
+            and not size_oblivious
+            and not any(symbol_is_type(s, SymT.FLOAT) for s in orig_expr.free_symbols)
+            and fallback_value is None
+        ):
+            # TODO: does this even worked with unbacked :think:
+            concrete_val = compute_concrete_val()
+            if concrete_val is sympy.true:
+                node, fresh = self._create_fx_call_function(torch._assert, (fx_node,))
+            elif concrete_val is sympy.false:
+                neg, _ = self._create_fx_call_function(operator.not_, (fx_node,))
+                node, fresh = self._create_fx_call_function(torch._assert, (neg,))
+            else:
+                eql, _ = self._create_fx_call_function(operator.eq, (fx_node, concrete_val))
+                node, fresh = self._create_fx_call_function(torch._assert, (eql,))
+
+            assert node is not None
+            # If this is a fresh node, we have to remember the event index that
+            # corresponds to this assertion node.
+            # Reason: so that, given an assertion node, we can replay the ShapeEnv
+            # events until the point where this assertion node was freshly created.
+            if fresh:
+                self._add_fx_node_metadata(node)
+
+        # After creating the FX node corresponding to orig_expr, we must make sure that
+        # no error will be raised until the end of this function.
+        #
+        # Reason: the translation validation may become invalid otherwise.
+        #
+        # If an error is raised before the end of this function, we remove the FX node
+        # inserted, and re-raise the error.
+        guard = None
+
+        try:
+            if orig_expr.is_number:
+                self.log.debug("eval %s [trivial]", orig_expr)
+                if hint is not None:
+                    if isinstance(hint, bool):
+                        assert orig_expr == hint, f"{orig_expr} != {hint}"
+                    else:
+                        assert sympy.Eq(orig_expr, hint), f"{orig_expr} != {hint}"
+                return orig_expr
+
+            expr = orig_expr
+
+            static_expr = self._maybe_evaluate_static(expr, size_oblivious=size_oblivious)
+            if static_expr is not None:
+                self.log.debug(
+                    "eval %s == %s [statically known]",
+                    (f"size_oblivious({orig_expr})" if size_oblivious else size_oblivious),
+                    static_expr,
+                )
+                if not size_oblivious and config.backed_size_oblivious and hint is not None:
+                    # TODO: maybe reconcile this with use of counterfactual hints
+                    # in unbacked case
+                    assert static_expr == hint, f"{static_expr} != {hint}"
+                return static_expr
+
+            transmute_into_runtime_assert = False
+
+            concrete_val = None
+            if not (expr.free_symbols <= self.var_to_val.keys()):
+                # TODO: dedupe this with _maybe_evaluate_static
+                # Attempt to eliminate the unbacked SymInt
+                new_expr = self._maybe_evaluate_static(expr, unbacked_only=True)
+                assert new_expr is not None
+                if not (new_expr.free_symbols <= self.var_to_val.keys()):
+                    ok = False
+
+                    # fallback_value is set when guard_or_true or guard_or_false are used.
+                    if not ok and fallback_value is not None:
+                        self._log_suppressed_dde(orig_expr, fallback_value)
+                        return fallback_value
+
+                    # oblivious_var_to_val will be defined iff we have sizes
+                    # with DimDynamic.OBLIVIOUS_SIZE type.
+                    # See https://github.com/pytorch/pytorch/issues/137100#issuecomment-2495778113
+                    if (
+                        self.oblivious_var_to_val
+                        and not (
+                            correct_hint := orig_expr.xreplace(self.oblivious_var_to_val)
+                        ).free_symbols
+                        and not (
+                            counterfactual_hint := orig_expr.xreplace(
+                                {k: max(2, v) for k, v in self.oblivious_var_to_val.items()}
+                            )
+                        ).free_symbols
+                        and correct_hint == counterfactual_hint
+                    ):
+                        # TODO: better logging
+                        log.info(
+                            "oblivious_size %s -> %s (passed counterfactual)",
+                            orig_expr,
+                            # pyrefly: ignore  # unbound-name
+                            correct_hint,
+                        )
+                        # pyrefly: ignore  # unbound-name
+                        concrete_val = correct_hint
+                        # NB: do NOT transmute into runtime assert
+                        ok = True
+
+                    # unbacked_var_to_val is not None iff propagate_real_tensors is on.
+                    # if propagate_real_tensors is on, we check the example values
+                    # to generate (unsound_result)
+                    # and if they pass we add a runtime assertions and continue.
+                    if (
+                        not ok
+                        and self.unbacked_var_to_val
+                        and not (
+                            unsound_result := orig_expr.xreplace(
+                                self.unbacked_var_to_val
+                            ).xreplace(self.var_to_val)
+                        ).free_symbols
+                    ):
+                        # pyrefly: ignore  # unbound-name
+                        self._log_real_tensor_propagation(orig_expr, unsound_result)
+                        transmute_into_runtime_assert = True
+                        # pyrefly: ignore  # unbound-name
+                        concrete_val = unsound_result
+                        ok = True
+
+                    # Check if this is coming from a python assert statement,
+                    # if so, convert it to a runtime assertion
+                    # instead of failing.
+                    if not ok and self.trace_asserts and self._is_python_assert():
+                        concrete_val = sympy.true
+                        transmute_into_runtime_assert = True
+                        ok = True
+
+                    # PATCHED: ok -> True
+                    ok = True
+                    # if not ok:
+                    #    raise self._make_data_dependent_error(
+                    #        expr.xreplace(self.var_to_val),
+                    #        expr,
+                    #        expr_sym_node_id=self._expr_sym_node_id,
+                    #    )
+                else:
+                    expr = new_expr
+
+            if concrete_val is None:
+                concrete_val = compute_concrete_val()
+            self._check_frozen(expr, concrete_val)
+
+            if (
+                config.inject_EVALUATE_EXPR_flip_equality_TESTING_ONLY
+                and isinstance(hint, bool)
+                and isinstance(expr, (sympy.Eq, sympy.Ne))
+            ):
+                expr = sympy.Not(expr)
+
+            # Turn this into a boolean expression, no longer need to consult
+            # concrete_val
+            if concrete_val is sympy.true:
+                g = cast(SympyBoolean, expr)
+            elif concrete_val is sympy.false:
+                g = sympy.Not(expr)
+            else:
+                g = sympy.Eq(expr, concrete_val)  # type: ignore[arg-type]
+
+            if transmute_into_runtime_assert:
+                self.guard_or_defer_runtime_assert(
+                    g, f"propagate_real_tensors: {orig_expr} == {concrete_val}"
+                )
+                return concrete_val
+
+            if not self._suppress_guards_tls():
+                self._log_guard("eval", g, forcing_spec=forcing_spec)
+
+                # TODO: If we successfully eliminate a symbol via equality, it
+                # is not actually necessary to save a guard for the equality,
+                # as we will implicitly generate a guard when we match that
+                # input against the symbol.  Probably the easiest way to
+                # implement this is to have maybe_guard_rel return a bool
+                # saying if it "subsumed" the guard (and therefore the guard
+                # is no longer necessary)
+                self._maybe_guard_rel(g)
+
+                if (
+                    torch.compiler.is_exporting()
+                    and self.prefer_deferred_runtime_asserts_over_guards
+                ):
+                    # it's fine to defer simple guards here without checking,
+                    # the _maybe_guard_rel() call above will set replacements if possible,
+                    # and so the result here will be statically known
+                    self.guard_or_defer_runtime_assert(g, f"evaluate_expr: {orig_expr}")
+                else:
+                    # at this point, we've evaluated the concrete expr value, and have
+                    # flipped/negated the guard if necessary. Now we know what to guard
+                    # or defer to runtime assert on.
+                    guard = ShapeGuard(g, self._get_sloc(), size_oblivious=size_oblivious)
+                    self.guards.append(guard)
+                    self.axioms.update(dict(self.get_implications(self.simplify(g))))
+            else:
+                self._log_guard("eval [guard suppressed]", g, forcing_spec=forcing_spec)
+
+        except Exception:
+            if fresh:
+                self._remove_fx_node(node)
+            raise
+
+        if not self._suppress_guards_tls():
+            if guard is not None:  # we might have deferred this to runtime assert
+                for s in g.free_symbols:
+                    self.symbol_guard_counter[s] += 1
+                    # Forcing_spec to avoid infinite recursion
+                    if (
+                        not forcing_spec
+                        and config.symbol_guard_limit_before_specialize is not None
+                        and self.symbol_guard_counter[s]
+                        > config.symbol_guard_limit_before_specialize
+                    ):
+                        # Force specialization
+                        self.log.info(
+                            "symbol_guard_limit_before_specialize=%s exceeded on %s",
+                            config.symbol_guard_limit_before_specialize,
+                            s,
+                        )
+                        self.evaluate_expr(s, forcing_spec=True)
+
+        return concrete_val
 
 
 def patched_vmap(func, in_dims=0, out_dims=0):
