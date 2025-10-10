@@ -39,6 +39,10 @@ class TestTasks(ExtTestCase):
         mid = "arnir0/Tiny-LLM"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "text-generation")
+        self.assertIn("inputs", data)
+        self.assertIn("inputs2", data)
+        self.assertIn("inputs_batch1", data)
+        self.assertIn("inputs_empty_cache", data)
         self.assertIn((data["size"], data["n_weights"]), [(51955968, 12988992)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**inputs)
