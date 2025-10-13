@@ -98,7 +98,7 @@ print("outputs:", string_type(expected_outputs, with_shape=True))
 # It still requires patches to be exportable (control flow).
 # See :func:`onnx_diagnostic.torch_export_patches.torch_export_patches`
 
-with torch_export_patches(patch_torh=False, patch_transformers=True) as f:
+with torch_export_patches(patch_torch=False, patch_transformers=True) as f:
     ep = torch.export.export(
         model,
         (),
