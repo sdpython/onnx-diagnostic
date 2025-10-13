@@ -108,7 +108,7 @@ def flatten_unflatten_for_dynamic_shapes(
 
 def is_cache_dynamic_registered(fast: bool = False) -> bool:
     """
-    Tells class :class:`transformers.cache_utils.DynamicCache` can be
+    Tells if class :class:`transformers.cache_utils.DynamicCache` can be
     serialized and deserialized. Only then, :func:`torch.export.export`
     can export a model.
 

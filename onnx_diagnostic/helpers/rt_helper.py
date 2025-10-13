@@ -3,8 +3,6 @@ import numpy as np
 import onnx
 import torch
 from .helper import string_type, flatten_object
-from .torch_helper import to_numpy
-from .cache_helper import is_cache_dynamic_registered
 
 
 def name_type_to_onnx_dtype(name: str) -> int:
@@ -49,7 +47,7 @@ def make_feeds(
     assert (
         not check_flatten
         or not all(isinstance(obj, torch.Tensor) for obj in flat)
-        or not is_cache_dynamic_registered(fast=True)
+        # or not is_cache_dynamic_registered(fast=True)
         or len(flat) == len(torch.utils._pytree.tree_flatten(inputs)[0])
     ), (
         f"Unexpected number of flattened objects, "
@@ -57,6 +55,8 @@ def make_feeds(
         f"{string_type(torch.utils._pytree.tree_flatten(inputs)[0], with_shape=True)}"
     )
     if use_numpy:
+        from .torch_helper import to_numpy
+
         flat = [to_numpy(t) if isinstance(t, torch.Tensor) else t for t in flat]
     names = (
         [i.name for i in proto.graph.input]
