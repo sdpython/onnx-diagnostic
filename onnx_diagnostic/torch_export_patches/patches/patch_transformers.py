@@ -1380,7 +1380,8 @@ class patched_IdeficsEmbedding(torch.nn.Module):
 
         def _set_cos_sin_cache_then(x, inv_freq, seq_len, _cos_cached, _sin_cached):
             t = torch.arange(seq_len, device=x.device, dtype=torch.int64).type_as(inv_freq)
-            freqs = torch.einsum("i,j->ij", t, inv_freq)
+            # freqs = torch.einsum("i,j->ij", t, inv_freq)
+            freqs = t.reshape((-1, 1)) * inv_freq.reshape((1, -1))
             emb = torch.cat((freqs, freqs), dim=-1)
             return emb.cos().to(x.dtype), emb.sin().to(x.dtype)
 
