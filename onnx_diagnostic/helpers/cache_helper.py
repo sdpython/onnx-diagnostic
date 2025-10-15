@@ -134,7 +134,54 @@ def is_cache_dynamic_registered(fast: bool = False) -> bool:
     return len(cache2.key_cache) == len(cache.value_cache)
 
 
-if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
+if (
+    pv.Version(transformers.__version__) > pv.Version("4.99.99999")
+    or transformers.__version__ == "4.57.0.dev0"
+):
+
+    def make_dynamic_cache(
+        key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    ) -> transformers.cache_utils.DynamicCache:
+        """
+        Creates an instance of :class:`transformers.cache_utils.DynamicCache`.
+        This version is valid for ``transformers >= 4.50``.
+
+        :param key_value_pairs: list of pairs of (key, values)
+        :return: :class:`transformers.cache_utils.DynamicCache`
+
+        Example:
+
+        .. runpython::
+            :showcode:
+
+            import torch
+            from onnx_diagnostic.helpers import string_type
+            from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
+
+            n_layers = 2
+            bsize, nheads, slen, dim = 2, 4, 3, 7
+
+            past_key_values = make_dynamic_cache(
+                [
+                    (
+                        torch.randn(bsize, nheads, slen, dim),
+                        torch.randn(bsize, nheads, slen, dim),
+                    )
+                    for i in range(n_layers)
+                ]
+            )
+            print(string_type(past_key_values, with_shape=True))
+        """
+        cache = transformers.cache_utils.DynamicCache(
+            [(None, k, v) for k, v in key_value_pairs]
+        )
+        assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
+            f"Unexpected number of layers in the cache ({len(cache.layers)}), "
+            f"{len(key_value_pairs)} expected."
+        )
+        return finalize_cache(cache)
+
+elif pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
 
     def make_dynamic_cache(
         key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
