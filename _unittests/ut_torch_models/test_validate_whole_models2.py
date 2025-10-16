@@ -16,7 +16,7 @@ class TestValidateWholeModels2(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.55")
-    @unittest.skipif(torch.__version__.startswith("2.9.0"), "no left space space on device?")
+    @unittest.skipIf(torch.__version__.startswith("2.9.0"), "no left space space on device?")
     def test_o_validate_phi35_4k_mini_instruct(self):
         mid = "microsoft/Phi-3-mini-4k-instruct"
         summary, data = validate_model(
