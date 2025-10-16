@@ -841,7 +841,7 @@ def get_parser_agg() -> ArgumentParser:
         "n_model_pass,n_model_faster,"
         "n_model_faster2x,n_model_faster3x,n_model_faster4x,n_node_attention,"
         "n_node_attention23,n_node_rotary_embedding,n_node_rotary_embedding23,"
-        "n_node_layer_normalization,n_node_layer_normalization23,"
+        "n_node_gqa,n_node_layer_normalization,n_node_layer_normalization23,"
         "peak_gpu_torch,peak_gpu_nvidia,n_node_control_flow,"
         "n_node_constant,n_node_shape,n_node_expand,"
         "n_node_function,n_node_initializer,n_node_scatter,"
