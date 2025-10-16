@@ -1438,6 +1438,8 @@ def validate_onnx_model(
     keys = [("inputs", "run_expected", "")]
     if second_input_keys:
         keys.extend([(k, f"run_expected2{k[6:]}", f"2{k[6:]}") for k in second_input_keys])
+    if verbose:
+        print(f"[validate_onnx_model] -- keys={keys}")
     for k_input, k_expected, suffix in keys:
         # make_feeds
         assert k_input in data, f"Unable to find {k_input!r} in {sorted(data)}"
@@ -1463,7 +1465,7 @@ def validate_onnx_model(
         # run ort
         if verbose:
             print(f"[validate_onnx_model] run session on inputs 'inputs{suffix}'...")
-            if quiet_input_sets:
+            if quiet_input_sets and f"inputs{suffix}" in quiet_input_sets:
                 print(f"[validate_onnx_model] quiet_input_sets={quiet_input_sets}")
 
         got = _quiet_or_not_quiet(

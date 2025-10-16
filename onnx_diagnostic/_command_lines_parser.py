@@ -553,6 +553,12 @@ def get_parser_validate() -> ArgumentParser:
         action=BooleanOptionalAction,
         help="Enables onnxruntime logging when the session is created",
     )
+    parser.add_argument(
+        "--quiet-input-sets",
+        default="",
+        help="Avoids raising an exception when an input sets does not work with "
+        "the exported model, example: --quiet-input-sets=inputs,inputs22",
+    )
     return parser
 
 
@@ -614,6 +620,7 @@ def _cmd_validate(argv: List[Any]):
             warmup=args.warmup,
             inputs2=args.inputs2,
             ort_logs=args.ort_logs,
+            quiet_input_sets=set(args.quiet_input_sets.split(",")),
             output_names=(
                 None if len(args.outnames.strip()) < 2 else args.outnames.strip().split(",")
             ),
