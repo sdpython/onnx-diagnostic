@@ -4,6 +4,8 @@ Change Logs
 0.7.15
 ++++++
 
+* :pr:`261`: updates to support ``transformers>=5.0``
+
 0.7.14
 ++++++
 
