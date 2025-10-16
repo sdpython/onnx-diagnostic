@@ -986,7 +986,12 @@ def patched__broadcast_in_dim_meta(
                     a.shape[original_idx] == shape[idx],
                     lambda idx=idx, original_idx=original_idx: (
                         f"non-broadcasting semantics require "
-                        f"{a.shape[original_idx]} == {shape[idx]}"
+                        f"{a.shape[original_idx]} == {shape[idx]}, "
+                        f"{guard_or_false(a.shape[idx] != 1)}, "
+                        f"guard_or_false(a.shape[idx] == 1)="
+                        f"{guard_or_false(a.shape[idx] == 1)}, "
+                        f"a.stride()={a.stride()}, idx={idx}, "
+                        f"original_idx={original_idx}"
                     ),
                 )
                 new_strides.append(a.stride()[original_idx])
