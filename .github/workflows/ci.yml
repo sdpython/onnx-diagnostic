@@ -37,7 +37,7 @@ jobs:
           - python: '3.11'  # 3.11
             torch: 'main'
           - python: '3.11'
-            torch: '2.9'
+            torch: '2.8'
           - python: '3.11'
             transformers: 'main'
           - python: '3.11'
