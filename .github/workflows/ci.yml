@@ -70,8 +70,8 @@ jobs:
           if [[ "${{ matrix.torch }}" == "main" ]]; then
             python -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cpu
           else
-            echo "install torch==${{ matrix.torch }}"
-            pip install torch==${{ matrix.torch }}
+            echo "install torch==${{ matrix.torch }} torchvision torchaudio"
+            pip install torch==${{ matrix.torch }} torchvision torchaudio
           fi
 
       - name: Install transformers ${{ matrix.transformers }}
@@ -106,8 +106,8 @@ jobs:
           if [[ "${{ matrix.torch }}" == "main" ]]; then
             python -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cpu
           else
-            echo "install torch==${{ matrix.torch }}"
-            pip install torch==${{ matrix.torch }}
+            echo "install torch==${{ matrix.torch }} torchvision torchaudio"
+            pip install torch==${{ matrix.torch }} torchvision torchaudio
           fi
 
       - name: Cache pip

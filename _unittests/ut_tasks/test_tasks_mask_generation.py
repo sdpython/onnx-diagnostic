@@ -28,6 +28,23 @@ class TestTasksMaskGeneration(ExtTestCase):
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
 
+    @hide_stdout()
+    @requires_transformers("4.53")
+    @requires_torch("2.7.99")
+    def test_mask_generation_with_torch_patches(self):
+        mid = "fxmarty/sam-vit-tiny-random"
+        data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
+        self.assertEqual(data["task"], "mask-generation")
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        model(**torch_deepcopy(inputs))
+        model(**data["inputs2"])
+        with torch_export_patches(
+            patch_torch=True, patch_sympy=True, patch_transformers=True, verbose=1
+        ):
+            torch.export.export(
+                model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
+            )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

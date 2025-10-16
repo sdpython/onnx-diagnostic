@@ -88,7 +88,7 @@ def patch__check_input_constraints_for_graph(
 
 def patched_infer_size(a, b):
     """Patches ``torch._subclasses.fake_impls.infer_size``."""
-    from torch.fx.experimental.symbolic_shapes import guard_size_oblivious
+    from torch.fx.experimental.symbolic_shapes import guard_or_false
 
     dimsA = len(a)
     dimsB = len(b)
@@ -113,19 +113,19 @@ def patched_infer_size(a, b):
         # were not the case, we'd need to write this using torch.sym_or() or
         # something like that).
         try:
-            b1 = guard_size_oblivious(sizeA == 1)
+            b1 = guard_or_false(sizeA == 1)
         except torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode:
             b1 = False
         try:
-            b2 = guard_size_oblivious(sizeB == 1)
+            b2 = guard_or_false(sizeB == 1)
         except torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode:
             b2 = False
         try:
-            b3 = guard_size_oblivious(sizeA == sizeB)
+            b3 = guard_or_false(sizeA == sizeB)
         except torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode:
             b3 = False
         if b1 or b2 or b3:
-            expandedSizes[i] = sizeB if guard_size_oblivious(sizeA == 1) else sizeA
+            expandedSizes[i] = sizeB if guard_or_false(sizeA == 1) else sizeA
         else:
             # PATCHED: generic case, the dimension is known, no need to assert
             expandedSizes[i] = torch.sym_max(sizeA, sizeB)
@@ -137,7 +137,6 @@ def patched__broadcast_shapes(*_shapes):
     from functools import reduce
     from torch._prims_common import IntLike
     from torch.fx.experimental.symbolic_shapes import (
-        guard_size_oblivious,
         guard_or_false,
         is_nested_int,
     )
@@ -174,13 +173,15 @@ def patched__broadcast_shapes(*_shapes):
                     continue
             # PATCHED: two cases, if == for sure, no broadcast,
             # otherwise maybe broadcast with max(dimensions)
-            if guard_size_oblivious(common_shape[idx] == 1):
+            if guard_or_false(common_shape[idx] != 1):
+                pass
+            elif guard_or_false(common_shape[idx] == 1) or guard_or_false(shape[idx] != 1):
                 if shape[idx] < 0:
                     raise ValueError(
                         "Attempting to broadcast a dimension with negative length!"
                     )
                 common_shape[idx] = shape[idx]
-            elif guard_size_oblivious(shape[idx] != 1):
+            else:
                 common_shape[idx] = torch.sym_max(common_shape[idx], shape[idx])
 
     return common_shape
@@ -359,6 +360,10 @@ class patched_ShapeEnv:
                     "user_stack": (structured.from_traceback(user_tb) if user_tb else None),
                 },
             )
+
+            for source in self.var_to_sources.get(a, []):
+                if user_tb:
+                    self.specialization_stacks[source] = user_tb
 
             # PATCHED: removed lines
             # if config.print_specializations:
@@ -973,15 +978,17 @@ def patched__broadcast_in_dim_meta(
                     new_strides.append(a.stride()[original_idx])
                 else:
                     new_strides.append(0)
+            # PATCHED: disabled this check
+            elif guard_or_false(a.shape[original_idx] != 1):
+                new_strides.append(a.stride()[original_idx])
             else:
-                # PATCHED: disabled this check
-                # torch._check(
-                #    a.shape[original_idx] == shape[idx],
-                #    lambda idx=idx, original_idx=original_idx: (
-                #        f"non-broadcasting semantics require "
-                #        f"{a.shape[original_idx]} == {shape[idx]}"
-                #    ),
-                # )
+                torch._check(
+                    a.shape[original_idx] == shape[idx],
+                    lambda idx=idx, original_idx=original_idx: (
+                        f"non-broadcasting semantics require "
+                        f"{a.shape[original_idx]} == {shape[idx]}"
+                    ),
+                )
                 new_strides.append(a.stride()[original_idx])
             original_idx = original_idx + 1
         else:
