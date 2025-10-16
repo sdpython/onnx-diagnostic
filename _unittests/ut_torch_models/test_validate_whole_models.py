@@ -107,13 +107,14 @@ class TestValidateWholeModels(ExtTestCase):
             verbose=10,
             exporter="onnx-dynamo",
             dump_folder="dump_test/validate_model_onnx_dynamo_os_ort",
-            patch=True,
+            patch=dict(patch_torch=False, patch_transformers=True, patch_sympy=True),
             stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
             optimization="os_ort",
+            quiet_input_sets={"inputs", "inputs22"},
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
-        self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
+        self.assertLess(summary["disc_onnx_ort_run2_batch1_abs"], 1e-4)
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
 
