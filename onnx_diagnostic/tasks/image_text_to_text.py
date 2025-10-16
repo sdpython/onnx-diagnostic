@@ -186,12 +186,13 @@ def _get_inputs_gemma3(
             f"total_sequence_length={total_sequence_length} != 860 "
             f"for model {model.__class__.__name__}"
         )
-        assert (
-            head_dim == 256
-        ), f"head_dim={head_dim} != 256 for model {model.__class__.__name__}"
+        assert head_dim in (
+            256,
+            32,
+        ), f"head_dim={head_dim} not in (32, 256) for model {model.__class__.__name__}"
         assert n_images == 1, f"n_images={n_images} != 1 for model {model.__class__.__name__}"
-        assert num_key_value_heads == 4, (
-            f"num_key_value_heads={num_key_value_heads} != 256 "
+        assert num_key_value_heads in (1, 4), (
+            f"num_key_value_heads={num_key_value_heads} not in (1, 4) "
             f"for this model {model.__class__.__name__}"
         )
 

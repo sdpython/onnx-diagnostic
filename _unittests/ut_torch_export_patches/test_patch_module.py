@@ -618,6 +618,94 @@ class TestPatchModule(ExtTestCase):
             )
         """
 
+    def test_broadcast_in_dim_1(self):
+        class BadBroadcast(torch.nn.Module):
+            def forward(self, x):
+                shape = [x.shape[0], x.shape[1], 1]
+                dims = [0, 1]
+                return torch.ops.prims.broadcast_in_dim.default(x, shape, dims)
+
+        x = torch.rand((3, 4), dtype=torch.float32)
+        expected = BadBroadcast()(x)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN},)
+        for strict in [False, True]:
+            with self.subTest(strict=strict):
+                ep = torch.export.export(
+                    BadBroadcast(), (x,), dynamic_shapes=ds, strict=strict
+                )
+                got = ep.module()(x)
+                self.assertEqualArray(expected, got)
+                with torch_export_patches(patch_torch=True):
+                    ep = torch.export.export(
+                        BadBroadcast(), (x,), dynamic_shapes=ds, strict=strict
+                    )
+                    got = ep.module()(x)
+                    self.assertEqualArray(expected, got)
+
+    def test_broadcast_in_dim_2(self):
+        class BadBroadcast(torch.nn.Module):
+            def forward(self, x):
+                shape = [x.shape[0], 3, 1]
+                dims = [0, 1]
+                return torch.ops.prims.broadcast_in_dim.default(x, shape, dims)
+
+        x = torch.rand((3, 1), dtype=torch.float32)
+        expected = BadBroadcast()(x)
+        print(expected.shape, expected)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN},)
+        for strict in [False, True]:
+            with self.subTest(strict=strict):
+                with torch_export_patches(patch_torch=True):
+                    ep = torch.export.export(
+                        BadBroadcast(), (x,), dynamic_shapes=ds, strict=strict
+                    )
+                    got = ep.module()(x)
+                    self.assertEqualArray(expected, got)
+
+    def test_broadcast_in_dim_3(self):
+        class BadBroadcast(torch.nn.Module):
+            def forward(self, x):
+                shape = [3, x.shape[1], 1]
+                dims = [0, 1]
+                return torch.ops.prims.broadcast_in_dim.default(x, shape, dims)
+
+        x = torch.rand((1, 3), dtype=torch.float32)
+        expected = BadBroadcast()(x)
+        print(expected.shape, expected)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN},)
+        for strict in [False, True]:
+            with self.subTest(strict=strict):
+                with torch_export_patches(patch_torch=True):
+                    ep = torch.export.export(
+                        BadBroadcast(), (x,), dynamic_shapes=ds, strict=strict
+                    )
+                    got = ep.module()(x)
+                    self.assertEqualArray(expected, got)
+
+    def test_broadcast_in_dim_5(self):
+        class BadBroadcast(torch.nn.Module):
+            def forward(self, x):
+                shape = [1, x.shape[1], 1]
+                dims = [0, 1]
+                return torch.ops.prims.broadcast_in_dim.default(x, shape, dims)
+
+        x = torch.rand((1, 3), dtype=torch.float32)
+        expected = BadBroadcast()(x)
+        print(expected.shape, expected)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN},)
+        for strict in [False, True]:
+            with self.subTest(strict=strict):
+                with torch_export_patches(patch_torch=True):
+                    ep = torch.export.export(
+                        BadBroadcast(), (x,), dynamic_shapes=ds, strict=strict
+                    )
+                    got = ep.module()(x)
+                    self.assertEqualArray(expected, got)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

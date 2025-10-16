@@ -12,15 +12,24 @@ from transformers.cache_utils import (
     StaticCache,
 )
 
-try:
-    from transformers.models.mamba.modeling_mamba import MambaCache
-except ImportError:
-    from transformers.cache_utils import MambaCache
-
 from ..helpers import string_type
 from .serialization import _lower_name_with_
 
 PATCH_OF_PATCHES: Set[Any] = set()
+
+
+def get_mamba_cache_cls() -> type:
+    try:
+        from transformers.models.mamba.modeling_mamba import MambaCache
+
+        return MambaCache
+    except ImportError:
+        try:
+            from transformers.cache_utils import MambaCache
+
+            return MambaCache
+        except ImportError:
+            return None
 
 
 def register_class_serialization(
@@ -203,13 +212,6 @@ def serialization_functions(
                 # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
                 verbose=verbose,
             ),
-            MambaCache: lambda verbose=verbose: register_class_serialization(
-                MambaCache,
-                flatten_mamba_cache,
-                unflatten_mamba_cache,
-                flatten_with_keys_mamba_cache,
-                verbose=verbose,
-            ),
             EncoderDecoderCache: lambda verbose=verbose: register_class_serialization(
                 EncoderDecoderCache,
                 flatten_encoder_decoder_cache,
@@ -232,6 +234,17 @@ def serialization_functions(
                 verbose=verbose,
             ),
         }
+        MambaCache = get_mamba_cache_cls()
+        if MambaCache:
+            transformers_classes[MambaCache] = (
+                lambda verbose=verbose: register_class_serialization(
+                    MambaCache,
+                    flatten_mamba_cache,
+                    unflatten_mamba_cache,
+                    flatten_with_keys_mamba_cache,
+                    verbose=verbose,
+                )
+            )
         classes.update(transformers_classes)
 
     if patch_diffusers:
@@ -287,7 +300,12 @@ def unregister_class_serialization(cls: type, verbose: int = 0):
 
 def unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
     """Undo all registrations."""
-    cls_ensemble = {MambaCache, DynamicCache, EncoderDecoderCache} | set(undo)
+    MambaCache = get_mamba_cache_cls()
+    cls_ensemble = (
+        {DynamicCache, EncoderDecoderCache}
+        | set(undo)
+        | ({MambaCache} if MambaCache else set())
+    )
     for cls in cls_ensemble:
         if undo.get(cls.__name__, False):
             unregister_class_serialization(cls, verbose)

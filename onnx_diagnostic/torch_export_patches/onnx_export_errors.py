@@ -422,7 +422,7 @@ def torch_export_patches(
                 )
             )
 
-        if stop_if_static:
+        if patch_torch and stop_if_static:
             ShapeEnv._log_guard_remember = ShapeEnv._log_guard
 
             if verbose:

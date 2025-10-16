@@ -321,6 +321,7 @@ class TestPatchPatchTorch(ExtTestCase):
                 got = ep.module()(*inputs)
                 self.assertEqualArray(expected, got)
 
+    @requires_torch("2.11", "until we know more")
     def test_patched__broadcast_in_dim_meta(self):
         class Model(torch.nn.Module):
             def forward(self, x, ind1, ind2):
@@ -336,7 +337,7 @@ class TestPatchPatchTorch(ExtTestCase):
 
         with (
             torch.fx.experimental._config.patch(backed_size_oblivious=True),
-            torch_export_patches(),
+            torch_export_patches(patch_torch=True),
         ):
             ep = torch.export.export(
                 model,

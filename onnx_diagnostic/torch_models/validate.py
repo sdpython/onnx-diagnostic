@@ -4,7 +4,7 @@ import inspect
 import os
 import pprint
 import sys
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 import time
 import numpy as np
 import onnx
@@ -319,6 +319,7 @@ def validate_model(
     inputs2: int = 1,
     output_names: Optional[List[str]] = None,
     ort_logs: bool = False,
+    quiet_input_sets: Optional[Set[str]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -373,6 +374,8 @@ def validate_model(
         or an empty cache for example
     :param output_names: output names the onnx exporter should use
     :param ort_logs: increases onnxruntime verbosity when creating the session
+    :param quiet_input_sets: avoid raising an exception if the inputs belongs to that set
+        even if quiet is False
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -842,6 +845,7 @@ def validate_model(
             warmup=warmup,
             second_input_keys=second_input_keys,
             ort_logs=ort_logs,
+            quiet_input_sets=quiet_input_sets,
         )
         summary.update(summary_valid)
         summary["time_total_validation_onnx"] = time.perf_counter() - validation_begin
@@ -904,6 +908,7 @@ def validate_model(
                     repeat=repeat,
                     warmup=warmup,
                     second_input_keys=second_input_keys,
+                    quiet_input_sets=quiet_input_sets,
                 )
                 summary.update(summary_valid)
 
@@ -1289,6 +1294,7 @@ def validate_onnx_model(
     warmup: int = 0,
     second_input_keys: Optional[List[str]] = None,
     ort_logs: bool = False,
+    quiet_input_sets: Optional[Set[str]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Verifies that an onnx model produces the same
@@ -1308,6 +1314,7 @@ def validate_onnx_model(
         to make sure the exported model supports dynamism, the value is
         used as an increment added to the first set of inputs (added to dimensions)
     :param ort_logs: triggers the logs for onnxruntime
+    :param quiet_input_sets: avoid raising an exception for these sets of inputs
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1431,6 +1438,8 @@ def validate_onnx_model(
     keys = [("inputs", "run_expected", "")]
     if second_input_keys:
         keys.extend([(k, f"run_expected2{k[6:]}", f"2{k[6:]}") for k in second_input_keys])
+    if verbose:
+        print(f"[validate_onnx_model] -- keys={keys}")
     for k_input, k_expected, suffix in keys:
         # make_feeds
         assert k_input in data, f"Unable to find {k_input!r} in {sorted(data)}"
@@ -1455,10 +1464,12 @@ def validate_onnx_model(
 
         # run ort
         if verbose:
-            print("[validate_onnx_model] run session...")
+            print(f"[validate_onnx_model] run session on inputs 'inputs{suffix}'...")
+            if quiet_input_sets and f"inputs{suffix}" in quiet_input_sets:
+                print(f"[validate_onnx_model] quiet_input_sets={quiet_input_sets}")
 
         got = _quiet_or_not_quiet(
-            quiet,
+            quiet or (quiet_input_sets is not None and f"inputs{suffix}" in quiet_input_sets),
             _mk(f"run_onnx_ort{suffix}"),
             summary,
             data,

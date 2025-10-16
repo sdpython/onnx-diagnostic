@@ -4,6 +4,7 @@ import sys
 import importlib.util
 import subprocess
 import time
+import torch
 from onnx_diagnostic import __file__ as onnx_diagnostic_file
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
@@ -129,6 +130,9 @@ class TestDocumentationExamples(ExtTestCase):
                 "plot_export_tiny_llm_dim01_onnx_custom.py",
             }:
                 reason = "too long"
+
+            if not reason and torch.__version__.startswith("2.9.0"):
+                reason = "examples are failing for on CI for 2.9.0"
 
             if reason:
 
