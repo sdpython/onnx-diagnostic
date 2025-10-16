@@ -236,7 +236,6 @@ epkg_dictionary = {
     "onnx.helper": "https://onnx.ai/onnx/api/helper.html",
     "ONNX": "https://onnx.ai/",
     "ONNX Operators": "https://onnx.ai/onnx/operators/",
-    "onnxrt backend": "https://docs.pytorch.org/docs/stable/onnx_dynamo_onnxruntime_backend.html",
     "onnxruntime": "https://onnxruntime.ai/",
     "onnxruntime-training": "https://onnxruntime.ai/docs/get-started/training-on-device.html",
     "onnxruntime kernels": "https://onnxruntime.ai/docs/reference/operators/OperatorKernels.html",
