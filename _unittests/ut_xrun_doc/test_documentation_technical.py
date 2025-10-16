@@ -77,7 +77,7 @@ class TestDocumentationTechnical(ExtTestCase):
             if not reason and not has_dot and name in {"plot_layer_norm_discrepancies.py"}:
                 reason = "dot not installed"
 
-            if not reason and torch.__version__ == "2.9.0":
+            if not reason and torch.__version__.startswith("2.9.0"):
                 reason = "examples are failing for on CI for 2.9.0"
 
             if reason:

@@ -131,7 +131,7 @@ class TestDocumentationExamples(ExtTestCase):
             }:
                 reason = "too long"
 
-            if not reason and torch.__version__ == "2.9.0":
+            if not reason and torch.__version__.startswith("2.9.0"):
                 reason = "examples are failing for on CI for 2.9.0"
 
             if reason:
