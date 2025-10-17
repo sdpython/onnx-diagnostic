@@ -152,7 +152,7 @@ def _make_folder_name(
         els.append(sdev)
     if opset is not None:
         els.append(f"op{opset}")
-    return "/".join(els)
+    return "/".join([e for e in els if e])
 
 
 def version_summary() -> Dict[str, Union[int, float, str]]:

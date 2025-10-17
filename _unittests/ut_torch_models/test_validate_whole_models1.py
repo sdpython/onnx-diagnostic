@@ -98,7 +98,7 @@ class TestValidateWholeModels1(ExtTestCase):
     @requires_torch("2.7")
     @requires_onnxscript("0.7")
     @hide_stdout()
-    @ignore_warnings(FutureWarning)
+    @ignore_warnings((FutureWarning, RuntimeWarning))
     def test_g_validate_model_onnx_dynamo_os_ort(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
