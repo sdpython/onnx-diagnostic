@@ -95,7 +95,8 @@ def config_class_from_architecture(arch: str, exc: bool = False) -> Optional[typ
     mod_name = cls.__module__
     mod = importlib.import_module(mod_name)
     source = inspect.getsource(mod)
-    reg = re.compile("config: ([A-Za-z0-9]+)")
+    # [^O] avoids capturing Optional[Something]
+    reg = re.compile("config: ([^O][A-Za-z0-9]+)")
     fall = reg.findall(source)
     if len(fall) == 0:
         assert not exc, (

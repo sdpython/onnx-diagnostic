@@ -229,7 +229,7 @@ epkg_dictionary = {
     "Linux": "https://www.linux.org/",
     "ml_dtypes": "https://github.com/jax-ml/ml_dtypes",
     "ModelBuilder": "https://onnxruntime.ai/docs/genai/howto/build-model.html",
-    "monai": "https://monai.io/",
+    "monai": "https://github.com/Project-MONAI/MONAI",
     "numpy": "https://numpy.org/",
     "onnx": "https://onnx.ai/onnx/",
     "onnx-ir": "https://github.com/onnx/ir-py",

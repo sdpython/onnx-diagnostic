@@ -117,11 +117,21 @@ def _make_folder_name(
     drop_inputs: Optional[List[str]] = None,
     same_as_pretrained: bool = False,
     use_pretrained: bool = False,
+    task: Optional[str] = None,
 ) -> str:
     "Creates a filename unique based on the given options."
     els = [model_id.replace("/", "_")]
     if subfolder:
         els.append(subfolder.replace("/", "_"))
+    if not task:
+        els.append(task)  # type: ignore[arg-type]
+    if drop_inputs:
+        ii = "-".join(f"{s[0]}{s[-1]}" for s in drop_inputs)
+        els.append(f"I-{ii.upper()}")
+    if use_pretrained:
+        els.append("TRAINED")
+    elif same_as_pretrained:
+        els.append("SAMESIZE")
     if exporter:
         els.append(exporter)
     if optimization:
@@ -142,14 +152,7 @@ def _make_folder_name(
         els.append(sdev)
     if opset is not None:
         els.append(f"op{opset}")
-    if drop_inputs:
-        ii = "-".join(f"{s[0]}{s[-1]}" for s in drop_inputs)
-        els.append(f"I-{ii.upper()}")
-    if use_pretrained:
-        els.append("TRAINED")
-    elif same_as_pretrained:
-        els.append("SAMESIZE")
-    return "-".join(els)
+    return "/".join([e for e in els if e])
 
 
 def version_summary() -> Dict[str, Union[int, float, str]]:
@@ -476,6 +479,7 @@ def validate_model(
             drop_inputs=drop_inputs,
             use_pretrained=use_pretrained,
             same_as_pretrained=same_as_pretrained,
+            task=task,
         )
         dump_folder = os.path.join(dump_folder, folder_name)
         if not os.path.exists(dump_folder):
@@ -490,6 +494,8 @@ def validate_model(
             print(f"[validate_model] validate model id {model_id!r}, subfolder={subfolder!r}")
         else:
             print(f"[validate_model] validate model id {model_id!r}")
+        if task:
+            print(f"[validate_model] with task {task!r}")
         print(f"[validate_model] patch={patch!r}")
         if model_options:
             print(f"[validate_model] model_options={model_options!r}")
@@ -765,6 +771,10 @@ def validate_model(
             ep = data["exported_program"]
             if verbose:
                 print(f"[validate_model] -- dumps exported program in {dump_folder!r}...")
+            assert isinstance(
+                folder_name, str
+            ), f"folder_name={folder_name!r} should be a string"
+            folder_name = folder_name.replace("/", "-")
             with open(os.path.join(dump_folder, f"{folder_name}.ep"), "w") as f:
                 f.write(str(ep))
             torch.export.save(ep, os.path.join(dump_folder, f"{folder_name}.pt2"))
@@ -773,6 +783,10 @@ def validate_model(
             if verbose:
                 print("[validate_model] done (dump ep)")
         if "onnx_program" in data:
+            assert isinstance(
+                folder_name, str
+            ), f"folder_name={folder_name!r} should be a string"
+            folder_name = folder_name.replace("/", "-")
             epo = data["onnx_program"]
             if verbose:
                 print(f"[validate_model] dumps onnx program in {dump_folder!r}...")

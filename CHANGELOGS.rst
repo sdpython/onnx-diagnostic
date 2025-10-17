@@ -4,6 +4,7 @@ Change Logs
 0.7.15
 ++++++
 
+* :pr:`264`: allows to validate a model with inputs defined from another task
 * :pr:`261`: updates to support ``transformers>=5.0``
 
 0.7.14
