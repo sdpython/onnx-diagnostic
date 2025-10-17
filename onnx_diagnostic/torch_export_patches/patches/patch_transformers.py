@@ -1019,7 +1019,7 @@ def patched__compute_dynamic_ntk_parameters(
     return inv_freq, attention_factor
 
 
-def _get_rope_init_fn(self) -> Callable:
+def _get_rope_init_fn(self, layer_type=None) -> Callable:
     if hasattr(self, "rope_init_fn"):
         # transformers<=5.0
         rope_init_fn = (
@@ -1030,8 +1030,9 @@ def _get_rope_init_fn(self) -> Callable:
         )
         return rope_init_fn
 
+    rope_type = self.rope_type if layer_type is None else self.rope_type[layer_type]
     rope_init_fn = self.compute_default_rope_parameters
-    if self.rope_type != "default":
+    if rope_type != "default":
         rope_init_fn = transformers.modeling_rope_utils.ROPE_INIT_FUNCTIONS[self.rope_type]
     if rope_init_fn is transformers.modeling_rope_utils._compute_dynamic_ntk_parameters:
         return patched__compute_dynamic_ntk_parameters
@@ -1101,17 +1102,27 @@ def patched_dynamic_rope_update(rope_forward):
 
     """
 
-    def longrope_frequency_update(self, position_ids, device):
+    def longrope_frequency_update(self, position_ids, device, layer_type=None):
         # It is no use to patch the function after the model is created
         # as rope_init_fn is an attribute set to one function when the model
         # is created and when no patch is applied yet.
         # So we select the patched version here.
-        rope_init_fn = _get_rope_init_fn(self)
+        rope_init_fn = _get_rope_init_fn(self, layer_type=layer_type)
         seq_len = torch.max(position_ids) + 1
         if hasattr(self.config, "original_max_position_embeddings"):
             original_max_position_embeddings = self.config.original_max_position_embeddings
         else:
             original_max_position_embeddings = self.config.max_position_embeddings
+
+        if layer_type is None:
+            # rope_type = self.rope_type
+            original_inv_freq = self.original_inv_freq
+            prefix = ""
+        else:
+            # rope_type = self.rope_type[layer_type]
+            original_inv_freq = getattr(self, f"{layer_type}_original_inv_freq")
+            prefix = f"{layer_type}_"
+
         # At export time, seq_len is unknown.
         long_inv_freq, _ = rope_init_fn(
             self.config, device, seq_len=original_max_position_embeddings + 1
@@ -1126,13 +1137,13 @@ def patched_dynamic_rope_update(rope_forward):
             (lambda x, y: y.clone()),
             [long_inv_freq, original_inv_freq],
         )
-        self.inv_freq = inv_freq
+        setattr(self, f"{prefix}inv_freq", inv_freq)
         # if seq_len > original_max_position_embeddings:
         #    self.inv_freq = self.long_inv_freq
         # else:
         #    self.inv_freq = self.original_inv_freq
 
-    def dynamic_frequency_update(self, position_ids, device):
+    def dynamic_frequency_update(self, position_ids, device, layer_type=None):
         # constructor:
         # - self.max_seq_len_cached = config.max_position_embeddings
         # - self.original_max_seq_len = config.max_position_embeddings
@@ -1142,7 +1153,7 @@ def patched_dynamic_rope_update(rope_forward):
         # as rope_init_fn is an attribute set to one function when the model
         # is created and when no patch is applied yet.
         # So we select the patched version here.
-        rope_init_fn = _get_rope_init_fn(self)
+        rope_init_fn = _get_rope_init_fn(self, layer_type=layer_type)
 
         # This behaviour is difficult to translate.
         # The sequence always grows.
@@ -1171,6 +1182,19 @@ def patched_dynamic_rope_update(rope_forward):
             self.config, device, seq_len=seq_len
         )
 
+        if layer_type is None:
+            # rope_type = self.rope_type
+            # max_seq_len_cached = self.max_seq_len_cached
+            original_inv_freq = self.original_inv_freq
+            prefix = ""
+        else:
+            # rope_type = self.rope_type[layer_type]
+            # max_seq_len_cached = getattr(
+            #     self, f"{layer_type}_max_seq_len_cached", self.max_seq_len_cached
+            # )
+            original_inv_freq = getattr(self, f"{layer_type}_original_inv_freq")
+            prefix = f"{layer_type}_"
+
         # Second test to translate.
         # Let's keep in mind, self.max_seq_len_cached = seq_len is likely to be True.
         # But in that case the following condition is a way to restore the original cache.
@@ -1192,15 +1216,26 @@ def patched_dynamic_rope_update(rope_forward):
             (lambda x, y: y.clone()),
             [long_inv_freq, original_inv_freq],
         )
-        self.inv_freq = inv_freq
+        setattr(self, f"{prefix}inv_freq", inv_freq)
 
     @wraps(rope_forward)
-    def wrapper(self, x, position_ids):
+    def wrapper(self, x, position_ids, layer_type=None):
+        if layer_type is None:
+            if "dynamic" in self.rope_type:
+                dynamic_frequency_update(self, position_ids, device=x.device)
+            elif self.rope_type == "longrope":
+                longrope_frequency_update(self, position_ids, device=x.device)
+            return rope_forward(self, x, position_ids)
+
         if "dynamic" in self.rope_type:
-            dynamic_frequency_update(self, position_ids, device=x.device)
+            dynamic_frequency_update(
+                self, position_ids, device=x.device, layer_type=layer_type
+            )
         elif self.rope_type == "longrope":
-            longrope_frequency_update(self, position_ids, device=x.device)
-        return rope_forward(self, x, position_ids)
+            longrope_frequency_update(
+                self, position_ids, device=x.device, layer_type=layer_type
+            )
+        return rope_forward(self, x, position_ids, layer_type=layer_type)
 
     return wrapper
 
@@ -1296,12 +1331,18 @@ class common_RotaryEmbedding(torch.nn.Module):
     # @torch.no_grad()
     # PATCHED: the decorator
     @patched_dynamic_rope_update
-    def forward(self, x, position_ids):
+    def forward(self, x, position_ids, layer_type=None):
+        if layer_type is not None:
+            # transformers>=5.0
+            inv_freq = getattr(self, f"{layer_type}_inv_freq")
+            attention_scaling = getattr(self, f"{layer_type}_attention_scaling")
+        else:
+            # transformers<5.0
+            inv_freq = self.inv_freq
+            attention_scaling = self.attention_scaling
+
         inv_freq_expanded = (
-            self.inv_freq[None, :, None]
-            .float()
-            .expand(position_ids.shape[0], -1, 1)
-            .to(x.device)
+            inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1).to(x.device)
         )
         position_ids_expanded = position_ids[:, None, :].float()
 
@@ -1313,8 +1354,8 @@ class common_RotaryEmbedding(torch.nn.Module):
         with torch.autocast(device_type=device_type, enabled=False):  # Force float32
             freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2)
             emb = torch.cat((freqs, freqs), dim=-1)
-            cos = emb.cos() * self.attention_scaling
-            sin = emb.sin() * self.attention_scaling
+            cos = emb.cos() * attention_scaling
+            sin = emb.sin() * attention_scaling
 
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
 
