@@ -124,7 +124,7 @@ def _make_folder_name(
     if subfolder:
         els.append(subfolder.replace("/", "_"))
     if not task:
-        els.append(task)
+        els.append(task)  # type: ignore[arg-type]
     if drop_inputs:
         ii = "-".join(f"{s[0]}{s[-1]}" for s in drop_inputs)
         els.append(f"I-{ii.upper()}")
@@ -771,6 +771,9 @@ def validate_model(
             ep = data["exported_program"]
             if verbose:
                 print(f"[validate_model] -- dumps exported program in {dump_folder!r}...")
+            assert isinstance(
+                folder_name, str
+            ), f"folder_name={folder_name!r} should be a string"
             folder_name = folder_name.replace("/", "-")
             with open(os.path.join(dump_folder, f"{folder_name}.ep"), "w") as f:
                 f.write(str(ep))
@@ -780,6 +783,9 @@ def validate_model(
             if verbose:
                 print("[validate_model] done (dump ep)")
         if "onnx_program" in data:
+            assert isinstance(
+                folder_name, str
+            ), f"folder_name={folder_name!r} should be a string"
             folder_name = folder_name.replace("/", "-")
             epo = data["onnx_program"]
             if verbose:
