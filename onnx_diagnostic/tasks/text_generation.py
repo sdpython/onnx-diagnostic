@@ -19,6 +19,9 @@ __TASK__ = "text-generation"
 def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     # FalconMambaConfig: use_mambapy
+    if hasattr(config, "text_config"):
+        # The model is probably of mixture of models used only for text.
+        config = config.text_config
     check_hasattr(
         config,
         ("head_dim", ("hidden_size", "num_attention_heads"), "use_mambapy"),
@@ -308,6 +311,9 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
 
     If the configuration is None, the function selects typical dimensions.
     """
+    if hasattr(config, "text_config"):
+        # The model is probably of mixture of models used only for text.
+        config = config.text_config
     if config is not None:
         check_hasattr(
             config,

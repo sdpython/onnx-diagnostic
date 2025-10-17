@@ -120,14 +120,16 @@ def get_untrained_model_with_inputs(
             **(model_kwargs or {}),
         )
 
-    model, task, mkwargs, diff_config = None, None, {}, None
+    model, task_, mkwargs, diff_config = None, None, {}, None
     if use_pretrained and same_as_pretrained:
         if model_id in HANDLED_MODELS:
-            model, task, config = load_specific_model(model_id, verbose=verbose)
+            model, task_, config = load_specific_model(model_id, verbose=verbose)
 
+    if task is None:
+        task = task_
     if model is None:
         arch = architecture_from_config(config)
-        if arch is None:
+        if task is None and arch is None:
             task = task_from_id(model_id, subfolder=subfolder)
         assert task is not None or arch is not None, (
             f"Unable to determine the architecture for model {model_id!r}, "
