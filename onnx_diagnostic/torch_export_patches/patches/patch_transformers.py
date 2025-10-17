@@ -1019,6 +1019,25 @@ def patched__compute_dynamic_ntk_parameters(
     return inv_freq, attention_factor
 
 
+def _get_rope_init_fn(self) -> Callable:
+    if hasattr(self, "rope_init_fn"):
+        # transformers<=5.0
+        rope_init_fn = (
+            patched__compute_dynamic_ntk_parameters
+            if self.rope_init_fn
+            is transformers.modeling_rope_utils._compute_dynamic_ntk_parameters
+            else self.rope_init_fn
+        )
+        return rope_init_fn
+
+    rope_init_fn = self.compute_default_rope_parameters
+    if self.rope_type != "default":
+        rope_init_fn = transformers.modeling_rope_utils.ROPE_INIT_FUNCTIONS[self.rope_type]
+    if rope_init_fn is transformers.modeling_rope_utils._compute_dynamic_ntk_parameters:
+        return patched__compute_dynamic_ntk_parameters
+    return rope_init_fn
+
+
 def patched_dynamic_rope_update(rope_forward):
     """manual patch: ``[patch:transformers.modeling_rope_utils.dynamic_rope_update]``
 
@@ -1087,12 +1106,7 @@ def patched_dynamic_rope_update(rope_forward):
         # as rope_init_fn is an attribute set to one function when the model
         # is created and when no patch is applied yet.
         # So we select the patched version here.
-        rope_init_fn = (
-            patched__compute_dynamic_ntk_parameters
-            if self.rope_init_fn
-            is transformers.modeling_rope_utils._compute_dynamic_ntk_parameters
-            else self.rope_init_fn
-        )
+        rope_init_fn = _get_rope_init_fn(self)
         seq_len = torch.max(position_ids) + 1
         if hasattr(self.config, "original_max_position_embeddings"):
             original_max_position_embeddings = self.config.original_max_position_embeddings
@@ -1128,12 +1142,7 @@ def patched_dynamic_rope_update(rope_forward):
         # as rope_init_fn is an attribute set to one function when the model
         # is created and when no patch is applied yet.
         # So we select the patched version here.
-        rope_init_fn = (
-            patched__compute_dynamic_ntk_parameters
-            if self.rope_init_fn
-            is transformers.modeling_rope_utils._compute_dynamic_ntk_parameters
-            else self.rope_init_fn
-        )
+        rope_init_fn = _get_rope_init_fn(self)
 
         # This behaviour is difficult to translate.
         # The sequence always grows.
