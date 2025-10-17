@@ -123,8 +123,8 @@ def _make_folder_name(
     els = [model_id.replace("/", "_")]
     if subfolder:
         els.append(subfolder.replace("/", "_"))
-    if not task:
-        els.append(task)  # type: ignore[arg-type]
+    if task:
+        els.append(task)
     if drop_inputs:
         ii = "-".join(f"{s[0]}{s[-1]}" for s in drop_inputs)
         els.append(f"I-{ii.upper()}")
