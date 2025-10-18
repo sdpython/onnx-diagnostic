@@ -464,6 +464,11 @@ def torch_export_patches(
             except ImportError:
                 sdpa_attention = None
 
+            try:
+                import transformers.modeling_utils as modeling_utils
+            except ImportError:
+                modeling_utils = None
+
             if verbose:
                 import transformers
 
@@ -558,8 +563,11 @@ def torch_export_patches(
                         patch_transformers_list.patched_sdpa_mask_recent_torch
                     )
 
-            if sdpa_attention is not None and hasattr(  # sdpa_attention_forward
-                sdpa_attention, "sdpa_attention_forward"
+            if (  # sdpa_attention_forward
+                sdpa_attention is not None
+                and modeling_utils is not None
+                and hasattr(sdpa_attention, "sdpa_attention_forward")
+                and hasattr(modeling_utils, "AttentionInterface")
             ):
                 if verbose:
                     print(
@@ -570,10 +578,10 @@ def torch_export_patches(
                 sdpa_attention.sdpa_attention_forward = (
                     patch_transformers_list.patched_sdpa_attention_forward
                 )
-                transformers.modeling_utils.sdpa_attention_forward = (
+                modeling_utils.sdpa_attention_forward = (
                     patch_transformers_list.patched_sdpa_attention_forward
                 )
-                transformers.modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
+                modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
                     patch_transformers_list.patched_sdpa_attention_forward
                 )
 
@@ -764,14 +772,15 @@ def torch_export_patches(
                                 "in ALL_MASK_ATTENTION_FUNCTIONS"
                             )
 
-                if sdpa_attention is not None and hasattr(  # sdpa_attention_forward
-                    sdpa_attention, "sdpa_attention_forward"
+                if (  # sdpa_attention_forward
+                    sdpa_attention is not None
+                    and modeling_utils is not None
+                    and hasattr(sdpa_attention, "sdpa_attention_forward")
+                    and hasattr(modeling_utils, "AttentionInterface")
                 ):
                     sdpa_attention.sdpa_attention_forward = f_sdpa_attention_forward
-                    transformers.modeling_utils.sdpa_attention_forward = (
-                        f_sdpa_attention_forward
-                    )
-                    transformers.modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
+                    modeling_utils.sdpa_attention_forward = f_sdpa_attention_forward
+                    modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
                         f_sdpa_attention_forward
                     )
                     if verbose:
