@@ -567,6 +567,7 @@ def torch_export_patches(
                 sdpa_attention is not None
                 and modeling_utils is not None
                 and hasattr(sdpa_attention, "sdpa_attention_forward")
+                and hasattr(sdpa_attention, "use_gqa_in_sdpa")
                 and hasattr(modeling_utils, "AttentionInterface")
             ):
                 if verbose:
@@ -776,6 +777,7 @@ def torch_export_patches(
                     sdpa_attention is not None
                     and modeling_utils is not None
                     and hasattr(sdpa_attention, "sdpa_attention_forward")
+                    and hasattr(sdpa_attention, "use_gqa_in_sdpa")
                     and hasattr(modeling_utils, "AttentionInterface")
                 ):
                     sdpa_attention.sdpa_attention_forward = f_sdpa_attention_forward
