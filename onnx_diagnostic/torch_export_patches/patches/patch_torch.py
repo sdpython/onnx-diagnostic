@@ -982,18 +982,97 @@ def patched__broadcast_in_dim_meta(
             elif guard_or_false(a.shape[original_idx] != 1):
                 new_strides.append(a.stride()[original_idx])
             else:
+                # This checks generates the following issue:
+                # non-broadcasting semantics require s3 == Max(s10, s3), False,
+                # guard_or_false(a.shape[idx]==1)=False, a.stride()=(1, 2),
+                # idx=1, a.shape=torch.Size([2, s3]), shape=[2, Max(s10, s3)],
+                # original_idx=1
                 torch._check(
                     a.shape[original_idx] == shape[idx],
                     lambda idx=idx, original_idx=original_idx: (
                         f"non-broadcasting semantics require "
                         f"{a.shape[original_idx]} == {shape[idx]}, "
                         f"{guard_or_false(a.shape[idx] != 1)}, "
-                        f"guard_or_false(a.shape[idx] == 1)="
+                        f"guard_or_false(a.shape[idx]==1)="
                         f"{guard_or_false(a.shape[idx] == 1)}, "
-                        f"a.stride()={a.stride()}, idx={idx}, "
-                        f"original_idx={original_idx}"
+                        f"a.stride()={a.stride()}, idx={idx}, a.shape={a.shape}, "
+                        f"shape={shape}, original_idx={original_idx}"
                     ),
                 )
+                new_strides.append(a.stride()[original_idx])
+            original_idx = original_idx + 1
+        else:
+            if guard_or_true(shape[idx] != 1):
+                # consistent with previous use of guard_size_oblivious
+                new_strides.append(0)
+            elif original_idx == a.ndim:
+                new_strides.append(1)
+            else:
+                new_strides.append(a.stride()[original_idx] * a.size()[original_idx])
+
+    return a.as_strided(shape, new_strides, a.storage_offset())
+
+
+def patched__broadcast_in_dim_meta_level_2(
+    a: torch._prims_common.TensorLikeType,
+    shape: torch._prims_common.ShapeType,
+    broadcast_dimensions: Sequence[int],
+):
+    """Patches ``torch._prims._broadcast_in_dim_meta``."""
+    from torch.fx.experimental.symbolic_shapes import (
+        guard_or_false,
+        guard_or_true,
+        sym_or,
+    )
+
+    # Type checks
+    assert isinstance(a, torch._prims_common.TensorLike)
+    assert isinstance(shape, Sequence)
+    assert isinstance(broadcast_dimensions, Sequence)
+
+    # every dimension must be accounted for
+    assert a.ndim == len(broadcast_dimensions)
+
+    # broadcast shape must have weakly more dimensions
+    assert len(shape) >= a.ndim
+
+    # broadcast_dimensions must be an ascending sequence
+    # (no relative reordering of dims) of integers and
+    # each dimension must be within the new shape
+    def _greater_than_reduce(acc, x):
+        assert isinstance(x, (int, torch.export.Dim)), f"unexpected type {type(x)} for x"
+        assert x > acc
+        assert x < len(shape)
+
+        return x
+
+    reduce(_greater_than_reduce, broadcast_dimensions, -1)
+
+    # shape must be broadcastable to
+    for idx, new_idx in enumerate(broadcast_dimensions):
+        torch._check(
+            sym_or(a.shape[idx] == 1, shape[new_idx] == a.shape[idx]),
+            lambda idx=idx, new_idx=new_idx: (
+                f"{a.shape[idx]} must be broadcastable to {shape[new_idx]}"
+            ),
+        )
+
+    new_strides = []
+    original_idx = 0
+    for idx in range(len(shape)):
+        if idx in broadcast_dimensions:
+            # Assigns a stride of zero to dimensions
+            # which were actually broadcast
+            if guard_or_false(a.shape[original_idx] == 1):
+                if guard_or_false(a.shape[original_idx] == shape[idx]):
+                    new_strides.append(a.stride()[original_idx])
+                else:
+                    new_strides.append(0)
+            # PATCHED: disabled this check
+            elif guard_or_false(a.shape[original_idx] != 1):
+                new_strides.append(a.stride()[original_idx])
+            else:
+                # PATCHED: torch._check was removed
                 new_strides.append(a.stride()[original_idx])
             original_idx = original_idx + 1
         else:

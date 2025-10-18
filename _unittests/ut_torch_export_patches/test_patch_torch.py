@@ -441,6 +441,56 @@ class TestPatchPatchTorch(ExtTestCase):
             got = ep.module()(**torch_deepcopy(inputs))
             self.assertEqualArrayAny(expected, got)
 
+    @requires_torch("2.9", "Eq(s3, Max(s10, s3)) is inconsistent!")
+    def test_patch_tiny_llm_dim_meta_level_1(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, ind1, ind2):
+                return x[ind1, ind2]
+
+        inputs = (
+            torch.randn(2, 1024),
+            torch.tensor([[0, 1]], dtype=torch.int64).T,
+            torch.arange(1024, dtype=torch.int64),
+        )
+        model = Model()
+
+        with (
+            torch_export_patches(patch_torch=1),
+            torch.fx.experimental._config.patch(backed_size_oblivious=True),
+        ):
+            self.assertRaise(
+                lambda: torch.export.export(
+                    model,
+                    inputs,
+                    dynamic_shapes=use_dyn_not_str(({0: "A", 1: "B"}, {1: "D"}, {0: "E"})),
+                ),
+                RuntimeError,
+            )
+
+    def test_patch_tiny_llm_dim_meta_level_2(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, ind1, ind2):
+                return x[ind1, ind2]
+
+        inputs = (
+            torch.randn(2, 1024),
+            torch.tensor([[0, 1]], dtype=torch.int64).T,
+            torch.arange(1024, dtype=torch.int64),
+        )
+        model = Model()
+        expected = model(*inputs)
+
+        with (
+            torch_export_patches(patch_torch=2),
+            torch.fx.experimental._config.patch(backed_size_oblivious=True),
+        ):
+            ep = torch.export.export(
+                model,
+                inputs,
+                dynamic_shapes=use_dyn_not_str(({0: "A", 1: "B"}, {1: "D"}, {0: "E"})),
+            )
+        self.assertEqualArray(expected, ep.module()(*inputs))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
