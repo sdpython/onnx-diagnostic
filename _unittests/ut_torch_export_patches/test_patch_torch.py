@@ -441,6 +441,7 @@ class TestPatchPatchTorch(ExtTestCase):
             got = ep.module()(**torch_deepcopy(inputs))
             self.assertEqualArrayAny(expected, got)
 
+    @requires_torch("2.9", "Eq(s3, Max(s10, s3)) is inconsistent!")
     def test_patch_tiny_llm_dim_meta_level_1(self):
         class Model(torch.nn.Module):
             def forward(self, x, ind1, ind2):
