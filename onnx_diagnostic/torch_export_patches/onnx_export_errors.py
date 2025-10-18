@@ -459,6 +459,11 @@ def torch_export_patches(
             except ImportError:
                 masking_utils = None
 
+            try:
+                import transformers.integrations.sdpa_attention as sdpa_attention
+            except ImportError:
+                sdpa_attention = None
+
             if verbose:
                 import transformers
 
@@ -470,7 +475,7 @@ def torch_export_patches(
                 patch_transformers_list, verbose=verbose
             )
 
-            if (
+            if (  # vmap
                 masking_utils
                 and patch_transformers_list.patch_masking_utils
                 and hasattr(masking_utils, "_vmap_for_bhqkv")
@@ -505,7 +510,7 @@ def torch_export_patches(
                 else:
                     f_transformers_sdpa_mask = None
 
-            if (
+            if (  # eager_mask
                 masking_utils
                 and patch_transformers_list.patch_masking_utils
                 and hasattr(masking_utils, "eager_mask")
@@ -532,7 +537,7 @@ def torch_export_patches(
                         patch_transformers_list.patched_eager_mask
                     )
 
-            if (
+            if (  # sdpa_mask
                 masking_utils
                 and patch_transformers_list.patch_masking_utils
                 and hasattr(masking_utils, "sdpa_mask")
@@ -552,6 +557,25 @@ def torch_export_patches(
                     masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] = (
                         patch_transformers_list.patched_sdpa_mask_recent_torch
                     )
+
+            if sdpa_attention is not None and hasattr(  # sdpa_attention_forward
+                sdpa_attention, "sdpa_attention_forward"
+            ):
+                if verbose:
+                    print(
+                        "[torch_export_patches] patches "
+                        "transformers.integrations.sdpa_attention.sdpa_attention_forward"
+                    )
+                f_sdpa_attention_forward = sdpa_attention.sdpa_attention_forward
+                sdpa_attention.sdpa_attention_forward = (
+                    patch_transformers_list.patched_sdpa_attention_forward
+                )
+                transformers.modeling_utils.sdpa_attention_forward = (
+                    patch_transformers_list.patched_sdpa_attention_forward
+                )
+                transformers.modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
+                    patch_transformers_list.patched_sdpa_attention_forward
+                )
 
         if custom_patches:
             if verbose:
@@ -662,7 +686,7 @@ def torch_export_patches(
                     patch_transformers_list, revert_patches_info, verbose=verbose
                 )
 
-                if (
+                if (  # vmap
                     masking_utils
                     and patch_transformers_list.patch_masking_utils
                     and hasattr(masking_utils, "_vmap_for_bhqkv")
@@ -693,7 +717,7 @@ def torch_export_patches(
                                 "transformers.masking_utils.sdpa_mask"
                             )
 
-                if (
+                if (  # eager_mask
                     masking_utils
                     and patch_transformers_list.patch_masking_utils
                     and hasattr(masking_utils, "eager_mask")
@@ -720,7 +744,7 @@ def torch_export_patches(
                                 "in ALL_MASK_ATTENTION_FUNCTIONS"
                             )
 
-                if (
+                if (  # sdpa_mask
                     masking_utils
                     and patch_transformers_list.patch_masking_utils
                     and hasattr(masking_utils, "sdpa_mask")
@@ -739,6 +763,23 @@ def torch_export_patches(
                                 "transformers.masking_utils.sdpa_mask "
                                 "in ALL_MASK_ATTENTION_FUNCTIONS"
                             )
+
+                if sdpa_attention is not None and hasattr(  # sdpa_attention_forward
+                    sdpa_attention, "sdpa_attention_forward"
+                ):
+                    sdpa_attention.sdpa_attention_forward = f_sdpa_attention_forward
+                    transformers.modeling_utils.sdpa_attention_forward = (
+                        f_sdpa_attention_forward
+                    )
+                    transformers.modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
+                        f_sdpa_attention_forward
+                    )
+                    if verbose:
+                        print(
+                            "[torch_export_patches] restored "
+                            "transformers.integrations.sdpa_attention."
+                            "sdpa_attention_forward"
+                        )
 
             ########
             # caches
