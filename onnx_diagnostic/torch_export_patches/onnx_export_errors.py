@@ -2,7 +2,7 @@ import functools
 import importlib
 import contextlib
 import re
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from .onnx_export_serialization import (
     register_cache_serialization,
     unregister_cache_serialization,
@@ -160,7 +160,7 @@ def register_additional_serialization_functions(
 @contextlib.contextmanager
 def torch_export_patches(
     patch_sympy: bool = True,
-    patch_torch: bool = True,
+    patch_torch: Union[bool, int] = True,
     patch_transformers: bool = False,
     patch_diffusers: bool = False,
     catch_constraints: bool = True,
@@ -349,6 +349,7 @@ def torch_export_patches(
                 _catch_produce_guards_and_solve_constraints,
                 patch__check_input_constraints_for_graph,
                 patched__broadcast_in_dim_meta,
+                patched__broadcast_in_dim_meta_level_2,
                 patched__maybe_broadcast,
                 patched_ShapeEnv,
             )
@@ -390,8 +391,13 @@ def torch_export_patches(
             # torch._prims._broadcast_in_dim_meta
             f_broadcast_in_dim = torch._prims.broadcast_in_dim
             f__broadcast_in_dim_meta = torch._prims._broadcast_in_dim_meta
-            torch._prims._broadcast_in_dim_meta = patched__broadcast_in_dim_meta
-            torch._prims.broadcast_in_dim = patched__broadcast_in_dim_meta
+            _patched_dim_f = (
+                patched__broadcast_in_dim_meta_level_2
+                if patch_torch == 2
+                else patched__broadcast_in_dim_meta
+            )
+            torch._prims._broadcast_in_dim_meta = _patched_dim_f
+            torch._prims.broadcast_in_dim = _patched_dim_f
 
             # torch._refs._maybe_broadcast
             f__maybe_broadcast = torch._refs._maybe_broadcast
