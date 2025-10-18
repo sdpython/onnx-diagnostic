@@ -4,6 +4,7 @@ Change Logs
 0.7.16
 ++++++
 
+* :pr:`267`: patches ``sdpa_attention_forward`` because of a control flow (``transformers>=5.0``)
 * :pr:`266`: makes ``patch_torch`` an integer in ``torch_export_patches`` to enable more patches 
 
 0.7.15

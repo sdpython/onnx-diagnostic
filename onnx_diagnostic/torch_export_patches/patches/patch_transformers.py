@@ -1276,6 +1276,56 @@ def common_eager_attention_forward(
     return attn_output, attn_weights
 
 
+def patched_sdpa_attention_forward(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    dropout: float = 0.0,
+    scaling: Optional[float] = None,
+    is_causal: Optional[bool] = None,
+    **kwargs,
+) -> tuple[torch.Tensor, None]:
+    """[patch:transformers.integrations.sdpa_attention.sdpa_attention_forward]"""
+    assert not kwargs.get("output_attentions", False), (
+        "`sdpa` attention does not support `output_attentions=True`."
+        " Please set your attention to `eager` if you want any of these features."
+    )
+    sdpa_kwargs = {}
+    if hasattr(module, "num_key_value_groups"):
+        if not transformers.integrations.sdpa_attention.use_gqa_in_sdpa(attention_mask, key):
+            key = transformers.integrations.sdpa_attention.repeat_kv(
+                key, module.num_key_value_groups
+            )
+            value = transformers.integrations.sdpa_attention.repeat_kv(
+                value, module.num_key_value_groups
+            )
+        else:
+            sdpa_kwargs = {"enable_gqa": True}
+
+    if attention_mask is not None and attention_mask.ndim == 4:
+        attention_mask = attention_mask[:, :, :, : key.shape[-2]]
+
+    is_causal = is_causal if is_causal is not None else getattr(module, "is_causal", True)
+    # PATCHED: remove the test query.shape[2] > 1
+    # is_causal = query.shape[2] > 1 and attention_mask is None and is_causal
+    is_causal = attention_mask is None and is_causal
+
+    attn_output = torch.nn.functional.scaled_dot_product_attention(
+        query,
+        key,
+        value,
+        attn_mask=attention_mask,
+        dropout_p=dropout,
+        scale=scaling,
+        is_causal=is_causal,
+        **sdpa_kwargs,
+    )
+    attn_output = attn_output.transpose(1, 2).contiguous()
+    return attn_output, None
+
+
 def patched_model_bart_eager_attention_forward(
     module: torch.nn.Module,
     query: torch.Tensor,
