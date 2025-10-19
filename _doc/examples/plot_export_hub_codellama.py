@@ -44,7 +44,7 @@ print("info", get_model_info(model_id))
 # %%
 # The configuration.
 
-print("config", get_pretrained_config(model_id))
+print("config", get_pretrained_config(model_id, use_only_preinstalled=unit_test_going()))
 
 # %%
 # The task determines the set of inputs which needs
