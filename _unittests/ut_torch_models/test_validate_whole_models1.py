@@ -236,7 +236,7 @@ class TestValidateWholeModels1(ExtTestCase):
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
 
-    @requires_torch("2.9")
+    @requires_torch("2.9.99")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.55")
