@@ -17,7 +17,7 @@ class TestCodeSample(ExtTestCase):
     @requires_transformers("4.53")
     @requires_torch("2.7.99")
     @requires_experimental()
-    # @hide_stdout()
+    @hide_stdout()
     def test_code_sample_tiny_llm(self):
         code = code_sample(
             "arnir0/Tiny-LLM",

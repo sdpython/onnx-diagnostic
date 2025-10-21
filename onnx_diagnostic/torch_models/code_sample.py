@@ -259,9 +259,18 @@ def code_sample(
         update["dynamic_shapes"] = ds
         data.update(update)
 
+    update = {}
     for k in data:
         if k.startswith("inputs"):
-            update[k] = to_any(data[]) to_any
+            v = data[k]
+            if dtype:
+                update[k] = v = to_any(
+                    v, getattr(torch, dtype) if isinstance(dtype, str) else dtype
+                )
+            if device:
+                update[k] = v = to_any(v, device)
+    if update:
+        data.update(update)
 
     args = [f"{model_id!r}"]
     if subfolder:
