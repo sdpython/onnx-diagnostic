@@ -557,7 +557,13 @@ def get_parser_validate() -> ArgumentParser:
         "--quiet-input-sets",
         default="",
         help="Avoids raising an exception when an input sets does not work with "
-        "the exported model, example: --quiet-input-sets=inputs,inputs22",
+        "the exported model.\nExample: --quiet-input-sets=inputs,inputs22",
+    )
+    parser.add_argument(
+        "--sample-code",
+        default="",
+        help="Generates a sample code to export a model without "
+        "without this package.\nExample --sample-code=export_sample",
     )
     return parser
 
@@ -624,6 +630,7 @@ def _cmd_validate(argv: List[Any]):
             output_names=(
                 None if len(args.outnames.strip()) < 2 else args.outnames.strip().split(",")
             ),
+            sample_code=args.sample_code,
         )
         print("")
         print("-- summary --")

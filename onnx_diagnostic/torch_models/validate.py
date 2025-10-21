@@ -323,6 +323,7 @@ def validate_model(
     output_names: Optional[List[str]] = None,
     ort_logs: bool = False,
     quiet_input_sets: Optional[Set[str]] = None,
+    sample_code: Optional[str] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -379,6 +380,8 @@ def validate_model(
     :param ort_logs: increases onnxruntime verbosity when creating the session
     :param quiet_input_sets: avoid raising an exception if the inputs belongs to that set
         even if quiet is False
+    :param sample_code: if specified, the function generates a code
+        which exports this model id without this package.
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
