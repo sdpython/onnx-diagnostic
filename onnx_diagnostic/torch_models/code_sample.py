@@ -1,6 +1,12 @@
+import os
 import textwrap
 import torch
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
+from ..helpers import flatten_object
+from ..helpers.torch_helper import to_any
+from .hghub.model_inputs import _preprocess_model_id
+from .hghub import get_untrained_model_with_inputs
+from .validate import filter_inputs, make_patch_kwargs
 
 
 CODE_SAMPLES = {
@@ -54,6 +60,94 @@ CODE_SAMPLES = {
     """
     ),
 }
+
+
+def make_code_for_inputs(inputs: Dict[str, torch.Tensor]) -> str:
+    """
+    Creates a code to generate random inputs.
+
+    :param inputs: dictionary
+    :return: code
+    """
+    codes = []
+    for k, v in inputs.items():
+        if isinstance(v, (int, bool, float)):
+            code = f"{k}={v}"
+        elif isinstance(v, torch.Tensor):
+            shape = tuple(map(int, v.shape))
+            if v.dtype in (torch.int32, torch.int64):
+                code = f"{k}=torch.randint({v.max()}, size={shape}, dtype={v.dtype})"
+            elif v.dtype in (torch.float32, torch.float16, torch.bfloat16):
+                code = f"{k}=torch.rand({shape}, dtype={v.dtype})"
+            else:
+                raise ValueError(f"Unexpeted dtype = {v.dtype} for k={k!r}")
+        elif v.__class__.__name__ == "DynamicCache":
+            obj = flatten_object(v)
+            cc = [f"torch.rand({tuple(map(int,_.shape))}, dtype={_.dtype})" for _ in obj]
+            va = [f"({a},{b})" for a, b in zip(cc[: len(cc) // 2], cc[len(cc) // 2 :])]
+            vas = ", ".join(va)
+            code = f"{k}=make_dynamic_cache([{vas}])"
+        else:
+            raise ValueError(f"Unexpected type {type(v)} for k={k!r}")
+        codes.append(code)
+    st = ", ".join(codes)
+    return f"dict({st})"
+
+
+def make_export_code(
+    exporter: str,
+    optimization: Optional[str] = None,
+    patch_kwargs: Optional[Dict[str, Any]] = None,
+    stop_if_static: int = 0,
+    dump_folder: Optional[str] = None,
+    opset: int = 18,
+    dynamic_shapes: Optional[Dict[str, Any]] = None,
+    output_names: Optional[List[str]] = None,
+    verbose: int = 0,
+) -> Tuple[str, str]:
+    args = [f"dynamic_shapes={dynamic_shapes}"]
+    if output_names:
+        args.append(f"output_names={output_names}")
+    if dump_folder:
+        filename = os.path.join(dump_folder, "model.onnx")
+    if exporter == "custom":
+        args.append(f"target_opset={opset}")
+        if optimization:
+            args.append(f"options=OptimizationOptions(pattern={optimization!r})")
+            args.append(f"large_model=True, filename={filename!r}")
+        sargs = ", ".join(args)
+        imports = [
+            "from experimental_experiment.torch_interpreter import to_onnx",
+            "from experimental_experiment.xbuilder import OptimizationOptions",
+        ]
+        code = [f"onx = to_onnx(model, inputs, {sargs})"]
+    elif exporter == "onnx-dynamo":
+        args.append(f"opset={opset}")
+        if optimization:
+            args.append("options=OptimizationOptions(pattern={optimization!r})")
+        sargs = ", ".join(args)
+        imports = []
+        code = [f"epo = torch.onnx.export(model, (), inputs, {sargs})"]
+        if optimization:
+            imports.append("import onnxscript")
+            code.extend(
+                [
+                    "ir_model = epo.to_ir()",
+                    "onnxscript.optimizer.optimize_ir(ir_model)",
+                    "ir_optimized = ort_fusions.optimize_for_ort(ir_model)",
+                    "epo.model = ir_optimized",
+                ]
+            )
+        if dump_folder:
+            code.append("epo.save({filename!r}")
+    else:
+        raise ValueError(f"Unexpected exporter {exporter!r}")
+    if not patch_kwargs:
+        return "\n".join(imports), "\n".join(code)
+
+    imports.append("from onnx_diagnostic.torch_export_patches import torch_export_patches")
+    code = [f"with torch_export_patches(**{patch_kwargs}):", *["    " + _ for _ in code]]
+    return "\n".join(imports), "\n".join(code)
 
 
 def code_sample(
@@ -131,6 +225,44 @@ def code_sample(
 
         print(code_sample("arnir0/Tiny-LLM"))
     """
+    model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
+        model_id,
+        subfolder,
+        same_as_pretrained=same_as_pretrained,
+        use_pretrained=use_pretrained,
+    )
+    patch_kwargs = make_patch_kwargs(patch=patch, rewrite=rewrite)
+
+    iop = input_options or {}
+    mop = model_options or {}
+    data = get_untrained_model_with_inputs(
+        model_id,
+        verbose=verbose,
+        task=task,
+        use_pretrained=use_pretrained,
+        same_as_pretrained=same_as_pretrained,
+        inputs_kwargs=iop,
+        model_kwargs=mop,
+        subfolder=subfolder,
+        add_second_input=False,
+    )
+    if drop_inputs:
+        update = {}
+        for k in data:
+            if k.startswith("inputs"):
+                update[k], ds = filter_inputs(
+                    data[k],
+                    drop_names=drop_inputs,
+                    model=data["model"],
+                    dynamic_shapes=data["dynamic_shapes"],
+                )
+        update["dynamic_shapes"] = ds
+        data.update(update)
+
+    for k in data:
+        if k.startswith("inputs"):
+            update[k] = to_any(data[]) to_any
+
     args = [f"{model_id!r}"]
     if subfolder:
         args.append(f"subfolder={subfolder!r}")
@@ -147,14 +279,34 @@ def code_sample(
     if model_options:
         args.append(f"model_options={model_options!r}")
     model_args = ", ".join(args)
+    imports, exporter_code = make_export_code(
+        exporter=exporter,
+        patch_kwargs=patch_kwargs,
+        verbose=verbose,
+        optimization=optimization,
+        stop_if_static=stop_if_static,
+        dump_folder=dump_folder,
+        opset=opset,
+    )
+    input_code = make_code_for_inputs(data["inputs"])
+    cache_import = (
+        "from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache"
+        if "dynamic_cache" in input_code
+        else ""
+    )
+
     pieces = [
         CODE_SAMPLES["imports"],
+        imports,
+        cache_import,
         CODE_SAMPLES["get_model_with_inputs"],
         textwrap.dedent(
             f"""
             model = get_model_with_inputs({model_args})
                         """
         ),
+        f"inputs = {input_code}",
+        exporter_code,
     ]
     code = "\n".join(pieces)
     try:

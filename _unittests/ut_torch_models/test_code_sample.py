@@ -1,6 +1,7 @@
 import unittest
 import subprocess
 import sys
+import torch
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     hide_stdout,
@@ -8,7 +9,8 @@ from onnx_diagnostic.ext_test_case import (
     requires_experimental,
     requires_transformers,
 )
-from onnx_diagnostic.torch_models.code_sample import code_sample
+from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
+from onnx_diagnostic.torch_models.code_sample import code_sample, make_code_for_inputs
 
 
 class TestCodeSample(ExtTestCase):
@@ -24,7 +26,7 @@ class TestCodeSample(ExtTestCase):
             patch=True,
             dump_folder="dump_test/validate_tiny_llm",
             dtype="float16",
-            device="cuda",
+            device="cpu",
         )
         filename = self.get_dump_file("test_code_sample_tiny_llm.py")
         with open(filename, "w") as f:
@@ -35,6 +37,37 @@ class TestCodeSample(ExtTestCase):
         _out, err = res
         st = err.decode("ascii", errors="ignore")
         self.assertNotIn("Traceback", st)
+
+    def test_make_code_for_inputs(self):
+        values = [
+            ("dict(a=True)", dict(a=True)),
+            ("dict(a=1)", dict(a=1)),
+            (
+                "dict(a=torch.randint(3, size=(2,), dtype=torch.int64))",
+                dict(a=torch.tensor([2, 3], dtype=torch.int64)),
+            ),
+            (
+                "dict(a=torch.rand((2,), dtype=torch.float16))",
+                dict(a=torch.tensor([2, 3], dtype=torch.float16)),
+            ),
+        ]
+        for res, inputs in values:
+            self.assertEqual(res, make_code_for_inputs(inputs))
+
+        res = make_code_for_inputs(
+            dict(
+                cc=make_dynamic_cache(
+                    [(torch.randn(2, 2, 2, 2), torch.randn(2, 2, 2, 2)) for i in range(2)]
+                )
+            )
+        )
+        self.assertEqual(
+            "dict(cc=make_dynamic_cache([(torch.rand((2, 2, 2, 2), "
+            "dtype=torch.float32),torch.rand((2, 2, 2, 2), dtype=torch.float32)), "
+            "(torch.rand((2, 2, 2, 2), dtype=torch.float32),"
+            "torch.rand((2, 2, 2, 2), dtype=torch.float32))]))",
+            res,
+        )
 
 
 if __name__ == "__main__":

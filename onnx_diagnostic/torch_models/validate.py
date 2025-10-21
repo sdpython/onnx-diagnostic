@@ -293,6 +293,33 @@ def shrink_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return new_cfg
 
 
+def make_patch_kwargs(
+    patch: Union[bool, str, Dict[str, bool]] = False,
+    rewrite: bool = False,
+) -> Dict[str, Any]:
+    """Creates patch arguments."""
+    default_patch = dict(patch_transformers=True, patch_diffusers=True, patch=True)
+    if isinstance(patch, bool):
+        patch_kwargs = default_patch if patch else dict(patch=False)
+    elif isinstance(patch, str):
+        patch_kwargs = {"patch": True, **{p: True for p in patch.split(",")}}  # noqa: C420
+    else:
+        assert isinstance(patch, dict), f"Unable to interpret patch={patch!r}"
+        patch_kwargs = patch.copy()
+        if "patch" not in patch_kwargs:
+            if any(patch_kwargs.values()):
+                patch_kwargs["patch"] = True
+        elif len(patch) == 1 and patch.get("patch", False):
+            patch_kwargs.update(default_patch)
+
+    assert not rewrite or patch_kwargs.get("patch", False), (
+        f"rewrite={rewrite}, patch={patch}, patch_kwargs={patch_kwargs} "
+        f"patch must be True to enable rewriting, "
+        f"if --patch=0 was specified on the command line, rewrites are disabled."
+    )
+    return patch_kwargs
+
+
 def validate_model(
     model_id: str,
     task: Optional[str] = None,
@@ -423,25 +450,8 @@ def validate_model(
         use_pretrained=use_pretrained,
     )
     time_preprocess_model_id = time.perf_counter() - main_validation_begin
-    default_patch = dict(patch_transformers=True, patch_diffusers=True, patch=True)
-    if isinstance(patch, bool):
-        patch_kwargs = default_patch if patch else dict(patch=False)
-    elif isinstance(patch, str):
-        patch_kwargs = {"patch": True, **{p: True for p in patch.split(",")}}  # noqa: C420
-    else:
-        assert isinstance(patch, dict), f"Unable to interpret patch={patch!r}"
-        patch_kwargs = patch.copy()
-        if "patch" not in patch_kwargs:
-            if any(patch_kwargs.values()):
-                patch_kwargs["patch"] = True
-        elif len(patch) == 1 and patch.get("patch", False):
-            patch_kwargs.update(default_patch)
+    patch_kwargs = make_patch_kwargs(patch=patch, rewrite=rewrite)
 
-    assert not rewrite or patch_kwargs.get("patch", False), (
-        f"rewrite={rewrite}, patch={patch}, patch_kwargs={patch_kwargs} "
-        f"patch must be True to enable rewriting, "
-        f"if --patch=0 was specified on the command line, rewrites are disabled."
-    )
     summary = version_summary()
     summary.update(
         dict(
