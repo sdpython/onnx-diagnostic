@@ -132,7 +132,6 @@ def make_export_code(
         if opset:
             args.append(f"opset_version={opset}")
         sargs = ", ".join(args)
-        imports = []
         code.extend([f"epo = torch.onnx.export(model, args=(), kwargs=inputs, {sargs})"])
         if optimization:
             imports.append("import onnxscript")

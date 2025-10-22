@@ -5,6 +5,7 @@ Change Logs
 ++++++
 
 * :pr:`270`: add export sample code to export a specific model id with the appropriate inputs
+* :pr:`269`: adds one unit test to track a patch fixing broadcast output shape
 * :pr:`267`: patches ``sdpa_attention_forward`` because of a control flow (``transformers>=5.0``)
 * :pr:`266`: makes ``patch_torch`` an integer in ``torch_export_patches`` to enable more patches 
 
