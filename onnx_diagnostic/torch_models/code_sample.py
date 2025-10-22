@@ -100,7 +100,7 @@ def make_export_code(
     patch_kwargs: Optional[Dict[str, Any]] = None,
     stop_if_static: int = 0,
     dump_folder: Optional[str] = None,
-    opset: int = 18,
+    opset: Optional[int] = None,
     dynamic_shapes: Optional[Dict[str, Any]] = None,
     output_names: Optional[List[str]] = None,
     verbose: int = 0,
@@ -111,9 +111,10 @@ def make_export_code(
     if dump_folder:
         filename = os.path.join(dump_folder, "model.onnx")
     if exporter == "custom":
-        args.append(f"target_opset={opset}")
+        if opset:
+            args.append(f"target_opset={opset}")
         if optimization:
-            args.append(f"options=OptimizationOptions(pattern={optimization!r})")
+            args.append(f"options=OptimizationOptions(patterns={optimization!r})")
             args.append(f"large_model=True, filename={filename!r}")
         sargs = ", ".join(args)
         imports = [
@@ -122,7 +123,8 @@ def make_export_code(
         ]
         code = [f"onx = to_onnx(model, inputs, {sargs})"]
     elif exporter == "onnx-dynamo":
-        args.append(f"opset_version={opset}")
+        if opset:
+            args.append(f"opset_version={opset}")
         sargs = ", ".join(args)
         imports = []
         code = [f"epo = torch.onnx.export(model, args=(), kwargs=inputs, {sargs})"]
@@ -143,6 +145,8 @@ def make_export_code(
         return "\n".join(imports), "\n".join(code)
 
     imports.append("from onnx_diagnostic.torch_export_patches import torch_export_patches")
+    if stop_if_static:
+        patch_kwargs["patch_kwargs"] = stop_if_static
     sargs = ", ".join(f"{k}={v}" for k, v in patch_kwargs.items())
     code = [f"with torch_export_patches({sargs}):", *["    " + _ for _ in code]]
     return "\n".join(imports), "\n".join(code)
@@ -293,15 +297,19 @@ def code_sample(
     if model_options:
         args.append(f"model_options={model_options!r}")
     model_args = ", ".join(args)
-    imports, exporter_code = make_export_code(
-        exporter=exporter,
-        patch_kwargs=patch_kwargs,
-        verbose=verbose,
-        optimization=optimization,
-        stop_if_static=stop_if_static,
-        dump_folder=dump_folder,
-        opset=opset,
-        dynamic_shapes=data["dynamic_shapes"],
+    imports, exporter_code = (
+        make_export_code(
+            exporter=exporter,
+            patch_kwargs=patch_kwargs,
+            verbose=verbose,
+            optimization=optimization,
+            stop_if_static=stop_if_static,
+            dump_folder=dump_folder,
+            opset=opset,
+            dynamic_shapes=data["dynamic_shapes"],
+        )
+        if exporter is not None
+        else ([], [])
     )
     input_code = make_code_for_inputs(data["inputs"])
     cache_import = (
