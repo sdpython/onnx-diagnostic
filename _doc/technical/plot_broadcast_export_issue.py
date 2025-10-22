@@ -2,7 +2,7 @@
 Dynamic Shapes and Broadcasting
 ===============================
 
-:func:`torch.exoprt.export` makes strict assumption on dynamic shapes
+:func:`torch.export.export` makes strict assumption on dynamic shapes
 to the generic case. Let's consider two tensors with only one dimension.
 ``x * y`` allows four configurations:
 
@@ -23,7 +23,7 @@ from torch.fx.experimental.symbolic_shapes import ShapeEnv
 from torch._subclasses.fake_tensor import FakeTensorMode
 from torch.fx.passes.fake_tensor_prop import FakeTensorProp
 from onnx_diagnostic.torch_export_patches import torch_export_patches
-from experimental_experiment.torch_interpreter.tracing import CustomTracer
+from torch.fx import Tracer
 
 
 class Model(torch.nn.Module):
@@ -41,7 +41,7 @@ ep = torch.export.export(
 print(ep)
 
 # %%
-# We see clearly that the export assummed that ``x`` ad ``y`` had the same shape.
+# We see clearly that the export assumed that ``x`` ad ``y`` had the same shape.
 # No other configuration seemed to work at export time,
 # including ``with torch.fx.experimental._config.patch(backed_size_oblivious=True):``
 # the shape of one tensor equal to ``(1,)``.
@@ -59,11 +59,9 @@ print("output shape is ", shape)
 # Tracing
 # +++++++
 #
-# Let's compare with what a simple tracing would do. :class:`CustomTracer
-# <experimental_experiment.torch_interpreter.tracing.CustomTracer>`
-# is a customize tracer built on top of :class:`torch.fx.Tracer`.
+# Let's compare with what a simple tracing would do. Let's use :class:`torch.fx.Tracer`.
 
-graph = CustomTracer().trace(Model())
+graph = Tracer().trace(Model())
 print(graph)
 
 # %%
