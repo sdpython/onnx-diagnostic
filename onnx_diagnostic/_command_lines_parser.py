@@ -557,7 +557,7 @@ def get_parser_validate() -> ArgumentParser:
         "--quiet-input-sets",
         default="",
         help="Avoids raising an exception when an input sets does not work with "
-        "the exported model, example: --quiet-input-sets=inputs,inputs22",
+        "the exported model.\nExample: --quiet-input-sets=inputs,inputs22",
     )
     return parser
 
@@ -629,6 +629,94 @@ def _cmd_validate(argv: List[Any]):
         print("-- summary --")
         for k, v in sorted(summary.items()):
             print(f":{k},{v};")
+
+
+def _cmd_export_sample(argv: List[Any]):
+    from .helpers import string_type
+    from .torch_models.validate import get_inputs_for_task, _make_folder_name
+    from .torch_models.code_sample import code_sample
+    from .tasks import supported_tasks
+
+    parser = get_parser_validate()
+    args = parser.parse_args(argv[1:])
+    if not args.task and not args.mid:
+        print("-- list of supported tasks:")
+        print("\n".join(supported_tasks()))
+    elif not args.mid:
+        data = get_inputs_for_task(args.task)
+        if args.verbose:
+            print(f"task: {args.task}")
+        max_length = max(len(k) for k in data["inputs"]) + 1
+        print("-- inputs")
+        for k, v in data["inputs"].items():
+            print(f"  + {k.ljust(max_length)}: {string_type(v, with_shape=True)}")
+        print("-- dynamic_shapes")
+        for k, v in data["dynamic_shapes"].items():
+            print(f"  + {k.ljust(max_length)}: {string_type(v)}")
+    else:
+        # Let's skip any invalid combination if known to be unsupported
+        if (
+            "onnx" not in (args.export or "")
+            and "custom" not in (args.export or "")
+            and (args.opt or "")
+        ):
+            print(f"code-sample - unsupported args: export={args.export!r}, opt={args.opt!r}")
+            return
+        patch_dict = args.patch if isinstance(args.patch, dict) else {"patch": args.patch}
+        code = code_sample(
+            model_id=args.mid,
+            task=args.task,
+            do_run=args.run,
+            verbose=args.verbose,
+            quiet=args.quiet,
+            same_as_pretrained=args.same_as_trained,
+            use_pretrained=args.trained,
+            dtype=args.dtype,
+            device=args.device,
+            patch=patch_dict,
+            rewrite=args.rewrite and patch_dict.get("patch", True),
+            stop_if_static=args.stop_if_static,
+            optimization=args.opt,
+            exporter=args.export,
+            dump_folder=args.dump_folder,
+            drop_inputs=None if not args.drop else args.drop.split(","),
+            input_options=args.iop,
+            model_options=args.mop,
+            subfolder=args.subfolder,
+            opset=args.opset,
+            runtime=args.runtime,
+            output_names=(
+                None if len(args.outnames.strip()) < 2 else args.outnames.strip().split(",")
+            ),
+        )
+        if args.dump_folder:
+            os.makedirs(args.dump_folder, exist_ok=True)
+            name = (
+                _make_folder_name(
+                    model_id=args.model_id,
+                    exporter=args.exporter,
+                    optimization=args.optimization,
+                    dtype=args.dtype,
+                    device=args.device,
+                    subfolder=args.subfolder,
+                    opset=args.opset,
+                    drop_inputs=None if not args.drop else args.drop.split(","),
+                    same_as_pretrained=args.same_as_pretrained,
+                    use_pretrained=args.use_pretrained,
+                    task=args.task,
+                ).replace("/", "-")
+                + ".py"
+            )
+            fullname = os.path.join(args.dump_folder, name)
+            if args.verbose:
+                print(f"-- prints code in {fullname!r}")
+            print("--")
+            with open(fullname, "w") as f:
+                f.write(code)
+            if args.verbose:
+                print("-- done")
+        else:
+            print(code)
 
 
 def get_parser_stats() -> ArgumentParser:
@@ -960,14 +1048,15 @@ def get_main_parser() -> ArgumentParser:
             Type 'python -m onnx_diagnostic <cmd> --help'
             to get help for a specific command.
 
-            agg        - aggregates statistics from multiple files
-            config     - prints a configuration for a model id
-            find       - find node consuming or producing a result
-            lighten    - makes an onnx model lighter by removing the weights,
-            print      - prints the model on standard output
-            stats      - produces statistics on a model
-            unlighten  - restores an onnx model produces by the previous experiment
-            validate   - validate a model
+            agg          - aggregates statistics from multiple files
+            config       - prints a configuration for a model id
+            exportsample - produces a code to export a model
+            find         - find node consuming or producing a result
+            lighten      - makes an onnx model lighter by removing the weights,
+            print        - prints the model on standard output
+            stats        - produces statistics on a model
+            unlighten    - restores an onnx model produces by the previous experiment
+            validate     - validate a model
             """
         ),
     )
@@ -976,6 +1065,7 @@ def get_main_parser() -> ArgumentParser:
         choices=[
             "agg",
             "config",
+            "exportsample",
             "find",
             "lighten",
             "print",
@@ -998,6 +1088,7 @@ def main(argv: Optional[List[Any]] = None):
         validate=_cmd_validate,
         stats=_cmd_stats,
         agg=_cmd_agg,
+        exportsample=_cmd_export_sample,
     )
 
     if argv is None:
@@ -1020,6 +1111,7 @@ def main(argv: Optional[List[Any]] = None):
                 validate=get_parser_validate,
                 stats=get_parser_stats,
                 agg=get_parser_agg,
+                exportsample=get_parser_validate,
             )
             cmd = argv[0]
             if cmd not in parsers:

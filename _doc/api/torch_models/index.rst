@@ -5,6 +5,7 @@ onnx_diagnostic.torch_models
     :maxdepth: 1
     :caption: submodules
 
+    code_sample    
     hghub/index
     llms
     validate
