@@ -15,7 +15,7 @@ from onnx_diagnostic.torch_models.code_sample import code_sample, make_code_for_
 
 class TestCodeSample(ExtTestCase):
     @requires_transformers("4.53")
-    @requires_torch("2.7.99")
+    @requires_torch("2.9")
     @requires_experimental()
     @hide_stdout()
     def test_code_sample_tiny_llm_custom(self):
@@ -40,7 +40,7 @@ class TestCodeSample(ExtTestCase):
         self.assertNotIn("Traceback", st)
 
     @requires_transformers("4.53")
-    @requires_torch("2.7.99")
+    @requires_torch("2.9")
     @requires_experimental()
     @hide_stdout()
     def test_code_sample_tiny_llm_dynamo(self):

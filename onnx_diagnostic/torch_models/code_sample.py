@@ -108,7 +108,11 @@ def make_export_code(
     args = [f"dynamic_shapes={dynamic_shapes}"]
     if output_names:
         args.append(f"output_names={output_names}")
+    code = []
+    imports = []
     if dump_folder:
+        code.append(f"os.makedirs({dump_folder!r})")
+        imports.append("import os")
         filename = os.path.join(dump_folder, "model.onnx")
     if exporter == "custom":
         if opset:
@@ -117,17 +121,19 @@ def make_export_code(
             args.append(f"options=OptimizationOptions(patterns={optimization!r})")
             args.append(f"large_model=True, filename={filename!r}")
         sargs = ", ".join(args)
-        imports = [
-            "from experimental_experiment.torch_interpreter import to_onnx",
-            "from experimental_experiment.xbuilder import OptimizationOptions",
-        ]
-        code = [f"onx = to_onnx(model, inputs, {sargs})"]
+        imports.extend(
+            [
+                "from experimental_experiment.torch_interpreter import to_onnx",
+                "from experimental_experiment.xbuilder import OptimizationOptions",
+            ]
+        )
+        code.extend([f"onx = to_onnx(model, inputs, {sargs})"])
     elif exporter == "onnx-dynamo":
         if opset:
             args.append(f"opset_version={opset}")
         sargs = ", ".join(args)
         imports = []
-        code = [f"epo = torch.onnx.export(model, args=(), kwargs=inputs, {sargs})"]
+        code.extend([f"epo = torch.onnx.export(model, args=(), kwargs=inputs, {sargs})"])
         if optimization:
             imports.append("import onnxscript")
             code.extend(["onnxscript.optimizer.optimize_ir(epo.model)"])
@@ -135,10 +141,7 @@ def make_export_code(
                 imports.append("import onnxscript.rewriter.ort_fusions as ort_fusions")
                 code.extend(["ort_fusions.optimize_for_ort(epo.model)"])
         if dump_folder:
-            imports.insert(0, "import os")
-            code.extend(
-                [f"os.makedirs({dump_folder!r}, exist_ok=True)", f"epo.save({filename!r})"]
-            )
+            code.extend([f"epo.save({filename!r})"])
     else:
         raise ValueError(f"Unexpected exporter {exporter!r}")
     if not patch_kwargs:
