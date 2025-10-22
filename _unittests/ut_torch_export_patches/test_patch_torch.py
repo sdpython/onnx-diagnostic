@@ -491,6 +491,25 @@ class TestPatchPatchTorch(ExtTestCase):
             )
         self.assertEqualArray(expected, ep.module()(*inputs))
 
+    def test_broadcast_max(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return x * y
+
+        Dim = torch.export.Dim
+        with torch_export_patches():
+            ep = torch.export.export(
+                Model(),
+                (
+                    torch.tensor([2, 3], dtype=torch.float32),
+                    torch.tensor([2, 3, 4], dtype=torch.float32),
+                ),
+                dynamic_shapes=({0: Dim.DYNAMIC}, {0: Dim.DYNAMIC}),
+            )
+        output = [n for n in ep.graph.nodes if n.op == "output"]
+        shape = output[0].args[0][0].meta["val"].shape
+        self.assertEqual(str(shape), "torch.Size([Max(s17, s77)])")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
