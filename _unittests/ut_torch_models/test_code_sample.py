@@ -18,17 +18,43 @@ class TestCodeSample(ExtTestCase):
     @requires_torch("2.7.99")
     @requires_experimental()
     @hide_stdout()
-    def test_code_sample_tiny_llm(self):
+    def test_code_sample_tiny_llm_custom(self):
         code = code_sample(
             "arnir0/Tiny-LLM",
             verbose=2,
             exporter="custom",
             patch=True,
-            dump_folder="dump_test/validate_tiny_llm",
+            dump_folder="dump_test/validate_tiny_llm_custom",
             dtype="float16",
             device="cpu",
+            optimization="default",
         )
-        filename = self.get_dump_file("test_code_sample_tiny_llm.py")
+        filename = self.get_dump_file("test_code_sample_tiny_llm_custom.py")
+        with open(filename, "w") as f:
+            f.write(code)
+        cmds = [sys.executable, "-u", filename]
+        p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        res = p.communicate()
+        _out, err = res
+        st = err.decode("ascii", errors="ignore")
+        self.assertNotIn("Traceback", st)
+
+    @requires_transformers("4.53")
+    @requires_torch("2.7.99")
+    @requires_experimental()
+    @hide_stdout()
+    def test_code_sample_tiny_llm_dynamo(self):
+        code = code_sample(
+            "arnir0/Tiny-LLM",
+            verbose=2,
+            exporter="onnx-dynamo",
+            patch=True,
+            dump_folder="dump_test/validate_tiny_llm_dynamo",
+            dtype="float16",
+            device="cpu",
+            optimization="ir",
+        )
+        filename = self.get_dump_file("test_code_sample_tiny_llm_dynamo.py")
         with open(filename, "w") as f:
             f.write(code)
         cmds = [sys.executable, "-u", filename]

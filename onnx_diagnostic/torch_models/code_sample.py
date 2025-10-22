@@ -122,31 +122,29 @@ def make_export_code(
         ]
         code = [f"onx = to_onnx(model, inputs, {sargs})"]
     elif exporter == "onnx-dynamo":
-        args.append(f"opset={opset}")
-        if optimization:
-            args.append("options=OptimizationOptions(pattern={optimization!r})")
+        args.append(f"opset_version={opset}")
         sargs = ", ".join(args)
         imports = []
-        code = [f"epo = torch.onnx.export(model, (), inputs, {sargs})"]
+        code = [f"epo = torch.onnx.export(model, args=(), kwargs=inputs, {sargs})"]
         if optimization:
             imports.append("import onnxscript")
-            code.extend(
-                [
-                    "ir_model = epo.to_ir()",
-                    "onnxscript.optimizer.optimize_ir(ir_model)",
-                    "ir_optimized = ort_fusions.optimize_for_ort(ir_model)",
-                    "epo.model = ir_optimized",
-                ]
-            )
+            code.extend(["onnxscript.optimizer.optimize_ir(epo.model)"])
+            if "os_ort" in optimization:
+                imports.append("import onnxscript.rewriter.ort_fusions as ort_fusions")
+                code.extend(["ort_fusions.optimize_for_ort(epo.model)"])
         if dump_folder:
-            code.append("epo.save({filename!r}")
+            imports.insert(0, "import os")
+            code.extend(
+                [f"os.makedirs({dump_folder!r}, exist_ok=True)", f"epo.save({filename!r})"]
+            )
     else:
         raise ValueError(f"Unexpected exporter {exporter!r}")
     if not patch_kwargs:
         return "\n".join(imports), "\n".join(code)
 
     imports.append("from onnx_diagnostic.torch_export_patches import torch_export_patches")
-    code = [f"with torch_export_patches(**{patch_kwargs}):", *["    " + _ for _ in code]]
+    sargs = ", ".join(f"{k}={v}" for k, v in patch_kwargs.items())
+    code = [f"with torch_export_patches({sargs}):", *["    " + _ for _ in code]]
     return "\n".join(imports), "\n".join(code)
 
 
@@ -223,7 +221,14 @@ def code_sample(
 
         from onnx_diagnostic.torch_models.code_sample import code_sample
 
-        print(code_sample("arnir0/Tiny-LLM"))
+        print(
+            code_sample(
+                "arnir0/Tiny-LLM",
+                exporter="onnx-dynamo",
+                optimization="ir",
+                patch=True,
+            )
+        )
     """
     model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
         model_id,
@@ -296,6 +301,7 @@ def code_sample(
         stop_if_static=stop_if_static,
         dump_folder=dump_folder,
         opset=opset,
+        dynamic_shapes=data["dynamic_shapes"],
     )
     input_code = make_code_for_inputs(data["inputs"])
     cache_import = (
