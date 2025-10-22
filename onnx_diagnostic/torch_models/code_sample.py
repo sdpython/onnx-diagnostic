@@ -80,13 +80,13 @@ def make_code_for_inputs(inputs: Dict[str, torch.Tensor]) -> str:
             elif v.dtype in (torch.float32, torch.float16, torch.bfloat16):
                 code = f"{k}=torch.rand({shape}, dtype={v.dtype})"
             else:
-                raise ValueError(f"Unexpeted dtype = {v.dtype} for k={k!r}")
+                raise ValueError(f"Unexpected dtype = {v.dtype} for k={k!r}")
         elif v.__class__.__name__ == "DynamicCache":
             obj = flatten_object(v)
             cc = [f"torch.rand({tuple(map(int,_.shape))}, dtype={_.dtype})" for _ in obj]
             va = [f"({a},{b})" for a, b in zip(cc[: len(cc) // 2], cc[len(cc) // 2 :])]
-            vas = ", ".join(va)
-            code = f"{k}=make_dynamic_cache([{vas}])"
+            va2 = ", ".join(va)
+            code = f"{k}=make_dynamic_cache([{va2}])"
         else:
             raise ValueError(f"Unexpected type {type(v)} for k={k!r}")
         codes.append(code)
@@ -146,7 +146,7 @@ def make_export_code(
 
     imports.append("from onnx_diagnostic.torch_export_patches import torch_export_patches")
     if stop_if_static:
-        patch_kwargs["patch_kwargs"] = stop_if_static
+        patch_kwargs["stop_if_static"] = stop_if_static
     sargs = ", ".join(f"{k}={v}" for k, v in patch_kwargs.items())
     code = [f"with torch_export_patches({sargs}):", *["    " + _ for _ in code]]
     return "\n".join(imports), "\n".join(code)
@@ -331,7 +331,7 @@ def code_sample(
         f"inputs = {input_code}",
         exporter_code,
     ]
-    code = "\n".join(pieces)
+    code = "\n".join(pieces)  # type: ignore[arg-type]
     try:
         import black
     except ImportError:
