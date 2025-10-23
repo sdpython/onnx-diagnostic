@@ -72,7 +72,7 @@ def fake_reshape(
 
 def make_fake(
     x: Any, fake_mode: Optional["FakeTensorMode"] = None  # noqa: F821
-) -> Optional[Tuple["FakeTensor"], Optional["FakeTensorMode"]]:  # noqa: F821
+) -> Tuple[Optional["FakeTensor"], Optional["FakeTensorMode"]]:  # noqa: F821
     """
     Replaces all tensors by fake tensors.
     This modification happens inplace for caches.
