@@ -271,7 +271,7 @@ def get_inputs_default(
         "input_ids": {0: batch, 1: seq_length},
         "token_type_ids": {0: batch, 1: seq_length},
         "attention_mask": {0: batch, 1: "cache+seq"},
-        "position_ids": {0: batch, 1: "cache+seq"},
+        "position_ids": {0: batch, 1: seq_length},
         "past_key_values": [
             [{0: batch} for _ in range(num_hidden_layers)],
             [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
