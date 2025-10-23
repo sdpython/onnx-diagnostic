@@ -1313,7 +1313,7 @@ def patched_sdpa_attention_forward(
     is_causal = attention_mask is None and is_causal
 
     torch._check(
-        attention_mask.shape[3] == key.shape[2],
+        attention_mask is None or attention_mask.shape[3] == key.shape[2],
         "Attention mask shape incompatible with key shape.",
     )
     attn_output = torch.nn.functional.scaled_dot_product_attention(
