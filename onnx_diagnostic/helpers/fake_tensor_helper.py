@@ -64,8 +64,6 @@ def fake_reshape(
     for i in sh:
         new_shape[i] = fake_tensor.shape[i]
 
-    #
-
     reduced_tensor = fake_mode.from_tensor(true_tensor, static_shapes=True).sum(
         axis=tuple(sorted(sh)), keepdim=True
     )
@@ -73,8 +71,8 @@ def fake_reshape(
 
 
 def make_fake(
-    x: Optional[Any], fake_mode: Optional["FakeTensorMode"] = None  # noqa: F821
-) -> Optional[Tuple["FakeTensor", "FaleTensorMode"]]:  # noqa: F821
+    x: Any, fake_mode: Optional["FakeTensorMode"] = None  # noqa: F821
+) -> Optional[Tuple["FakeTensor", "FakeTensorMode"]]:  # noqa: F821
     """
     Replaces all tensors by fake tensors.
     This modification happens inplace for caches.

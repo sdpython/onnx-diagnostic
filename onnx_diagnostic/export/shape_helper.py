@@ -204,10 +204,10 @@ def guess_dynamic_shapes_from_inputs(
 
 
 def make_fake_with_dynamic_dimensions(
-    inputs: Optional[Any],
+    inputs: Any,
     dynamic_shapes: Any,
     fake_mode: Optional["FakeTensorMode"] = None,  # noqa: F821
-) -> Optional[Tuple["FakeTensor", "FakeTensorMode"]]:  # noqa: F821
+) -> Any:  # noqa: F821
     """
     Replaces all tensors by fake tensor respecting the same
     constraints as the following dynamic shapes.
