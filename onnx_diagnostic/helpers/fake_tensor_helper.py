@@ -2,11 +2,13 @@ from typing import Any, Optional, Tuple
 
 
 def make_fake(
-    x: Any, fake_mode: Optional["FakeTensorMode"] = None  # noqa: F821
-) -> Tuple["FakeTensor", "FaleTensorMode"]:  # noqa: F821
+    x: Optional[Any], fake_mode: Optional["FakeTensorMode"] = None  # noqa: F821
+) -> Optional[Tuple["FakeTensor", "FaleTensorMode"]]:  # noqa: F821
     """
     Replaces all tensors by fake tensors.
     This modification happens inplace for caches.
+    This function is only implemented for cache with
+    ``transformers>=4.55``.
 
     .. runpython::
         :showcode:
@@ -49,12 +51,13 @@ def make_fake(
         return {k: make_fake(v, fake_mode=fake_mode)[0] for k, v in x.items()}, fake_mode
 
     if x.__class__.__name__ in {"DynamicCache", "StaticCache", "HybridCache"}:
-        assert hasattr(
-            x, "layers"
-        ), f"Une more recent version of transformers, 'layers' not found in class {type(x)}"
+        assert hasattr(x, "layers"), (
+            f"Une more recent version of transformers (>=4.55), "
+            f"'layers' not found in class {type(x)}"
+        )
         for layer in x.layers:
             assert hasattr(layer, "keys") and hasattr(layer, "values"), (
-                f"Une more recent version of transformers, 'layers' "
+                f"Une more recent version of transformers (>=4.55), 'layers' "
                 f"not found in class {type(layer)} ({dir(layer)})"
             )
             layer.keys = make_fake(layer.keys, fake_mode=fake_mode)[0]

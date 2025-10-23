@@ -1,12 +1,13 @@
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
 from onnx_diagnostic.helpers import flatten_object
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.helpers.fake_tensor_helper import make_fake
 
 
 class TestMakeTensorHelper(ExtTestCase):
+    @requires_transformers("4.55")
     def test_fake_inputs(self):
         inputs, _ = make_fake(
             dict(
