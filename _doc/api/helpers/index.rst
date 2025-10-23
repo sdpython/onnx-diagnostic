@@ -11,6 +11,7 @@ onnx_diagnostic.helpers
     cache_helper
     config_helper
     doc_helper
+    fake_tensor_helper
     graph_helper
     helper
     _log_helper
