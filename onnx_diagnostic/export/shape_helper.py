@@ -307,7 +307,7 @@ def make_fake_with_dynamic_dimensions(
     if hasattr(x, "shape"):
         t = fake_reshape(x, dynamic_shapes, fake_mode=fake_mode)
         return t, fake_mode
-    from . import string_type
+    from ..helpers import string_type
 
     raise TypeError(
         f"Unexpected type {type(x)} for x, content is {string_type(x, with_shape=True)}"
