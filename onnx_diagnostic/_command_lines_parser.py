@@ -693,16 +693,16 @@ def _cmd_export_sample(argv: List[Any]):
             os.makedirs(args.dump_folder, exist_ok=True)
             name = (
                 _make_folder_name(
-                    model_id=args.model_id,
-                    exporter=args.exporter,
-                    optimization=args.optimization,
+                    model_id=args.mid,
+                    exporter=args.export,
+                    optimization=args.opt,
                     dtype=args.dtype,
                     device=args.device,
                     subfolder=args.subfolder,
                     opset=args.opset,
                     drop_inputs=None if not args.drop else args.drop.split(","),
-                    same_as_pretrained=args.same_as_pretrained,
-                    use_pretrained=args.use_pretrained,
+                    same_as_pretrained=args.same_as_trained,
+                    use_pretrained=args.trained,
                     task=args.task,
                 ).replace("/", "-")
                 + ".py"
