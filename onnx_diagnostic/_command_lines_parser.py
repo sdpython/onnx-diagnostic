@@ -1121,7 +1121,7 @@ def main(argv: Optional[List[Any]] = None):
                 validate=get_parser_validate,
                 stats=get_parser_stats,
                 agg=get_parser_agg,
-                exportsample=lambda: get_parser_validate("exportsample"),
+                exportsample=lambda: get_parser_validate("exportsample"),  # type: ignore[operator]
             )
             cmd = argv[0]
             if cmd not in parsers:
