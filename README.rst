@@ -43,9 +43,9 @@ You need then to remove those which are not dynamic in your model.
 
 .. code-block:: python
 
-  from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+  from onnx_diagnostic.export.shape_helper import all_dynamic_shapes_from_inputs
 
-  dynamic_shapes = all_dynamic_shape_from_inputs(cache)
+  dynamic_shapes = all_dynamic_shapes_from_inputs(cache)
 
 It also implements tools to investigate, validate exported models (ExportedProgramm, ONNXProgram, ...).
 See `documentation of onnx-diagnostic <https://sdpython.github.io/doc/onnx-diagnostic/dev/>`_ and
@@ -109,13 +109,13 @@ Snapshot of usefuls tools
       ep = torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=dynamic_shapes)
       # ...
 
-**all_dynamic_shape_from_inputs**
+**all_dynamic_shapes_from_inputs**
 
 .. code-block:: python
 
-  from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+  from onnx_diagnostic.export.shape_helper import all_dynamic_shapes_from_inputs
 
-  dynamic_shapes = all_dynamic_shape_from_inputs(cache)
+  dynamic_shapes = all_dynamic_shapes_from_inputs(cache)
 
 **torch_export_rewrite**
 

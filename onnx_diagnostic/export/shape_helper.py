@@ -1,9 +1,11 @@
-from typing import Any, Dict, List, Set, Tuple, Union
+from typing import Any, Dict, List, Set, Optional, Tuple, Union
+from ..helpers import flatten_object
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
-from .dynamic_shapes import ModelInputs
+from ..helpers.fake_tensor_helper import make_fake
+from .dynamic_shapes import ModelInputs, _flatten_dynamic_shapes
 
 
-def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
+def all_dynamic_shapes_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
     """
     Returns the dynamic shapes for the given inputs.
     All dimensions are considered as dynamic.
@@ -18,7 +20,7 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
         import pprint
         import torch
         from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
-        from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+        from onnx_diagnostic.export.shape_helper import all_dynamic_shapes_from_inputs
         from onnx_diagnostic.torch_export_patches import torch_export_patches
 
         bsize, nheads, slen, dim = 2, 1, 30, 96
@@ -32,7 +34,7 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
             ),
         )
         with torch_export_patches(patch_transformers=True):
-            ds = all_dynamic_shape_from_inputs(inputs)
+            ds = all_dynamic_shapes_from_inputs(inputs)
         pprint.pprint(ds)
 
     For this function to work, patches must be enabled if :epkg:`transformers`
@@ -50,7 +52,7 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
             make_sliding_window_cache,
             make_static_cache,
         )
-        from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+        from onnx_diagnostic.export.shape_helper import all_dynamic_shapes_from_inputs
         from onnx_diagnostic.torch_export_patches import torch_export_patches
 
         caches = [
@@ -104,7 +106,7 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
         with torch_export_patches(patch_transformers=True):
             for cache in caches:
                 print(f"-- {cache.__class__.__name__}")
-                pprint.pprint(all_dynamic_shape_from_inputs(cache))
+                pprint.pprint(all_dynamic_shapes_from_inputs(cache))
     """
     if isinstance(dim_prefix, str):
         prefixes: Set[str] = set()
@@ -199,3 +201,53 @@ def guess_dynamic_shapes_from_inputs(
     """
     mi = ModelInputs(None, inputs)
     return mi.guess_dynamic_shapes(auto=auto)
+
+
+def make_fake_with_dynamic_dimensions(
+    inputs: Optional[Any],
+    dynamic_shapes: Any,
+    fake_mode: Optional["FakeTensorMode"] = None,  # noqa: F821
+) -> Optional[Tuple["FakeTensor", "FakeTensorMode"]]:  # noqa: F821
+    """
+    Replaces all tensors by fake tensor respecting the same
+    constraints as the following dynamic shapes.
+    This uses function :func:`onnx_diagnostic.helpers.fake_tensor_helper.make_fake`.
+
+    .. runpython::
+        :showcode:
+
+        from onnx_diagnostic.export.dynamic_shapes import make_fake_with_dynamic_dimensions
+
+        inputs, _ = make_fake_with_dynamic_dimensions(
+            dict(
+                input_ids=torch.randint(30360, size=(2, 3), dtype=torch.int64),
+                attention_mask=torch.randint(1, size=(2, 33), dtype=torch.int64),
+                position_ids=torch.randint(32, size=(2, 3), dtype=torch.int64),
+                past_key_values=make_dynamic_cache(
+                    [
+                        (
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                        ),
+                        (
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                        ),
+                    ]
+                ),
+            )
+        )
+        print(inputs)
+    """
+    flat_inputs = flatten_object(inputs, drop_keys=True)
+    flat_fake, fake_mode = make_fake(flat_inputs, fake_mode=fake_mode)
+    flat_ds = _flatten_dynamic_shapes(dynamic_shapes)
+    assert len(flat_inputs) == len(flat_ds), (
+        f"Mismatch between the number of input tensor {len(flat_inputs)} "
+        f"and the number of dynamic_shapes {len(flat_ds)}"
+    )
+    flat_reshaped = [
+        make_fake_with_dynamic_dimensions(t, sh, true_tensor=t, fake_mode=fake_mode)
+        for t, sh in zip(flat_inputs, flat_fake, flat_ds)
+    ]
+    return flat_reshaped

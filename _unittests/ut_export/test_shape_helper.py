@@ -1,18 +1,18 @@
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, requires_torch
-from onnx_diagnostic.export.shape_helper import (
-    all_dynamic_shape_from_inputs,
-    guess_dynamic_shapes_from_inputs,
-)
+from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.helpers.cache_helper import (
     make_dynamic_cache,
     make_sliding_window_cache,
     make_encoder_decoder_cache,
     make_static_cache,
 )
-from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
-from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.export.shape_helper import (
+    all_dynamic_shapes_from_inputs,
+    guess_dynamic_shapes_from_inputs,
+)
 
 
 class TestShapeHelper(ExtTestCase):
@@ -21,7 +21,7 @@ class TestShapeHelper(ExtTestCase):
     @requires_torch("2.7.99")
     def test_all_dynamic_shape_from_cache(self):
         cache = make_dynamic_cache([(torch.ones((2, 2)), (torch.ones((2, 2)) * 2))])
-        ds = all_dynamic_shape_from_inputs(cache)
+        ds = all_dynamic_shapes_from_inputs(cache)
         self.assertEqual([[{0: "d_0_0", 1: "d_0_1"}], [{0: "d_1_0", 1: "d_1_1"}]], ds)
 
     @requires_torch("2.7.99")
@@ -122,17 +122,17 @@ class TestShapeHelper(ExtTestCase):
         with torch_export_patches(patch_transformers=True):
             for cache, exds in caches:
                 with self.subTest(cache_name=cache.__class__.__name__):
-                    ds = all_dynamic_shape_from_inputs(cache)
+                    ds = all_dynamic_shapes_from_inputs(cache)
                     self.assertEqual(exds, ds)
 
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
-    def test_all_dynamic_shape_from_inputs(self):
-        ds = all_dynamic_shape_from_inputs((torch.randn((5, 6)), torch.randn((1, 6))))
+    def test_all_dynamic_shapes_from_inputs(self):
+        ds = all_dynamic_shapes_from_inputs((torch.randn((5, 6)), torch.randn((1, 6))))
         self.assertEqual(({0: "d_0_0", 1: "d_0_1"}, {0: "d_1_0", 1: "d_1_1"}), ds)
-        ds = all_dynamic_shape_from_inputs([torch.randn((5, 6)), torch.randn((1, 6))])
+        ds = all_dynamic_shapes_from_inputs([torch.randn((5, 6)), torch.randn((1, 6))])
         self.assertEqual([{0: "d_0_0", 1: "d_0_1"}, {0: "d_1_0", 1: "d_1_1"}], ds)
-        ds = all_dynamic_shape_from_inputs(
+        ds = all_dynamic_shapes_from_inputs(
             (torch.randn((5, 6)), torch.randn((1, 6))), dim_prefix=torch.export.Dim.AUTO
         )
         self.assertEqual(
@@ -145,9 +145,9 @@ class TestShapeHelper(ExtTestCase):
 
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
-    def test_all_dynamic_shape_from_inputs_dynamic_cache(self):
+    def test_all_dynamic_shapes_from_inputs_dynamic_cache(self):
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM")
-        ds = all_dynamic_shape_from_inputs(data["inputs"])
+        ds = all_dynamic_shapes_from_inputs(data["inputs"])
         self.assertEqual(
             {
                 "input_ids": {0: "d_0_0", 1: "d_0_1"},

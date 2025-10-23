@@ -2,24 +2,23 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 import torch
-from ..helpers import string_type, flatten_object
+from ..helpers import string_type
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
-from ..helpers.fake_tensor_helper import make_fake
 
 DYNAMIC_SHAPES = Tuple[Tuple[Any, ...], Dict[str, Any]]
 
 
-def flatten_dynamic_shapes(ds: Any) -> Any:
+def _flatten_dynamic_shapes(ds: Any) -> Any:
     """Flattens the dynamic shapes."""
     if isinstance(ds, list):
-        return _flat_list([flatten_dynamic_shapes(t) for t in ds])
+        return _flat_list([_flatten_dynamic_shapes(t) for t in ds])
     if isinstance(ds, tuple):
-        return tuple(_flat_list([flatten_dynamic_shapes(t) for t in ds]))
+        return tuple(_flat_list([_flatten_dynamic_shapes(t) for t in ds]))
     if isinstance(ds, dict):
         if all(isinstance(i, int) for i in ds):
             # That's a dynamic shape
             return ds
-        return _flat_list([flatten_dynamic_shapes(t) for t in ds.values()])
+        return _flat_list([_flatten_dynamic_shapes(t) for t in ds.values()])
     raise AssertionError(f"Not implemented for {type(ds)}: {ds}")
 
 
@@ -31,51 +30,6 @@ def _flat_list(li: List[Any]) -> List[Dict[int, str]]:
         else:
             res.extend(t)
     return res
-
-
-def make_fake_with_dynamic_dimensions(
-    x: Optional[Any],
-    dynamic_shapes: Any,
-    fake_mode: Optional["FakeTensorMode"] = None,  # noqa: F821
-) -> Optional[Tuple["FakeTensor", "FaleTensorMode"]]:  # noqa: F821
-    """
-    Replaces all tensors by fake tensor respecting the same
-    constraints as the following dynamic shapes.
-    This uses function :func:`onnx_diagnostic.helpers.fake_tensor_helper.make_fake`.
-
-    .. runpython::
-        :showcode:
-
-        from onnx_diagnostic.export.dynamic_shapes import make_fake_with_dynamic_dimensions
-
-        inputs, _ = make_fake_with_dynamic_dimensions(
-            dict(
-                input_ids=torch.randint(30360, size=(2, 3), dtype=torch.int64),
-                attention_mask=torch.randint(1, size=(2, 33), dtype=torch.int64),
-                position_ids=torch.randint(32, size=(2, 3), dtype=torch.int64),
-                past_key_values=make_dynamic_cache(
-                    [
-                        (
-                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
-                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
-                        ),
-                        (
-                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
-                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
-                        ),
-                    ]
-                ),
-            )
-        )
-        print(inputs)
-    """
-    fake_inputs = make_fake(x, fake_mode=fake_mode)
-    flat_inputs = flatten_object(fake_inputs, drop_keys=True)
-    flat_ds = flatten_dynamic_shapes(dynamic_shapes)
-    assert len(flat_inputs) == len(flat_ds), (
-        f"Mismatch between the number of input tensor {len(flat_inputs)} "
-        f"and the number of dynamic_shapes {len(flat_ds)}"
-    )
 
 
 class CoupleInputsDynamicShapes:
@@ -426,7 +380,7 @@ class CoupleInputsDynamicShapes:
         flat, spec = torch.utils._pytree.tree_flatten(inputs)
         if all(isinstance(t, torch.Tensor) for t in flat):
             # We need to flatten dynamic shapes as well
-            ds = flatten_dynamic_shapes(ds)
+            ds = _flatten_dynamic_shapes(ds)
         res = cls._generic_walker_step(
             processor, flat, ds, flatten_unflatten=flatten_unflatten
         )

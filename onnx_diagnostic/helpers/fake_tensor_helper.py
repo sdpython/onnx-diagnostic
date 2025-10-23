@@ -1,4 +1,75 @@
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
+
+
+_UNIQUE = set()
+
+
+def _unique():
+    i = 129 + 1
+    while i in _UNIQUE:
+        i += 1
+    _UNIQUE.add(i)
+    return i
+
+
+def fake_reshape(
+    true_tensor: "Tensor",  # noqa: F821
+    sh: Dict[int, Any],  # noqa: F821
+    fake_tensor: Optional["FakeTensor"] = None,  # noqa: F821
+    fake_mode: Optional["FakeTensorMode"] = None,  # noqa: F821
+) -> "FakeTensor":  # noqa: F821
+    """
+    Changes the shape of a true tensor to make it dynamic.
+
+    :param true_tensor: true tensor
+    :param sh: dynamic shape
+    :param fake_tensor: fake tensor, if None, make a fake one
+    :param fake_mode: fake tensor mode
+    :return: fake tensor
+    """
+    import torch
+
+    # deal with 0/1
+    for i in sh:
+        if true_tensor.shape[i] <= 1:
+            expanded_shape = list(true_tensor.shape)
+            expanded_shape[i] = _unique()
+            true_tensor = torch.empty(tuple(expanded_shape), dtype=true_tensor.dtype)
+
+    # deal with equivalent dimension
+    new_shape = list(true_tensor.shape)
+    mapping = {}
+    for i, s in sh.items():
+        d = true_tensor.shape[i]
+        if d not in mapping:
+            mapping[d] = s
+        elif mapping[d] != s:
+            d = _unique()
+            mapping[d] = s
+            new_shape[i] = d
+    true_tensor = torch.empty(tuple(new_shape), dtype=true_tensor.dtype)
+
+    # now switch to FakeTensor
+    if fake_mode is None:
+        from torch.fx.experimental.symbolic_shapes import ShapeEnv
+        from torch._subclasses.fake_tensor import FakeTensorMode
+
+        shape_env = ShapeEnv()
+        fake_mode = FakeTensorMode(shape_env=shape_env)
+    if fake_tensor is None:
+        fake_tensor = fake_mode.from_tensor(true_tensor, static_shapes=False)
+    assert fake_mode is not None, "fake_mode must be provided"
+
+    new_shape = list(true_tensor.shape)
+    for i in sh:
+        new_shape[i] = fake_tensor.shape[i]
+
+    #
+
+    reduced_tensor = fake_mode.from_tensor(true_tensor, static_shapes=True).sum(
+        axis=tuple(sorted(sh)), keepdim=True
+    )
+    return reduced_tensor.expand(*new_shape)
 
 
 def make_fake(
