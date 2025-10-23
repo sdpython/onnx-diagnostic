@@ -47,6 +47,10 @@ module = ["onnx_diagnostic.ext_test_case"]
 disable_error_code = ["arg-type", "assignment", "import-untyped", "misc", "name-defined", "override", "return-value", "truthy-function"]
 
 [[tool.mypy.overrides]]
+module = ["onnx_diagnostic.export.shape_helper"]
+disable_error_code = ["name-defined"]
+
+[[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.args_helper"]
 disable_error_code = ["arg-type", "call-overload", "index"]
 
