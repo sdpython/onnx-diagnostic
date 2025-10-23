@@ -80,8 +80,8 @@ fake_mode = FakeTensorMode(shape_env=shape_env)
 # d1 = shape_env.create_unbacked_symint()
 # d2 = shape_env.create_unbacked_symint()
 fake_inputs = fake_mode.from_tensor(
-    torch.zeros((2,), dtype=torch.float32), static_shapes=False
-), fake_mode.from_tensor(torch.zeros((2,), dtype=torch.float32), static_shapes=False)
+    torch.zeros((3,), dtype=torch.float32), static_shapes=False
+), fake_mode.from_tensor(torch.zeros((3,), dtype=torch.float32), static_shapes=False)
 
 print("fake_inputs are ", fake_inputs)
 res = FakeTensorProp(gm, fake_mode).propagate(*fake_inputs)
@@ -115,7 +115,7 @@ print("fake_inputs are ", fake_inputs)
 try:
     res = FakeTensorProp(gm, fake_mode).propagate(*fake_inputs)
 except Exception as e:
-    print(e)
+    print("error", e)
 
 # %%
 # By applying the patches:

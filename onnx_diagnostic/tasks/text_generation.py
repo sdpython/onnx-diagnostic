@@ -220,10 +220,7 @@ def get_inputs(
                     0: batch,
                     1: "cache+seq",  # cache_length + seq_length
                 },
-                "position_ids": {
-                    0: batch,
-                    1: "cache+seq",  # cache_length + seq_length
-                },
+                "position_ids": {0: batch, 1: seq_length},
                 "past_key_values": [
                     [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
                     [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],

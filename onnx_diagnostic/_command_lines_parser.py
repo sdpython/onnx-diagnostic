@@ -371,30 +371,34 @@ class _BoolOrParseDictPatch(argparse.Action):
         setattr(namespace, self.dest, d)
 
 
-def get_parser_validate() -> ArgumentParser:
+def get_parser_validate(name: str = "validate") -> ArgumentParser:
     parser = ArgumentParser(
-        prog="validate",
+        prog=name,
         description=textwrap.dedent(
             """
-            Prints out dummy inputs for a particular task or a model id.
-            If both mid and task are empty, the command line displays the list
-            of supported tasks.
+            Validates a model for a particular task given the model id.
+            It exports the model and then validates it by computing the discrepancies
+            on different input sets.
+            """
+            if name == "validate"
+            else """
+            Creates a script to export  a model for a particular task given the model id.
             """
         ),
         epilog=textwrap.dedent(
-            """
+            f"""
             If the model id is specified, one untrained version of it is instantiated.
             Examples:
 
-            python -m onnx_diagnostic validate -m microsoft/Phi-4-mini-reasoning \\
+            python -m onnx_diagnostic {name} -m microsoft/Phi-4-mini-reasoning \\
                 --run -v 1 -o dump_test --no-quiet --repeat 2 --warmup 2 \\
                 --dtype float16 --device cuda --patch --export onnx-dynamo --opt ir
 
-            python -m onnx_diagnostic validate -m microsoft/Phi-4-mini-reasoning \\
+            python -m onnx_diagnostic {name} -m microsoft/Phi-4-mini-reasoning \\
                 --run -v 1 -o dump_test --no-quiet --repeat 2 --warmup 2 \\
                 --dtype float16 --device cuda --patch --export custom --opt default
 
-            python -m onnx_diagnostic validate -m microsoft/Phi-4-mini-reasoning \\
+            python -m onnx_diagnostic {name} -m microsoft/Phi-4-mini-reasoning \\
                 --run -v 1 -o dump_test --no-quiet --repeat 2 --warmup 2 \\
                 --dtype float16 --device cuda --export modelbuilder
 
@@ -405,12 +409,12 @@ def get_parser_validate() -> ArgumentParser:
             The behaviour may be modified compare the original configuration,
             the following argument can be rope_scaling to dynamic:
 
-                --mop \"rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}\""
+                --mop \"rope_scaling={{'rope_type': 'dynamic', 'factor': 10.0}}\""
 
             You can profile the command line by running:
 
-                pyinstrument -m onnx_diagnostic validate ...
-                pyinstrument -r html -o profile.html -m onnx_diagnostic validate ...
+                pyinstrument -m onnx_diagnostic {name} ...
+                pyinstrument -r html -o profile.html -m onnx_diagnostic {name} ...
             """
         ),
         formatter_class=RawTextHelpFormatter,
@@ -460,19 +464,19 @@ def get_parser_validate() -> ArgumentParser:
         "--same-as-trained",
         default=False,
         action=BooleanOptionalAction,
-        help="Validates a model identical to the trained model but not trained.",
+        help="Validates or exports a model identical to the trained model but not trained.",
     )
     parser.add_argument(
         "--trained",
         default=False,
         action=BooleanOptionalAction,
-        help="Validates the trained model (requires downloading).",
+        help="Validates or exports the trained model (requires downloading).",
     )
     parser.add_argument(
         "--inputs2",
         default=1,
         type=int,
-        help="Validates the model on a second set of inputs\n"
+        help="Validates or exports the model on a second set of inputs\n"
         "to check the exported model supports dynamism. The values is used "
         "as an increment to the first set of inputs. A high value may trick "
         "a different behavior in the model and missed by the exporter.",
@@ -504,13 +508,14 @@ def get_parser_validate() -> ArgumentParser:
         "--subfolder",
         help="Subfolder where to find the model and the configuration.",
     )
-    parser.add_argument(
-        "--ortfusiontype",
-        required=False,
-        help="Applies onnxruntime fusion, this parameter should contain the\n"
-        "model type or multiple values separated by `|`. `ALL` can be used\n"
-        "to run them all.",
-    )
+    if name == "validate":
+        parser.add_argument(
+            "--ortfusiontype",
+            required=False,
+            help="Applies onnxruntime fusion, this parameter should contain the\n"
+            "model type or multiple values separated by `|`. `ALL` can be used\n"
+            "to run them all.",
+        )
     parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
     parser.add_argument("--dtype", help="Changes dtype if necessary.")
     parser.add_argument("--device", help="Changes the device if necessary.")
@@ -532,33 +537,38 @@ def get_parser_validate() -> ArgumentParser:
         "--mop \"rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}\"",
         action=_ParseDict,
     )
-    parser.add_argument(
-        "--repeat",
-        default=1,
-        type=int,
-        help="number of times to run the model to measures inference time",
-    )
-    parser.add_argument(
-        "--warmup", default=0, type=int, help="number of times to run the model to do warmup"
-    )
+    if name == "validate":
+        parser.add_argument(
+            "--repeat",
+            default=1,
+            type=int,
+            help="number of times to run the model to measures inference time",
+        )
+        parser.add_argument(
+            "--warmup",
+            default=0,
+            type=int,
+            help="number of times to run the model to do warmup",
+        )
     parser.add_argument(
         "--outnames",
         help="This comma separated list defines the output names "
         "the onnx exporter should use.",
         default="",
     )
-    parser.add_argument(
-        "--ort-logs",
-        default=False,
-        action=BooleanOptionalAction,
-        help="Enables onnxruntime logging when the session is created",
-    )
-    parser.add_argument(
-        "--quiet-input-sets",
-        default="",
-        help="Avoids raising an exception when an input sets does not work with "
-        "the exported model.\nExample: --quiet-input-sets=inputs,inputs22",
-    )
+    if name == "validate":
+        parser.add_argument(
+            "--ort-logs",
+            default=False,
+            action=BooleanOptionalAction,
+            help="Enables onnxruntime logging when the session is created",
+        )
+        parser.add_argument(
+            "--quiet-input-sets",
+            default="",
+            help="Avoids raising an exception when an input sets does not work with "
+            "the exported model.\nExample: --quiet-input-sets=inputs,inputs22",
+        )
     return parser
 
 
@@ -637,7 +647,7 @@ def _cmd_export_sample(argv: List[Any]):
     from .torch_models.code_sample import code_sample
     from .tasks import supported_tasks
 
-    parser = get_parser_validate()
+    parser = get_parser_validate("exportsample")
     args = parser.parse_args(argv[1:])
     if not args.task and not args.mid:
         print("-- list of supported tasks:")
@@ -693,16 +703,16 @@ def _cmd_export_sample(argv: List[Any]):
             os.makedirs(args.dump_folder, exist_ok=True)
             name = (
                 _make_folder_name(
-                    model_id=args.model_id,
-                    exporter=args.exporter,
-                    optimization=args.optimization,
+                    model_id=args.mid,
+                    exporter=args.export,
+                    optimization=args.opt,
                     dtype=args.dtype,
                     device=args.device,
                     subfolder=args.subfolder,
                     opset=args.opset,
                     drop_inputs=None if not args.drop else args.drop.split(","),
-                    same_as_pretrained=args.same_as_pretrained,
-                    use_pretrained=args.use_pretrained,
+                    same_as_pretrained=args.same_as_trained,
+                    use_pretrained=args.trained,
                     task=args.task,
                 ).replace("/", "-")
                 + ".py"
@@ -1111,7 +1121,7 @@ def main(argv: Optional[List[Any]] = None):
                 validate=get_parser_validate,
                 stats=get_parser_stats,
                 agg=get_parser_agg,
-                exportsample=get_parser_validate,
+                exportsample=lambda: get_parser_validate("exportsample"),  # type: ignore[operator]
             )
             cmd = argv[0]
             if cmd not in parsers:
