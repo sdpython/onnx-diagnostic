@@ -72,7 +72,7 @@ def fake_reshape(
 
 def make_fake(
     x: Any, fake_mode: Optional["FakeTensorMode"] = None  # noqa: F821
-) -> Optional[Tuple["FakeTensor", "FakeTensorMode"]]:  # noqa: F821
+) -> Optional[Tuple["FakeTensor"], Optional["FakeTensorMode"]]:  # noqa: F821
     """
     Replaces all tensors by fake tensors.
     This modification happens inplace for caches.
@@ -106,7 +106,7 @@ def make_fake(
         print(inputs)
     """
     if x is None:
-        return None
+        return None, None
     if fake_mode is None:
         from torch.fx.experimental.symbolic_shapes import ShapeEnv
         from torch._subclasses.fake_tensor import FakeTensorMode
