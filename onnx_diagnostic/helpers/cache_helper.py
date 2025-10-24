@@ -169,6 +169,21 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             )
             print(string_type(past_key_values, with_shape=True))
         """
+        if key_value_pairs and isinstance(
+            key_value_pairs[0][0], torch._subclasses.fake_tensor.FakeTensor
+        ):
+            cache = transformers.cache_utils.DynamicCache()
+            cache.layers.extend(
+                [transformers.cache_utils.DynamicLayer() for _ in key_value_pairs]
+            )
+            for i, layer in enumerate(cache.layers):
+                k, v = key_value_pairs[i][0], key_value_pairs[i][1]
+                layer.dtype = k.dtype
+                layer.device = k.device
+                layer.keys = k
+                layer.values = v
+            return finalize_cache(cache)
+
         cache = transformers.cache_utils.DynamicCache(key_value_pairs)
         if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
             # The cache constructor contains the two following lines
