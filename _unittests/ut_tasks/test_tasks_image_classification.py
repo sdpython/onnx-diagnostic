@@ -14,14 +14,15 @@ class TestTasksImageClassification(ExtTestCase):
         self.assertEqual(data["task"], "image-classification")
         self.assertIn((data["size"], data["n_weights"]), [(56880, 14220)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
-        model(**inputs)
+        expected = model(**inputs)
         model(**data["inputs2"])
         if not has_transformers("4.52.999"):
             raise unittest.SkipTest("Requires transformers>=4.52")
         with torch_export_patches(patch_transformers=True, verbose=10):
-            torch.export.export(
+            ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+            self.assertEqualAny(expected, ep.module()(**inputs))
 
 
 if __name__ == "__main__":

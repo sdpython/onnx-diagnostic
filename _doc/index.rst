@@ -135,7 +135,7 @@ See :func:`onnx_diagnostic.torch_export_patches.torch_export_rewrite`.
       # ...
 
 all_dynamic_shapes_from_inputs
-+++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++
 
 See :func:`onnx_diagnostic.export.shape_helper.all_dynamic_shapes_from_inputs`.
 

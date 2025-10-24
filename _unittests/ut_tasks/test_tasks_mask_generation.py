@@ -21,12 +21,13 @@ class TestTasksMaskGeneration(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "mask-generation")
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
-        model(**torch_deepcopy(inputs))
+        expected = model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
         with torch_export_patches(patch_torch=False, patch_transformers=True, verbose=1):
-            torch.export.export(
+            ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+            self.assertEqualAny(expected, ep.module()(**inputs))
 
     @hide_stdout()
     @requires_transformers("4.53")
@@ -36,14 +37,15 @@ class TestTasksMaskGeneration(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "mask-generation")
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
-        model(**torch_deepcopy(inputs))
+        expected = model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
         with torch_export_patches(
             patch_torch=True, patch_sympy=True, patch_transformers=True, verbose=1
         ):
-            torch.export.export(
+            ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+            self.assertEqualAny(expected, ep.module()(**inputs))
 
 
 if __name__ == "__main__":

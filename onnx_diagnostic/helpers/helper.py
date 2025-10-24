@@ -463,6 +463,7 @@ def string_type(
         if verbose:
             print(f"[string_type] F2:{type(obj)}")
         return f"{prefix}F{i}s{'x'.join(map(str, obj.shape))}"
+
     if isinstance(obj, torch.Tensor):
         from .torch_helper import torch_dtype_to_onnx_dtype
 
@@ -783,6 +784,8 @@ def string_type(
             obj, ultralytics.engine.results.Results
         ), f"Unexpected type={type(obj)}"
         return f"ultralytics.{obj.__class__.__name__}(...)"
+    if obj.__class__.__name__ == "FakeTensorMode":
+        return f"{obj}"
 
     if verbose:
         print(f"[string_type] END:{type(obj)}")

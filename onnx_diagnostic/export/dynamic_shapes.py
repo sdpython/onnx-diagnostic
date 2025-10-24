@@ -226,7 +226,7 @@ class CoupleInputsDynamicShapes:
         for i, d in enumerate(inputs.shape):
             if i in ds and not isinstance(ds[i], int):
                 # dynamic then
-                if d in {0, 1}:
+                if isinstance(d, int) and d in {0, 1}:
                     # export issues for sure
                     issues[i] = f"d=[{d}]"
         return issues if issues else None

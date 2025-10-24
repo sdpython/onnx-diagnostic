@@ -119,6 +119,8 @@ nitpick_ignore = [
     ("py:class", "ast.Node"),
     ("py:class", "dtype"),
     ("py:class", "False"),
+    ("py:class", "FakeTensor"),
+    ("py:class", "FakeTensorMode"),
     ("py:class", "True"),
     ("py:class", "Argument"),
     ("py:class", "CacheProcessor"),
