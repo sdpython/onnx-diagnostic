@@ -16,7 +16,7 @@ import torch
 from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
-from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+from onnx_diagnostic.export.shape_helper import all_dynamic_shapes_from_inputs
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 
@@ -34,9 +34,9 @@ inputs = dict(
 print(string_type(inputs, with_shape=True))
 
 # %%
-# Function :func:`onnx_diagnostic.export.shape_helper.all_dynamic_shape_from_inputs`
+# Function :func:`onnx_diagnostic.export.shape_helper.all_dynamic_shapes_from_inputs`
 # produces the corresponding dynamic shapes assuming they are all dynamic.
-ds = all_dynamic_shape_from_inputs(inputs)
+ds = all_dynamic_shapes_from_inputs(inputs)
 pprint.pprint(ds)
 
 # %%
@@ -56,13 +56,13 @@ print(string_type(inputs, with_shape=True))
 
 # %%
 # And the input shapes.
-ds = all_dynamic_shape_from_inputs(inputs)
+ds = all_dynamic_shapes_from_inputs(inputs)
 if ds["past_key_values"]:
     print("transformers implemented serialization function for StaticCache.")
 else:
     print("We need to use serialization function implemented in this package.")
     with torch_export_patches(patch_transformers=True):
-        ds = all_dynamic_shape_from_inputs(inputs)
+        ds = all_dynamic_shapes_from_inputs(inputs)
 
 # %%
 # That gives.

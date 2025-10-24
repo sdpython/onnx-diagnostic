@@ -8,17 +8,17 @@ from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 DYNAMIC_SHAPES = Tuple[Tuple[Any, ...], Dict[str, Any]]
 
 
-def flatten_dynamic_shapes(ds: Any) -> Any:
+def _flatten_dynamic_shapes(ds: Any) -> Any:
     """Flattens the dynamic shapes."""
     if isinstance(ds, list):
-        return _flat_list([flatten_dynamic_shapes(t) for t in ds])
+        return _flat_list([_flatten_dynamic_shapes(t) for t in ds])
     if isinstance(ds, tuple):
-        return tuple(_flat_list([flatten_dynamic_shapes(t) for t in ds]))
+        return tuple(_flat_list([_flatten_dynamic_shapes(t) for t in ds]))
     if isinstance(ds, dict):
         if all(isinstance(i, int) for i in ds):
             # That's a dynamic shape
             return ds
-        return _flat_list([flatten_dynamic_shapes(t) for t in ds.values()])
+        return _flat_list([_flatten_dynamic_shapes(t) for t in ds.values()])
     raise AssertionError(f"Not implemented for {type(ds)}: {ds}")
 
 
@@ -380,7 +380,7 @@ class CoupleInputsDynamicShapes:
         flat, spec = torch.utils._pytree.tree_flatten(inputs)
         if all(isinstance(t, torch.Tensor) for t in flat):
             # We need to flatten dynamic shapes as well
-            ds = flatten_dynamic_shapes(ds)
+            ds = _flatten_dynamic_shapes(ds)
         res = cls._generic_walker_step(
             processor, flat, ds, flatten_unflatten=flatten_unflatten
         )

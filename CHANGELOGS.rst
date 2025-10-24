@@ -4,6 +4,7 @@ Change Logs
 0.7.16
 ++++++
 
+* :pr:`272`: makes patches work with FakeTensor
 * :pr:`270`: add export sample code to export a specific model id with the appropriate inputs
 * :pr:`269`: adds one unit test to track a patch fixing broadcast output shape
 * :pr:`267`: patches ``sdpa_attention_forward`` because of a control flow (``transformers>=5.0``)
@@ -100,7 +101,7 @@ Change Logs
 +++++
 
 * :pr:`178`: add a patch for eager_mask to handle ``assert len(flat_dynamic_shapes) == num_placeholders - num_lifted_inputs``
-* :pr:`177`: changes for the next version of onnx, fixes all_dynamic_shape_from_inputs
+* :pr:`177`: changes for the next version of onnx, fixes all_dynamic_shapes_from_inputs
 
 0.7.3
 +++++

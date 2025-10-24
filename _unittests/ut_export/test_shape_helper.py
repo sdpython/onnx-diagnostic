@@ -1,27 +1,28 @@
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, requires_torch
-from onnx_diagnostic.export.shape_helper import (
-    all_dynamic_shape_from_inputs,
-    guess_dynamic_shapes_from_inputs,
-)
+from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
+from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.helpers import flatten_object
 from onnx_diagnostic.helpers.cache_helper import (
     make_dynamic_cache,
     make_sliding_window_cache,
     make_encoder_decoder_cache,
     make_static_cache,
 )
-from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
-from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.export.shape_helper import (
+    all_dynamic_shapes_from_inputs,
+    guess_dynamic_shapes_from_inputs,
+    make_fake_with_dynamic_dimensions,
+)
 
 
 class TestShapeHelper(ExtTestCase):
-
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
     def test_all_dynamic_shape_from_cache(self):
         cache = make_dynamic_cache([(torch.ones((2, 2)), (torch.ones((2, 2)) * 2))])
-        ds = all_dynamic_shape_from_inputs(cache)
+        ds = all_dynamic_shapes_from_inputs(cache)
         self.assertEqual([[{0: "d_0_0", 1: "d_0_1"}], [{0: "d_1_0", 1: "d_1_1"}]], ds)
 
     @requires_torch("2.7.99")
@@ -122,17 +123,17 @@ class TestShapeHelper(ExtTestCase):
         with torch_export_patches(patch_transformers=True):
             for cache, exds in caches:
                 with self.subTest(cache_name=cache.__class__.__name__):
-                    ds = all_dynamic_shape_from_inputs(cache)
+                    ds = all_dynamic_shapes_from_inputs(cache)
                     self.assertEqual(exds, ds)
 
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
-    def test_all_dynamic_shape_from_inputs(self):
-        ds = all_dynamic_shape_from_inputs((torch.randn((5, 6)), torch.randn((1, 6))))
+    def test_all_dynamic_shapes_from_inputs(self):
+        ds = all_dynamic_shapes_from_inputs((torch.randn((5, 6)), torch.randn((1, 6))))
         self.assertEqual(({0: "d_0_0", 1: "d_0_1"}, {0: "d_1_0", 1: "d_1_1"}), ds)
-        ds = all_dynamic_shape_from_inputs([torch.randn((5, 6)), torch.randn((1, 6))])
+        ds = all_dynamic_shapes_from_inputs([torch.randn((5, 6)), torch.randn((1, 6))])
         self.assertEqual([{0: "d_0_0", 1: "d_0_1"}, {0: "d_1_0", 1: "d_1_1"}], ds)
-        ds = all_dynamic_shape_from_inputs(
+        ds = all_dynamic_shapes_from_inputs(
             (torch.randn((5, 6)), torch.randn((1, 6))), dim_prefix=torch.export.Dim.AUTO
         )
         self.assertEqual(
@@ -145,9 +146,9 @@ class TestShapeHelper(ExtTestCase):
 
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
-    def test_all_dynamic_shape_from_inputs_dynamic_cache(self):
+    def test_all_dynamic_shapes_from_inputs_dynamic_cache(self):
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM")
-        ds = all_dynamic_shape_from_inputs(data["inputs"])
+        ds = all_dynamic_shapes_from_inputs(data["inputs"])
         self.assertEqual(
             {
                 "input_ids": {0: "d_0_0", 1: "d_0_1"},
@@ -183,6 +184,60 @@ class TestShapeHelper(ExtTestCase):
             ),
             guessed,
         )
+
+    @requires_transformers("4.55")
+    @requires_torch("2.9")
+    def test_make_fake_with_dynamic_dimensions_tensor(self):
+        res = make_fake_with_dynamic_dimensions(
+            (torch.rand((2, 32, 30, 96), dtype=torch.float16),),
+            ({0: "batch", 2: "cache_length"},),
+        )
+        reshaped = res[0][0]
+        self.assertIsInstance(reshaped.shape[0], torch.SymInt)
+        self.assertIsInstance(reshaped.shape[2], torch.SymInt)
+        self.assertEqual(reshaped.shape[1], 32)
+        self.assertEqual(reshaped.shape[3], 96)
+        self.assertNotEqual(reshaped.shape[0], reshaped.shape[2])
+
+    @requires_transformers("4.55")
+    @requires_torch("2.9")
+    def test_make_fake_with_dynamic_dimensions_whole(self):
+        res = make_fake_with_dynamic_dimensions(
+            dict(
+                input_ids=torch.randint(30360, size=(2, 3), dtype=torch.int64),
+                attention_mask=torch.randint(1, size=(2, 33), dtype=torch.int64),
+                position_ids=torch.randint(32, size=(2, 3), dtype=torch.int64),
+                past_key_values=make_dynamic_cache(
+                    [
+                        (
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                        ),
+                        (
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                        ),
+                    ]
+                ),
+            ),
+            dynamic_shapes={
+                "input_ids": {0: "batch", 1: "seq_length"},
+                "attention_mask": {0: "batch", 1: "cache+seq"},
+                "position_ids": {0: "batch", 1: "seq_length"},
+                "past_key_values": [
+                    [{0: "batch", 2: "cache_length"}, {0: "batch", 2: "cache_length"}],
+                    [{0: "batch", 2: "cache_length"}, {0: "batch", 2: "cache_length"}],
+                ],
+            },
+        )
+        flat = flatten_object(res[0], drop_keys=True)
+        for t in flat:
+            if len(t.shape) == 4:
+                self.assertIsInstance(t.shape[0], torch.SymInt)
+                self.assertIsInstance(t.shape[2], torch.SymInt)
+                self.assertEqual(t.shape[1], 32)
+                self.assertEqual(t.shape[3], 96)
+                self.assertNotEqual(t.shape[0], t.shape[2])
 
 
 if __name__ == "__main__":

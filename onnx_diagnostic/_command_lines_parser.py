@@ -1128,7 +1128,7 @@ def main(argv: Optional[List[Any]] = None):
                 raise ValueError(
                     f"Unknown command {cmd!r}, it should be in {list(sorted(parsers))}."
                 )
-            parser = parsers[cmd]()
+            parser = parsers[cmd]()  # type: ignore[operator]
             parser.parse_args(argv[1:])
         raise RuntimeError("The programme should have exited before.")
 

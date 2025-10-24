@@ -1,9 +1,10 @@
-from typing import Any, Dict, List, Set, Tuple, Union
+from typing import Any, Dict, List, Set, Optional, Tuple, Union
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
+from ..helpers.fake_tensor_helper import fake_reshape
 from .dynamic_shapes import ModelInputs
 
 
-def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
+def all_dynamic_shapes_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
     """
     Returns the dynamic shapes for the given inputs.
     All dimensions are considered as dynamic.
@@ -18,7 +19,7 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
         import pprint
         import torch
         from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
-        from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+        from onnx_diagnostic.export.shape_helper import all_dynamic_shapes_from_inputs
         from onnx_diagnostic.torch_export_patches import torch_export_patches
 
         bsize, nheads, slen, dim = 2, 1, 30, 96
@@ -32,7 +33,7 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
             ),
         )
         with torch_export_patches(patch_transformers=True):
-            ds = all_dynamic_shape_from_inputs(inputs)
+            ds = all_dynamic_shapes_from_inputs(inputs)
         pprint.pprint(ds)
 
     For this function to work, patches must be enabled if :epkg:`transformers`
@@ -50,7 +51,7 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
             make_sliding_window_cache,
             make_static_cache,
         )
-        from onnx_diagnostic.export.shape_helper import all_dynamic_shape_from_inputs
+        from onnx_diagnostic.export.shape_helper import all_dynamic_shapes_from_inputs
         from onnx_diagnostic.torch_export_patches import torch_export_patches
 
         caches = [
@@ -104,7 +105,7 @@ def all_dynamic_shape_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
         with torch_export_patches(patch_transformers=True):
             for cache in caches:
                 print(f"-- {cache.__class__.__name__}")
-                pprint.pprint(all_dynamic_shape_from_inputs(cache))
+                pprint.pprint(all_dynamic_shapes_from_inputs(cache))
     """
     if isinstance(dim_prefix, str):
         prefixes: Set[str] = set()
@@ -199,3 +200,115 @@ def guess_dynamic_shapes_from_inputs(
     """
     mi = ModelInputs(None, inputs)
     return mi.guess_dynamic_shapes(auto=auto)
+
+
+def make_fake_with_dynamic_dimensions(
+    x: Any,
+    dynamic_shapes: Any,
+    fake_mode: Optional["FakeTensorMode"] = None,  # noqa: F821
+) -> Tuple[Any, "FakeTensorMode"]:  # noqa: F821
+    """
+    Replaces all tensors by fake tensor respecting the same
+    constraints as the following dynamic shapes.
+    This uses function :func:`onnx_diagnostic.helpers.fake_tensor_helper.make_fake`.
+
+    .. runpython::
+        :showcode:
+
+        from onnx_diagnostic.export.dynamic_shapes import make_fake_with_dynamic_dimensions
+
+        inputs, _ = make_fake_with_dynamic_dimensions(
+            dict(
+                input_ids=torch.randint(30360, size=(2, 3), dtype=torch.int64),
+                attention_mask=torch.randint(1, size=(2, 33), dtype=torch.int64),
+                position_ids=torch.randint(32, size=(2, 3), dtype=torch.int64),
+                past_key_values=make_dynamic_cache(
+                    [
+                        (
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                        ),
+                        (
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                            torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                        ),
+                    ]
+                ),
+            ),
+            dynamic_shapes={
+                "input_ids": {0: "batch", 1: "seq_length"},
+                "attention_mask": {0: "batch", 1: "cache+seq"},
+                "position_ids": {0: "batch", 1: "seq_length"},
+                "past_key_values": [
+                    [{0: "batch", 2: "cache_length"}, {0: "batch", 2: "cache_length"}],
+                    [{0: "batch", 2: "cache_length"}, {0: "batch", 2: "cache_length"}],
+                ],
+            },
+        )
+        print(inputs)
+    """
+    if x is None:
+        return None, None
+    if fake_mode is None:
+        from torch.fx.experimental.symbolic_shapes import ShapeEnv
+        from torch._subclasses.fake_tensor import FakeTensorMode
+
+        shape_env = ShapeEnv()
+        fake_mode = FakeTensorMode(shape_env=shape_env)
+
+    if isinstance(x, (list, tuple)):
+        return (
+            x.__class__(
+                [
+                    make_fake_with_dynamic_dimensions(
+                        i, fake_mode=fake_mode, dynamic_shapes=ds
+                    )[0]
+                    for i, ds in zip(x, dynamic_shapes)
+                ]
+            ),
+            fake_mode,
+        )
+    if isinstance(x, dict):
+        return {
+            k: make_fake_with_dynamic_dimensions(
+                v, fake_mode=fake_mode, dynamic_shapes=dynamic_shapes[k]
+            )[0]
+            for k, v in x.items()
+        }, fake_mode
+
+    if x.__class__.__name__ in {"DynamicCache", "StaticCache", "HybridCache"}:
+        assert hasattr(x, "layers"), (
+            f"Une more recent version of transformers (>=4.55), "
+            f"'layers' not found in class {type(x)}"
+        )
+        assert (
+            isinstance(dynamic_shapes, list) and len(dynamic_shapes) == 2
+        ), f"Unexpected dynamic_shapes={dynamic_shapes} for a DynamicCache"
+        for il, layer in enumerate(x.layers):
+            assert hasattr(layer, "keys") and hasattr(layer, "values"), (
+                f"Une more recent version of transformers (>=4.55), 'layers' "
+                f"not found in class {type(layer)} ({dir(layer)})"
+            )
+            layer.keys = make_fake_with_dynamic_dimensions(
+                layer.keys, fake_mode=fake_mode, dynamic_shapes=dynamic_shapes[0][il]
+            )[0]
+            layer.values = make_fake_with_dynamic_dimensions(
+                layer.values, fake_mode=fake_mode, dynamic_shapes=dynamic_shapes[1][il]
+            )[0]
+        return x, fake_mode
+    if x.__class__.__name__ == "EncoderDecoderCache":
+        make_fake_with_dynamic_dimensions(
+            x.self_attention_cache, fake_mode=fake_mode, dynamic_shapes=dynamic_shapes[0]
+        )
+        make_fake_with_dynamic_dimensions(
+            x.cross_attention_cache, fake_mode=fake_mode, dynamic_shapes=dynamic_shapes[1]
+        )
+        return x, fake_mode
+    if hasattr(x, "shape"):
+        t = fake_reshape(x, dynamic_shapes, fake_mode=fake_mode)
+        return t, fake_mode
+    from ..helpers import string_type
+
+    raise TypeError(
+        f"Unexpected type {type(x)} for x, content is {string_type(x, with_shape=True)}"
+    )
