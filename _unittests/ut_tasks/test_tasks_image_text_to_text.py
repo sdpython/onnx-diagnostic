@@ -14,7 +14,7 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 class TestTasksImageTextToText(ExtTestCase):
     @hide_stdout()
-    @requires_transformers("4.53")
+    @requires_transformers("4.56")
     @requires_torch("2.7.99")
     def test_image_text_to_text_idefics(self):
         mid = "HuggingFaceM4/tiny-random-idefics"
