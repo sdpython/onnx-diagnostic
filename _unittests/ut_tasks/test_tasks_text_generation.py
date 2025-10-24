@@ -54,6 +54,7 @@ class TestTasksTextGeneration(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "text-generation")
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        inputs_copied = torch_deepcopy(inputs)
         expected = model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
         fake = make_fake_with_dynamic_dimensions(inputs, dynamic_shapes=ds)[0]
@@ -62,7 +63,7 @@ class TestTasksTextGeneration(ExtTestCase):
                 model, (), kwargs=fake, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
             # print(ep)
-        got = ep.module()(**inputs)
+        got = ep.module()(**inputs_copied)
         self.assertEqualAny(expected.past_key_values, got.past_key_values)
         self.assertEqualArray(expected.logits, got.logits)
 

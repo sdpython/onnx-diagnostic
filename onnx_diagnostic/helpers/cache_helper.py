@@ -182,6 +182,11 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                 layer.device = k.device
                 layer.keys = k
                 layer.values = v
+                layer.is_initialized = True
+            assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
+                f"Unexpected number of layers in the cache ({len(cache.layers)}), "
+                f"{len(key_value_pairs)} expected."
+            )
             return finalize_cache(cache)
 
         cache = transformers.cache_utils.DynamicCache(key_value_pairs)
