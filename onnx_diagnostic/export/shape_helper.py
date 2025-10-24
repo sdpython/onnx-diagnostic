@@ -306,6 +306,8 @@ def make_fake_with_dynamic_dimensions(
         return x, fake_mode
     if hasattr(x, "shape"):
         t = fake_reshape(x, dynamic_shapes, fake_mode=fake_mode)
+        assert t.device == x.device, f"device mismatch {x.device} -> {t.device}"
+        assert t.dtype == x.dtype, f"dtype mismatch {x.dtype} -> {t.dtype}"
         return t, fake_mode
     from ..helpers import string_type
 

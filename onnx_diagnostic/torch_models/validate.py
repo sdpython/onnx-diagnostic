@@ -1909,6 +1909,14 @@ def call_torch_export_custom(
     strict = "-strict" in exporter
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
+    if "-fake" in exporter:
+        from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
+
+        if verbose:
+            print("[call_torch_export_custom] switching to FakeTensor")
+        assert not args, f"Exporter {exporter!r} not implemented with fake tensors."
+        kwargs = torch_deepcopy(kwargs)
+        kwargs, _ = make_fake_with_dynamic_dimensions(kwargs, dynamic_shapes=ds)
     opset = data.get("model_opset", None)
     if opset:
         summary["export_opset"] = opset

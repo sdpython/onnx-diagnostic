@@ -34,7 +34,9 @@ def fake_reshape(
         if true_tensor.shape[i] <= 1:
             expanded_shape = list(true_tensor.shape)
             expanded_shape[i] = _unique()
-            true_tensor = torch.empty(tuple(expanded_shape), dtype=true_tensor.dtype)
+            true_tensor = torch.empty(
+                tuple(expanded_shape), dtype=true_tensor.dtype, device=true_tensor.device
+            )
 
     # deal with equivalent dimension
     new_shape = list(true_tensor.shape)
@@ -47,7 +49,9 @@ def fake_reshape(
             d = _unique()
             mapping[d] = s
             new_shape[i] = d
-    true_tensor = torch.empty(tuple(new_shape), dtype=true_tensor.dtype)
+    true_tensor = torch.empty(
+        tuple(new_shape), dtype=true_tensor.dtype, device=true_tensor.device
+    )
 
     # now switch to FakeTensor
     if fake_mode is None:
