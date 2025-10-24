@@ -169,8 +169,10 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             )
             print(string_type(past_key_values, with_shape=True))
         """
-        if key_value_pairs and isinstance(
-            key_value_pairs[0][0], torch._subclasses.fake_tensor.FakeTensor
+        if (
+            key_value_pairs
+            and isinstance(key_value_pairs[0][0], torch._subclasses.fake_tensor.FakeTensor)
+            and pv.Version(transformers.__version__) >= pv.Version("4.55")
         ):
             cache = transformers.cache_utils.DynamicCache()
             cache.layers.extend(
