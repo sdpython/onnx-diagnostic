@@ -979,7 +979,11 @@ class ExtTestCase(unittest.TestCase):
             else:
                 for e, g in zip(expected, value):
                     self.assertEqualAny(e, g, msg=msg, atol=atol, rtol=rtol)
-        elif expected.__class__.__name__ in ("DynamicCache", "SlidingWindowCache"):
+        elif expected.__class__.__name__ in (
+            "DynamicCache",
+            "SlidingWindowCache",
+            "HybridCache",
+        ):
             self.assertEqual(type(expected), type(value), msg=msg)
             atts = ["key_cache", "value_cache"]
             self.assertEqualAny(
