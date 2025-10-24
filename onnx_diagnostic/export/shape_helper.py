@@ -215,7 +215,10 @@ def make_fake_with_dynamic_dimensions(
     .. runpython::
         :showcode:
 
-        from onnx_diagnostic.export.dynamic_shapes import make_fake_with_dynamic_dimensions
+        import pprint
+        import torch
+        from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
+        from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
 
         inputs, _ = make_fake_with_dynamic_dimensions(
             dict(
@@ -245,7 +248,7 @@ def make_fake_with_dynamic_dimensions(
                 ],
             },
         )
-        print(inputs)
+        pprint.pprint(inputs)
     """
     if x is None:
         return None, None

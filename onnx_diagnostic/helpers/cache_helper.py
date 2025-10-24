@@ -168,11 +168,15 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                 ]
             )
             print(string_type(past_key_values, with_shape=True))
+
+        The function is fully able to handle ``FakeTensor`` with dynamic dimensions if
+        ``transformers>=4.56``. Before that version, only FakeTensor with static dimensions
+        are supported.
         """
         if (
             key_value_pairs
             and isinstance(key_value_pairs[0][0], torch._subclasses.fake_tensor.FakeTensor)
-            and pv.Version(transformers.__version__) >= pv.Version("4.55")
+            and pv.Version(transformers.__version__) >= pv.Version("4.56")
         ):
             cache = transformers.cache_utils.DynamicCache()
             cache.layers.extend(
@@ -516,51 +520,51 @@ def make_hybrid_cache(
 
     .. code-block:: python
 
-            self.max_cache_len = (
-                max_cache_len if max_cache_len is not None else config.max_position_embeddings)
+        self.max_cache_len = (
+            max_cache_len if max_cache_len is not None else config.max_position_embeddings)
 
-            # Sliding layers can't be larger than the overall max cache len
-            self.sliding_window_len = min(config.sliding_window, self.max_cache_len)
-            self.max_batch_size = max_batch_size
+        # Sliding layers can't be larger than the overall max cache len
+        self.sliding_window_len = min(config.sliding_window, self.max_cache_len)
+        self.max_batch_size = max_batch_size
 
-            self.head_dim = (
-                config.head_dim if hasattr(config, "head_dim")
-                else config.hidden_size // config.num_attention_heads
-            )
+        self.head_dim = (
+            config.head_dim if hasattr(config, "head_dim")
+            else config.hidden_size // config.num_attention_heads
+        )
 
-            self._dtype = dtype
-            self.num_key_value_heads = (
-                config.num_attention_heads
-                if getattr(config, "num_key_value_heads", None) is None
-                else config.num_key_value_heads
-            )
+        self._dtype = dtype
+        self.num_key_value_heads = (
+            config.num_attention_heads
+            if getattr(config, "num_key_value_heads", None) is None
+            else config.num_key_value_heads
+        )
 
-            # If the attribute does not exist in the config, fallback to a simple StaticCache
-            if hasattr(config, "layer_types"):
-                self.is_sliding = [
-                    layer_type != "full_attention" for layer_type in config.layer_types]
-            else:
-                self.is_sliding = [False] * config.num_hidden_layers
+        # If the attribute does not exist in the config, fallback to a simple StaticCache
+        if hasattr(config, "layer_types"):
+            self.is_sliding = [
+                layer_type != "full_attention" for layer_type in config.layer_types]
+        else:
+            self.is_sliding = [False] * config.num_hidden_layers
 
-            self.key_cache: list[torch.Tensor] = []
-            self.value_cache: list[torch.Tensor] = []
-            global_cache_shape = (self.max_batch_size, self.num_key_value_heads,
-                                  self.max_cache_len, self.head_dim)
-            sliding_cache_shape = (self.max_batch_size, self.num_key_value_heads,
-                                   self.sliding_window_len, self.head_dim)
-            self.sliding_window = min(config.sliding_window, max_cache_len)
-            device = torch.device(device) if device is not None else None
-            for i in range(config.num_hidden_layers):
-                layer_device = layer_device_map[i] if layer_device_map is not None else device
-                cache_shape = sliding_cache_shape if self.is_sliding[i] else global_cache_shape
-                new_layer_key_cache = torch.zeros(
-                    cache_shape, dtype=self._dtype, device=layer_device)
-                new_layer_value_cache = torch.zeros(
-                    cache_shape, dtype=self._dtype, device=layer_device)
-                torch._dynamo.mark_static_address(new_layer_key_cache)
-                torch._dynamo.mark_static_address(new_layer_value_cache)
-                self.key_cache.append(new_layer_key_cache)
-                self.value_cache.append(new_layer_value_cache)
+        self.key_cache: list[torch.Tensor] = []
+        self.value_cache: list[torch.Tensor] = []
+        global_cache_shape = (self.max_batch_size, self.num_key_value_heads,
+                                self.max_cache_len, self.head_dim)
+        sliding_cache_shape = (self.max_batch_size, self.num_key_value_heads,
+                                self.sliding_window_len, self.head_dim)
+        self.sliding_window = min(config.sliding_window, max_cache_len)
+        device = torch.device(device) if device is not None else None
+        for i in range(config.num_hidden_layers):
+            layer_device = layer_device_map[i] if layer_device_map is not None else device
+            cache_shape = sliding_cache_shape if self.is_sliding[i] else global_cache_shape
+            new_layer_key_cache = torch.zeros(
+                cache_shape, dtype=self._dtype, device=layer_device)
+            new_layer_value_cache = torch.zeros(
+                cache_shape, dtype=self._dtype, device=layer_device)
+            torch._dynamo.mark_static_address(new_layer_key_cache)
+            torch._dynamo.mark_static_address(new_layer_value_cache)
+            self.key_cache.append(new_layer_key_cache)
+            self.value_cache.append(new_layer_value_cache)
     """
     layer_types = None
     if key_value_pairs:

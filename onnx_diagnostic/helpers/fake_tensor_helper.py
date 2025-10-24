@@ -86,6 +86,9 @@ def make_fake(
     .. runpython::
         :showcode:
 
+        import pprint
+        import torch
+        from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
         from onnx_diagnostic.helpers.fake_tensor_helper import make_fake
 
         inputs, _ = make_fake(
@@ -107,7 +110,7 @@ def make_fake(
                 ),
             )
         )
-        print(inputs)
+        pprint.pprint(inputs)
     """
     if x is None:
         return None, None
