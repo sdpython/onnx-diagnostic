@@ -13,7 +13,7 @@ def _unique():
 
 
 def fake_reshape(
-    true_tensor: "Tensor",  # noqa: F821
+    true_tensor: "torch.Tensor",  # noqa: F821
     sh: Dict[int, Any],  # noqa: F821
     fake_tensor: Optional["FakeTensor"] = None,  # noqa: F821
     fake_mode: Optional["FakeTensorMode"] = None,  # noqa: F821
