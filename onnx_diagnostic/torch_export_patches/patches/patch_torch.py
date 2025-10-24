@@ -25,8 +25,8 @@ def retrieve_stacktrace():
 
 def _catch_produce_guards_and_solve_constraints(
     previous_function: Callable,
-    fake_mode: "FakeTensorMode",  # noqa: F821
-    gm: "torch.fx.GraphModule",  # noqa: F821
+    fake_mode: FakeTensorMode,
+    gm: torch.fx.GraphModule,
     dynamic_shapes: Union[Dict[str, Any], Tuple[Any], List[Any], None],
     equalities_inputs: "EqualityConstraint",  # noqa: F821
     original_signature: inspect.Signature,
