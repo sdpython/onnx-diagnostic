@@ -21,12 +21,13 @@ class TestTasksImageTextToText(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "image-text-to-text")
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
-        model(**torch_deepcopy(inputs))
+        expected = model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
         with torch_export_patches(patch_transformers=True, verbose=10, patch_torch=False):
-            torch.export.export(
+            ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+            self.assertEqualAny(expected, ep.module()(**inputs))
 
     @hide_stdout()
     @requires_transformers("5.0.99")
@@ -44,12 +45,13 @@ class TestTasksImageTextToText(ExtTestCase):
         # self.assertIn((data["size"], data["n_weights"]), [(17248576, 4312144)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         print("--", self.string_type(data["inputs"], with_shape=True))
-        model(**torch_deepcopy(inputs))
+        expected = model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
         with torch_export_patches(patch_transformers=True, verbose=10):
-            torch.export.export(
+            ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+            self.assertEqualAny(expected, ep.module()(**inputs))
 
     @hide_stdout()
     @requires_transformers("4.56.99")
@@ -72,11 +74,12 @@ class TestTasksImageTextToText(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         # inputs.pop("attention_mask")
         # ds.pop("attention_mask")
-        model(**torch_deepcopy(inputs))
+        expected = model(**torch_deepcopy(inputs))
         with torch_export_patches(patch_transformers=True, verbose=10):
-            torch.export.export(
+            ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+            self.assertEqualAny(expected, ep.module()(**inputs))
 
     @hide_stdout()
     @requires_transformers("5.0.99")
@@ -93,12 +96,13 @@ class TestTasksImageTextToText(ExtTestCase):
         self.assertEqual(data["task"], "image-text-to-text")
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         print("--", self.string_type(data["inputs"], with_shape=True))
-        model(**torch_deepcopy(inputs))
+        expected = model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
         with torch_export_patches(patch_transformers=True, verbose=10):
-            torch.export.export(
+            ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+            self.assertEqualAny(expected, ep.module()(**inputs))
 
 
 if __name__ == "__main__":

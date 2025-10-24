@@ -1900,6 +1900,7 @@ def call_torch_export_custom(
         "custom-nostrict-all-noinline",
         "custom-dec",
         "custom-decall",
+        "custom-fake",
     }
     assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"

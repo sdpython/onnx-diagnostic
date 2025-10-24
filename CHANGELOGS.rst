@@ -4,6 +4,7 @@ Change Logs
 0.7.16
 ++++++
 
+* :pr:`273`: enables export with FakeTensor
 * :pr:`272`: makes patches work with FakeTensor
 * :pr:`270`: add export sample code to export a specific model id with the appropriate inputs
 * :pr:`269`: adds one unit test to track a patch fixing broadcast output shape

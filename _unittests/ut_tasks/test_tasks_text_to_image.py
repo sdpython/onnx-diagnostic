@@ -23,12 +23,13 @@ class TestTasksTextToTimage(ExtTestCase):
         self.assertEqual(data["task"], "text-to-image")
         self.assertIn((data["size"], data["n_weights"]), [(5708048, 1427012)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
-        model(**inputs)
+        expected = model(**inputs)
         model(**data["inputs2"])
         with torch_export_patches(patch_transformers=True, verbose=10, stop_if_static=1):
-            torch.export.export(
+            ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+            self.assertEqualAny(expected, ep.module()(**inputs))
 
 
 if __name__ == "__main__":

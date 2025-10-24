@@ -15,12 +15,13 @@ class TestTasksZeroShotImageClassification(ExtTestCase):
         self.assertEqual(data["task"], "zero-shot-image-classification")
         self.assertIn((data["size"], data["n_weights"]), [(188872708, 47218177)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
-        model(**inputs)
+        expected = model(**inputs)
         model(**data["inputs2"])
         with torch_export_patches(patch_transformers=True, verbose=10):
-            torch.export.export(
+            ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
+            self.assertEqualAny(expected, ep.module()(**inputs))
 
 
 if __name__ == "__main__":
