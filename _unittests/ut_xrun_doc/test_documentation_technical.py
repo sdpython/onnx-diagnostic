@@ -6,7 +6,12 @@ import subprocess
 import time
 import torch
 from onnx_diagnostic import __file__ as onnx_diagnostic_file
-from onnx_diagnostic.ext_test_case import ExtTestCase, is_windows, ignore_errors
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    is_windows,
+    ignore_errors,
+    has_transformers,
+)
 
 
 VERBOSE = 0
@@ -79,6 +84,9 @@ class TestDocumentationTechnical(ExtTestCase):
 
             if not reason and torch.__version__.startswith("2.9.0"):
                 reason = "examples are failing for on CI for 2.9.0"
+
+            if not reason and not has_transformers("4.55.0") and name in {"plot_generate.py"}:
+                reason = "transformers 4.55 is required"
 
             if reason:
 
