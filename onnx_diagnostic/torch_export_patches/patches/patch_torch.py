@@ -683,7 +683,7 @@ class patched_ShapeEnv:
         return concrete_val
 
 
-def patched_vmap(func, in_dims=0, out_dims=0):
+def patched_vmap(func, in_dims=0, out_dims=0, use_scan: bool = False):
     """
     Python implementation of :func:`torch.vmap`.
     The implementation raises an issue when it is being exported with
@@ -724,8 +724,9 @@ def patched_vmap(func, in_dims=0, out_dims=0):
             arg = arg.movedim(in_dim, 0)
             batched_args.append(arg)
 
-        if all(isinstance(a, torch.Tensor) for a in args) and isinstance(
-            batch_size, torch.SymInt
+        if use_scan or (
+            all(isinstance(a, torch.Tensor) for a in args)
+            and isinstance(batch_size, torch.SymInt)
         ):
             batched_tensors = [
                 (
@@ -735,7 +736,9 @@ def patched_vmap(func, in_dims=0, out_dims=0):
                 )
                 for arg, in_dim in zip(batched_args, in_dims_)
             ]
-            results = torch.ops.higher_order.scan(func, [], batched_tensors, [])
+            results = torch.ops.higher_order.scan(
+                lambda *args, **kwargs: [func(*args, **kwargs)], [], batched_tensors, []
+            )
             stacked = results[0]
             if out_dims != 0:
                 return stacked.movedim(0, out_dims)
@@ -745,7 +748,7 @@ def patched_vmap(func, in_dims=0, out_dims=0):
             torch._check(
                 not isinstance(batch_size, torch.SymInt),
                 lambda: (
-                    f"patched_vmap supports dynamic batch_size only if all argument "
+                    f"patched_vmap supports dynamic batch_size only if all arguments "
                     f"are tensors but types are {[type(a) for a in args]}"
                 ),
             )
