@@ -179,7 +179,7 @@ if not os.path.exists(model_name):
 # +++++++++++++
 #
 # Then we can call method generate for two tokens.
-# This function is part of :epkg:`onnx_diagnostic` but follows the implementation
+# This function is part of :mod:`onnx_diagnostic` but follows the implementation
 # seen earlier for a torch model.
 # Let's ask first the function to return the session to avoid creating on the second call.
 
