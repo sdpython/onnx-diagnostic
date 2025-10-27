@@ -48,6 +48,7 @@ def to_onnx(
             output_names=output_names,
             opset_version=target_opset,
             dynamic_shapes=dynamic_shapes,
+            dynamo=True,
         )
         ort_fusions.optimize_for_ort(epo.model)
         epo.save(filename)
