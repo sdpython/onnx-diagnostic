@@ -5,8 +5,9 @@
 From a LLM to processing a prompt
 =================================
 
-Method ``generate`` generates the model answer fro a given prompt.
-Let's implement our own to understand better how it works.
+Method ``generate`` generates the model answer for a given prompt.
+Let's implement our own to understand better how it works and
+then apply it to an ONNX model.
 
 Example with Phi 1.5
 ====================
