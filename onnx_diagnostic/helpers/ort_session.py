@@ -135,6 +135,10 @@ class _InferenceSession:
         self.sess = sess
         self.input_names = [i.name for i in sess.get_inputs()]
         self.output_names = [i.name for i in sess.get_outputs()]
+        self.input_shapes = [i.shape for i in sess.get_inputs()]
+        self.output_shapes = [i.shape for i in sess.get_outputs()]
+        self.input_types = [i.type for i in sess.get_inputs()]
+        self.output_types = [i.type for i in sess.get_outputs()]
         self.torch = torch
         self.nvtx = nvtx
         self.run_options = onnxruntime.RunOptions()

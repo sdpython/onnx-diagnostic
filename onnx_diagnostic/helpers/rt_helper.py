@@ -1,8 +1,9 @@
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import onnx
 import torch
 from .helper import string_type, flatten_object
+from .ort_session import InferenceSessionForTorch
 
 
 def name_type_to_onnx_dtype(name: str) -> int:
@@ -141,3 +142,104 @@ def reorder_modelbuilder_cache_to_torch(past_kv: List[Any]) -> List[Any]:
         keys.append(past_kv[i])
         values.append(past_kv[i + 1])
     return keys + values
+
+
+def _get_dim(i: int, s: Union[str, int], batch: int = 1) -> int:
+    if isinstance(s, int):
+        return s
+    if s == "batch":
+        return batch
+    # Everything else is cache length or sequence length.
+    return 0
+
+
+_DTYPES = {
+    "tensor(float)": torch.float32,
+    "tensor(float16)": torch.float16,
+    "tensor(bfloat16)": torch.bfloat16,
+    "tensor(int64)": torch.int64,
+    "tensor(int32)": torch.int32,
+}
+
+
+def rt_type_to_torch_dtype(typename: str) -> torch.dtype:
+    """Converts a string such as ``tensor(float)`` into a dtype (torch.float32)."""
+    return _DTYPES[typename]
+
+
+def onnx_generate(
+    model_or_path: Union[onnx.ModelProto, str, InferenceSessionForTorch],
+    input_ids: torch.Tensor,
+    eos_token_id: int,
+    max_new_tokens=100,
+    return_session: bool = False,
+) -> Union[torch.Tensor, Tuple[torch.Tensor, InferenceSessionForTorch]]:
+    """
+    Implements a simple method ``generate`` for an ONNX model.
+    The function does not expect any ``position_ids`` as input.
+
+    :param model_or_path: model or loaded model
+    :param input_ids: input tokens
+    :param eos_token_ids: token representing the end of an answer
+    :param max_new_tokens: stops after this number of generated tokens
+    :param
+    :return: input tokens concatenated with new tokens
+    """
+    if not isinstance(model_or_path, InferenceSessionForTorch):
+        providers = ["CUDAExecutionProvider"] if input_ids.is_cuda else []
+        providers.append("CPUExecutionProvider")
+        session = InferenceSessionForTorch(model_or_path, providers=providers)
+    else:
+        session = model_or_path
+
+    input_shapes = session.input_shapes
+    input_names = session.input_names
+    input_types = session.input_types
+
+    assert (
+        len(input_names) > 2
+        and input_names[:2] == ["input_ids", "attention_mask"]
+        and input_names[2].startswith("past_key_values")
+    ), f"Only text generation is supported but input_names == {input_names}"
+
+    # First call: prefill
+    input_feeds = dict(
+        input_ids=input_ids,
+        attention_mask=torch.ones(
+            input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
+        ),
+    )
+    for name, shape, dtype in zip(input_names[2:], input_shapes[2:], input_types[2:]):
+        new_shape = tuple(
+            _get_dim(i, s, batch=input_ids.shape[0]) for i, s in enumerate(shape)
+        )
+        input_feeds[name] = torch.empty(new_shape, dtype=rt_type_to_torch_dtype(dtype))
+
+    outputs = session.run(None, input_feeds)
+
+    # Next calls: decode
+    for _ in range(max_new_tokens):
+        next_token_logits = outputs[0][:, -1, :]
+
+        # The most probable next token is chosen.
+        next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+        # But we could select it using a multinomial law
+        # <<< probs = torch.softmax(next_token_logits / temperature, dim=-1)
+        # <<< top_probs, top_indices = torch.topk(probs, top_k)
+        # <<< next_token_id = top_indices[torch.multinomial(top_probs, 1)]
+
+        if next_token_id.item() == eos_token_id:
+            break
+        input_ids = torch.cat([input_ids, next_token_id.to(input_ids.device)], dim=-1)
+        feeds = dict(
+            input_ids=next_token_id,
+            attention_mask=torch.ones(
+                input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
+            ),
+        )
+        feeds.update(dict(zip(input_names[2:], outputs[1:])))
+        outputs = session.run(None, input_feeds)
+
+    if return_session:
+        return input_ids, session
+    return input_ids
