@@ -28,6 +28,23 @@ class TestPatchPatchTorch(ExtTestCase):
         got = patched_vmap(f)(x, y)
         self.assertEqualArray(expected, got)
 
+    @requires_transformers("4.52")
+    def test_export_patched_vmap_dynamic_shapes(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_torch import patched_vmap
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                f = lambda x, y: x * y + 1  # noqa: E731
+                return patched_vmap(f)(x, y)
+
+        x = torch.tensor([1.0, 2.0, 3.0])
+        y = torch.tensor([0.1, 0.2, 0.3])
+        expected = Model()(x, y)
+        DYN = torch.export.Dim.DYNAMIC
+        ep = torch.export.export(Model(), (x, y), dynamic_shapes=({0: DYN}, {0: DYN}))
+        got = ep.module()(x, y)
+        self.assertEqualArray(expected, got)
+
     @requires_torch("2.10")
     def test_export_vmap(self):
         class Model(torch.nn.Module):
@@ -55,6 +72,55 @@ class TestPatchPatchTorch(ExtTestCase):
         y = torch.tensor([0.1, 0.2, 0.3])
         ep = torch.export.export(Model(), (x, y))
         self.assertEqualArray(Model()(x, y), ep.module()(x, y))
+
+    @requires_torch("2.8")
+    @requires_transformers("4.52")
+    def test_export_patched_vmap_scan(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_torch import patched_vmap
+
+        x = torch.tensor([1.0, 2.0, 3.0])
+        y = torch.tensor([0.1, 0.2, 0.3])
+        res = torch.ops.higher_order.scan(lambda x, y: x + y, [], [x, y], [])
+        self.assertEqualArray(x + y, res[0])
+
+        class ModelVmap(torch.nn.Module):
+            def forward(self, x, y):
+                f = lambda x, y: x * y + 1  # noqa: E731
+                return torch.vmap(f)(x, y)
+
+        expected = ModelVmap()(x, y)
+
+        class ModelNoScan(torch.nn.Module):
+            def forward(self, x, y):
+                f = lambda x, y: x * y + 1  # noqa: E731
+                return patched_vmap(f, use_scan=False)(x, y)
+
+        expected2 = ModelNoScan()(x, y)
+        self.assertEqualArray(expected, expected2)
+
+        class ModelScan(torch.nn.Module):
+            def forward(self, x, y):
+                f = lambda x, y: [x * y + 1]  # noqa: E731
+                return torch.ops.higher_order.scan(f, [], [x, y], [])[0]
+
+        expected2 = ModelNoScan()(x, y)
+        self.assertEqualArray(expected, expected2)
+        ep = torch.export.export(ModelScan(), (x, y))
+        self.assertEqualArray(expected, ep.module()(x, y))
+
+        DYN = torch.export.Dim.DYNAMIC
+        ep = torch.export.export(ModelScan(), (x, y), dynamic_shapes=({0: DYN}, {0: DYN}))
+        self.assertEqualArray(expected, ep.module()(x, y))
+
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                f = lambda x, y: x * y + 1  # noqa: E731
+                return patched_vmap(f, use_scan=True)(x, y)
+
+        expected2 = Model()(x, y)
+        self.assertEqualArray(expected, expected2)
+        ep = torch.export.export(Model(), (x, y), dynamic_shapes=({0: DYN}, {0: DYN}))
+        self.assertEqualArray(expected, ep.module()(x, y))
 
     @requires_transformers("4.52")
     def test_vmap_outdim(self):
