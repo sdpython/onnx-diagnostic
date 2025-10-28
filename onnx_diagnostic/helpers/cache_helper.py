@@ -140,7 +140,7 @@ def is_cache_dynamic_registered(fast: bool = False) -> bool:
 
 
 def make_dynamic_shapes_kv_cache(
-    cache: transformers.cache_utils.Cache, shape_of_one: Dict[str, Any]
+    cache: transformers.cache_utils.Cache, shape_of_one: Dict[int, Any]
 ) -> List[Dict[int, Any]]:
     """
     Returns the dynamic shapes for key-value cache
