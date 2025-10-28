@@ -182,7 +182,10 @@ def onnx_generate(
     :param input_ids: input tokens
     :param eos_token_ids: token representing the end of an answer
     :param max_new_tokens: stops after this number of generated tokens
-    :param
+    :param return_session: returns the instance of class
+        :class:`InferenceSessionForTorch
+        <onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch>`
+        created if necessary
     :return: input tokens concatenated with new tokens
     """
     if not isinstance(model_or_path, InferenceSessionForTorch):
