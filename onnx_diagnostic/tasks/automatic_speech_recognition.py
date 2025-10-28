@@ -84,14 +84,8 @@ def get_inputs(
         "cache_position": {0: seq_length},
         "encoder_outputs": [{0: batch}],  # last_hidden_state
         "past_key_values": [
-            [
-                [{0: batch} for _ in range(num_hidden_layers)],
-                [{0: batch} for _ in range(num_hidden_layers)],
-            ],
-            [
-                [{0: batch} for _ in range(num_hidden_layers)],
-                [{0: batch} for _ in range(num_hidden_layers)],
-            ],
+            [{0: batch} for _ in range(num_hidden_layers * 2)],
+            [{0: batch} for _ in range(num_hidden_layers * 2)],
         ],
     }
     inputs = dict(

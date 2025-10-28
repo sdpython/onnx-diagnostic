@@ -81,14 +81,8 @@ def get_inputs(
         "attention_mask": {0: batch, 1: "seq_mask"},
         # "cache_position": {0: batch, 1: torch.export.Dim.DYNAMIC},
         "past_key_values": [
-            [
-                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-                [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-            ],
-            [
-                [{0: batch, 2: cache_length2} for _ in range(num_hidden_layers)],
-                [{0: batch, 2: cache_length2} for _ in range(num_hidden_layers)],
-            ],
+            [{0: batch, 2: cache_length} for _ in range(num_hidden_layers * 2)],
+            [{0: batch, 2: cache_length2} for _ in range(num_hidden_layers * 2)],
         ],
         # one these is selected based on the forward method signature
         # "encoder_last_hidden_state": {0: batch, 1: torch.export.Dim.DYNAMIC},

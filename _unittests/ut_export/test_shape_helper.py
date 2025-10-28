@@ -225,8 +225,10 @@ class TestShapeHelper(ExtTestCase):
                 "attention_mask": {0: "batch", 1: "cache+seq"},
                 "position_ids": {0: "batch", 1: "seq_length"},
                 "past_key_values": [
-                    [{0: "batch", 2: "cache_length"}, {0: "batch", 2: "cache_length"}],
-                    [{0: "batch", 2: "cache_length"}, {0: "batch", 2: "cache_length"}],
+                    {0: "batch", 2: "cache_length"},
+                    {0: "batch", 2: "cache_length"},
+                    {0: "batch", 2: "cache_length"},
+                    {0: "batch", 2: "cache_length"},
                 ],
             },
         )

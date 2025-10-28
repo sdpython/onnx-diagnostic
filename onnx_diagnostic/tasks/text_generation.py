@@ -119,10 +119,7 @@ def get_inputs(
                 0: batch,
                 1: "cache+seq",  # cache_length + seq_length
             },
-            "cache_params": [
-                [{0: batch} for _ in range(num_hidden_layers)],
-                [{0: batch} for _ in range(num_hidden_layers)],
-            ],
+            "cache_params": [{0: batch} for _ in range(num_hidden_layers * 2)],
         }
         inputs = dict(
             input_ids=torch.randint(
@@ -176,12 +173,7 @@ def get_inputs(
                 "input_ids": {0: batch, 1: seq_length},
                 "attention_mask": {0: batch, 2: "seq"},
                 "cache_position": {0: "seq"},
-                "past_key_values": [
-                    # [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-                    # [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-                    [{0: batch} for _ in range(num_hidden_layers)],
-                    [{0: batch} for _ in range(num_hidden_layers)],
-                ],
+                "past_key_values": [{0: batch} for _ in range(num_hidden_layers * 2)],
             }
             inputs = dict(
                 input_ids=torch.randint(
@@ -222,8 +214,7 @@ def get_inputs(
                 },
                 "position_ids": {0: batch, 1: seq_length},
                 "past_key_values": [
-                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
-                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
+                    {0: batch, 2: cache_length} for _ in range(num_hidden_layers * 2)
                 ],
             }
 
