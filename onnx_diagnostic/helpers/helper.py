@@ -1,6 +1,7 @@
 import ast
 import enum
 import inspect
+import itertools
 from dataclasses import is_dataclass, fields
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
@@ -948,8 +949,8 @@ def flatten_object(x: Any, drop_keys: bool = False) -> Any:
         from .cache_helper import CacheKeyValue
 
         kc = CacheKeyValue(x)
-        res = flatten_object(kc.key_cache) + flatten_object(kc.value_cache)
-        return tuple(res)
+        return list(itertools.chain.from_iterable(zip(kc.key_cache, kc.value_cache)))
+
     if x.__class__.__name__ == "EncoderDecoderCache":
         res = flatten_object(x.self_attention_cache) + flatten_object(x.cross_attention_cache)
         return tuple(res)

@@ -8,6 +8,7 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_static_cache,
     make_sliding_window_cache,
     flatten_unflatten_for_dynamic_shapes,
+    make_dynamic_shapes_kv_cache,
     CacheKeyValue,
 )
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
@@ -64,8 +65,8 @@ class TestPatchSerialization(ExtTestCase):
         model(cache)
         DYN = torch.export.Dim.DYNAMIC
         ds = [
-            [[{0: DYN}, {0: DYN}, {0: DYN}], [{0: DYN}, {0: DYN}, {0: DYN}]],
-            [[{0: DYN}, {0: DYN}, {0: DYN}], [{0: DYN}, {0: DYN}, {0: DYN}]],
+            make_dynamic_shapes_kv_cache(cache1, {0: DYN}),
+            make_dynamic_shapes_kv_cache(cache2, {0: DYN}),
         ]
 
         with torch_export_patches(patch_transformers=True):
@@ -99,9 +100,15 @@ class TestPatchSerialization(ExtTestCase):
         model = Model()
         model(cache)
         DYN = torch.export.Dim.DYNAMIC
-        ds = [[{0: DYN}, {0: DYN}, {0: DYN}], [{0: DYN}, {0: DYN}, {0: DYN}]]
+        ds = make_dynamic_shapes_kv_cache(cache, {0: DYN})
+        self.assertEqual(len(ds), 6)
 
-        with torch_export_patches():
+        with torch_export_patches(patch_transformers=True):
+            flat, _spec = torch.utils._pytree.tree_flatten(cache)
+            self.assertEqual(len(flat), len(ds))
+            unflat = torch.utils._pytree.tree_unflatten(flat, _spec)
+            if hasattr(unflat, "layers"):
+                self.assertEqual(len(unflat.layers), 3)
             torch.export.export(model, (cache,), dynamic_shapes=(ds,))
 
     @ignore_warnings(UserWarning)
@@ -195,7 +202,7 @@ class TestPatchSerialization(ExtTestCase):
         model = Model()
         model(cache)
         DYN = torch.export.Dim.DYNAMIC
-        ds = [[{0: DYN}, {0: DYN}], [{0: DYN}, {0: DYN}]]
+        ds = make_dynamic_shapes_kv_cache(cache, {0: DYN})
 
         with torch_export_patches(patch_transformers=True):
             torch.export.export(model, (cache,), dynamic_shapes=(ds,))
@@ -265,9 +272,7 @@ class TestPatchSerialization(ExtTestCase):
             flat, _spec = torch.utils._pytree.tree_flatten(bo)
             unflat = flatten_unflatten_for_dynamic_shapes(bo, use_dict=True)
             self.assertIsInstance(unflat, list)
-            self.assertEqual(
-                "#2[#3[T1r4,T1r4,T1r4],#3[T1r4,T1r4,T1r4]]", self.string_type(unflat)
-            )
+            self.assertEqual("#6[T1r4,T1r4,T1r4,T1r4,T1r4,T1r4]", self.string_type(unflat))
 
         # export
         class Model(torch.nn.Module):
@@ -278,7 +283,7 @@ class TestPatchSerialization(ExtTestCase):
         model = Model()
         model(bo)
         DYN = torch.export.Dim.DYNAMIC
-        ds = [[{0: DYN}, {0: DYN}, {0: DYN}], [{0: DYN}, {0: DYN}, {0: DYN}]]
+        ds = make_dynamic_shapes_kv_cache(bo, {0: DYN})
 
         with torch_export_patches(patch_transformers=True, stop_if_static=1):
             torch.export.export(model, (bo,), dynamic_shapes=(ds,))

@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import packaging.version as pv
 import torch
 import transformers
@@ -46,8 +46,13 @@ class CacheKeyValue:
             raise NotImplementedError(f"type(cache)={type(cache)}")
 
     def make_dynamic_cache(self):
-        """Do the reverse operation."""
+        """Does the reverse operation."""
         return make_dynamic_cache(list(zip(self.key_cache, self.value_cache)))
+
+    @property
+    def n_layers(self) -> int:
+        """Returns the number of layers."""
+        return len(self.key_cache) if self.key_cache else 0
 
 
 def flatten_unflatten_for_dynamic_shapes(
@@ -132,6 +137,19 @@ def is_cache_dynamic_registered(fast: bool = False) -> bool:
     if hasattr(cache2, "layers") and hasattr(cache, "layers"):
         return len(cache2.layers) == len(cache.layers)
     return len(cache2.key_cache) == len(cache.value_cache)
+
+
+def make_dynamic_shapes_kv_cache(
+    cache: transformers.cache_utils.Cache, shape_of_one: Dict[str, Any]
+) -> List[Dict[int, Any]]:
+    """
+    Returns the dynamic shapes for key-value cache
+
+    :param cache: a cache
+    :param shape_of_one: shape of one element
+    :return: dynamic shapes
+    """
+    return [shape_of_one for _ in range(CacheKeyValue(cache).n_layers * 2)]
 
 
 if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
