@@ -181,7 +181,7 @@ class TestHelpers(ExtTestCase):
     def test_flatten_cache(self):
         cache = make_dynamic_cache([(torch.ones((5, 6, 5, 6)), torch.ones((5, 6, 5, 6)) + 2)])
         flat = flatten_object(cache, drop_keys=True)
-        self.assertEqual(string_type(flat), "(T1r4,T1r4)")
+        self.assertEqual(string_type(flat), "#2[T1r4,T1r4]")
         cache = dict(
             cache=make_dynamic_cache(
                 [(torch.ones((5, 6, 5, 6)), torch.ones((5, 6, 5, 6)) + 2)]

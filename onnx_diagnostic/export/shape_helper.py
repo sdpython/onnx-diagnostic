@@ -303,8 +303,8 @@ def make_fake_with_dynamic_dimensions(
             f"Une more recent version of transformers (>=4.55), "
             f"'layers' not found in class {type(x)}"
         )
-        assert (
-            isinstance(dynamic_shapes, list) and len(dynamic_shapes) == 2
+        assert isinstance(dynamic_shapes, list) and (
+            not dynamic_shapes or not isinstance(dynamic_shapes[0], list)
         ), f"Unexpected dynamic_shapes={dynamic_shapes} for a DynamicCache"
         for il, layer in enumerate(x.layers):
             assert hasattr(layer, "keys") and hasattr(layer, "values"), (
@@ -312,10 +312,10 @@ def make_fake_with_dynamic_dimensions(
                 f"not found in class {type(layer)} ({dir(layer)})"
             )
             layer.keys = make_fake_with_dynamic_dimensions(
-                layer.keys, fake_mode=fake_mode, dynamic_shapes=dynamic_shapes[0][il]
+                layer.keys, fake_mode=fake_mode, dynamic_shapes=dynamic_shapes[il * 2]
             )[0]
             layer.values = make_fake_with_dynamic_dimensions(
-                layer.values, fake_mode=fake_mode, dynamic_shapes=dynamic_shapes[1][il]
+                layer.values, fake_mode=fake_mode, dynamic_shapes=dynamic_shapes[il * 2 + 1]
             )[0]
         return x, fake_mode
     if x.__class__.__name__ == "EncoderDecoderCache":

@@ -73,7 +73,7 @@ class TestCacheHelpers(ExtTestCase):
             input_ids={0: batch, 1: "seq"},
             attention_mask={0: batch, 1: "seq"},
             position_ids={0: batch, 1: "seq"},
-            past_key_values=[[{0: batch, 2: "seq"}], [{0: batch, 2: "seq"}]],
+            past_key_values=[{0: batch, 2: "seq"}, {0: batch, 2: "seq"}],
         )
 
         DYN = torch.export.Dim.DYNAMIC
@@ -86,7 +86,7 @@ class TestCacheHelpers(ExtTestCase):
             cpl = CoupleInputsDynamicShapes(tuple(), kwargs, dynamic_shapes)
             res = cpl.replace_string_by()
         dsc = res["past_key_values"]
-        self.assertEqual([[{0: batch, 2: DYN}], [{0: batch, 2: DYN}]], dsc)
+        self.assertEqual([{0: batch, 2: DYN}, {0: batch, 2: DYN}], dsc)
 
     def test_unflatten_flatten_dynamic_cache(self):
         with torch_export_patches(patch_transformers=True):
@@ -94,7 +94,7 @@ class TestCacheHelpers(ExtTestCase):
             self.assertIsInstance(c1, transformers.cache_utils.DynamicCache)
             unflat = flatten_unflatten_for_dynamic_shapes(c1)
             self.assertEqual(
-                "#2[#1[T1s4x4x4],#1[T1s4x4x4]]", self.string_type(unflat, with_shape=True)
+                "#2[T1s4x4x4,T1s4x4x4]", self.string_type(unflat, with_shape=True)
             )
             self.assertEqual(
                 "DynamicCache(key_cache=#1[T1s4x4x4], value_cache=#1[T1s4x4x4])",
@@ -129,16 +129,15 @@ class TestCacheHelpers(ExtTestCase):
             self.assertIsInstance(unflat, list)
             self.assertEqual(len(unflat), 2)
             self.assertIsInstance(unflat[0], list)
-            self.assertEqual(len(unflat[0]), 2)
-            self.assertIsInstance(unflat[0][0], list)
-            self.assertEqual(len(unflat[0][0]), 3)
+            self.assertEqual(len(unflat[0]), 6)
+            self.assertIsInstance(unflat[0][0], torch.Tensor)
             self.assertEqual(
-                "#2[#3[T1s4x4x4,T1s4x4x4,T1s4x4x4],#3[T1s4x4x4,T1s4x4x4,T1s4x4x4]]",
+                "#6[T1s4x4x4,T1s4x4x4,T1s4x4x4,T1s4x4x4,T1s4x4x4,T1s4x4x4]",
                 self.string_type(unflat[0], with_shape=True),
             )
             self.assertEqual(
-                "#2[#2[#3[T1s4x4x4,T1s4x4x4,T1s4x4x4],#3[T1s4x4x4,T1s4x4x4,T1s4x4x4]],"
-                "#2[#3[T1s5x5x5,T1s5x5x5,T1s5x5x5],#3[T1s5x5x5,T1s5x5x5,T1s5x5x5]]]",
+                "#2[#6[T1s4x4x4,T1s4x4x4,T1s4x4x4,T1s4x4x4,T1s4x4x4,T1s4x4x4],"
+                "#6[T1s5x5x5,T1s5x5x5,T1s5x5x5,T1s5x5x5,T1s5x5x5,T1s5x5x5]]",
                 self.string_type(unflat, with_shape=True),
             )
             self.assertEqual(
@@ -217,9 +216,9 @@ class TestCacheHelpers(ExtTestCase):
             self.assertEqual(len(flat), 6)
             unflat = flatten_unflatten_for_dynamic_shapes(c2)
             self.assertIsInstance(unflat, list)
-            self.assertEqual(len(unflat), 2)
+            self.assertEqual(len(unflat), 6)
             self.assertEqual(
-                "#2[#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7],#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7]]",
+                "#6[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7]",
                 self.string_type(unflat, with_shape=True),
             )
 
@@ -256,9 +255,9 @@ class TestCacheHelpers(ExtTestCase):
             self.assertEqual(len(flat), 6)
             unflat = flatten_unflatten_for_dynamic_shapes(c2)
             self.assertIsInstance(unflat, list)
-            self.assertEqual(len(unflat), 2)
+            self.assertEqual(len(unflat), 6)
             self.assertEqual(
-                "#2[#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7],#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7]]",
+                "#6[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7]",
                 self.string_type(unflat, with_shape=True),
             )
 

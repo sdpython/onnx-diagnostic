@@ -76,10 +76,7 @@ class TestOnnxExportErrors(ExtTestCase):
             ep = torch.export.export(
                 model,
                 inputs,
-                dynamic_shapes=(
-                    {0: DYN, 2: DYN},
-                    [[{0: DYN, 2: DYN}], [{0: DYN, 2: DYN}]],
-                ),
+                dynamic_shapes=({0: DYN, 2: DYN}, [{0: DYN, 2: DYN}, {0: DYN, 2: DYN}]),
                 strict=False,
             )
             mod = ep.module()

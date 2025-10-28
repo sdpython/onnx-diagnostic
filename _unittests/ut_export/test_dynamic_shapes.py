@@ -452,19 +452,18 @@ class TestDynamicShapes(ExtTestCase):
             (
                 (
                     [
-                        [{}, {}],
-                        [
-                            {
-                                0: torch.export.Dim.DYNAMIC,
-                                2: torch.export.Dim.DYNAMIC,
-                                3: torch.export.Dim.DYNAMIC,
-                            },
-                            {
-                                0: torch.export.Dim.DYNAMIC,
-                                2: torch.export.Dim.DYNAMIC,
-                                3: torch.export.Dim.DYNAMIC,
-                            },
-                        ],
+                        {},
+                        {
+                            0: torch.export.Dim.DYNAMIC,
+                            2: torch.export.Dim.DYNAMIC,
+                            3: torch.export.Dim.DYNAMIC,
+                        },
+                        {},
+                        {
+                            0: torch.export.Dim.DYNAMIC,
+                            2: torch.export.Dim.DYNAMIC,
+                            3: torch.export.Dim.DYNAMIC,
+                        },
                     ],
                     {3: torch.export.Dim.DYNAMIC},
                 ),
@@ -520,11 +519,10 @@ class TestDynamicShapes(ExtTestCase):
             (
                 (
                     [
-                        [{}, {}],
-                        [
-                            {0: "dim_0I_1o_0l0", 2: "dim_0I_1o_0l2", 3: "dim_0I_1o_0l3"},
-                            {0: "dim_0I_1o_1l0", 2: "dim_0I_1o_1l2", 3: "dim_0I_1o_1l3"},
-                        ],
+                        {},
+                        {0: "dim_0I_1o0", 2: "dim_0I_1o2", 3: "dim_0I_1o3"},
+                        {},
+                        {0: "dim_0I_3o0", 2: "dim_0I_3o2", 3: "dim_0I_3o3"},
                     ],
                     {3: "dim_1I3"},
                 ),
@@ -641,18 +639,18 @@ class TestDynamicShapes(ExtTestCase):
                     kwargs,
                     {
                         "A": ds_batch,
-                        "B": (ds_batch, [[ds_batch, ds_batch], [ds_batch, ds_batch]]),
+                        "B": (ds_batch, [ds_batch, ds_batch, ds_batch, ds_batch]),
                     },
                 ).invalid_dimensions_for_export(),
             )
             self.assertEqual(
-                {"B": (None, [[None, {2: "d=[1]"}], [None, {2: "d=[1]"}]])},
+                {"B": (None, [None, {2: "d=[1]"}, None, {2: "d=[1]"}])},
                 Cls(
                     (),
                     kwargs,
                     {
                         "A": ds_batch,
-                        "B": (ds_batch, [[ds_batch, ds_batch_seq], [ds_batch, ds_batch_seq]]),
+                        "B": (ds_batch, [ds_batch, ds_batch_seq, ds_batch, ds_batch_seq]),
                     },
                 ).invalid_dimensions_for_export(),
             )
@@ -831,18 +829,17 @@ class TestDynamicShapes(ExtTestCase):
 
         DYN = torch.export.Dim.DYNAMIC
         ds = {
-            "cache": [
-                [{0: DYN, 1: DYN}, {0: DYN, 1: DYN}],
-                [{0: DYN, 1: DYN}, {0: DYN, 1: DYN}],
-            ]
+            "cache": [{0: DYN, 1: DYN}, {0: DYN, 1: DYN}, {0: DYN, 1: DYN}, {0: DYN, 1: DYN}]
         }
         inst = CoupleInputsDynamicShapes((), dict(cache=cache), ds)
         as_string = inst.replace_by_string()
         self.assertEqual(
             {
                 "cache": [
-                    [{0: "Dim0", 1: "Dim1"}, {0: "Dim2", 1: "Dim3"}],
-                    [{0: "Dim4", 1: "Dim5"}, {0: "Dim6", 1: "Dim7"}],
+                    {0: "Dim0", 1: "Dim1"},
+                    {0: "Dim2", 1: "Dim3"},
+                    {0: "Dim4", 1: "Dim5"},
+                    {0: "Dim6", 1: "Dim7"},
                 ]
             },
             as_string,
