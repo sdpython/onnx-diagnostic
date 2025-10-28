@@ -206,7 +206,7 @@ def onnx_generate(
     ), f"Only text generation is supported but input_names == {input_names}"
 
     # First call: prefill
-    input_feeds = dict(
+    feeds = dict(
         input_ids=input_ids,
         attention_mask=torch.ones(
             input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
@@ -216,9 +216,9 @@ def onnx_generate(
         new_shape = tuple(
             _get_dim(i, s, batch=input_ids.shape[0]) for i, s in enumerate(shape)
         )
-        input_feeds[name] = torch.empty(new_shape, dtype=rt_type_to_torch_dtype(dtype))
+        feeds[name] = torch.empty(new_shape, dtype=rt_type_to_torch_dtype(dtype))
 
-    outputs = session.run(None, input_feeds)
+    outputs = session.run(None, feeds)
 
     # Next calls: decode
     for _ in range(max_new_tokens):
@@ -241,7 +241,7 @@ def onnx_generate(
             ),
         )
         feeds.update(dict(zip(input_names[2:], outputs[1:])))
-        outputs = session.run(None, input_feeds)
+        outputs = session.run(None, feeds)
 
     if return_session:
         return input_ids, session

@@ -48,8 +48,8 @@ class TestPatchInputs(ExtTestCase):
                 "attention_mask": {0: "batch_size", 1: "total_sequence_length"},
                 "input_ids": {0: "batch_size", 1: "sequence_length"},
                 "past_key_values": [
-                    [{0: "batch_size", 2: "past_sequence_length"}],
-                    [{0: "batch_size", 2: "past_sequence_length"}],
+                    {0: "batch_size", 2: "past_sequence_length"},
+                    {0: "batch_size", 2: "past_sequence_length"},
                 ],
                 "position_ids": {0: "batch_size", 1: "sequence_length"},
             },
@@ -98,8 +98,8 @@ class TestPatchInputs(ExtTestCase):
                 "attention_mask": {0: "batch_size", 1: "sequence_length"},
                 "input_ids": {0: "batch_size", 1: "sequence_length"},
                 "past_key_values": [
-                    [{0: "batch_size", 2: "past_sequence_length"}],
-                    [{0: "batch_size", 2: "past_sequence_length"}],
+                    {0: "batch_size", 2: "past_sequence_length"},
+                    {0: "batch_size", 2: "past_sequence_length"},
                 ],
                 "position_ids": {0: "batch_size", 1: "sequence_length"},
             },

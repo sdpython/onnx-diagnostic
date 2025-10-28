@@ -113,8 +113,8 @@ class TestTasks(ExtTestCase):
                 "cache_position": {0: "seq_length"},
                 "encoder_outputs": [{0: "batch"}],
                 "past_key_values": [
-                    [[{0: "batch"}, {0: "batch"}], [{0: "batch"}, {0: "batch"}]],
-                    [[{0: "batch"}, {0: "batch"}], [{0: "batch"}, {0: "batch"}]],
+                    [{0: "batch"}, {0: "batch"}, {0: "batch"}, {0: "batch"}],
+                    [{0: "batch"}, {0: "batch"}, {0: "batch"}, {0: "batch"}],
                 ],
             },
             ds,

@@ -155,8 +155,8 @@ class TestShapeHelper(ExtTestCase):
                 "attention_mask": {0: "d_1_0", 1: "d_1_1"},
                 "position_ids": {0: "d_2_0", 1: "d_2_1"},
                 "past_key_values": [
-                    [{0: "d_3_0", 1: "d_3_1", 2: "d_3_2", 3: "d_3_3"}],
-                    [{0: "d_4_0", 1: "d_4_1", 2: "d_4_2", 3: "d_4_3"}],
+                    {0: "d_3_0", 1: "d_3_1", 2: "d_3_2", 3: "d_3_3"},
+                    {0: "d_4_0", 1: "d_4_1", 2: "d_4_2", 3: "d_4_3"},
                 ],
             },
             ds,
@@ -176,8 +176,8 @@ class TestShapeHelper(ExtTestCase):
                     "attention_mask": {0: "dd_0I0", 1: "dd_0I1"},
                     "input_ids": {0: "dd_1I0", 1: "dd_1I1"},
                     "past_key_values": [
-                        [{0: "dd_2I_0o_0l0", 2: "dd_2I_0o_0l2"}],
-                        [{0: "dd_2I_1o_0l0", 2: "dd_2I_1o_0l2"}],
+                        {0: "dd_2I_0o_0l0", 2: "dd_2I_0o_0l2"},
+                        {0: "dd_2I_1o_0l0", 2: "dd_2I_1o_0l2"},
                     ],
                     "position_ids": {0: "dd_3I0", 1: "dd_3I1"},
                 },
