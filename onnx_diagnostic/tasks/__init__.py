@@ -77,6 +77,13 @@ def random_input_kwargs(config: Any, task: str) -> Tuple[Dict[str, Any], Callabl
     If the configuration is None, the function selects typical dimensions.
     It returns parameters and a function. The function creates dummy inputs
     if it receives the parameters returned as a first result.
+
+    .. code-block:: python
+
+        config = get_pretrained_config(model_id)
+        task = task = task_from_id(name)
+        kwargs, fct = random_input_kwargs(config, task)
+        res = fct(model, config, add_second_input=False, **kwargs)
     """
     tasks = {mod.__TASK__: mod.random_input_kwargs for mod in __TASKS__}
     assert task in tasks, f"Task {task!r} not found in {sorted(tasks)}"

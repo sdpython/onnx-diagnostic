@@ -222,7 +222,7 @@ def make_fake_with_dynamic_dimensions(
         from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
 
         inputs, _ = make_fake_with_dynamic_dimensions(
-            torch.rand((2, 3, 4, 5), dtype=dtype=torch.float32),
+            torch.rand((2, 3, 4, 5), dtype=torch.float32),
             {0: "batch", 2: "cache_length"},
         )
         print(inputs)

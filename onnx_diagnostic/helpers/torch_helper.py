@@ -966,3 +966,16 @@ def to_tensor(tensor: onnx.TensorProto, base_dir: str = "") -> torch.Tensor:
     # Other cases, it should be small tensor. We use numpy.
     np_tensor = to_array_extended(tensor)
     return torch.from_numpy(np_tensor)
+
+
+def get_weight_type(model: torch.nn.Module) -> torch.dtype:
+    """Returns the most probable dtype in a model."""
+    counts = {}
+    for _name, param in model.named_parameters():
+        dt = param.dtype
+        if dt not in counts:
+            counts[dt] = 1
+        else:
+            counts[dt] += 1
+    final = max(list(counts.items()))
+    return final[0]

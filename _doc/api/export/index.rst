@@ -5,6 +5,7 @@ onnx_diagnostic.export
     :maxdepth: 1
     :caption: modules
 
+    api
     dynamic_shapes
     shape_helper
     validate

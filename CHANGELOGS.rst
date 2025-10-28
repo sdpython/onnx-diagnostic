@@ -4,6 +4,7 @@ Change Logs
 0.7.17
 ++++++
 
+* :pr:`276`: implements onnx_generate which implements method generate for an onnx model
 * :pr:`275`: fixes function ``patched_vmap``
 
 0.7.16

@@ -8,6 +8,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, requires_tor
 from onnx_diagnostic.helpers import max_diff, string_type
 from onnx_diagnostic.helpers.torch_helper import (
     dummy_llm,
+    get_weight_type,
     to_numpy,
     is_torchdynamo_exporting,
     model_statistics,
@@ -414,6 +415,11 @@ class TestTorchTestHelper(ExtTestCase):
                 proto = from_array_extended(a)
                 c = to_tensor(proto)
                 self.assertEqualArray(a, c)
+
+    def test_get_weight_type(self):
+        model, _inputs = dummy_llm("LLM")
+        dt = get_weight_type(model)
+        self.assertEqual(torch.float32, dt)
 
 
 if __name__ == "__main__":
