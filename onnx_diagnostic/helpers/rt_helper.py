@@ -122,6 +122,31 @@ def rt_type_to_torch_dtype(typename: str) -> torch.dtype:
     return _DTYPES[typename]
 
 
+def make_empty_cache(
+    batch: int,
+    onnx_input_names: List[str],
+    onnx_input_shapes: List[Tuple[Union[int, str], ...]],
+    onnx_input_types: List[str],
+) -> Dict[str, torch.Tensor]:
+    """
+    Creates an empty cache. Example:
+
+    .. code-block:: python
+
+        make_empty_cache(
+            1,
+            sess.input_names[2:],
+            [i.shape for i in sess.get_inputs()[2:]],
+            [i.type for i in sess.get_inputs()[2:]],
+        )
+    """
+    feeds = {}
+    for name, shape, dtype in zip(onnx_input_names, onnx_input_shapes, onnx_input_types):
+        new_shape = tuple(_get_dim(i, s, batch=batch) for i, s in enumerate(shape))
+        feeds[name] = torch.empty(new_shape, dtype=rt_type_to_torch_dtype(dtype))
+    return feeds
+
+
 def onnx_generate(
     model_or_path: Union[onnx.ModelProto, str, InferenceSessionForTorch],
     input_ids: torch.Tensor,
@@ -166,12 +191,10 @@ def onnx_generate(
         attention_mask=torch.ones(
             input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
         ),
+        **make_empty_cache(
+            input_ids.shape[0], input_names[2:], input_shapes[2:], input_types[2:]
+        ),
     )
-    for name, shape, dtype in zip(input_names[2:], input_shapes[2:], input_types[2:]):
-        new_shape = tuple(
-            _get_dim(i, s, batch=input_ids.shape[0]) for i, s in enumerate(shape)
-        )
-        feeds[name] = torch.empty(new_shape, dtype=rt_type_to_torch_dtype(dtype))
 
     outputs = session.run(None, feeds)
 

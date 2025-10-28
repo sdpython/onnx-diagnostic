@@ -1057,6 +1057,20 @@ def max_diff(
             allow_unique_tensor_with_list_of_one_element=False,
             hist=hist,
         )
+
+    if expected.__class__.__name__ == "CausalLMOutputWithPast":
+        if verbose >= 6:
+            print(
+                f"[max_diff] CausalLMOutputWithPast: {string_type(expected)} "
+                f"? {string_type(got)}"
+            )
+        return max_diff(
+            [expected.logits, *flatten_object(expected.past_key_values)],
+            got,
+            debug_info=_debug(expected.__class__.__name__),
+            **_dkws,
+        )
+
     if hasattr(expected, "to_tuple"):
         if verbose >= 6:
             print(f"[max_diff] to_tuple1: {string_type(expected)} ? {string_type(got)}")
@@ -1066,36 +1080,6 @@ def max_diff(
         if verbose >= 6:
             print(f"[max_diff] to_tuple2: {string_type(expected)} ? {string_type(got)}")
         return max_diff(expected, got.to_tuple(), debug_info=_debug("to_tuple2"), **_dkws)
-
-        if isinstance(got, (list, tuple)):
-            if len(got) != 1:
-                if verbose >= 6:
-                    print(
-                        f"[max_diff] list,tuple,2: {string_type(expected)} "
-                        f"? {string_type(got)}"
-                    )
-                if verbose > 2:
-                    import torch
-
-                    print(
-                        f"[max_diff] (a) inf because len(expected)={len(expected)}!=1, "
-                        f"len(got)={len(got)}, level={level}, _index={_index}"
-                    )
-                    for i, (a, b) in enumerate(zip(expected, got)):
-                        if isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
-                            print(
-                                f"    i={i} expected {a.dtype}:{a.shape}, "
-                                f"has {b.dtype}:{b.shape}, _index={_index}"
-                            )
-                        else:
-                            print(
-                                f"    i={i} a is {type(a)}, "
-                                f"b is {type(b)}, _index={_index}"
-                            )
-                return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
-            if verbose >= 6:
-                print(f"[max_diff] list,tuple,1: {string_type(expected)} ? {string_type(got)}")
-            return max_diff(expected, got[0], debug_info=_debug("lt1"), **_dkws)
 
     if isinstance(expected, (tuple, list)):
         if verbose >= 6:
@@ -1485,7 +1469,7 @@ def max_diff(
             return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
         if verbose >= 6:
             print(
-                f"[max_diff] {expected.__class__.__name__}: "
+                f"[max_diff*] {expected.__class__.__name__}: "
                 f"{string_type(expected)} ? {string_type(got)}"
             )
         expected_args, _spec = torch.utils._pytree.tree_flatten(expected)
