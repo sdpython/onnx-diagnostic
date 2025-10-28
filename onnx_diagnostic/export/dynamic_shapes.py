@@ -1,4 +1,5 @@
 import inspect
+import itertools
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 import torch
@@ -934,7 +935,7 @@ class ModelInputs:
                         auto=auto if isinstance(auto, bool) else f"{auto}_{i}vdc",
                     )
                 )
-            return [key_cache, value_cache]
+            return list(itertools.chain.from_iterable(zip(key_cache, value_cache)))
 
         raise NotImplementedError(
             f"Unable to build dynamic shapes for type {set_types.pop()}: "

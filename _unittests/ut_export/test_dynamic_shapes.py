@@ -862,6 +862,60 @@ class TestDynamicShapes(ExtTestCase):
             s,
         )
 
+    def test_guess_dynamic_cache_without_patches(self):
+        n_layers = 2
+        bsize, nheads, slen, dim = 2, 4, 3, 7
+        cache = make_dynamic_cache(
+            [
+                (torch.randn(bsize, nheads, slen, dim), torch.randn(bsize, nheads, slen, dim))
+                for i in range(n_layers)
+            ]
+        )
+        z = torch.randn((1, 1, 1, 7))
+        cache2 = make_dynamic_cache(
+            [
+                (
+                    torch.randn(bsize + 1, nheads, slen + 1, dim + 1),
+                    torch.randn(bsize + 1, nheads, slen + 1, dim + 1),
+                )
+                for i in range(n_layers)
+            ]
+        )
+        inputs = [
+            (cache, z),
+            (cache2, torch.randn((1, 1, 1, 8))),
+        ]
+
+        class Model(torch.nn.Module):
+            def forward(self, cache, z):
+                cache = CacheKeyValue(cache)
+                return (
+                    z
+                    + cache.key_cache[0]
+                    + cache.key_cache[1]
+                    + cache.value_cache[0]
+                    + cache.value_cache[1]
+                )
+
+        mi = ModelInputs(Model(), inputs)
+        ds = mi.guess_dynamic_shapes()
+        DYN = torch.export.Dim.DYNAMIC
+        self.assertEqual(
+            (
+                (
+                    [
+                        {0: DYN, 2: DYN, 3: DYN},
+                        {0: DYN, 2: DYN, 3: DYN},
+                        {0: DYN, 2: DYN, 3: DYN},
+                        {0: DYN, 2: DYN, 3: DYN},
+                    ],
+                    {3: DYN},
+                ),
+                {},
+            ),
+            ds,
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

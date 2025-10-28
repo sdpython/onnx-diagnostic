@@ -88,8 +88,8 @@ class TestPatchInputs(ExtTestCase):
         )
         self.assertEqual(
             [
-                [{0: "batch_size", 2: "past_sequence_length"}],
-                [{0: "batch_size", 2: "past_sequence_length"}],
+                {0: "batch_size", 2: "past_sequence_length"},
+                {0: "batch_size", 2: "past_sequence_length"},
             ],
             res[2]["past_key_values"],
         )

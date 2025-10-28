@@ -38,7 +38,7 @@ def _make_shape(subset: Dict, cls: type, value: Any) -> Any:
         for v in subset.values():
             axes = v
             break
-        new_shape = [[axes for i in range(cache_length)], [axes for i in range(cache_length)]]
+        new_shape = [axes for i in range(cache_length * 2)]
         return new_shape
     if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:
         raise NotImplementedError(

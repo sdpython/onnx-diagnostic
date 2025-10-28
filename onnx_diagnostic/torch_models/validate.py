@@ -12,7 +12,7 @@ import torch
 from ..export import CoupleInputsDynamicShapes
 from ..helpers import max_diff, string_type, string_diff
 from ..helpers.helper import flatten_object
-from ..helpers.rt_helper import make_feeds, reorder_modelbuilder_cache_to_torch
+from ..helpers.rt_helper import make_feeds
 from ..helpers.torch_helper import to_any, torch_deepcopy
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 from ..tasks import random_input_kwargs
@@ -1478,7 +1478,7 @@ def validate_onnx_model(
             data[k_input],
             use_numpy=True,
             check_flatten=False,
-            is_modelbuilder=data["exporter"] == "modelbuilder",
+            is_modelbuilder=data["exporter"] == "modelbuilder",  # to remove position_ids
         )
         if verbose:
             print(f"[validate_onnx_model] ort inputs={string_type(feeds, with_shape=True)}")
@@ -1501,13 +1501,6 @@ def validate_onnx_model(
             repeat=repeat,
             warmup=warmup,
         )
-        # NOTE: modelbuilder has different order on past_kv outputs
-        if data["exporter"] == "modelbuilder":
-            logits = got[:1]
-            past_key_values = got[1:]
-            reorder_past_key_values = reorder_modelbuilder_cache_to_torch(past_key_values)
-            got = logits + reorder_past_key_values
-
         if f"ERR_{_mk(f'time_onnx_ort_run{suffix}')}" in summary:
             return summary, data
 
