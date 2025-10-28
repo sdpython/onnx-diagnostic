@@ -84,6 +84,8 @@ class TestDocumentationExamples(ExtTestCase):
             if not reason and not has_dot and name in {"plot_dump_intermediate_results.py"}:
                 reason = "dot not installed"
 
+            # transformers
+
             if (
                 not reason
                 and name in {"plot_export_tiny_llm.py"}
@@ -100,11 +102,21 @@ class TestDocumentationExamples(ExtTestCase):
 
             if (
                 not reason
+                and name in {"plot_export_with_dynamic_cache.py", "plot_export_tiny_phi2.py"}
+                and not has_transformers("4.55")
+            ):
+                reason = "transformers<4.55"
+
+            # pytorch
+
+            if (
+                not reason
                 and name
                 in {
+                    "plot_export_hub_codellama.py",
                     "plot_export_locate_issue.py",
                     "plot_export_with_auto.py",
-                    "plot_export_hub_codellama.py",
+                    "plot_export_tiny_llm.py",
                 }
                 and not has_torch("2.8")
             ):
@@ -114,13 +126,6 @@ class TestDocumentationExamples(ExtTestCase):
                 not reason
                 and name in {"plot_dump_intermediate_results.py"}
                 and not has_torch("2.9.1")
-            ):
-                reason = "unstable, let's wait for the next version"
-
-            if (
-                not reason
-                and name in {"plot_export_tiny_phi2.py"}
-                and not has_transformers("4.55")
             ):
                 reason = "unstable, let's wait for the next version"
 
