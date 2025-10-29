@@ -102,10 +102,17 @@ class TestDocumentationExamples(ExtTestCase):
 
             if (
                 not reason
-                and name in {"plot_export_tiny_phi2.py", "plot_export_with_dynamic_cache.py"}
+                and name in {"plot_export_tiny_phi2.py"}
                 and not has_transformers("4.55")
             ):
                 reason = "transformers<4.55"
+
+            if (
+                not reason
+                and name in {"plot_export_with_dynamic_cache.py"}
+                and not has_transformers("4.56")
+            ):
+                reason = "transformers<4.56"
 
             # pytorch
 
