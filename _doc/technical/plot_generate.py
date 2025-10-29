@@ -155,7 +155,7 @@ if "position_ids" in export_inputs:
 dtype = get_weight_type(model)
 print("-- model dtype:", dtype)
 export_inputs["past_key_values"] = to_any(export_inputs["past_key_values"], dtype)
-exporter = "custom" if "custom" in sys.argv else "onnx-dynamo"
+exporter = "onnx-dynamo" if "dynamo" in sys.argv else "custom"
 model_name = f"model_{model_id.replace('/', '-')}.{exporter}.onnx"
 if not os.path.exists(model_name):
     # This step is slow so let's skip it if it was already done.

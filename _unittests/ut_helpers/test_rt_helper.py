@@ -48,7 +48,8 @@ class TestRtSession(ExtTestCase):
             f"\ninput_ids.shape={input_ids.shape}"
             f"\nexpected={self.string_type(outputs, with_shape=True, with_min_max=True)}"
             f"\n     got=\n"
-            f"{self.string_type(onnx_results, with_shape=True, with_min_max=True)}"
+            f"{self.string_type(onnx_results, with_shape=True, with_min_max=True)}\n"
+            f"feeds={self.string_type(feeds, with_shape=True, with_min_max=True)}"
         )
 
         # Next calls: decode
@@ -87,7 +88,8 @@ class TestRtSession(ExtTestCase):
                 f"\ndiff={diff}\ninput_ids.shape={input_ids.shape}"
                 f"\nexpected={self.string_type(outputs, with_shape=True, with_min_max=True)}"
                 f"\n     got=\n"
-                f"{self.string_type(onnx_results, with_shape=True, with_min_max=True)}"
+                f"{self.string_type(onnx_results, with_shape=True, with_min_max=True)}\n"
+                f"feeds={self.string_type(feeds, with_shape=True, with_min_max=True)}"
             )
         return input_ids
 
@@ -113,7 +115,7 @@ class TestRtSession(ExtTestCase):
                 kwargs=inputs,
                 dynamic_shapes=ds,
                 filename=model_name,
-                exporter="modelbuilder",
+                exporter="custom",
             )
 
             print("-- test_onnx_generate: generate")

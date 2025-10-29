@@ -39,19 +39,45 @@ try:
 except ImportError:
     patch_DynamicLayer = False
 
-from ...ext_test_case import has_transformers
-from ...helpers.torch_helper import is_torchdynamo_exporting
 
-patch_is_initialized = pv.Version(transformers.__version__) > pv.Version("4.56.99")
+def _has_transformers(version: str) -> bool:
+    return pv.Version(transformers.__version__) >= pv.Version(version)
+
+
+def _is_torchdynamo_exporting() -> bool:
+    """
+    Tells if :epkg:`torch` is exporting a model.
+    Relies on ``torch.compiler.is_exporting()``.
+    """
+    import torch
+
+    if not hasattr(torch.compiler, "is_exporting"):
+        # torch.compiler.is_exporting requires torch>=2.7
+        return False
+
+    try:
+        return torch.compiler.is_exporting()
+    except Exception:
+        try:
+            import torch._dynamo as dynamo
+
+            return dynamo.is_exporting()  # type: ignore
+        except Exception:
+            return False
+
+
+patch_is_initialized = _has_transformers("4.56.99")
 
 
 if patch_masking_utils:
     # Introduced in 4.52
     from transformers.masking_utils import (
+        _ignore_causal_mask_sdpa,
+        _ignore_bidirectional_mask_sdpa,
+        and_masks,
+        bidirectional_mask_function,
         causal_mask_function,
         padding_mask_function,
-        and_masks,
-        _ignore_causal_mask_sdpa,
         prepare_padding_mask,
     )
 
@@ -98,7 +124,7 @@ if patch_masking_utils:
             #    for a, dims in zip(args, udimensions)
             # ]
             max_shape = tuple(args[i].shape[0] for i in indices)
-            # if is_torchdynamo_exporting():
+            # if _is_torchdynamo_exporting():
             #     for a in args:
             #         # The exporter should export with a dimension > 1
             #         # to make sure it is dynamic.
@@ -151,6 +177,7 @@ if patch_masking_utils:
         attention_mask: Optional[torch.Tensor] = None,
         local_size: Optional[int] = None,
         allow_is_causal_skip: bool = True,
+        allow_is_bidirectional_skip: bool = False,
         **kwargs,
     ) -> Optional[torch.Tensor]:
         """manual patch for function ``transformers.masking_utils.sdpa_mask_recent_torch``."""
@@ -160,6 +187,25 @@ if patch_masking_utils:
             padding_mask, q_length, kv_length, kv_offset, local_size
         ):
             return None
+        if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa(padding_mask):
+            return None
+
+        if mask_function is bidirectional_mask_function:
+            if padding_mask is not None:
+                # used for slicing without data-dependent slicing
+                mask_indices = (
+                    torch.arange(kv_length, device=cache_position.device) + kv_offset
+                )
+                return padding_mask[:, None, None, mask_indices].expand(-1, -1, q_length, -1)
+            return torch.ones(
+                batch_size,
+                1,
+                q_length,
+                kv_length,
+                dtype=torch.bool,
+                device=cache_position.device,
+            )
+
         kv_arange = torch.arange(kv_length, device=cache_position.device)
         kv_arange += kv_offset
         if padding_mask is not None:
@@ -275,7 +321,7 @@ class patched_AttentionMaskConverter:
     """
 
     # This method was fixed in 4.51 at least.
-    _PATCHES_ = ["_make_causal_mask"] if not has_transformers("4.48.3") else []
+    _PATCHES_ = ["_make_causal_mask"] if not _has_transformers("4.48.3") else []
     _PATCHED_CLASS_ = AttentionMaskConverter
 
     @staticmethod
@@ -507,7 +553,7 @@ class patched_GenerationMixin:
         The current implementation does not rely on ``self`` and could be
         a class method. It is left as a standard method to be easily rewritten.
         """
-        if is_torchdynamo_exporting():
+        if _is_torchdynamo_exporting():
             return self._cache_dependant_input_preparation_exporting(
                 input_ids, inputs_embeds, cache_position
             )
@@ -1316,16 +1362,40 @@ def patched_sdpa_attention_forward(
         attention_mask is None or attention_mask.shape[3] == key.shape[2],
         "Attention mask shape incompatible with key shape.",
     )
-    attn_output = torch.nn.functional.scaled_dot_product_attention(
-        query,
-        key,
-        value,
-        attn_mask=attention_mask,
-        dropout_p=dropout,
-        scale=scaling,
-        is_causal=is_causal,
-        **sdpa_kwargs,
-    )
+    if is_causal:
+        attn_output = torch.cond(
+            query.shape[2] > 1,  # distinction between prefill and decoding steps
+            lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                dropout_p=dropout,
+                scale=scaling,
+                is_causal=True,
+                **sdpa_kwargs,
+            ),
+            lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                dropout_p=dropout,
+                scale=scaling,
+                is_causal=False,
+                **sdpa_kwargs,
+            ),
+            [query, key, value],
+        )
+    else:
+        attn_output = torch.nn.functional.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=attention_mask,
+            dropout_p=dropout,
+            scale=scaling,
+            is_causal=is_causal,
+            **sdpa_kwargs,
+        )
     attn_output = attn_output.transpose(1, 2).contiguous()
     return attn_output, None
 
