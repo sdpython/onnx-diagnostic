@@ -3,12 +3,17 @@ import unittest
 import torch
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
+    has_onnxruntime_genai,
     hide_stdout,
     requires_transformers,
     requires_torch,
 )
 from onnx_diagnostic.helpers import max_diff, flatten_object
-from onnx_diagnostic.helpers.rt_helper import onnx_generate, make_empty_cache
+from onnx_diagnostic.helpers.rt_helper import (
+    onnx_generate,
+    onnx_generate_with_genai,
+    make_empty_cache,
+)
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.helpers.ort_session import InferenceSessionForTorch
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
@@ -101,6 +106,7 @@ class TestRtSession(ExtTestCase):
         print("-- test_onnx_generate: get model")
         data = get_untrained_model_with_inputs(mid)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        configuration = data["configuration"]
         del inputs["position_ids"]
         del ds["position_ids"]
         input_ids = inputs["input_ids"]
@@ -118,25 +124,38 @@ class TestRtSession(ExtTestCase):
                 exporter="custom",
             )
 
-            print("-- test_onnx_generate: generate")
-            res, session = onnx_generate(
-                model_name, input_ids[:1], 2, max_new_tokens=10, return_session=True
-            )
-            n_inputs = input_ids.shape[1]
-            self.assertEqualArray(input_ids[:1], res[:, :n_inputs])
-            self.assertEqual(res.dtype, torch.int64)
-            self.assertEqual(res.shape, (1, 13))
-            print("-- test_onnx_generate: done")
-            # expected = model.generate(input_ids[:1], max_new_tokens=10)
-            expected = self.simple_generate_with_cache(
-                model, input_ids[:1], 2, max_new_tokens=10, session=session
-            )
-            self.assertEqualArray(input_ids[:1], expected[:, :n_inputs])
-            print("******", res)
-            print("******", expected)
-            self.assertEqual(expected.dtype, torch.int64)
-            self.assertEqual(expected.shape, (1, 13))
-            self.assertEqualArray(expected, res)
+        print("-- test_onnx_generate: generate")
+        res, session = onnx_generate(
+            model_name, input_ids[:1], 2, max_new_tokens=10, return_session=True
+        )
+        n_inputs = input_ids.shape[1]
+        self.assertEqualArray(input_ids[:1], res[:, :n_inputs])
+        self.assertEqual(res.dtype, torch.int64)
+        self.assertEqual(res.shape, (1, 13))
+        print("-- test_onnx_generate: done")
+        # expected = model.generate(input_ids[:1], max_new_tokens=10)
+        expected = self.simple_generate_with_cache(
+            model, input_ids[:1], 2, max_new_tokens=10, session=session
+        )
+        self.assertEqualArray(input_ids[:1], expected[:, :n_inputs])
+        print("******", res)
+        print("******", expected)
+        self.assertEqual(expected.dtype, torch.int64)
+        self.assertEqual(expected.shape, (1, 13))
+        self.assertEqualArray(expected, res)
+
+        if not has_onnxruntime_genai():
+            raise unittest.SkipTest("onnxruntime_genai is missing")
+
+        res, session = onnx_generate_with_genai(
+            model_name,
+            input_ids[:1],
+            max_new_tokens=10,
+            return_session=True,
+            transformers_config=configuration,
+        )
+        self.assertNotEmpty(session)
+        self.assertEqualArray(expected, res)
 
 
 if __name__ == "__main__":

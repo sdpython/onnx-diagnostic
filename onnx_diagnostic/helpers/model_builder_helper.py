@@ -1,11 +1,12 @@
+import copy
 import importlib.util
 import os
 import requests
 import sys
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 from urllib.parse import urlparse
-from onnx import ModelProto, TensorProto
+from onnx import ModelProto, TensorProto, load as load_model
 
 CACHE_SUBDIR = "onnx-diagnostic"
 
@@ -337,3 +338,102 @@ def create_model_builder(
     # onnx_model.make_genai_config(hf_name, extra_kwargs, output_dir)
     # onnx_model.save_processing(hf_name, extra_kwargs, output_dir)
     return onnx_model
+
+
+def make_genai_config(
+    config,
+    onnx_filename: str,
+) -> Dict:
+    """
+    Creates genai config file for a model.
+
+    :param config: configuration from transformers
+    :param onnx_filename: onnx configuration
+    :return: configuration
+    """
+    onx = load_model(onnx_filename, load_external_data=False)
+    config = copy.deepcopy(config)
+    defaults = {
+        "bos_token_id": None,
+        "do_sample": False,
+        "eos_token_id": None,
+        "pad_token_id": None,
+        "temperature": 1.0,
+        "top_k": 50,
+        "top_p": 1.0,
+    }
+    for key, default_val in defaults.items():
+        if not hasattr(config, key):
+            setattr(config, key, default_val)
+
+    bos_token_id = (
+        config.bos_token_id
+        if hasattr(config, "bos_token_id") and config.bos_token_id is not None
+        else 1
+    )
+    eos_token_id = config.eos_token_id
+    pad_token_id = (
+        config.pad_token_id
+        if hasattr(config, "pad_token_id") and config.pad_token_id is not None
+        else (
+            config.eos_token_id[0]
+            if isinstance(config.eos_token_id, list)
+            else config.eos_token_id
+        )
+    )
+    input_names = [i.name for i in onx.graph.input]
+    output_names = [i.name for i in onx.graph.output]
+    past_key_values = [s for s in input_names if s.startswith("past_key_value")]
+    first = [i for i in onx.graph.input if i.name == past_key_values[0]][0]  # noqa: RUF015
+    shape = tuple(d.dim_value or d.dim_param for d in first.type.tensor_type.shape.dim)
+    return {
+        "model": {
+            "bos_token_id": bos_token_id,
+            "context_length": config.max_position_embeddings,
+            "decoder": {
+                "session_options": {
+                    "log_id": "onnxruntime-genai",
+                    "provider_options": [],
+                },
+                "filename": onnx_filename,
+                "head_size": shape[-1],
+                "hidden_size": config.hidden_size,
+                "inputs": input_names,
+                "outputs": output_names,
+                "num_attention_heads": config.num_attention_heads,
+                "num_hidden_layers": len(past_key_values) // 2,
+                "num_key_value_heads": shape[1],
+            },
+            "eos_token_id": eos_token_id,
+            "pad_token_id": pad_token_id,
+            # "type": self.model_type[ : self.model_type.find("For")
+            # if "For" in self.model_type else len(self.model_type)].lower(),
+            "vocab_size": config.vocab_size,
+        },
+        "search": {
+            "diversity_penalty": (
+                config.diversity_penalty if hasattr(config, "diversity_penalty") else 0.0
+            ),
+            "do_sample": config.do_sample if hasattr(config, "do_sample") else False,
+            "early_stopping": True,
+            "length_penalty": (
+                config.length_penalty if hasattr(config, "length_penalty") else 1.0
+            ),
+            "max_length": config.max_position_embeddings,
+            "min_length": 0,
+            "no_repeat_ngram_size": (
+                config.no_repeat_ngram_size if hasattr(config, "no_repeat_ngram_size") else 0
+            ),
+            "num_beams": config.num_beams if hasattr(config, "num_beams") else 1,
+            "num_return_sequences": (
+                config.num_return_sequences if hasattr(config, "num_return_sequences") else 1
+            ),
+            "past_present_share_buffer": False,
+            "repetition_penalty": (
+                config.repetition_penalty if hasattr(config, "repetition_penalty") else 1.0
+            ),
+            "temperature": config.temperature if hasattr(config, "temperature") else 1.0,
+            "top_k": config.top_k if hasattr(config, "top_k") else 50,
+            "top_p": config.top_p if hasattr(config, "top_p") else 1.0,
+        },
+    }
