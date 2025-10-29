@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import packaging.version as pv
 import torch
 import transformers
@@ -152,10 +152,18 @@ def make_dynamic_shapes_kv_cache(
     return [shape_of_one for _ in range(CacheKeyValue(cache).n_layers * 2)]
 
 
+def _preprocess_key_value_pairs(
+    key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
+) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+    if not key_value_pairs or isinstance(key_value_pairs[0], tuple):
+        return key_value_pairs
+    return list(zip(key_value_pairs[::2], key_value_pairs[1::2]))
+
+
 if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
 
     def make_dynamic_cache(
-        key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+        key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
     ) -> transformers.cache_utils.DynamicCache:
         """
         Creates an instance of :class:`transformers.cache_utils.DynamicCache`.
@@ -191,6 +199,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         ``transformers>=4.56``. Before that version, only FakeTensor with static dimensions
         are supported.
         """
+        key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
         if (
             key_value_pairs
             and isinstance(key_value_pairs[0][0], torch._subclasses.fake_tensor.FakeTensor)
@@ -230,7 +239,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
 else:
 
     def make_dynamic_cache(
-        key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+        key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
     ) -> transformers.cache_utils.DynamicCache:
         """
         Creates an instance of :class:`transformers.cache_utils.DynamicCache`.
@@ -262,6 +271,7 @@ else:
             )
             print(string_type(past_key_values, with_shape=True))
         """
+        key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
         cache = transformers.cache_utils.DynamicCache(len(key_value_pairs))  # type: ignore
         for i, (key, value) in enumerate(key_value_pairs):
             cache.update(key, value, i)
@@ -269,7 +279,7 @@ else:
 
 
 def make_static_cache(
-    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
     max_cache_len: Optional[int] = None,
 ) -> transformers.cache_utils.DynamicCache:
     """
@@ -302,6 +312,7 @@ def make_static_cache(
         )
         print(string_type(past_key_values, with_shape=True))
     """
+    key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
 
     class _config:
         def __init__(self):
@@ -444,9 +455,10 @@ def make_mamba_cache(
 
 
 def make_sliding_window_cache(
-    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
 ) -> transformers.cache_utils.SlidingWindowCache:
     "Creates a :class:`transformers.cache_utils.SlidingWindowCache`."
+    key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
 
     class _config:
         def __init__(self):
@@ -499,7 +511,7 @@ def make_sliding_window_cache(
 
 
 def make_hybrid_cache(
-    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
     max_cache_len: Optional[int] = None,
     max_batch_size: Optional[int] = None,
     sliding_window: Optional[int] = None,
@@ -584,6 +596,7 @@ def make_hybrid_cache(
             self.key_cache.append(new_layer_key_cache)
             self.value_cache.append(new_layer_value_cache)
     """
+    key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
     layer_types = None
     if key_value_pairs:
         assert (

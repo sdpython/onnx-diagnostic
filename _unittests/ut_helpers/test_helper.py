@@ -10,6 +10,7 @@ from onnx_diagnostic.ext_test_case import (
     skipif_ci_windows,
     hide_stdout,
     requires_onnx,
+    requires_transformers,
 )
 from onnx_diagnostic.helpers.helper import (
     string_type,
@@ -40,7 +41,13 @@ from onnx_diagnostic.helpers.torch_helper import (
     onnx_dtype_to_torch_dtype,
     torch_dtype_to_onnx_dtype,
 )
-from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
+from onnx_diagnostic.helpers.cache_helper import (
+    make_dynamic_cache,
+    make_encoder_decoder_cache,
+    make_static_cache,
+    make_hybrid_cache,
+    make_sliding_window_cache,
+)
 from onnx_diagnostic.torch_models.hghub.hub_api import get_pretrained_config
 
 
@@ -584,10 +591,54 @@ class TestHelpers(ExtTestCase):
         s = string_type(inputs)
         self.assertIn("EncoderDecoderCache", s)
 
-    def test_string_typeçconfig(self):
+    def test_string_type_config(self):
         conf = get_pretrained_config("microsoft/phi-2", use_only_preinstalled=True)
         s = string_type(conf)
         self.assertStartsWith("PhiConfig(**{", s)
+
+    @requires_transformers("4.55")
+    def test_max_diff_causal_output(self):
+        from transformers.modeling_outputs import CausalLMOutputWithPast
+
+        logits = torch.rand((3, 4))
+        cache = make_dynamic_cache([(torch.rand((3, 4)), torch.rand((3, 4)))])
+        out1 = CausalLMOutputWithPast(logits=logits, past_key_values=cache)
+        out2 = CausalLMOutputWithPast(logits=logits, past_key_values=cache)
+        self.assertEqual(max_diff(out1, out2)["abs"], 0)
+        self.assertEqual(
+            max_diff(out1, [logits, cache.layers[0].keys, cache.layers[0].values])["abs"], 0
+        )
+
+    def test_max_diff_others(self):
+        t = torch.rand((3, 4))
+        self.assertEqual(max_diff(t, t)["abs"], 0)
+        self.assertEqual(max_diff([t], [t])["abs"], 0)
+        self.assertEqual(max_diff([t], (t,))["abs"], 0)
+        self.assertEqual(max_diff((t,), [t])["abs"], 0)
+        self.assertEqual(max_diff((t,), (t,))["abs"], 0)
+        self.assertEqual(max_diff({"t": t}, {"t": t})["abs"], 0)
+
+    def test_max_diff_caches(self):
+        cache = make_dynamic_cache([(torch.rand((3, 4)), torch.rand((3, 4)))])
+        self.assertEqual(max_diff(cache, cache)["abs"], 0)
+        cache = make_static_cache(
+            [(torch.rand((1, 1, 3, 4)), torch.rand((1, 1, 3, 4)))], max_cache_len=3
+        )
+        self.assertEqual(max_diff(cache, cache)["abs"], 0)
+        cache = make_hybrid_cache([(torch.rand((1, 1, 3, 4)), torch.rand((1, 1, 3, 4)))])
+        self.assertEqual(max_diff(cache, cache)["abs"], 0)
+        cache = make_sliding_window_cache(
+            [(torch.rand((1, 1, 3, 4)), torch.rand((1, 1, 3, 4)))]
+        )
+        self.assertEqual(max_diff(cache, cache)["abs"], 0)
+        cache = make_encoder_decoder_cache(cache, cache)
+        self.assertEqual(max_diff(cache, cache)["abs"], 0)
+
+    def test_max_diff_caches_flat(self):
+        data = [(torch.rand((3, 4)), torch.rand((3, 4)))]
+        cache1 = make_dynamic_cache(data)
+        cache2 = make_dynamic_cache([*data[0]])
+        self.assertEqual(max_diff(cache1, cache2)["abs"], 0)
 
 
 if __name__ == "__main__":

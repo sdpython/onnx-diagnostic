@@ -1064,6 +1064,13 @@ def max_diff(
                 f"[max_diff] CausalLMOutputWithPast: {string_type(expected)} "
                 f"? {string_type(got)}"
             )
+        if got.__class__.__name__ == "CausalLMOutputWithPast":
+            return max_diff(
+                [expected.logits, *flatten_object(expected.past_key_values)],
+                [got.logits, *flatten_object(got.past_key_values)],
+                debug_info=_debug(expected.__class__.__name__),
+                **_dkws,
+            )
         return max_diff(
             [expected.logits, *flatten_object(expected.past_key_values)],
             got,
