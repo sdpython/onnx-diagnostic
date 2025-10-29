@@ -113,7 +113,7 @@ class TestRtSession(ExtTestCase):
                 kwargs=inputs,
                 dynamic_shapes=ds,
                 filename=model_name,
-                exporter="custom",
+                exporter="modelbuilder",
             )
 
             print("-- test_onnx_generate: generate")

@@ -12,9 +12,7 @@ from onnx_diagnostic.helpers.model_builder_helper import (
     create_model_builder,
     save_model_builder,
 )
-from onnx_diagnostic.torch_models.hghub import (
-    get_untrained_model_with_inputs,
-)
+from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.helpers.rt_helper import make_feeds
 
 

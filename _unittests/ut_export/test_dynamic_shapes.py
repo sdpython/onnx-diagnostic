@@ -916,6 +916,27 @@ class TestDynamicShapes(ExtTestCase):
             ds,
         )
 
+    def test_invalid_dimensions_for_export(self):
+        ags = []
+        kws = dict(
+            input_ids=torch.randint(0, 10, (2, 3)),
+            attention_mask=torch.randint(0, 1, (2, 33)),
+            position_ids=torch.randint(0, 10, (2, 3)),
+            past_key_values=make_dynamic_cache(
+                [torch.rand((2, 1, 30, 96)), torch.rand((2, 1, 30, 96))]
+            ),
+        )
+        ds = dict(
+            input_ids={0: "batch", 1: "seq_length"},
+            attention_mask={0: "batch", 1: "seq_length"},
+            position_ids={0: "batch", 1: "seq_length"},
+            past_key_values=[{0: "batch", 2: "cache_length"}, {0: "batch", 2: "cache_length"}],
+        )
+        with torch_export_patches(patch_transformers=True):
+            cpl = CoupleInputsDynamicShapes(ags, kws, ds)
+            backed_size_oblivious = cpl.invalid_dimensions_for_export()
+            self.assertFalse(backed_size_oblivious)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
