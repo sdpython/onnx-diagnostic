@@ -73,13 +73,18 @@ if patch_masking_utils:
     # Introduced in 4.52
     from transformers.masking_utils import (
         _ignore_causal_mask_sdpa,
-        _ignore_bidirectional_mask_sdpa,
         and_masks,
         bidirectional_mask_function,
         causal_mask_function,
         padding_mask_function,
         prepare_padding_mask,
     )
+
+    try:
+        # transformers>=5.0
+        from transformers.masking_utils import _ignore_bidirectional_mask_sdpa
+    except ImportError:
+        _ignore_bidirectional_mask_sdpa = None
 
     def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) -> Callable:
         """manual patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""
@@ -187,7 +192,11 @@ if patch_masking_utils:
             padding_mask, q_length, kv_length, kv_offset, local_size
         ):
             return None
-        if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa(padding_mask):
+        if (
+            allow_is_bidirectional_skip
+            and _ignore_bidirectional_mask_sdpa
+            and _ignore_bidirectional_mask_sdpa(padding_mask)
+        ):
             return None
 
         if mask_function is bidirectional_mask_function:

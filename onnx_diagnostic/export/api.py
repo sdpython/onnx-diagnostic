@@ -65,9 +65,9 @@ def to_onnx(
         ), f"output_dynamic_shapes not supported for exporter={exporter!r}"
         assert hasattr(mod, "config"), f"configuration is missing in model class {type(mod)}"
         assert not args, f"only kwargs can be defined with exporter={exporter!r}"
-        assert list(kwargs) == ["input_ids", "attention_mask", "past_key_values"], (
+        assert list(kwargs) == ["input_ids", "attention_mask", "past_key_values"], (  # type: ignore[arg-type]
             f"Only a specified set of inputs is supported for exporter={exporter!r}, "
-            f"but it is {list(kwargs)}"
+            f"but it is {list(kwargs)}"  # type: ignore[arg-type]
         )
         flat_inputs = flatten_object(kwargs, drop_keys=True)
         first = flat_inputs[0]
