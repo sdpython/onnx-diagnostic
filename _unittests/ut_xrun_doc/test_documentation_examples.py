@@ -117,11 +117,17 @@ class TestDocumentationExamples(ExtTestCase):
                     "plot_export_locate_issue.py",
                     "plot_export_with_auto.py",
                     "plot_export_tiny_llm.py",
-                    "plot_export_with_dynamic_cache.py",
                 }
                 and not has_torch("2.8")
             ):
                 reason = "torch<2.8"
+
+            if (
+                not reason
+                and name in {"plot_export_with_dynamic_cache.py"}
+                and not has_torch("2.9")
+            ):
+                reason = "does not work with 2.8"
 
             if (
                 not reason
