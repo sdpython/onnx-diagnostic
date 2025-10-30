@@ -1,9 +1,6 @@
 from typing import Any, Dict, Optional, Set, Tuple
 
 
-_UNIQUE = set()
-
-
 class FakeTensorContext:
     """Stores information used to reused same dimension for the same dimension names."""
 
@@ -33,7 +30,7 @@ class FakeTensorContext:
 
         return [i for i, prime in enumerate(sieve) if prime and i >= 13]
 
-    def _unique(self):
+    def _unique(self) -> int:
         i = 0
         c = self._candidates[i]
         while c in self._unique_ or c in self._mapping_int:
@@ -220,7 +217,7 @@ class FakeTensorContext:
 
                 x = torch.empty(tuple(new_shape), dtype=x.dtype, device=x.device)
 
-            t = self.fake_reshape(x, dynamic_shapes)
+            t = self.fake_reshape(x, dynamic_shapes)  # type: ignore[arg-type]
             assert t.device == x.device, f"device mismatch {x.device} -> {t.device}"
             assert t.dtype == x.dtype, f"dtype mismatch {x.dtype} -> {t.dtype}"
             return t
