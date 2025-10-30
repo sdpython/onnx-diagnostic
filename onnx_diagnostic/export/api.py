@@ -15,7 +15,38 @@ def to_onnx(
     output_dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
     exporter: str = "onnx-dynamo",
 ) -> Any:
-    """Common API for exporters."""
+    """
+    Common API for exporters. By default, the models are optimized to use the
+    most efficient kernels implemented in :epkg:`onnxruntime`.
+
+    :param mod: torch model
+    :param args: unnamed arguments
+    :param kwargs: named arguments
+    :param input_names: input names for the onnx model (optional)
+    :param target_opset: opset to target, if not specified, each converter
+        keeps its default value
+    :param verbose: verbosity level
+    :param dynamic_shapes: dynamic shapes, usually a nested structure
+        included a dictionary for each tensor
+    :param filename: output filename
+    :param output_names: to change the output of the onnx model
+    :param output_dynamic_shapes: to overwrite the dynamic shapes names
+    :param exporter: exporter to use (``onnx-dynamo``, ``modelbuilder``, ``custom``)
+    :return: the output of the selected exporter, usually a structure including
+        an onnx model
+
+    A simple example:
+
+    .. code-block:: python
+
+        to_onnx(
+            model,
+            kwargs=inputs,
+            dynamic_shapes=ds,
+            exporter=exporter,
+            filename=filename,
+        )
+    """
     if exporter == "custom":
         from experimental_experiment.torch_interpreter import to_onnx as _to_onnx
         from experimental_experiment.xbuilder import OptimizationOptions

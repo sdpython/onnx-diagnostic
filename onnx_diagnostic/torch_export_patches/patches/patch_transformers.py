@@ -66,6 +66,7 @@ def _is_torchdynamo_exporting() -> bool:
             return False
 
 
+patch_is_causal = _has_transformers("4.55")
 patch_is_initialized = _has_transformers("4.56.99")
 
 
@@ -1365,10 +1366,15 @@ def patched_sdpa_attention_forward(
     if attention_mask is not None and attention_mask.ndim == 4:
         attention_mask = attention_mask[:, :, :, : key.shape[-2]]
 
-    is_causal = is_causal if is_causal is not None else getattr(module, "is_causal", True)
-    # PATCHED: remove the test query.shape[2] > 1
-    # is_causal = query.shape[2] > 1 and attention_mask is None and is_causal
-    is_causal = attention_mask is None and is_causal
+    if patch_is_causal:
+        is_causal = is_causal if is_causal is not None else getattr(module, "is_causal", True)
+
+        # PATCHED: remove the test query.shape[2] > 1
+        # is_causal = query.shape[2] > 1 and attention_mask is None and is_causal
+        # and we split the test to keep the minimum in torch.cond
+        is_causal = attention_mask is None and is_causal
+    elif is_causal is None:
+        is_causal = attention_mask is None
 
     torch._check(
         attention_mask is None or attention_mask.shape[3] == key.shape[2],

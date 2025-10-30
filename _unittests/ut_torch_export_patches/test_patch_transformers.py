@@ -3,7 +3,7 @@ import torch
 import transformers
 import transformers.integrations.sdpa_attention as sdpa_attention
 import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, ignore_warnings
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
@@ -123,7 +123,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         attn_causal_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
         self.assertEqual(attn_causal_bias.min().item(), -float("inf"))
 
-    # @ignore_warnings(UserWarning)
+    @ignore_warnings(UserWarning)
     def test_causal_mask_in_scaled_dot_product_attention_export(self):
         sdpa_attention_forward = sdpa_attention.sdpa_attention_forward
         patched_sdpa_attention_forward = patch_transformers.patched_sdpa_attention_forward
