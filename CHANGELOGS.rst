@@ -1,10 +1,11 @@
 Change Logs
 ===========
 
-0.7.17
-++++++
+0.8.0
++++++
 
-* :pr:`276`: implements onnx_generate which implements method generate for an onnx model
+* :pr:`276`: implements onnx_generate which implements method generate for an onnx model,
+  changes the serialization for all caches to reorder the model outputs (key_1, value_1, key_2, ...)
 * :pr:`275`: fixes function ``patched_vmap``
 
 0.7.16
