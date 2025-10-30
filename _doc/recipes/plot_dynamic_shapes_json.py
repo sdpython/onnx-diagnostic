@@ -22,6 +22,7 @@ from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.export.shape_helper import all_dynamic_shapes_from_inputs
+from onnx_diagnostic.torch_export_patches import register_additional_serialization_functions
 
 bsize, nheads, slen, dim = 2, 1, 30, 96
 
@@ -41,7 +42,11 @@ print(string_type(inputs, with_shape=True))
 # %%
 # Function :func:`onnx_diagnostic.export.shape_helper.all_dynamic_shapes_from_inputs`
 # produces the corresponding dynamic shapes assuming they are all dynamic.
-ds = all_dynamic_shapes_from_inputs(inputs)
+# ``register_additional_serialization_functions(patch_transformers=True)`` registers
+# function letting pytorch know how to serialize, deserialize the class DynamicCache.
+
+with register_additional_serialization_functions(patch_transformers=True):
+    ds = all_dynamic_shapes_from_inputs(inputs)
 pprint.pprint(ds)
 
 # %%
@@ -88,7 +93,8 @@ def flatten_unflatten_like_dynamic_shapes(obj):
         return list(subtrees)
     raise ValueError(
         f"Unable to interpret spec type {spec.type} "
-        f"(type is {type(spec.type)}, context is {spec.context})."
+        f"(type is {type(spec.type)}, context is {spec.context}), "
+        f"obj type is {type(obj)}."
     )
 
 
@@ -109,7 +115,8 @@ def fix_dynamic_shapes(inputs, dynamic_shapes):
     return _align(flat_unflat_inputs, dynamic_shapes)
 
 
-fixed_ds = fix_dynamic_shapes(inputs, ds2)
+with register_additional_serialization_functions(patch_transformers=True):
+    fixed_ds = fix_dynamic_shapes(inputs, ds2)
 pprint.pprint(fixed_ds)
 
 # %%
