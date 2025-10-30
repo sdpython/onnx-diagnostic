@@ -33,9 +33,7 @@ from onnx_diagnostic.helpers.cache_helper import is_cache_dynamic_registered
 from onnx_diagnostic.helpers.rt_helper import make_feeds
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
-from onnx_diagnostic.torch_models.hghub import (
-    get_untrained_model_with_inputs,
-)
+from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 
 warnings.simplefilter("ignore")
 

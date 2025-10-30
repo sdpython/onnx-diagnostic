@@ -452,19 +452,18 @@ class TestDynamicShapes(ExtTestCase):
             (
                 (
                     [
-                        [{}, {}],
-                        [
-                            {
-                                0: torch.export.Dim.DYNAMIC,
-                                2: torch.export.Dim.DYNAMIC,
-                                3: torch.export.Dim.DYNAMIC,
-                            },
-                            {
-                                0: torch.export.Dim.DYNAMIC,
-                                2: torch.export.Dim.DYNAMIC,
-                                3: torch.export.Dim.DYNAMIC,
-                            },
-                        ],
+                        {},
+                        {
+                            0: torch.export.Dim.DYNAMIC,
+                            2: torch.export.Dim.DYNAMIC,
+                            3: torch.export.Dim.DYNAMIC,
+                        },
+                        {},
+                        {
+                            0: torch.export.Dim.DYNAMIC,
+                            2: torch.export.Dim.DYNAMIC,
+                            3: torch.export.Dim.DYNAMIC,
+                        },
                     ],
                     {3: torch.export.Dim.DYNAMIC},
                 ),
@@ -520,11 +519,10 @@ class TestDynamicShapes(ExtTestCase):
             (
                 (
                     [
-                        [{}, {}],
-                        [
-                            {0: "dim_0I_1o_0l0", 2: "dim_0I_1o_0l2", 3: "dim_0I_1o_0l3"},
-                            {0: "dim_0I_1o_1l0", 2: "dim_0I_1o_1l2", 3: "dim_0I_1o_1l3"},
-                        ],
+                        {},
+                        {0: "dim_0I_1o0", 2: "dim_0I_1o2", 3: "dim_0I_1o3"},
+                        {},
+                        {0: "dim_0I_3o0", 2: "dim_0I_3o2", 3: "dim_0I_3o3"},
                     ],
                     {3: "dim_1I3"},
                 ),
@@ -641,18 +639,18 @@ class TestDynamicShapes(ExtTestCase):
                     kwargs,
                     {
                         "A": ds_batch,
-                        "B": (ds_batch, [[ds_batch, ds_batch], [ds_batch, ds_batch]]),
+                        "B": (ds_batch, [ds_batch, ds_batch, ds_batch, ds_batch]),
                     },
                 ).invalid_dimensions_for_export(),
             )
             self.assertEqual(
-                {"B": (None, [[None, {2: "d=[1]"}], [None, {2: "d=[1]"}]])},
+                {"B": (None, [None, {2: "d=[1]"}, None, {2: "d=[1]"}])},
                 Cls(
                     (),
                     kwargs,
                     {
                         "A": ds_batch,
-                        "B": (ds_batch, [[ds_batch, ds_batch_seq], [ds_batch, ds_batch_seq]]),
+                        "B": (ds_batch, [ds_batch, ds_batch_seq, ds_batch, ds_batch_seq]),
                     },
                 ).invalid_dimensions_for_export(),
             )
@@ -831,18 +829,17 @@ class TestDynamicShapes(ExtTestCase):
 
         DYN = torch.export.Dim.DYNAMIC
         ds = {
-            "cache": [
-                [{0: DYN, 1: DYN}, {0: DYN, 1: DYN}],
-                [{0: DYN, 1: DYN}, {0: DYN, 1: DYN}],
-            ]
+            "cache": [{0: DYN, 1: DYN}, {0: DYN, 1: DYN}, {0: DYN, 1: DYN}, {0: DYN, 1: DYN}]
         }
         inst = CoupleInputsDynamicShapes((), dict(cache=cache), ds)
         as_string = inst.replace_by_string()
         self.assertEqual(
             {
                 "cache": [
-                    [{0: "Dim0", 1: "Dim1"}, {0: "Dim2", 1: "Dim3"}],
-                    [{0: "Dim4", 1: "Dim5"}, {0: "Dim6", 1: "Dim7"}],
+                    {0: "Dim0", 1: "Dim1"},
+                    {0: "Dim2", 1: "Dim3"},
+                    {0: "Dim4", 1: "Dim5"},
+                    {0: "Dim6", 1: "Dim7"},
                 ]
             },
             as_string,
@@ -864,6 +861,81 @@ class TestDynamicShapes(ExtTestCase):
             "key_cache=#1[T1s1x1x30x96], value_cache=#1[T1s1x1x30x96]))",
             s,
         )
+
+    def test_guess_dynamic_cache_without_patches(self):
+        n_layers = 2
+        bsize, nheads, slen, dim = 2, 4, 3, 7
+        cache = make_dynamic_cache(
+            [
+                (torch.randn(bsize, nheads, slen, dim), torch.randn(bsize, nheads, slen, dim))
+                for i in range(n_layers)
+            ]
+        )
+        z = torch.randn((1, 1, 1, 7))
+        cache2 = make_dynamic_cache(
+            [
+                (
+                    torch.randn(bsize + 1, nheads, slen + 1, dim + 1),
+                    torch.randn(bsize + 1, nheads, slen + 1, dim + 1),
+                )
+                for i in range(n_layers)
+            ]
+        )
+        inputs = [
+            (cache, z),
+            (cache2, torch.randn((1, 1, 1, 8))),
+        ]
+
+        class Model(torch.nn.Module):
+            def forward(self, cache, z):
+                cache = CacheKeyValue(cache)
+                return (
+                    z
+                    + cache.key_cache[0]
+                    + cache.key_cache[1]
+                    + cache.value_cache[0]
+                    + cache.value_cache[1]
+                )
+
+        mi = ModelInputs(Model(), inputs)
+        ds = mi.guess_dynamic_shapes()
+        DYN = torch.export.Dim.DYNAMIC
+        self.assertEqual(
+            (
+                (
+                    [
+                        {0: DYN, 2: DYN, 3: DYN},
+                        {0: DYN, 2: DYN, 3: DYN},
+                        {0: DYN, 2: DYN, 3: DYN},
+                        {0: DYN, 2: DYN, 3: DYN},
+                    ],
+                    {3: DYN},
+                ),
+                {},
+            ),
+            ds,
+        )
+
+    def test_invalid_dimensions_for_export(self):
+        ags = []
+        kws = dict(
+            input_ids=torch.randint(0, 10, (2, 3)),
+            attention_mask=torch.randint(0, 1, (2, 33)),
+            position_ids=torch.randint(0, 10, (2, 3)),
+            past_key_values=make_dynamic_cache(
+                [torch.rand((2, 1, 30, 96)), torch.rand((2, 1, 30, 96))]
+            ),
+        )
+        ds = dict(
+            input_ids={0: "batch", 1: "seq_length"},
+            attention_mask={0: "batch", 1: "seq_length"},
+            position_ids={0: "batch", 1: "seq_length"},
+            past_key_values=[{0: "batch", 2: "cache_length"}, {0: "batch", 2: "cache_length"}],
+        )
+        with torch_export_patches(patch_transformers=True):
+            cpl = CoupleInputsDynamicShapes(ags, kws, ds)
+            backed_size_oblivious = cpl.invalid_dimensions_for_export()
+            self.assertFalse(backed_size_oblivious)
 
 
 if __name__ == "__main__":

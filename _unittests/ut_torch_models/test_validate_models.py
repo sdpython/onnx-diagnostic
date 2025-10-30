@@ -39,7 +39,7 @@ class TestValidateModel(ExtTestCase):
         self.assertIn("onnx_filename", data)
 
     @requires_transformers("4.53")
-    @requires_torch("2.7.99")
+    @requires_torch("2.8.99")
     @requires_experimental()
     @hide_stdout()
     def test_validate_microsoft_phi4_reasoning(self):
@@ -60,7 +60,7 @@ class TestValidateModel(ExtTestCase):
         self.assertIn("onnx_filename", data)
 
     @requires_transformers("4.53")
-    @requires_torch("2.7.99")
+    @requires_torch("2.8.99")
     @requires_experimental()
     @hide_stdout()
     def test_validate_microsoft_phi3_mini_128k(self):

@@ -96,52 +96,7 @@ def make_feeds(
         elif isinstance(i, float):
             i = np.array(i, dtype=np.float32)
         new_flat.append(i)
-
-    # NOTE: model builder has a different order for past_key_values
-    #       we need to reorder them to match the expected order
-    if is_modelbuilder:
-        # We assume that if "past_key_values" is in the names when it's
-        # modelbuilder
-        non_past_kv_input_names = [n for n in names if "past_key_values" not in n]
-        past_kv_names = [n for n in names if "past_key_values" in n]
-        reorder_past_kv_names = reorder_modelbuilder_cache_to_torch(past_kv_names)
-        names = non_past_kv_input_names + reorder_past_kv_names
     return dict(zip(names, new_flat))
-
-
-def reorder_modelbuilder_cache_to_torch(past_kv: List[Any]) -> List[Any]:
-    """
-    Reorders the past_kvs for ModelBuilder to match the expected order
-    by PyTorch exported models.
-
-    .. note::
-        This function can take either the names or the actual tensors
-        as long as they are in a list.
-
-    Conceptually,
-
-    From::
-
-        [past_key_values.0.key, past_key_values.0.value,
-        past_key_values.1.key, past_key_values.1.value, ...]
-
-    To::
-
-        [past_key_values.0.key, past_key_values.1.key,
-        ..., past_key_values.0.value, past_key_values.1.value, ...]
-
-    :param past_kv: list of flattened inputs
-    :return: reordered list of flattened inputs
-    """
-    total_len = len(past_kv)
-    if total_len % 2 != 0:
-        raise ValueError("The length of past_key_values should be even.")
-    keys = []
-    values = []
-    for i in range(0, total_len, 2):
-        keys.append(past_kv[i])
-        values.append(past_kv[i + 1])
-    return keys + values
 
 
 def _get_dim(i: int, s: Union[str, int], batch: int = 1) -> int:
@@ -165,6 +120,31 @@ _DTYPES = {
 def rt_type_to_torch_dtype(typename: str) -> torch.dtype:
     """Converts a string such as ``tensor(float)`` into a dtype (torch.float32)."""
     return _DTYPES[typename]
+
+
+def make_empty_cache(
+    batch: int,
+    onnx_input_names: List[str],
+    onnx_input_shapes: List[Tuple[Union[int, str], ...]],
+    onnx_input_types: List[str],
+) -> Dict[str, torch.Tensor]:
+    """
+    Creates an empty cache. Example:
+
+    .. code-block:: python
+
+        make_empty_cache(
+            1,
+            sess.input_names[2:],
+            [i.shape for i in sess.get_inputs()[2:]],
+            [i.type for i in sess.get_inputs()[2:]],
+        )
+    """
+    feeds = {}
+    for name, shape, dtype in zip(onnx_input_names, onnx_input_shapes, onnx_input_types):
+        new_shape = tuple(_get_dim(i, s, batch=batch) for i, s in enumerate(shape))
+        feeds[name] = torch.empty(new_shape, dtype=rt_type_to_torch_dtype(dtype))
+    return feeds
 
 
 def onnx_generate(
@@ -206,19 +186,17 @@ def onnx_generate(
     ), f"Only text generation is supported but input_names == {input_names}"
 
     # First call: prefill
-    input_feeds = dict(
+    feeds = dict(
         input_ids=input_ids,
         attention_mask=torch.ones(
             input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
         ),
+        **make_empty_cache(
+            input_ids.shape[0], input_names[2:], input_shapes[2:], input_types[2:]
+        ),
     )
-    for name, shape, dtype in zip(input_names[2:], input_shapes[2:], input_types[2:]):
-        new_shape = tuple(
-            _get_dim(i, s, batch=input_ids.shape[0]) for i, s in enumerate(shape)
-        )
-        input_feeds[name] = torch.empty(new_shape, dtype=rt_type_to_torch_dtype(dtype))
 
-    outputs = session.run(None, input_feeds)
+    outputs = session.run(None, feeds)
 
     # Next calls: decode
     for _ in range(max_new_tokens):
@@ -241,7 +219,7 @@ def onnx_generate(
             ),
         )
         feeds.update(dict(zip(input_names[2:], outputs[1:])))
-        outputs = session.run(None, input_feeds)
+        outputs = session.run(None, feeds)
 
     if return_session:
         return input_ids, session

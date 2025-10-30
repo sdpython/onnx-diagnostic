@@ -84,10 +84,7 @@ def get_phi2(
             0: batch,
             1: torch.export.Dim.DYNAMIC,  # cache_length + seq_length
         },
-        "past_key_values": [
-            [{0: batch, 2: cache_length} for _ in range(n_layers)],
-            [{0: batch, 2: cache_length} for _ in range(n_layers)],
-        ],
+        "past_key_values": [{0: batch, 2: cache_length} for _ in range(n_layers * 2)],
     }
     inputs = dict(
         input_ids=torch.randint(0, max_token_id, (batch_size, sequence_length2)).to(

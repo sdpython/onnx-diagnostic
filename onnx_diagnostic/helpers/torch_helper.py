@@ -856,9 +856,15 @@ def torch_deepcopy(value: Any) -> Any:
         ), f"Unexpected type={type(value)}"
         return copy.deepcopy(value)
 
+    if hasattr(value, "__nocopy__"):
+        return value
+
     # We should have a code using serialization, deserialization assuming a model
     # cannot be exported without them.
-    raise NotImplementedError(f"torch_deepcopy not implemented for type {type(value)}")
+    raise NotImplementedError(
+        f"torch_deepcopy not implemented for type {type(value)}, "
+        f"add attribute '__nocopy__' to return it as is."
+    )
 
 
 def torch_tensor_size(value: Any) -> Any:

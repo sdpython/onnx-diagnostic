@@ -22,9 +22,7 @@ import torch
 from onnx_diagnostic import doc
 from onnx_diagnostic.ext_test_case import unit_test_going
 from onnx_diagnostic.helpers import string_type
-from onnx_diagnostic.torch_models.hghub import (
-    get_untrained_model_with_inputs,
-)
+from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_models.hghub.hub_api import (
     get_model_info,
     get_pretrained_config,
