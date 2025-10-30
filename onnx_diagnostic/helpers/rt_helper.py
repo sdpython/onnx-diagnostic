@@ -1,8 +1,9 @@
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import onnx
 import torch
-from .helper import string_type, flatten_object
+from .helper import string_type, flatten_object, max_diff
+from .torch_helper import torch_deepcopy
 from .ort_session import InferenceSessionForTorch
 
 
@@ -147,6 +148,115 @@ def make_empty_cache(
     return feeds
 
 
+def generate_and_validate(
+    model,
+    input_ids: torch.Tensor,
+    eos_token_id: int,
+    max_new_tokens: int = 100,
+    session: Optional[Union[InferenceSessionForTorch, onnx.ModelProto, str]] = None,
+    atol: float = 0.1,
+) -> Union[torch.Tensor, Tuple[torch.Tensor, List[Dict]]]:
+    """
+    Implements a simple method ``generate`` for a torch model.
+    The function does not expect any ``position_ids`` as input.
+    The function also checks the outputs coming from an onnx model
+    are close to the output the torch model produces.
+
+    :param model_or_path: model or loaded model
+    :param input_ids: input tokens
+    :param eos_token_ids: token representing the end of an answer
+    :param max_new_tokens: stops after this number of generated tokens
+    :param session: the onnx model
+    :return: input tokens concatenated with new tokens,
+        if session is not null, it also returns the maximum differences
+        at every iterations
+
+    See example given with function :func:`onnx_generate
+    <onnx_diagnostic.helpers.rt_helper.onnx_generate>`.
+    """
+    if session is not None:
+        if not isinstance(session, InferenceSessionForTorch):
+            providers = ["CUDAExecutionProvider"] if input_ids.is_cuda else []
+            providers.append("CPUExecutionProvider")
+            session = InferenceSessionForTorch(session, providers=providers)
+
+    # First call: prefill
+    attention_mask = torch.ones(
+        input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
+    )
+    if session:
+        feeds = {
+            **dict(zip(session.input_names[:2], [input_ids, attention_mask])),
+            **make_empty_cache(
+                input_ids.shape[0],
+                session.input_names[2:],
+                session.input_shapes[2:],
+                session.input_types[2:],
+            ),
+        }
+        onnx_results = session.run(None, feeds)
+
+    outputs = model(input_ids, use_cache=True, attention_mask=attention_mask)
+
+    if session:
+        diff = max_diff(outputs, onnx_results)
+        assert diff["abs"] <= atol, (
+            f"Unexpected issue with {type(model)}\ndiff={diff}"
+            f"\ninput_ids.shape={input_ids.shape}"
+            f"\nexpected={string_type(outputs, with_shape=True, with_min_max=True)}"
+            f"\n     got=\n"
+            f"{string_type(onnx_results, with_shape=True, with_min_max=True)}\n"
+            f"feeds={string_type(feeds, with_shape=True, with_min_max=True)}"
+        )
+        diffs = [diff]
+
+    # Next calls: decode
+    for iteration in range(max_new_tokens):
+        next_token_logits = outputs.logits[:, -1, :]
+        next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+        if next_token_id.item() == eos_token_id:
+            break
+        input_ids = torch.cat([input_ids, next_token_id], dim=-1)
+        attention_mask = torch.ones(
+            input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
+        )
+        if session:
+            feeds = dict(
+                zip(
+                    session.input_names,
+                    [
+                        t.detach()
+                        for t in torch_deepcopy(
+                            flatten_object(
+                                [next_token_id, attention_mask, outputs.past_key_values]
+                            )
+                        )
+                    ],
+                )
+            )
+            onnx_results = session.run(None, feeds)
+        outputs = model(
+            next_token_id,
+            use_cache=True,
+            past_key_values=outputs.past_key_values,
+            attention_mask=attention_mask,
+        )
+        if session:
+            diff = max_diff(outputs, onnx_results)
+            assert diff["abs"] <= atol, (
+                f"Unexpected issue with {type(model)}, iteration={iteration}"
+                f"\ndiff={diff}\ninput_ids.shape={input_ids.shape}"
+                f"\nexpected={string_type(outputs, with_shape=True, with_min_max=True)}"
+                f"\n     got=\n"
+                f"{string_type(onnx_results, with_shape=True, with_min_max=True)}\n"
+                f"feeds={string_type(feeds, with_shape=True, with_min_max=True)}"
+            )
+            diffs.append(diff)
+    if session:
+        return input_ids, diffs
+    return input_ids
+
+
 def onnx_generate(
     model_or_path: Union[onnx.ModelProto, str, InferenceSessionForTorch],
     input_ids: torch.Tensor,
@@ -167,6 +277,54 @@ def onnx_generate(
         <onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch>`
         created if necessary
     :return: input tokens concatenated with new tokens
+
+    .. runpython::
+        :showcode:
+
+        import os
+        from onnx_diagnostic.helpers import string_type, string_diff
+        from onnx_diagnostic.helpers.rt_helper import onnx_generate, generate_and_validate
+        from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
+        from onnx_diagnostic.torch_export_patches import torch_export_patches
+        from onnx_diagnostic.export.api import to_onnx
+
+        mid = "arnir0/Tiny-LLM"
+        print(f"-- get model for {mid!r}")
+        data = get_untrained_model_with_inputs(mid)
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        del inputs["position_ids"]
+        del ds["position_ids"]
+        input_ids = inputs["input_ids"]
+
+        print(f"-- input_ids={input_ids.shape}")
+        print(f"-- inputs: {string_type(inputs, with_shape=True)}")
+        print(f"-- dynamic_shapes: {string_type(ds)}")
+        folder = "dump_test"
+        os.makedirs(folder, exist_ok=True)
+        model_name = os.path.join(folder, "model.onnx")
+        print("-- test_onnx_generate: export model")
+        with torch_export_patches(patch_transformers=True, patch_torch=False):
+            to_onnx(
+                model,
+                (),
+                kwargs=inputs,
+                dynamic_shapes=ds,
+                filename=model_name,
+                exporter="custom",  # custom, dynamo or onnx-dynamo, modelbuilder
+            )
+
+        print("-- onnx_generate")
+        onnx_outputs = onnx_generate(model_name, input_ids[:1], 2, max_new_tokens=10)
+        print("-- onnx output", onnx_outputs)
+
+        print("-- generate")
+        torch_outputs, diffs = generate_and_validate(
+            model, input_ids[:1], 2, max_new_tokens=10, session=model_name
+        )
+        print("-- torch output", torch_outputs)
+        print("-- differences at each step:")
+        for i, d in enumerate(diffs):
+            print(f"iteration {i}: {string_diff(d)}")
     """
     if not isinstance(model_or_path, InferenceSessionForTorch):
         providers = ["CUDAExecutionProvider"] if input_ids.is_cuda else []

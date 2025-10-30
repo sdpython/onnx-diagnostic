@@ -34,7 +34,7 @@ def to_onnx(
             output_dynamic_shapes=output_dynamic_shapes,
             options=OptimizationOptions(patterns="default+onnxruntime"),
         )
-    if exporter == "onnx-dynamo":
+    if exporter in ("dynamo", "onnx-dynamo"):
         import onnxscript.rewriter.ort_fusions as ort_fusions
 
         assert (
