@@ -239,6 +239,7 @@ epkg_dictionary = {
     "ONNX": "https://onnx.ai/",
     "ONNX Operators": "https://onnx.ai/onnx/operators/",
     "onnxruntime": "https://onnxruntime.ai/",
+    "onnxruntime-genai": "https://github.com/microsoft/onnxruntime-genai",
     "onnxruntime-training": "https://onnxruntime.ai/docs/get-started/training-on-device.html",
     "onnxruntime kernels": "https://onnxruntime.ai/docs/reference/operators/OperatorKernels.html",
     "onnx-array-api": "https://sdpython.github.io/doc/onnx-array-api/dev/",
