@@ -323,6 +323,7 @@ def onnx_generate(
         onnx_outputs = onnx_generate(model_name, input_ids[:1], 2, max_new_tokens=10)
         print("-- onnx output", onnx_outputs)
 
+        # The example continues with other functions doing the same.
         print("-- generate with pytorch")
         torch_outputs, diffs = generate_and_validate(
             model, input_ids[:1], 2, max_new_tokens=10, session=model_name
@@ -422,6 +423,9 @@ def onnx_generate_with_genai(
     :param transformers_config: write configuration
         if missing and if this configuration is provided
     :return: input tokens concatenated with new tokens
+
+    See example given with function :func:`onnx_generate
+    <onnx_diagnostic.helpers.rt_helper.onnx_generate>`.
     """
     import onnxruntime_genai as og
 
