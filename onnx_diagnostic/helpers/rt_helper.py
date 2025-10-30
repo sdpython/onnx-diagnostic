@@ -200,7 +200,7 @@ def generate_and_validate(
 
     if session:
         diff = max_diff(outputs, onnx_results)
-        assert diff["abs"] <= atol, (
+        assert isinstance(diff["abs"], float) and diff["abs"] <= atol, (
             f"Unexpected issue with {type(model)}\ndiff={diff}"
             f"\ninput_ids.shape={input_ids.shape}"
             f"\nexpected={string_type(outputs, with_shape=True, with_min_max=True)}"
@@ -243,7 +243,7 @@ def generate_and_validate(
         )
         if session:
             diff = max_diff(outputs, onnx_results)
-            assert diff["abs"] <= atol, (
+            assert isinstance(diff["abs"], float) and diff["abs"] <= atol, (
                 f"Unexpected issue with {type(model)}, iteration={iteration}"
                 f"\ndiff={diff}\ninput_ids.shape={input_ids.shape}"
                 f"\nexpected={string_type(outputs, with_shape=True, with_min_max=True)}"
