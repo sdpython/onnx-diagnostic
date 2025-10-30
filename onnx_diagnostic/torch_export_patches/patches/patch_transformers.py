@@ -1374,6 +1374,14 @@ def patched_sdpa_attention_forward(
         attention_mask is None or attention_mask.shape[3] == key.shape[2],
         "Attention mask shape incompatible with key shape.",
     )
+    torch._check(
+        query.shape[0] == key.shape[0] or query.shape[0] == 1,
+        lambda: f"broadcast issue query (1): {query.shape}, key: {key.shape}, value: {value.shape}",
+    )
+    torch._check(
+        key.shape[0] == value.shape[0] or key.shape[0] == 1,
+        lambda: f"broadcast issue query (2): {query.shape}, key: {key.shape}, value: {value.shape}",
+    )
     if is_causal:
         attn_output = torch.cond(
             query.shape[2] > 1,  # distinction between prefill and decoding steps
