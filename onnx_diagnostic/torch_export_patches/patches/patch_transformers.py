@@ -1388,40 +1388,50 @@ def patched_sdpa_attention_forward(
             f"value: {value.shape}"
         ),
     )
-    if is_causal:
-        attn_output = torch.cond(
-            query.shape[2] > 1,  # distinction between prefill and decoding steps
-            lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
+    if not is_causal:
+        return (
+            torch.nn.functional.scaled_dot_product_attention(
                 query,
                 key,
                 value,
+                attn_mask=attention_mask,
                 dropout_p=dropout,
                 scale=scaling,
-                is_causal=True,
+                is_causal=is_causal,
                 **sdpa_kwargs,
-            ),
-            lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
-                query,
-                key,
-                value,
-                dropout_p=dropout,
-                scale=scaling,
-                is_causal=False,
-                **sdpa_kwargs,
-            ),
-            [query, key, value],
+            )
+            .transpose(1, 2)
+            .contiguous(),
+            None,
         )
-    else:
-        attn_output = torch.nn.functional.scaled_dot_product_attention(
+
+    # To avoid the following errors:
+    # is_causal=query.shape[2] > 1
+    # TypeError: scaled_dot_product_attention(): argument 'is_causal' must be bool, not SymBool
+    # is_causal=torch.tensor(query.shape[2] > 1)
+    # TypeError: scaled_dot_product_attention(): argument 'is_causal' must be bool, not Tensor
+    attn_output = torch.cond(
+        query.shape[2] > 1,  # distinction between prefill and decoding steps
+        lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
             query,
             key,
             value,
-            attn_mask=attention_mask,
             dropout_p=dropout,
             scale=scaling,
-            is_causal=is_causal,
+            is_causal=True,
             **sdpa_kwargs,
-        )
+        ),
+        lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            dropout_p=dropout,
+            scale=scaling,
+            is_causal=False,
+            **sdpa_kwargs,
+        ),
+        [query, key, value],
+    )
     attn_output = attn_output.transpose(1, 2).contiguous()
     return attn_output, None
 
