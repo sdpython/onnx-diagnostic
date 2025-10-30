@@ -1352,10 +1352,6 @@ def patched_sdpa_attention_forward(
         " Please set your attention to `eager` if you want any of these features."
     )
     torch._check(
-        attention_mask is None or attention_mask.shape[3] == key.shape[2],
-        "Attention mask shape incompatible with key shape.",
-    )
-    torch._check(
         query.shape[0] == key.shape[0] or query.shape[0] == 1,
         lambda: (
             f"broadcast issue query (1): {query.shape}, key: {key.shape}, "
@@ -1384,6 +1380,11 @@ def patched_sdpa_attention_forward(
 
     if attention_mask is not None and attention_mask.ndim == 4:
         attention_mask = attention_mask[:, :, :, : key.shape[-2]]
+
+    torch._check(
+        attention_mask is None or attention_mask.shape[3] == key.shape[2],
+        lambda: "Attention mask shape incompatible with key shape.",
+    )
 
     if patch_sdpa_is_causal:
         # transformers>=4.55

@@ -75,8 +75,8 @@ except RuntimeError as e:
 
 
 # %%
-# Final try with pathes...
-# ++++++++++++++++++++++++
+# Final try with patches...
+# +++++++++++++++++++++++++
 
 print("-- export shape:", string_type((x, y, z), with_shape=True))
 print("-- dynamic shapes:", string_type((ds, ds, ds)))
