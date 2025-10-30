@@ -44,7 +44,6 @@ class TestPatchPatchTransformers(ExtTestCase):
         got = patched_sdpa_mask_recent_torch(**kwargs)
         self.assertEqualArray(expected, got)
 
-    @requires_transformers("4.55")
     def test_sdpa_attention_forward_not_causal(self):
         sdpa_attention_forward = sdpa_attention.sdpa_attention_forward
         patched_sdpa_attention_forward = patch_transformers.patched_sdpa_attention_forward
@@ -76,7 +75,6 @@ class TestPatchPatchTransformers(ExtTestCase):
         got = patched_sdpa_attention_forward(**torch_deepcopy(kwargs))[0]
         self.assertEqualArray(expected, got)
 
-    @requires_transformers("4.55")
     def test_sdpa_attention_forward_causal(self):
         sdpa_attention_forward = sdpa_attention.sdpa_attention_forward
         patched_sdpa_attention_forward = patch_transformers.patched_sdpa_attention_forward

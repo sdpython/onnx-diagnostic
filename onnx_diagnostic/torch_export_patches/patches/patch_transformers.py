@@ -1351,31 +1351,6 @@ def patched_sdpa_attention_forward(
         "`sdpa` attention does not support `output_attentions=True`."
         " Please set your attention to `eager` if you want any of these features."
     )
-    sdpa_kwargs = {}
-    if hasattr(module, "num_key_value_groups"):
-        if not transformers.integrations.sdpa_attention.use_gqa_in_sdpa(attention_mask, key):
-            key = transformers.integrations.sdpa_attention.repeat_kv(
-                key, module.num_key_value_groups
-            )
-            value = transformers.integrations.sdpa_attention.repeat_kv(
-                value, module.num_key_value_groups
-            )
-        else:
-            sdpa_kwargs = {"enable_gqa": True}
-
-    if attention_mask is not None and attention_mask.ndim == 4:
-        attention_mask = attention_mask[:, :, :, : key.shape[-2]]
-
-    if patch_is_causal:
-        is_causal = is_causal if is_causal is not None else getattr(module, "is_causal", True)
-
-        # PATCHED: remove the test query.shape[2] > 1
-        # is_causal = query.shape[2] > 1 and attention_mask is None and is_causal
-        # and we split the test to keep the minimum in torch.cond
-        is_causal = attention_mask is None and is_causal
-    elif is_causal is None:
-        is_causal = attention_mask is None
-
     torch._check(
         attention_mask is None or attention_mask.shape[3] == key.shape[2],
         "Attention mask shape incompatible with key shape.",
@@ -1394,22 +1369,67 @@ def patched_sdpa_attention_forward(
             f"value: {value.shape}"
         ),
     )
-    if not is_causal or not patch_is_causal:
-        return (
-            torch.nn.functional.scaled_dot_product_attention(
-                query,
-                key,
-                value,
-                attn_mask=attention_mask,
-                dropout_p=dropout,
-                scale=scaling,
-                is_causal=is_causal,
-                **sdpa_kwargs,
+
+    sdpa_kwargs = {}
+    if hasattr(module, "num_key_value_groups"):
+        if not transformers.integrations.sdpa_attention.use_gqa_in_sdpa(attention_mask, key):
+            key = transformers.integrations.sdpa_attention.repeat_kv(
+                key, module.num_key_value_groups
             )
-            .transpose(1, 2)
-            .contiguous(),
-            None,
-        )
+            value = transformers.integrations.sdpa_attention.repeat_kv(
+                value, module.num_key_value_groups
+            )
+        else:
+            sdpa_kwargs = {"enable_gqa": True}
+
+    if attention_mask is not None and attention_mask.ndim == 4:
+        attention_mask = attention_mask[:, :, :, : key.shape[-2]]
+
+    if patch_is_causal:
+        # transformers>=4.55
+        is_causal = is_causal if is_causal is not None else getattr(module, "is_causal", True)
+
+        # PATCHED: remove the test query.shape[2] > 1
+        # is_causal = query.shape[2] > 1 and attention_mask is None and is_causal
+        # and we split the test to keep the minimum in torch.cond
+        is_causal = attention_mask is None and is_causal
+
+        if not is_causal:
+            return (
+                torch.nn.functional.scaled_dot_product_attention(
+                    query,
+                    key,
+                    value,
+                    attn_mask=attention_mask,
+                    dropout_p=dropout,
+                    scale=scaling,
+                    is_causal=is_causal,
+                    **sdpa_kwargs,
+                )
+                .transpose(1, 2)
+                .contiguous(),
+                None,
+            )
+    else:
+        # transformers<4.55
+        if is_causal is None and attention_mask is not None:
+            is_causal = False
+        if is_causal is not None:
+            return (
+                torch.nn.functional.scaled_dot_product_attention(
+                    query,
+                    key,
+                    value,
+                    attn_mask=attention_mask,
+                    dropout_p=dropout,
+                    scale=scaling,
+                    is_causal=is_causal,
+                    **sdpa_kwargs,
+                )
+                .transpose(1, 2)
+                .contiguous(),
+                None,
+            )
 
     # To avoid the following errors:
     # is_causal=query.shape[2] > 1
