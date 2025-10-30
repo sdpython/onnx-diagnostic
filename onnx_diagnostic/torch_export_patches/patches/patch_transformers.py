@@ -1394,7 +1394,7 @@ def patched_sdpa_attention_forward(
             f"value: {value.shape}"
         ),
     )
-    if not is_causal:
+    if not is_causal or not patch_is_causal:
         return (
             torch.nn.functional.scaled_dot_product_attention(
                 query,

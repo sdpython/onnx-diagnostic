@@ -124,7 +124,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqual(attn_causal_bias.min().item(), -float("inf"))
 
     @ignore_warnings(UserWarning)
-    def test_causal_mask_in_scaled_dot_product_attention_export(self):
+    def test_sdpa_attention_forward_export_is_causal(self):
         sdpa_attention_forward = sdpa_attention.sdpa_attention_forward
         patched_sdpa_attention_forward = patch_transformers.patched_sdpa_attention_forward
         kwargs = {
@@ -152,6 +152,55 @@ class TestPatchPatchTransformers(ExtTestCase):
                     "attention_dropout": 0,
                     "scaling": 0.10206207261596575,
                     "is_causal": True,
+                }
+                return patched_sdpa_attention_forward(**kwargs)[0]
+
+        query, key, value = kwargs["query"], kwargs["key"], kwargs["value"]
+        model = Model()
+        got = model(query, key, value)
+        self.assertEqualArray(expected, got)
+
+        # static export
+        ep = torch.export.export(model, (query, key, value))
+        got = ep.module()(query, key, value)
+        self.assertEqualArray(expected, got)
+
+        # dynamic
+        ds = ({0: "batch", 2: "seq1"}, {0: "batch", 2: "seq2"}, {0: "batch", 2: "seq2"})
+        fake_inputs, _ = make_fake_with_dynamic_dimensions((query, key, value), ds)
+        epd = torch.export.export(model, fake_inputs, dynamic_shapes=use_dyn_not_str(ds))
+        got = epd.module()(query, key, value)
+        self.assertEqualArray(expected, got)
+
+    @ignore_warnings(UserWarning)
+    def test_sdpa_attention_forward_export_is_causal_none(self):
+        sdpa_attention_forward = sdpa_attention.sdpa_attention_forward
+        patched_sdpa_attention_forward = patch_transformers.patched_sdpa_attention_forward
+        kwargs = {
+            "module": None,
+            "query": torch.rand((1, 2, 1, 96), dtype=torch.float32),
+            "key": torch.rand((1, 2, 4, 96), dtype=torch.float32),
+            "value": torch.rand((1, 2, 4, 96), dtype=torch.float32),
+            "attention_mask": None,
+            "attention_dropout": 0,
+            "scaling": 0.10206207261596575,
+            "is_causal": None,
+        }
+        expected = sdpa_attention_forward(**torch_deepcopy(kwargs))[0]
+        got = patched_sdpa_attention_forward(**torch_deepcopy(kwargs))[0]
+        self.assertEqualArray(expected, got)
+
+        class Model(torch.nn.Module):
+            def forward(self, query, key, value):
+                kwargs = {
+                    "module": None,
+                    "query": query,
+                    "key": key,
+                    "value": value,
+                    "attention_mask": None,
+                    "attention_dropout": 0,
+                    "scaling": 0.10206207261596575,
+                    "is_causal": None,
                 }
                 return patched_sdpa_attention_forward(**kwargs)[0]
 
