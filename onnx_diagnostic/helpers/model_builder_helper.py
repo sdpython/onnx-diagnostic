@@ -1,10 +1,11 @@
 import copy
 import importlib.util
 import os
+import re
 import requests
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
 from onnx import ModelProto, TensorProto, load as load_model
 
@@ -340,6 +341,26 @@ def create_model_builder(
     return onnx_model
 
 
+def find_names_pattern(names: List[str]) -> str:
+    """
+    Finds a repeatable patterns in a list of names.
+    It tries to locate the figures.
+
+    .. runpython::
+        :showcode:
+
+        from onnx_diagnostic.helpers.model_builder_helper import find_names_pattern
+        pattern = find_names_pattern(["past_key_values_key_0", "past_key_values_key_1"])
+        print(pattern)
+    """
+    patterns = [re.sub(r"(\d+)", r"%d", t) for t in names]
+    unique = set(patterns)
+    assert (
+        len(unique) == 1
+    ), f"Unable to guess a pattern from {names} which led to the unique patterns {unique}"
+    return patterns[0]
+
+
 def make_genai_config(
     config,
     onnx_filename: str,
@@ -398,8 +419,17 @@ def make_genai_config(
                 "filename": onnx_filename,
                 "head_size": shape[-1],
                 "hidden_size": config.hidden_size,
-                "inputs": input_names,
-                "outputs": output_names,
+                "inputs": {
+                    "input_ids": input_names[0],
+                    "attention_mask": input_names[1],
+                    "past_key_names": find_names_pattern(input_names[2::2]),
+                    "past_value_names": find_names_pattern(input_names[3::2]),
+                },
+                "outputs": {
+                    "logits": output_names[0],
+                    "present_key_names": find_names_pattern(output_names[1::2]),
+                    "present_value_names": find_names_pattern(output_names[2::2]),
+                },
                 "num_attention_heads": config.num_attention_heads,
                 "num_hidden_layers": len(past_key_values) // 2,
                 "num_key_value_heads": shape[1],
