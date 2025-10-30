@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
 
 
 _UNIQUE = set()
@@ -17,9 +17,9 @@ class FakeTensorContext:
         else:
             self.fake_mode = fake_mode
         self._candidates = self._first_primes()
-        self._unique_ = set()
-        self._mapping_int = {}
-        self._mapping_str = {}
+        self._unique_: Set[str] = set()
+        self._mapping_int: Dict[int, str] = {}
+        self._mapping_str: Dict[str, int] = {}
 
     @classmethod
     def _first_primes(cls, n=1000):
