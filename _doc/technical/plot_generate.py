@@ -94,6 +94,9 @@ print("eos_token_id=", tokenizer.eos_token_id)
 # %%
 # Custom method generate
 # ======================
+#
+# Let's implement a simple function replicating when method
+# ``generate`` does.
 
 
 def simple_generate_with_cache(
