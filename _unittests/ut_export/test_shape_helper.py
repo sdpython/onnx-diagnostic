@@ -185,6 +185,40 @@ class TestShapeHelper(ExtTestCase):
 
     @requires_transformers("4.55")
     @requires_torch("2.9")
+    def test_make_fake_with_dynamic_dimensions_two_tensors(self):
+        res = make_fake_with_dynamic_dimensions(
+            (
+                torch.rand((2, 32, 30, 96), dtype=torch.float16),
+                torch.rand((2, 32, 30, 96), dtype=torch.float16),
+            ),
+            ({0: "batch", 2: "cache_length"}, {0: "batch", 2: "cache_length"}),
+        )
+        reshaped = res[0][0]
+        self.assertIsInstance(reshaped.shape[0], torch.SymInt)
+        self.assertIsInstance(reshaped.shape[2], torch.SymInt)
+        self.assertEqual(reshaped.shape[1], 32)
+        self.assertEqual(reshaped.shape[3], 96)
+        self.assertNotEqual(reshaped.shape[0], reshaped.shape[2])
+        self.assertEqual(str(res[0][0].shape), str(res[0][1].shape))
+        sh1 = res[0][0].shape
+        sh2 = res[0][1].shape
+        self.assertEqual(sh1[0], sh2[0])
+        self.assertEqual(sh1[1], sh2[1])
+        self.assertEqual(sh1[2], sh2[2])
+        self.assertEqual(sh1[3], sh2[3])
+
+    def test_make_fake_with_dynamic_dimensions_attention(self):
+        query = torch.rand((1, 2, 1, 96), dtype=torch.float32)
+        key = torch.rand((1, 2, 4, 96), dtype=torch.float32)
+        value = torch.rand((1, 2, 4, 96), dtype=torch.float32)
+        ds = ({0: "batch", 2: "seq1"}, {0: "batch", 2: "seq2"}, {0: "batch", 2: "seq2"})
+        fake_inputs, _ = make_fake_with_dynamic_dimensions((query, key, value), ds)
+        self.assertEqual(fake_inputs[1].shape, fake_inputs[2].shape)
+        self.assertEqual(fake_inputs[0].shape[0], fake_inputs[1].shape[0])
+        self.assertEqual(fake_inputs[0].shape[0], fake_inputs[2].shape[0])
+
+    @requires_transformers("4.55")
+    @requires_torch("2.9")
     def test_make_fake_with_dynamic_dimensions_whole(self):
         res = make_fake_with_dynamic_dimensions(
             dict(

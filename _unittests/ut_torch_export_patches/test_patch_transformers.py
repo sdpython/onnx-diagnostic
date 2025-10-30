@@ -168,9 +168,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         # dynamic
         ds = ({0: "batch", 2: "seq1"}, {0: "batch", 2: "seq2"}, {0: "batch", 2: "seq2"})
         fake_inputs, _ = make_fake_with_dynamic_dimensions((query, key, value), ds)
-        print("****", fake_inputs)
-        epd = torch.export.export(model, fake_inputs)  # , dynamic_shapes=use_dyn_not_str(ds))
-        print(epq)
+        epd = torch.export.export(model, fake_inputs, dynamic_shapes=use_dyn_not_str(ds))
         got = epd.module()(query, key, value)
         self.assertEqualArray(expected, got)
 

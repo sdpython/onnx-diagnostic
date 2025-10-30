@@ -1376,11 +1376,17 @@ def patched_sdpa_attention_forward(
     )
     torch._check(
         query.shape[0] == key.shape[0] or query.shape[0] == 1,
-        lambda: f"broadcast issue query (1): {query.shape}, key: {key.shape}, value: {value.shape}",
+        lambda: (
+            f"broadcast issue query (1): {query.shape}, key: {key.shape}, "
+            f"value: {value.shape}"
+        ),
     )
     torch._check(
         key.shape[0] == value.shape[0] or key.shape[0] == 1,
-        lambda: f"broadcast issue query (2): {query.shape}, key: {key.shape}, value: {value.shape}",
+        lambda: (
+            f"broadcast issue query (2): {query.shape}, key: {key.shape}, "
+            f"value: {value.shape}"
+        ),
     )
     if is_causal:
         attn_output = torch.cond(
