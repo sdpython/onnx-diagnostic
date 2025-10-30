@@ -59,8 +59,6 @@ class TestRtSession(ExtTestCase):
             model, input_ids[:1], 2, max_new_tokens=10, session=session
         )
         self.assertEqualArray(input_ids[:1], expected[:, :n_inputs])
-        print("******", res)
-        print("******", expected)
         self.assertEqual(expected.dtype, torch.int64)
         self.assertEqual(expected.shape, (1, 13))
         self.assertEqualArray(expected, res)

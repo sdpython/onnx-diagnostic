@@ -416,7 +416,7 @@ def make_genai_config(
                     "log_id": "onnxruntime-genai",
                     "provider_options": [],
                 },
-                "filename": onnx_filename,
+                "filename": os.path.split(onnx_filename)[-1],
                 "head_size": shape[-1],
                 "hidden_size": config.hidden_size,
                 "inputs": {
@@ -436,7 +436,7 @@ def make_genai_config(
             },
             "eos_token_id": eos_token_id,
             "pad_token_id": pad_token_id,
-            # "type": self.model_type[ : self.model_type.find("For")
+            "type": config.model_type,
             # if "For" in self.model_type else len(self.model_type)].lower(),
             "vocab_size": config.vocab_size,
         },

@@ -285,7 +285,11 @@ def onnx_generate(
 
         import os
         from onnx_diagnostic.helpers import string_type, string_diff
-        from onnx_diagnostic.helpers.rt_helper import onnx_generate, generate_and_validate
+        from onnx_diagnostic.helpers.rt_helper import (
+            onnx_generate,
+            generate_and_validate,
+            onnx_generate_with_genai,
+        )
         from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
         from onnx_diagnostic.torch_export_patches import torch_export_patches
         from onnx_diagnostic.export.api import to_onnx
@@ -315,11 +319,11 @@ def onnx_generate(
                 exporter="custom",  # custom, dynamo or onnx-dynamo, modelbuilder
             )
 
-        print("-- onnx_generate")
+        print("-- generate with onnx")
         onnx_outputs = onnx_generate(model_name, input_ids[:1], 2, max_new_tokens=10)
         print("-- onnx output", onnx_outputs)
 
-        print("-- generate")
+        print("-- generate with pytorch")
         torch_outputs, diffs = generate_and_validate(
             model, input_ids[:1], 2, max_new_tokens=10, session=model_name
         )
@@ -327,6 +331,16 @@ def onnx_generate(
         print("-- differences at each step:")
         for i, d in enumerate(diffs):
             print(f"iteration {i}: {string_diff(d)}")
+
+        print("-- generate with genai")
+        genai_outputs, session = onnx_generate_with_genai(
+            model_name,
+            input_ids[:1],
+            max_new_tokens=10,
+            return_session=True,
+            transformers_config=data["configuration"],
+        )
+        print("-- genai output", genai_outputs)
     """
     if not isinstance(model_or_path, InferenceSessionForTorch):
         providers = ["CUDAExecutionProvider"] if input_ids.is_cuda else []
@@ -439,18 +453,20 @@ def onnx_generate_with_genai(
         session = model_or_path
 
     params = og.GeneratorParams(session)
-    params.set_search_options(max_new_tokens=max_new_tokens, batch_size=input_ids.shape[0])
+    params.set_search_options(
+        max_length=max_new_tokens + input_ids.shape[1], batch_size=input_ids.shape[0]
+    )
     generator = og.Generator(session, params)
 
     # First call: prefill
-    cats = [input_ids]
+    cats = []
     generator.append_tokens(input_ids)
     while not generator.is_done():
         generator.generate_next_token()
         new_token = generator.get_next_tokens()[0]
-        cats.append(new_token)
+        cats.append(int(new_token))
 
-    input_ids = torch.cat(cats, dim=-1)
+    input_ids = torch.cat([input_ids, torch.tensor([cats], dtype=torch.int64)], dim=-1)
     if return_session:
         return input_ids, session
     return input_ids
