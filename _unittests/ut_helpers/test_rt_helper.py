@@ -3,11 +3,16 @@ import unittest
 import torch
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
+    has_onnxruntime_genai,
     hide_stdout,
     requires_transformers,
     requires_torch,
 )
-from onnx_diagnostic.helpers.rt_helper import onnx_generate, generate_and_validate
+from onnx_diagnostic.helpers.rt_helper import (
+    onnx_generate,
+    generate_and_validate,
+    onnx_generate_with_genai,
+)
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.export.api import to_onnx
@@ -22,6 +27,7 @@ class TestRtSession(ExtTestCase):
         print("-- test_onnx_generate: get model")
         data = get_untrained_model_with_inputs(mid)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        configuration = data["configuration"]
         del inputs["position_ids"]
         del ds["position_ids"]
         input_ids = inputs["input_ids"]
@@ -53,10 +59,21 @@ class TestRtSession(ExtTestCase):
             model, input_ids[:1], 2, max_new_tokens=10, session=session
         )
         self.assertEqualArray(input_ids[:1], expected[:, :n_inputs])
-        print("******", res)
-        print("******", expected)
         self.assertEqual(expected.dtype, torch.int64)
         self.assertEqual(expected.shape, (1, 13))
+        self.assertEqualArray(expected, res)
+
+        if not has_onnxruntime_genai():
+            raise unittest.SkipTest("onnxruntime_genai is missing")
+
+        res, session = onnx_generate_with_genai(
+            model_name,
+            input_ids[:1],
+            max_new_tokens=10,
+            return_session=True,
+            transformers_config=configuration,
+        )
+        self.assertNotEmpty(session)
         self.assertEqualArray(expected, res)
 
 

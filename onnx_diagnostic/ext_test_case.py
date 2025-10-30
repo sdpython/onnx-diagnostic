@@ -630,6 +630,17 @@ def has_onnxruntime_training(push_back_batch: bool = False):
     return True
 
 
+def has_onnxruntime_genai():
+    """Tells if onnxruntime_genai is installed."""
+    try:
+        import onnxruntime_genai  # noqa: F401
+
+        return True
+    except ImportError:
+        # onnxruntime not training
+        return False
+
+
 def requires_onnxruntime_training(
     push_back_batch: bool = False, ortmodule: bool = False, msg: str = ""
 ) -> Callable:

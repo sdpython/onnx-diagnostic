@@ -11,6 +11,7 @@ from onnx_diagnostic.helpers.model_builder_helper import (
     import_model_builder,
     create_model_builder,
     save_model_builder,
+    find_names_pattern,
 )
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.helpers.rt_helper import make_feeds
@@ -62,6 +63,11 @@ class TestModelBuilderHelper(ExtTestCase):
             if "batch_size must be 1 when sequence_length > 1" in str(e):
                 raise unittest.SkipTest("batch_size must be 1 when sequence_length > 1")
         self.assertEqualAny(expected, got)
+
+    def test_find_names_pattern(self):
+        pats = ["past_key_values_key_0", "past_key_values_key_1"]
+        self.assertEqual("past_key_values_key_%d", find_names_pattern(pats))
+        self.assertEqual("past_key_values_key_%d", find_names_pattern(pats[:1]))
 
 
 if __name__ == "__main__":

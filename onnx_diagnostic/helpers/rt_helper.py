@@ -1,3 +1,5 @@
+import json
+import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import onnx
@@ -283,7 +285,11 @@ def onnx_generate(
 
         import os
         from onnx_diagnostic.helpers import string_type, string_diff
-        from onnx_diagnostic.helpers.rt_helper import onnx_generate, generate_and_validate
+        from onnx_diagnostic.helpers.rt_helper import (
+            onnx_generate,
+            generate_and_validate,
+            onnx_generate_with_genai,
+        )
         from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
         from onnx_diagnostic.torch_export_patches import torch_export_patches
         from onnx_diagnostic.export.api import to_onnx
@@ -313,11 +319,12 @@ def onnx_generate(
                 exporter="custom",  # custom, dynamo or onnx-dynamo, modelbuilder
             )
 
-        print("-- onnx_generate")
+        print("-- generate with onnx")
         onnx_outputs = onnx_generate(model_name, input_ids[:1], 2, max_new_tokens=10)
         print("-- onnx output", onnx_outputs)
 
-        print("-- generate")
+        # The example continues with other functions doing the same.
+        print("-- generate with pytorch")
         torch_outputs, diffs = generate_and_validate(
             model, input_ids[:1], 2, max_new_tokens=10, session=model_name
         )
@@ -325,6 +332,16 @@ def onnx_generate(
         print("-- differences at each step:")
         for i, d in enumerate(diffs):
             print(f"iteration {i}: {string_diff(d)}")
+
+        print("-- generate with genai")
+        genai_outputs, session = onnx_generate_with_genai(
+            model_name,
+            input_ids[:1],
+            max_new_tokens=10,
+            return_session=True,
+            transformers_config=data["configuration"],
+        )
+        print("-- genai output", genai_outputs)
     """
     if not isinstance(model_or_path, InferenceSessionForTorch):
         providers = ["CUDAExecutionProvider"] if input_ids.is_cuda else []
@@ -379,6 +396,81 @@ def onnx_generate(
         feeds.update(dict(zip(input_names[2:], outputs[1:])))
         outputs = session.run(None, feeds)
 
+    if return_session:
+        return input_ids, session
+    return input_ids
+
+
+def onnx_generate_with_genai(
+    model_or_path: Union[onnx.ModelProto, str, InferenceSessionForTorch],
+    input_ids: torch.Tensor,
+    max_new_tokens=100,
+    return_session: bool = False,
+    transformers_config: Optional[Any] = None,
+) -> Union[torch.Tensor, Tuple[torch.Tensor, InferenceSessionForTorch]]:
+    """
+    Uses :epkg:`onnxruntime-genai` to implement a simple method ``generate``
+    for an ONNX model. The function does not expect any ``position_ids`` as input.
+
+    :param model_or_path: model or loaded model
+    :param input_ids: input tokens
+    :param eos_token_ids: token representing the end of an answer
+    :param max_new_tokens: stops after this number of generated tokens
+    :param return_session: returns the instance of class
+        :class:`InferenceSessionForTorch
+        <onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch>`
+        created if necessary
+    :param transformers_config: write configuration
+        if missing and if this configuration is provided
+    :return: input tokens concatenated with new tokens
+
+    See example given with function :func:`onnx_generate
+    <onnx_diagnostic.helpers.rt_helper.onnx_generate>`.
+    """
+    import onnxruntime_genai as og
+
+    if not isinstance(model_or_path, og.Model):
+        from .model_builder_helper import make_genai_config
+
+        assert isinstance(
+            model_or_path, str
+        ), f"Only a filename is allowed for model_or_path but type is {type(model_or_path)}"
+        folder = os.path.dirname(model_or_path)
+        assert os.path.exists(folder), f"Folder {folder!r} does not exists."
+        assert os.path.exists(model_or_path), f"Folder {model_or_path!r} does not exists."
+        config_file = os.path.join(folder, "genai_config.json")
+        if not os.path.exists(config_file):
+            if not transformers_config:
+                raise FileNotFoundError(
+                    f"Folder {model_or_path!r} does not contain 'genai_config.json'."
+                )
+            config = make_genai_config(transformers_config, model_or_path)
+            with open(config_file, "w") as f:
+                json.dump(config, f, indent=4)
+
+        config = og.Config(os.path.dirname(config_file))
+        if input_ids.is_cuda:
+            config.clear_providers()
+            config.append_provider("cuda")
+        session = og.Model(config)
+    else:
+        session = model_or_path
+
+    params = og.GeneratorParams(session)
+    params.set_search_options(
+        max_length=max_new_tokens + input_ids.shape[1], batch_size=input_ids.shape[0]
+    )
+    generator = og.Generator(session, params)
+
+    # First call: prefill
+    cats = []
+    generator.append_tokens(input_ids)
+    while not generator.is_done():
+        generator.generate_next_token()
+        new_token = generator.get_next_tokens()[0]
+        cats.append(int(new_token))
+
+    input_ids = torch.cat([input_ids, torch.tensor([cats], dtype=torch.int64)], dim=-1)
     if return_session:
         return input_ids, session
     return input_ids
