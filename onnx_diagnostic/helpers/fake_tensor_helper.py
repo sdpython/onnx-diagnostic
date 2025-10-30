@@ -143,7 +143,7 @@ class FakeTensorContext:
     def make_fake_with_dynamic_dimensions(self, x: Any, dynamic_shapes: Any) -> Any:
         """
         See
-        :func:`onnx_diagnostic.helpers.shape_helper.make_fake_with_dynamic_dimensions`.
+        :func:`onnx_diagnostic.export.shape_helper.make_fake_with_dynamic_dimensions`.
         """
         if x is None:
             return None, None
