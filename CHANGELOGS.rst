@@ -4,6 +4,7 @@ Change Logs
 0.8.0
 +++++
 
+* :pr:`280`: fixes patches for sdpa_attention_forward for different version of transformers
 * :pr:`278`: implements ``onnx_generate_with_genai``
 * :pr:`277`: changes the serialization for all caches to reorder the model outputs (key_1, value_1, key_2, ...)
 * :pr:`276`: implements ``onnx_generate`` which implements method generate for an onnx model,
