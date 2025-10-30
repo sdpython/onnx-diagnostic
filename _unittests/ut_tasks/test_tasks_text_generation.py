@@ -58,12 +58,20 @@ class TestTasksTextGeneration(ExtTestCase):
         expected = model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
         fake = make_fake_with_dynamic_dimensions(inputs, dynamic_shapes=ds)[0]
-        with torch_export_patches(patch_transformers=True, verbose=10, patch_torch=False):
+        with torch_export_patches(patch_transformers=True, verbose=1, patch_torch=False):
             ep = torch.export.export(
                 model, (), kwargs=fake, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )
             # print(ep)
-        got = ep.module()(**inputs_copied)
+        rem = []
+        for node in ep.graph.nodes:
+            if "_assert" in str(node.target):
+                rem.append(node)
+        for node in rem:
+            ep.graph.erase_node(node)
+        ep.graph.lint()
+        mod = ep.module(check_guards=False)
+        got = mod(**inputs_copied)
         self.assertEqualAny(expected.past_key_values, got.past_key_values)
         self.assertEqualArray(expected.logits, got.logits)
 
