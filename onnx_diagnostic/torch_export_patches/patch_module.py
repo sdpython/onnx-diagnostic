@@ -8,7 +8,7 @@ import textwrap
 import sys
 from typing import Callable, Dict, List, Set, Optional, Tuple, Union
 from .patch_module_helper import code_needing_rewriting
-from .patch_details import PatchDetails, make_diff_code
+from .patch_details import PatchDetails, make_diff_code, clean_code_with_black
 
 NODE_TYPES = tuple(
     getattr(ast, k)
@@ -1022,7 +1022,7 @@ def torch_export_rewrite(
             if verbose:
                 print(f"[torch_export_rewrite] dump original code in {filename1!r}")
             with open(filename1, "w") as f:
-                code = _clean_code(inspect.getsource(to_rewrite))
+                code = clean_code_with_black(inspect.getsource(to_rewrite))
                 f.write(code)
         rewr = transform_method(to_rewrite, verbose=max(verbose - 1, 0), **kws)
         if dump_rewriting:
@@ -1030,7 +1030,7 @@ def torch_export_rewrite(
             if verbose:
                 print(f"[torch_export_rewrite] dump rewritten code in {filename2!r}")
             with open(filename2, "w") as f:
-                rcode = _clean_code(rewr.code)
+                rcode = clean_code_with_black(rewr.code)
                 f.write(rcode)
             diff = os.path.join(dump_rewriting, f"{kind}.{cls_name}.{name}.diff")
             make_diff_code(code, rcode, diff)
@@ -1045,11 +1045,3 @@ def torch_export_rewrite(
             if verbose:
                 print(f"[torch_export_rewrite] restored {kind} {cls.__name__}.{name}")
             setattr(cls, name, me)
-
-
-def _clean_code(code: str) -> str:
-    try:
-        import black
-    except ImportError:
-        return code
-    return black.format_str(code, mode=black.FileMode(line_length=98))

@@ -85,9 +85,9 @@ def patch_module_or_classes(
             res[f] = f
             if verbose:
                 print(f"[patch_module_or_classes] function: {original.__name__}.{f.__name__}")
-            setattr(original, f.__name__, cls["patch"])
             if patch_details:
-                patch_details.append(list_name, original, f)
+                patch_details.append(list_name, getattr(original, f.__name__), cls["patch"])
+            setattr(original, f.__name__, cls["patch"])
             continue
 
         original = cls._PATCHED_CLASS_
@@ -355,7 +355,9 @@ def torch_export_patches(
             sympy.core.numbers.IntegerConstant.name = lambda self: f"IntCst{str(self)}"
             if patch_details:
                 patch_details.append(
-                    "sympy", f_sympy_name, sympy.core.numbers.IntegerConstant.name
+                    "sympy",
+                    f_sympy_name or "sympy.core.numbers.IntegerConstant.name",
+                    sympy.core.numbers.IntegerConstant.name,
                 )
 
         ###############
@@ -432,7 +434,7 @@ def torch_export_patches(
             torch._prims._broadcast_in_dim_meta = _patched_dim_f
             torch._prims.broadcast_in_dim = _patched_dim_f
             if patch_details:
-                patch_details.append("torch", f_broadcast_in_dim, _patched_dim_f)
+                patch_details.append("torch", f__broadcast_in_dim_meta, _patched_dim_f)
 
             # torch._refs._maybe_broadcast
             f__maybe_broadcast = torch._refs._maybe_broadcast
@@ -783,6 +785,10 @@ def torch_export_patches(
                     and patch_transformers_list.patch_masking_utils
                     and hasattr(masking_utils, "_vmap_for_bhqkv")
                 ):
+                    assert f_transformers__vmap_for_bhqkv.__name__ == "_vmap_for_bhqkv", (
+                        f"corrupted function '_vmap_for_bhqkv', its name is "
+                        f"{f_transformers__vmap_for_bhqkv.__name__!r}"
+                    )
                     masking_utils._vmap_for_bhqkv = f_transformers__vmap_for_bhqkv
 
                     if verbose:
@@ -791,6 +797,13 @@ def torch_export_patches(
                             "transformers.masking_utils._vmap_for_bhqkv"
                         )
 
+                    assert (
+                        f_transformers_sdpa_mask_recent_torch.__name__
+                        == "sdpa_mask_recent_torch"
+                    ), (
+                        f"corrupted function 'sdpa_mask_recent_torch', its name is "
+                        f"{f_transformers_sdpa_mask_recent_torch.__name__!r}"
+                    )
                     masking_utils.sdpa_mask_recent_torch = (
                         f_transformers_sdpa_mask_recent_torch
                     )
@@ -802,6 +815,13 @@ def torch_export_patches(
                         )
 
                     if f_transformers_sdpa_mask is not None:
+                        assert f_transformers_sdpa_mask.__name__ in (
+                            "sdpa_mask",
+                            "sdpa_mask_recent_torch",
+                        ), (
+                            f"corrupted function 'sdpa_mask', its name is "
+                            f"{f_transformers_sdpa_mask.__name__!r}"
+                        )
                         masking_utils.sdpa_mask = f_transformers_sdpa_mask
                         if verbose:
                             print(
@@ -814,13 +834,20 @@ def torch_export_patches(
                     and patch_transformers_list.patch_masking_utils
                     and hasattr(masking_utils, "eager_mask")
                 ):
-                    f_transformers_eager_mask = masking_utils.eager_mask
+                    assert f_transformers_eager_mask.__name__ == "eager_mask", (
+                        f"corrupted function 'eager_mask', its name is "
+                        f"{f_transformers_eager_mask.__name__!r}"
+                    )
                     masking_utils.eager_mask = f_transformers_eager_mask
                     if verbose:
                         print(
                             "[torch_export_patches] restored "
                             "transformers.masking_utils.eager_mask"
                         )
+                    assert masking_utils.eager_mask.__name__ == "eager_mask", (
+                        f"corrupted function 'eager_mask', its name is "
+                        f"{masking_utils.eager_mask.__name__!r}"
+                    )
                     if (
                         "eager" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
                         and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"]
@@ -835,6 +862,10 @@ def torch_export_patches(
                                 "transformers.masking_utils.eager_mask "
                                 "in ALL_MASK_ATTENTION_FUNCTIONS"
                             )
+                    assert masking_utils.eager_mask.__name__ == "eager_mask", (
+                        f"corrupted function 'eager_mask', its name is "
+                        f"{masking_utils.eager_mask.__name__!r}"
+                    )
 
                 if (  # sdpa_mask
                     masking_utils

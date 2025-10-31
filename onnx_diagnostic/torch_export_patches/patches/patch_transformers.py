@@ -66,6 +66,7 @@ def _is_torchdynamo_exporting() -> bool:
             return False
 
 
+patch_sdpa_is_causal = _has_transformers("4.55")
 patch_is_initialized = _has_transformers("4.56.99")
 
 
@@ -155,6 +156,7 @@ if patch_masking_utils:
         """manual patch for function ``transformers.masking_utils.eager_mask``."""
         # The masks for eager attention are simply boolean mask from sdpa, casted to 0 and -inf
         _ = kwargs.pop("allow_is_causal_skip", None)
+        _ = kwargs.pop("allow_is_bidirectional_skip", None)
         # PATCHED: this line called the patched version of sdpa_mask
         mask = patched_sdpa_mask_recent_torch(
             batch_size=batch_size,
@@ -164,6 +166,7 @@ if patch_masking_utils:
             mask_function=mask_function,
             attention_mask=attention_mask,
             allow_is_causal_skip=False,
+            allow_is_bidirectional_skip=False,
             allow_torch_fix=False,
             **kwargs,
         )
@@ -1350,6 +1353,21 @@ def patched_sdpa_attention_forward(
         "`sdpa` attention does not support `output_attentions=True`."
         " Please set your attention to `eager` if you want any of these features."
     )
+    torch._check(
+        query.shape[0] == key.shape[0] or query.shape[0] == 1,
+        lambda: (
+            f"broadcast issue query (1): {query.shape}, key: {key.shape}, "
+            f"value: {value.shape}"
+        ),
+    )
+    torch._check(
+        key.shape[0] == value.shape[0] or key.shape[0] == 1,
+        lambda: (
+            f"broadcast issue query (2): {query.shape}, key: {key.shape}, "
+            f"value: {value.shape}"
+        ),
+    )
+
     sdpa_kwargs = {}
     if hasattr(module, "num_key_value_groups"):
         if not transformers.integrations.sdpa_attention.use_gqa_in_sdpa(attention_mask, key):
@@ -1365,49 +1383,84 @@ def patched_sdpa_attention_forward(
     if attention_mask is not None and attention_mask.ndim == 4:
         attention_mask = attention_mask[:, :, :, : key.shape[-2]]
 
-    is_causal = is_causal if is_causal is not None else getattr(module, "is_causal", True)
-    # PATCHED: remove the test query.shape[2] > 1
-    # is_causal = query.shape[2] > 1 and attention_mask is None and is_causal
-    is_causal = attention_mask is None and is_causal
-
     torch._check(
         attention_mask is None or attention_mask.shape[3] == key.shape[2],
-        "Attention mask shape incompatible with key shape.",
+        lambda: "Attention mask shape incompatible with key shape.",
     )
-    if is_causal:
-        attn_output = torch.cond(
-            query.shape[2] > 1,  # distinction between prefill and decoding steps
-            lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
-                query,
-                key,
-                value,
-                dropout_p=dropout,
-                scale=scaling,
-                is_causal=True,
-                **sdpa_kwargs,
-            ),
-            lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
-                query,
-                key,
-                value,
-                dropout_p=dropout,
-                scale=scaling,
-                is_causal=False,
-                **sdpa_kwargs,
-            ),
-            [query, key, value],
-        )
+
+    if patch_sdpa_is_causal:
+        # transformers>=4.55
+        is_causal = is_causal if is_causal is not None else getattr(module, "is_causal", True)
+
+        # PATCHED: remove the test query.shape[2] > 1
+        # is_causal = query.shape[2] > 1 and attention_mask is None and is_causal
+        # and we split the test to keep the minimum in torch.cond
+        is_causal = attention_mask is None and is_causal
+
+        if not is_causal:
+            return (
+                torch.nn.functional.scaled_dot_product_attention(
+                    query,
+                    key,
+                    value,
+                    attn_mask=attention_mask,
+                    dropout_p=dropout,
+                    scale=scaling,
+                    is_causal=is_causal,
+                    **sdpa_kwargs,
+                )
+                .transpose(1, 2)
+                .contiguous(),
+                None,
+            )
     else:
-        attn_output = torch.nn.functional.scaled_dot_product_attention(
+        # transformers<4.55
+        if is_causal is None and attention_mask is not None:
+            is_causal = False
+        if is_causal is not None:
+            return (
+                torch.nn.functional.scaled_dot_product_attention(
+                    query,
+                    key,
+                    value,
+                    attn_mask=attention_mask,
+                    dropout_p=dropout,
+                    scale=scaling,
+                    is_causal=is_causal,
+                    **sdpa_kwargs,
+                )
+                .transpose(1, 2)
+                .contiguous(),
+                None,
+            )
+
+    # To avoid the following errors:
+    # is_causal=query.shape[2] > 1
+    # TypeError: scaled_dot_product_attention(): argument 'is_causal' must be bool, not SymBool
+    # is_causal=torch.tensor(query.shape[2] > 1)
+    # TypeError: scaled_dot_product_attention(): argument 'is_causal' must be bool, not Tensor
+    attn_output = torch.cond(
+        query.shape[2] > 1,  # distinction between prefill and decoding steps
+        lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
             query,
             key,
             value,
-            attn_mask=attention_mask,
             dropout_p=dropout,
             scale=scaling,
-            is_causal=is_causal,
+            is_causal=True,
             **sdpa_kwargs,
-        )
+        ),
+        lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            dropout_p=dropout,
+            scale=scaling,
+            is_causal=False,
+            **sdpa_kwargs,
+        ),
+        [query, key, value],
+    )
     attn_output = attn_output.transpose(1, 2).contiguous()
     return attn_output, None
 
