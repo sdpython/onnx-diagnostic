@@ -11,6 +11,7 @@ what works and what does not with :func:`torch.export.export`.
     exported_program_dynamic
     exporter_dynamic
     patches_coverage
+    patches_diff
 
 Examples checking about dynamic dimensions:
 

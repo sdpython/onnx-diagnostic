@@ -5,7 +5,6 @@ from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, hi
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_export_patches.patch_details import PatchDetails, PatchInfo
-from onnx_diagnostic.torch_export_patches.patches.patch_transformers import patched_eager_mask
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 
 
@@ -35,6 +34,10 @@ class TestPatchDetails(ExtTestCase):
 
     @requires_transformers("4.55")
     def test_patch_diff(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+            patched_eager_mask,
+        )
+
         eager_mask = transformers.masking_utils.eager_mask
         self.assertEqual(eager_mask.__name__, "eager_mask")
         self.assertEqual(patched_eager_mask.__name__, "patched_eager_mask")

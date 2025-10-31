@@ -1,5 +1,6 @@
 import difflib
 import inspect
+import pprint
 import re
 import textwrap
 from typing import Any, Dict, Callable, List, Optional, Tuple, Union
@@ -111,9 +112,13 @@ class PatchInfo:
 
             import transformers
             import onnx_diagnostic.torch_export_patches.patches.patch_transformers as ptr
-            from onnx_diagnostic.torch_export_patches.patch_details import Patchinfo
+            from onnx_diagnostic.torch_export_patches.patch_details import PatchInfo
+            from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+                patched_eager_mask,
+            )
 
-            diff = Patchinfo(eager_mask, patched_eager_mask).format_diff(format="rst")
+            eager_mask = transformers.masking_utils.eager_mask
+            diff = PatchInfo(eager_mask, patched_eager_mask).format_diff(format="rst")
             print(diff)
         """
         diff = self.make_diff()
@@ -146,7 +151,8 @@ class PatchDetails:
     """
     This class is used to store patching information.
     This helps understanding which rewriting was applied to which
-    method of functions.
+    method of functions. Page :ref:`l-patch-diff` contains all the
+    diff for all the implemented patches.
 
     .. runpython::
         :showcode:
@@ -227,6 +233,7 @@ class PatchDetails:
             node_stack.append((node, stack))
 
         patch_node = []
+        patched_nodes = set()
         for patch, _f, source, interval in patches:
             exp = 'File "([^"]*?%s[^"]+?)", line (\\d+)' % cst
             reg = re.compile(exp)
@@ -246,6 +253,15 @@ class PatchDetails:
                         and self.matching_pair(patch, node)
                     ):
                         patch_node.append((patch, node))
+                        patched_nodes.add(id(node))
+
+        # checks all patches were discovered
+        for node, _ in node_stack:
+            assert id(node) in patched_nodes, (
+                f"One node was patched but no patch was found:\n"
+                f"node: {node.target}({','.join(map(str, node.args))}) -> {node.name}"
+                f"\n--\n{pprint.pformat(node.meta)}"
+            )
 
         res = {}
         for patch, node in patch_node:
