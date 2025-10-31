@@ -1,5 +1,6 @@
 import functools
 import importlib
+import inspect
 import contextlib
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -82,6 +83,10 @@ def patch_module_or_classes(
             keep = {}
             original = cls["module"]
             f = cls["function"]
+            assert not f.__name__.startswith("patched_"), (
+                f"The function {f} was already patched or the patch was not removed, "
+                f"original={original}"
+            )
             res[f] = f
             if verbose:
                 print(f"[patch_module_or_classes] function: {original.__name__}.{f.__name__}")
@@ -99,9 +104,14 @@ def patch_module_or_classes(
         for n in methods:
             if patch_details:
                 if hasattr(original, n):
-                    patch_details.append(list_name, getattr(original, n), getattr(cls, n))
+                    p = patch_details.append(list_name, getattr(original, n), getattr(cls, n))
                 else:
-                    patch_details.append(list_name, f"{original.__name__}{n}", getattr(cls, n))
+                    p = patch_details.append(
+                        list_name, f"{original.__name__}{n}", getattr(cls, n)
+                    )
+                if "@patched_dynamic_rope_update" in inspect.getsource(getattr(cls, n)):
+                    # a tweak to include that patch.
+                    p.add_dependency(patch_details.find("patched_dynamic_rope_update"))
             setattr(original, n, getattr(cls, n))
         res[cls] = keep
 
@@ -523,6 +533,18 @@ def torch_export_patches(
                 import transformers.modeling_utils as modeling_utils
             except ImportError:
                 modeling_utils = None
+
+            try:
+                import transformers.modeling_rope_utils as modeling_rope_utils
+            except ImportError:
+                modeling_rope_utils = None
+
+            if patch_details and modeling_rope_utils:
+                patch_details.append(
+                    "patch_transformers",
+                    modeling_rope_utils.dynamic_rope_update,
+                    patch_transformers_list.patched_dynamic_rope_update,
+                )
 
             if verbose:
                 import transformers

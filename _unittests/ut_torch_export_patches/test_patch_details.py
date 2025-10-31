@@ -58,6 +58,7 @@ class TestPatchDetails(ExtTestCase):
         self.assertNotEmpty(patches)
         report = details.make_report(patches, format="rst")
         self.assertIn("====", report)
+        self.assertIn("def longrope_frequency_update", report)
 
 
 if __name__ == "__main__":

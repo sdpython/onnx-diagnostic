@@ -45,14 +45,14 @@ def make_diff_code(code1: str, code2: str, output: Optional[str] = None) -> str:
 
 class PatchInfo:
     """
-    Stores informations about patches.
+    Stores information about patches.
 
     :param function_to_patch: function to patch
     :param patch: function patched
     :param family: a category, anything to classify the patch
     """
 
-    __slots__ = ("family", "function_to_patch", "patch")
+    __slots__ = ("depends_on", "family", "function_to_patch", "patch")
 
     def __init__(
         self, function_to_patch: Union[str, Callable], patch: Callable, family: str = ""
@@ -67,6 +67,10 @@ class PatchInfo:
         self.family = family
         self.function_to_patch = function_to_patch
         self.patch = patch
+        self.depends_on = []
+
+    def add_dependency(self, patch_info: "PatchInfo"):
+        self.depends_on.append(patch_info)
 
     def __repr__(self) -> str:
         "usual"
@@ -93,7 +97,14 @@ class PatchInfo:
             return clean_code_with_black(inspect.getsource(self.patch))
         src1 = clean_code_with_black(inspect.getsource(self.function_to_patch))
         src2 = clean_code_with_black(inspect.getsource(self.patch))
-        return make_diff_code(src1, src2)
+        diff = make_diff_code(src1, src2)
+        if not self.depends_on:
+            return diff
+        res = [diff]
+        for d in self.depends_on:
+            res.append("")
+            res.append(d.make_diff())
+        return "\n".join(res)
 
     @classmethod
     def function_name(cls, f: Callable) -> str:
@@ -180,16 +191,32 @@ class PatchDetails:
 
     def __init__(self):
         self.patched = []
+        self.find_cache = {}
 
-    def append(self, family: str, function_to_patch: Union[str, Callable], patch: Callable):
+    def find(self, name: str) -> Optional[PatchInfo]:
+        "Finds a patch by name."
+        if name in self.find_cache:
+            return self.find_cache[name]
+        for p in self.patched:
+            if p.patch.__name__ == name:
+                self.find_cache[name] = p
+                return p
+        return None
+
+    def append(
+        self, family: str, function_to_patch: Union[str, Callable], patch: Callable
+    ) -> PatchInfo:
         """
         Stores a patch.
 
         :param family: a category, anything to classify the patch
         :param function_to_patch: function to patch
         :param patch: function patched
+        :return: instance of PatchInfo
         """
-        self.patched.append(PatchInfo(function_to_patch, patch, family=family))
+        p = PatchInfo(function_to_patch, patch, family=family)
+        self.patched.append(p)
+        return p
 
     @property
     def n_patches(self) -> int:
