@@ -1,7 +1,6 @@
 import ast
 import copy
 import contextlib
-import difflib
 import inspect
 import os
 import types
@@ -9,6 +8,7 @@ import textwrap
 import sys
 from typing import Callable, Dict, List, Set, Optional, Tuple, Union
 from .patch_module_helper import code_needing_rewriting
+from .patch_details import PatchDetails, make_diff_code
 
 NODE_TYPES = tuple(
     getattr(ast, k)
@@ -881,6 +881,7 @@ def torch_export_rewrite(
     ] = None,
     dump_rewriting: Optional[str] = None,
     verbose: int = 0,
+    patch_details: Optional[PatchDetails] = None,
 ):
     """
     Automatically rewrite the methods given in `rewrite` to export
@@ -897,6 +898,8 @@ def torch_export_rewrite(
     :param verbose: verbosity, up to 10, 10 shows the rewritten code,
         ``verbose=1`` shows the rewritten function,
         ``verbose=2`` shows the rewritten code as well
+    :param patch_details: to store any applied patch and get a better understanding
+        of the applied modifications
 
     Example:
 
@@ -1030,7 +1033,9 @@ def torch_export_rewrite(
                 rcode = _clean_code(rewr.code)
                 f.write(rcode)
             diff = os.path.join(dump_rewriting, f"{kind}.{cls_name}.{name}.diff")
-            make_diff(code, rcode, diff)
+            make_diff_code(code, rcode, diff)
+        if patch_details:
+            patch_details.append("rewrite", getattr(cls, name), rewr.func)
         setattr(cls, name, rewr.func)
 
     try:
@@ -1048,27 +1053,3 @@ def _clean_code(code: str) -> str:
     except ImportError:
         return code
     return black.format_str(code, mode=black.FileMode(line_length=98))
-
-
-def make_diff(code1: str, code2: str, output: Optional[str] = None) -> str:
-    """
-    Creates a diff between two codes.
-
-    :param code1: first code
-    :param code2: second code
-    :param output: if not empty, stores the output in this file
-    :return: diff
-    """
-    text = "\n".join(
-        difflib.unified_diff(
-            code1.strip().splitlines(),
-            code2.strip().splitlines(),
-            fromfile="original",
-            tofile="rewritten",
-            lineterm="",
-        )
-    )
-    if output:
-        with open(output, "w") as f:
-            f.write(text)
-    return text

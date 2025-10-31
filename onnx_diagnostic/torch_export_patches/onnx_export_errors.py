@@ -52,7 +52,9 @@ def get_patches(mod, verbose: int = 0) -> Tuple[str, List[Any]]:
     return name, to_patch
 
 
-def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Callable]]:
+def patch_module_or_classes(
+    mod, verbose: int = 0, patch_details: Optional[PatchDetails] = None
+) -> Dict[type, Dict[type, Callable]]:
     """
     Applies all patches defined in classes prefixed by ``patched_``
     ``cls._PATCHED_CLASS_`` defines the class to patch,
@@ -62,13 +64,16 @@ def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Call
 
     :param mod: module of list of clsses to patch
     :param verbose: verbosity
+    :param patch_details: used to store information about the applied patches
     :return: patch info
     """
     if isinstance(mod, list):
         to_patch = mod
         name = "list"
+        list_name = "auto:list"
     else:
         name, to_patch = get_patches(mod, verbose)
+        list_name = f"auto:{mod.__name__}"
 
     res = {}
     for cls in to_patch:
@@ -81,6 +86,8 @@ def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Call
             if verbose:
                 print(f"[patch_module_or_classes] function: {original.__name__}.{f.__name__}")
             setattr(original, f.__name__, cls["patch"])
+            if patch_details:
+                patch_details.append(list_name, original, f)
             continue
 
         original = cls._PATCHED_CLASS_
@@ -90,6 +97,11 @@ def patch_module_or_classes(mod, verbose: int = 0) -> Dict[type, Dict[type, Call
 
         keep = {n: getattr(original, n, None) for n in methods}
         for n in methods:
+            if patch_details:
+                if hasattr(original, n):
+                    patch_details.append(list_name, getattr(original, n), getattr(cls, n))
+                else:
+                    patch_details.append(list_name, f"{original.__name__}{n}", getattr(cls, n))
             setattr(original, n, getattr(cls, n))
         res[cls] = keep
 
@@ -343,7 +355,7 @@ def torch_export_patches(
             sympy.core.numbers.IntegerConstant.name = lambda self: f"IntCst{str(self)}"
             if patch_details:
                 patch_details.append(
-                    ("sympy", f_sympy_name, sympy.core.numbers.IntegerConstant.name)
+                    "sympy", f_sympy_name, sympy.core.numbers.IntegerConstant.name
                 )
 
         ###############
@@ -386,14 +398,14 @@ def torch_export_patches(
             f_infer_size = torch._subclasses.fake_impls.infer_size
             torch._subclasses.fake_impls.infer_size = patched_infer_size
             if patch_details:
-                patch_details.append(("torch", f_infer_size, patched_infer_size))
+                patch_details.append("torch", f_infer_size, patched_infer_size)
 
             # torch._refs._broadcast_shapes
             f__broadcast_shapes = torch._refs._broadcast_shapes
             torch._refs._broadcast_shapes = patched__broadcast_shapes
             torch._meta_registrations._broadcast_shapes = patched__broadcast_shapes
             if patch_details:
-                patch_details.append(("torch", f__broadcast_shapes, patched__broadcast_shapes))
+                patch_details.append("torch", f__broadcast_shapes, patched__broadcast_shapes)
 
             # torch._export.non_strict_utils._constrain_user_specified_dimhint_range
             f___constrain_user_specified_dimhint_range = (
@@ -404,11 +416,9 @@ def torch_export_patches(
             )
             if patch_details:
                 patch_details.append(
-                    (
-                        "torch",
-                        f___constrain_user_specified_dimhint_range,
-                        patched__constrain_user_specified_dimhint_range,
-                    )
+                    "torch",
+                    f___constrain_user_specified_dimhint_range,
+                    patched__constrain_user_specified_dimhint_range,
                 )
 
             # torch._prims._broadcast_in_dim_meta
@@ -422,20 +432,20 @@ def torch_export_patches(
             torch._prims._broadcast_in_dim_meta = _patched_dim_f
             torch._prims.broadcast_in_dim = _patched_dim_f
             if patch_details:
-                patch_details.append(("torch", f_broadcast_in_dim, _patched_dim_f))
+                patch_details.append("torch", f_broadcast_in_dim, _patched_dim_f)
 
             # torch._refs._maybe_broadcast
             f__maybe_broadcast = torch._refs._maybe_broadcast
             torch._refs._maybe_broadcast = patched__maybe_broadcast
             if patch_details:
-                patch_details.append(("torch", f__maybe_broadcast, patched__maybe_broadcast))
+                patch_details.append("torch", f__maybe_broadcast, patched__maybe_broadcast)
 
             # ShapeEnv
             f_shape_env__evaluate_expr = ShapeEnv._evaluate_expr
             ShapeEnv._evaluate_expr = patched_ShapeEnv._evaluate_expr
             if patch_details:
                 patch_details.append(
-                    ("torch", f_shape_env__evaluate_expr, patched_ShapeEnv._evaluate_expr)
+                    "torch", f_shape_env__evaluate_expr, patched_ShapeEnv._evaluate_expr
                 )
 
         # torch._export.non_strict_utils.produce_guards_and_solve_constraints
@@ -470,7 +480,7 @@ def torch_export_patches(
             ShapeEnv._set_replacement = patched_ShapeEnv._set_replacement
             if patch_details:
                 patch_details.append(
-                    ("torch", f_shape_env__set_replacement, patched_ShapeEnv._set_replacement)
+                    "torch", f_shape_env__set_replacement, patched_ShapeEnv._set_replacement
                 )
 
             if verbose:
@@ -479,7 +489,7 @@ def torch_export_patches(
             ShapeEnv._log_guard = patched_ShapeEnv._log_guard
             if patch_details:
                 patch_details.append(
-                    ("torch", f_shape_env__log_guard, patched_ShapeEnv._log_guard)
+                    "torch", f_shape_env__log_guard, patched_ShapeEnv._log_guard
                 )
 
             if stop_if_static > 1:
@@ -489,7 +499,7 @@ def torch_export_patches(
                 ShapeEnv._check_frozen = patched_ShapeEnv._check_frozen
                 if patch_details:
                     patch_details.append(
-                        ("torch", f_shape_env__check_frozen, ShapeEnv._check_frozen)
+                        "torch", f_shape_env__check_frozen, ShapeEnv._check_frozen
                     )
 
         ####################
@@ -537,11 +547,9 @@ def torch_export_patches(
                 masking_utils._vmap_for_bhqkv = patch_transformers_list.patched__vmap_for_bhqkv
                 if patch_details:
                     patch_details.append(
-                        (
-                            "transformers",
-                            f_transformers__vmap_for_bhqkv,
-                            patch_transformers_list.patched__vmap_for_bhqkv,
-                        )
+                        "transformers",
+                        f_transformers__vmap_for_bhqkv,
+                        patch_transformers_list.patched__vmap_for_bhqkv,
                     )
 
                 if verbose:
@@ -555,11 +563,9 @@ def torch_export_patches(
                 )
                 if patch_details:
                     patch_details.append(
-                        (
-                            "transformers",
-                            f_transformers_sdpa_mask_recent_torch,
-                            patch_transformers_list.patched_sdpa_mask_recent_torch,
-                        )
+                        "transformers",
+                        f_transformers_sdpa_mask_recent_torch,
+                        patch_transformers_list.patched_sdpa_mask_recent_torch,
                     )
                 if masking_utils.sdpa_mask == f_transformers_sdpa_mask_recent_torch:
                     if verbose:
@@ -573,11 +579,9 @@ def torch_export_patches(
                     )
                     if patch_details:
                         patch_details.append(
-                            (
-                                "transformers",
-                                f_transformers_sdpa_mask,
-                                patch_transformers_list.patched_sdpa_mask_recent_torch,
-                            )
+                            "transformers",
+                            f_transformers_sdpa_mask,
+                            patch_transformers_list.patched_sdpa_mask_recent_torch,
                         )
                 else:
                     f_transformers_sdpa_mask = None
@@ -596,11 +600,9 @@ def torch_export_patches(
                 masking_utils.eager_mask = patch_transformers_list.patched_eager_mask
                 if patch_details:
                     patch_details.append(
-                        (
-                            "transformers",
-                            f_transformers_eager_mask,
-                            patch_transformers_list.patched_eager_mask,
-                        )
+                        "transformers",
+                        f_transformers_eager_mask,
+                        patch_transformers_list.patched_eager_mask,
                     )
                 if (
                     "eager" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
@@ -662,11 +664,9 @@ def torch_export_patches(
                 )
                 if patch_details:
                     patch_details.append(
-                        (
-                            "transformers",
-                            f_sdpa_attention_forward,
-                            patch_transformers_list.patched_sdpa_attention_forward,
-                        )
+                        "transformers",
+                        f_sdpa_attention_forward,
+                        patch_transformers_list.patched_sdpa_attention_forward,
                     )
 
         if custom_patches:
