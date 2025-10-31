@@ -47,7 +47,7 @@ class PatchInfo:
     """
     Stores informations about patches.
 
-    :param function_to_patch: function to pathc
+    :param function_to_patch: function to patch
     :param patch: function patched
     :param family: a category, anything to classify the patch
     """
@@ -186,7 +186,7 @@ class PatchDetails:
         Stores a patch.
 
         :param family: a category, anything to classify the patch
-        :param function_to_patch: function to pathc
+        :param function_to_patch: function to patch
         :param patch: function patched
         """
         self.patched.append(PatchInfo(function_to_patch, patch, family=family))
@@ -263,7 +263,7 @@ class PatchDetails:
                 f"\n--\n{pprint.pformat(node.meta)}"
             )
 
-        res = {}
+        res = {}  # type: ignore[var-annotated]
         for patch, node in patch_node:
             if patch not in res:
                 res[patch] = []
