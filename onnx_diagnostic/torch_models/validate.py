@@ -16,7 +16,10 @@ from ..helpers.rt_helper import make_feeds
 from ..helpers.torch_helper import to_any, torch_deepcopy
 from ..helpers.cache_helper import flatten_unflatten_for_dynamic_shapes
 from ..tasks import random_input_kwargs
-from ..torch_export_patches import torch_export_patches
+from ..torch_export_patches import (
+    torch_export_patches,
+    register_additional_serialization_functions,
+)
 from ..torch_export_patches.patch_inputs import use_dyn_not_str
 from .hghub import get_untrained_model_with_inputs
 from .hghub.model_inputs import _preprocess_model_id
@@ -574,12 +577,7 @@ def validate_model(
             cpl = CoupleInputsDynamicShapes(
                 tuple(), data[k], dynamic_shapes=data["dynamic_shapes"]
             )
-            if patch_kwargs.get("patch", False):
-                with torch_export_patches(**patch_kwargs):  # type: ignore[arg-type]
-                    data[k] = cpl.change_dynamic_dimensions(
-                        desired_values=dict(batch=1), only_desired=True
-                    )
-            else:
+            with register_additional_serialization_functions(patch_transformers=True):  # type: ignore[arg-type]
                 data[k] = cpl.change_dynamic_dimensions(
                     desired_values=dict(batch=1), only_desired=True
                 )

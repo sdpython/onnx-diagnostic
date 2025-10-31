@@ -203,7 +203,7 @@ class TestValidateWholeModels1(ExtTestCase):
             verbose=10,
             exporter="modelbuilder",
             dump_folder="dump_test/validate_model_modelbuilder",
-            patch=True,
+            patch=False,
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
