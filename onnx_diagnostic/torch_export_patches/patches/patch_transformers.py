@@ -66,7 +66,7 @@ def _is_torchdynamo_exporting() -> bool:
             return False
 
 
-patch_sdpa_is_causal = _has_transformers("5.0")
+patch_sdpa_is_causal = _has_transformers("4.99")
 patch_is_initialized = _has_transformers("4.56.99")
 
 
