@@ -149,7 +149,17 @@ jobs:
       - name: run tests
         run: |
           pip install pytest
-          PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py --ignore _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --ignore _unittests/ut_torch_models/test_tiny_llms_bypassed.py --ignore _unittests/ut_tasks/test_tasks_zero_shot_image_classification.py --ignore _unittests/ut_tasks/test_tasks_image_classification.py
+          PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests --ignore _unittests/ut_reference/test_backend_extended_reference_evaluator.py --ignore _unittests/ut_reference/test_backend_onnxruntime_evaluator.py --ignore _unittests/ut_torch_models/test_tiny_llms_bypassed.py --ignore _unittests/ut_tasks/test_tasks_zero_shot_image_classification.py --ignore _unittests/ut_tasks/test_tasks_image_classification.py --ignore _unittests/ut_torch_models/test_validate_whole_models*.py
+
+      - name: test models
+        run: |
+          echo "----"
+          PYTHONPATH=. UNITTEST_GOING=1 python _unittests/ut_torch_models/test_validate_whole_models1.py
+          echo "----"
+          PYTHONPATH=. UNITTEST_GOING=1 python _unittests/ut_torch_models/test_validate_whole_models2.py
+          echo "----"
+          PYTHONPATH=. UNITTEST_GOING=1 python _unittests/ut_torch_models/test_validate_whole_models3.py
+          echo "----"
 
       # - name: run backend tests python
       #   run: PYTHONPATH=. UNITTEST_GOING=1 pytest --durations=10 _unittests/ut_reference/test_backend_extended_reference_evaluator.py

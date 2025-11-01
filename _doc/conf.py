@@ -214,6 +214,7 @@ elif pv.Version(torch.__version__) < pv.Version("2.8"):
 epkg_dictionary = {
     "aten functions": "https://pytorch.org/cppdocs/api/namespace_at.html#functions",
     "azure pipeline": "https://azure.microsoft.com/en-us/products/devops/pipelines",
+    "black": "https://github.com/psf/black",
     "Custom Backends": "https://docs.pytorch.org/docs/stable/torch.compiler_custom_backends.html",
     "diffusers": "https://github.com/huggingface/diffusers",
     "DOT": "https://graphviz.org/doc/info/lang.html",

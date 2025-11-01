@@ -66,7 +66,7 @@ def _is_torchdynamo_exporting() -> bool:
             return False
 
 
-patch_sdpa_is_causal = _has_transformers("4.55")
+patch_sdpa_is_causal = _has_transformers("4.99")
 patch_is_initialized = _has_transformers("4.56.99")
 
 
@@ -156,6 +156,7 @@ if patch_masking_utils:
         """manual patch for function ``transformers.masking_utils.eager_mask``."""
         # The masks for eager attention are simply boolean mask from sdpa, casted to 0 and -inf
         _ = kwargs.pop("allow_is_causal_skip", None)
+        _ = kwargs.pop("allow_is_bidirectional_skip", None)
         # PATCHED: this line called the patched version of sdpa_mask
         mask = patched_sdpa_mask_recent_torch(
             batch_size=batch_size,
@@ -165,6 +166,7 @@ if patch_masking_utils:
             mask_function=mask_function,
             attention_mask=attention_mask,
             allow_is_causal_skip=False,
+            allow_is_bidirectional_skip=False,
             allow_torch_fix=False,
             **kwargs,
         )
@@ -1346,7 +1348,10 @@ def patched_sdpa_attention_forward(
     is_causal: Optional[bool] = None,
     **kwargs,
 ) -> tuple[torch.Tensor, None]:
-    """[patch:transformers.integrations.sdpa_attention.sdpa_attention_forward]"""
+    """
+    manual patch for function
+    ``transformers.integrations.sdpa_attention.sdpa_attention_forward``
+    """
     assert not kwargs.get("output_attentions", False), (
         "`sdpa` attention does not support `output_attentions=True`."
         " Please set your attention to `eager` if you want any of these features."
