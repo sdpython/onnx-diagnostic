@@ -74,7 +74,7 @@ class PatchInfo:
         self.family = family
         self.function_to_patch = function_to_patch
         self.patch = patch
-        self.depends_on = []
+        self.depends_on: List[PatchInfo] = []
 
     def add_dependency(self, patch_info: "PatchInfo"):
         self.depends_on.append(patch_info)
