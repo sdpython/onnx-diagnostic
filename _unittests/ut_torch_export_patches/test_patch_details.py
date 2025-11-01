@@ -1,7 +1,12 @@
 import unittest
 import torch
 import transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, hide_stdout
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    requires_transformers,
+    hide_stdout,
+    has_transformers,
+)
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_export_patches.patch_details import PatchDetails, PatchInfo
@@ -67,8 +72,9 @@ class TestPatchDetails(ExtTestCase):
         patches = details.patches_involded_in_graph(ep.graph)
         self.assertNotEmpty(patches)
         report = details.make_report(patches, format="rst")
-        self.assertIn("====", report)
-        self.assertIn("def longrope_frequency_update", report)
+        if has_transformers("4.51"):
+            self.assertIn("====", report)
+            self.assertIn("def longrope_frequency_update", report)
 
 
 if __name__ == "__main__":
