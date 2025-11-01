@@ -180,7 +180,7 @@ def register_additional_serialization_functions(
         unregister_cache_serialization(done, verbose=verbose)
 
 
-def _patch_sympy(verbose: int, patch_details: PatchDetails) -> Tuple[Callable, ...]:
+def _patch_sympy(verbose: int, patch_details: PatchDetails) -> Tuple[Optional[Callable], ...]:
     import sympy
 
     f_sympy_name = getattr(sympy.core.numbers.IntegerConstant, "name", None)
@@ -199,7 +199,7 @@ def _patch_sympy(verbose: int, patch_details: PatchDetails) -> Tuple[Callable, .
     return (f_sympy_name,)
 
 
-def _unpatch_sympy(verbose: int, f_sympy_name: Callable):
+def _unpatch_sympy(verbose: int, f_sympy_name: Optional[Callable]):
     # tracked by https://github.com/pytorch/pytorch/issues/143494
     import sympy
 
@@ -218,7 +218,7 @@ def _patch_torch(
     patch_torch: int,
     catch_constraints: bool,
     stop_if_static: int,
-) -> Tuple[Callable, ...]:
+) -> Tuple[Optional[Callable], ...]:
     import torch
     import torch.jit
     import torch._export.non_strict_utils  # produce_guards_and_solve_constraints
@@ -399,21 +399,21 @@ def _unpatch_torch(
     patch_torch: int,
     catch_constraints: bool,
     stop_if_static: int,
-    f___constrain_user_specified_dimhint_range: Callable,
-    f__broadcast_in_dim_meta: Callable,
-    f__broadcast_shapes: Callable,
-    f__check_input_constraints_for_graph: Callable,
-    f__maybe_broadcast: Callable,
-    f_broadcast_in_dim: Callable,
-    f_infer_size: Callable,
-    f_jit_isinstance: Callable,
-    f_mark_static_address: Callable,
-    f_produce_guards_and_solve_constraints: Callable,
-    f_shape_env__check_frozen: Callable,
-    f_shape_env__evaluate_expr: Callable,
-    f_shape_env__log_guard: Callable,
-    f_shape_env__set_replacement: Callable,
-    f_vmap: Callable,
+    f___constrain_user_specified_dimhint_range: Optional[Callable],
+    f__broadcast_in_dim_meta: Optional[Callable],
+    f__broadcast_shapes: Optional[Callable],
+    f__check_input_constraints_for_graph: Optional[Callable],
+    f__maybe_broadcast: Optional[Callable],
+    f_broadcast_in_dim: Optional[Callable],
+    f_infer_size: Optional[Callable],
+    f_jit_isinstance: Optional[Callable],
+    f_mark_static_address: Optional[Callable],
+    f_produce_guards_and_solve_constraints: Optional[Callable],
+    f_shape_env__check_frozen: Optional[Callable],
+    f_shape_env__evaluate_expr: Optional[Callable],
+    f_shape_env__log_guard: Optional[Callable],
+    f_shape_env__set_replacement: Optional[Callable],
+    f_vmap: Optional[Callable],
 ):
     import torch
     import torch.jit
@@ -467,7 +467,9 @@ def _unpatch_torch(
             print("[torch_export_patches] restored shape constraints")
 
 
-def _patch_transformers(verbose: int, patch_details: PatchDetails) -> Tuple[Callable, ...]:
+def _patch_transformers(
+    verbose: int, patch_details: PatchDetails
+) -> Tuple[Optional[Callable], ...]:
     import transformers
 
     try:
@@ -503,6 +505,12 @@ def _patch_transformers(verbose: int, patch_details: PatchDetails) -> Tuple[Call
         f"Function 'sdpa_attention.sdpa_attention_forward' is already patched, "
         f"sdpa_attention.sdpa_attention_forward={sdpa_attention.sdpa_attention_forward}"
     )
+
+    f_transformers__vmap_for_bhqkv = None
+    f_transformers_eager_mask = None
+    f_transformers_sdpa_attention_forward = None
+    f_transformers_sdpa_mask = None
+    f_transformers_sdpa_mask_recent_torch = None
 
     if (  # vmap
         masking_utils
@@ -649,12 +657,12 @@ def _patch_transformers(verbose: int, patch_details: PatchDetails) -> Tuple[Call
 def _unpatch_transformers(
     verbose: int,
     _patch_details: PatchDetails,
-    f_transformers__vmap_for_bhqkv: Callable,
-    f_transformers_eager_mask: Callable,
-    f_transformers_sdpa_attention_forward: Callable,
-    f_transformers_sdpa_mask: Callable,
-    f_transformers_sdpa_mask_recent_torch: Callable,
-    revert_patches_info: Callable,
+    f_transformers__vmap_for_bhqkv: Optional[Callable],
+    f_transformers_eager_mask: Optional[Callable],
+    f_transformers_sdpa_attention_forward: Optional[Callable],
+    f_transformers_sdpa_mask: Optional[Callable],
+    f_transformers_sdpa_mask_recent_torch: Optional[Callable],
+    revert_patches_info: Optional[Callable],
 ):
 
     try:
