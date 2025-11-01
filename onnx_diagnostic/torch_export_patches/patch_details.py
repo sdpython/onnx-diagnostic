@@ -61,9 +61,16 @@ class PatchInfo:
             f"function_to_patch is not a function but {type(function_to_patch)} "
             f"- {function_to_patch!r}"
         )
-        assert callable(
-            patch
-        ), f"function_to_patch is not a function but {type(patch)} - {patch!r}"
+        assert callable(patch), (
+            f"function_to_patch is not a function but {type(patch)} - {patch!r}, "
+            f"function_to_patch={function_to_patch!r}"
+        )
+        assert not callable(function_to_patch) or not function_to_patch.__name__.startswith(
+            "patched_"
+        ), (
+            f"A patch was probably not removed because function_to_patch="
+            f"{function_to_patch!r} and patch={patch!r}"
+        )
         self.family = family
         self.function_to_patch = function_to_patch
         self.patch = patch

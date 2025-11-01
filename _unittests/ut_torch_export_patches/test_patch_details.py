@@ -32,6 +32,16 @@ class TestPatchDetails(ExtTestCase):
             rst = patch.format_diff(format="rst")
             self.assertIn("====", rst)
 
+        # second time to make every patch was removed
+        with torch_export_patches(
+            patch_transformers=True,
+            verbose=10,
+            patch_torch=True,
+            patch_diffusers=True,
+            patch_details=details,
+        ):
+            pass
+
     @requires_transformers("4.55")
     def test_patch_diff(self):
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (

@@ -1348,7 +1348,10 @@ def patched_sdpa_attention_forward(
     is_causal: Optional[bool] = None,
     **kwargs,
 ) -> tuple[torch.Tensor, None]:
-    """[patch:transformers.integrations.sdpa_attention.sdpa_attention_forward]"""
+    """
+    manual patch for function
+    ``transformers.integrations.sdpa_attention.sdpa_attention_forward``
+    """
     assert not kwargs.get("output_attentions", False), (
         "`sdpa` attention does not support `output_attentions=True`."
         " Please set your attention to `eager` if you want any of these features."

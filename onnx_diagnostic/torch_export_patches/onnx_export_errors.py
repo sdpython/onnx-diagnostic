@@ -180,6 +180,616 @@ def register_additional_serialization_functions(
         unregister_cache_serialization(done, verbose=verbose)
 
 
+def _patch_sympy(verbose: int, patch_details: PatchDetails) -> Tuple[Callable, ...]:
+    import sympy
+
+    f_sympy_name = getattr(sympy.core.numbers.IntegerConstant, "name", None)
+
+    if verbose:
+        print(f"[torch_export_patches] sympy.__version__={sympy.__version__!r}")
+        print("[torch_export_patches] patch sympy")
+
+    sympy.core.numbers.IntegerConstant.name = lambda self: f"IntCst{str(self)}"
+    if patch_details:
+        patch_details.append(
+            "sympy",
+            f_sympy_name or "sympy.core.numbers.IntegerConstant.name",
+            sympy.core.numbers.IntegerConstant.name,
+        )
+    return (f_sympy_name,)
+
+
+def _unpatch_sympy(verbose: int, f_sympy_name: Callable):
+    # tracked by https://github.com/pytorch/pytorch/issues/143494
+    import sympy
+
+    if f_sympy_name:
+        sympy.core.numbers.IntegerConstant.name = f_sympy_name
+    else:
+        delattr(sympy.core.numbers.IntegerConstant, "name")
+
+    if verbose:
+        print("[torch_export_patches] restored sympy functions")
+
+
+def _patch_torch(
+    verbose: int,
+    patch_details: PatchDetails,
+    patch_torch: int,
+    catch_constraints: bool,
+    stop_if_static: int,
+) -> Tuple[Callable, ...]:
+    import torch
+    import torch.jit
+    import torch._export.non_strict_utils  # produce_guards_and_solve_constraints
+    from torch.fx.experimental.symbolic_shapes import ShapeEnv
+    from .patches.patch_torch import (
+        patched_infer_size,
+        patched_vmap,
+        patched__broadcast_shapes,
+        patched__constrain_user_specified_dimhint_range,
+        _catch_produce_guards_and_solve_constraints,
+        patch__check_input_constraints_for_graph,
+        patched__broadcast_in_dim_meta,
+        patched__broadcast_in_dim_meta_level_2,
+        patched__maybe_broadcast,
+        patched_ShapeEnv,
+    )
+
+    f___constrain_user_specified_dimhint_range = None
+    f__broadcast_in_dim_meta = None
+    f__broadcast_shapes = None
+    f__check_input_constraints_for_graph = None
+    f__maybe_broadcast = None
+    f_broadcast_in_dim = None
+    f_infer_size = None
+    f_jit_isinstance = None
+    f_mark_static_address = None
+    f_produce_guards_and_solve_constraints = None
+    f_shape_env__check_frozen = None
+    f_shape_env__evaluate_expr = None
+    f_shape_env__log_guard = None
+    f_shape_env__set_replacement = None
+    f_vmap = None
+
+    if verbose:
+        print(f"[torch_export_patches] torch.__version__={torch.__version__!r}")
+        print(f"[torch_export_patches] stop_if_static={stop_if_static!r}")
+        print("[torch_export_patches] patch pytorch")
+
+    # torch.vmap
+    f_vmap = torch.vmap
+    torch.vmap = patched_vmap
+
+    # torch.jit.isinstance
+    f_jit_isinstance = torch.jit.isinstance
+    torch.jit.isinstance = isinstance
+
+    # torch._dynamo.mark_static_address
+    f_mark_static_address = torch._dynamo.mark_static_address
+    torch._dynamo.mark_static_address = lambda *_, **y_: None
+
+    # torch._subclasses.fake_impls.infer_size
+    f_infer_size = torch._subclasses.fake_impls.infer_size
+    torch._subclasses.fake_impls.infer_size = patched_infer_size
+    if patch_details:
+        patch_details.append("torch", f_infer_size, patched_infer_size)
+
+    # torch._refs._broadcast_shapes
+    f__broadcast_shapes = torch._refs._broadcast_shapes
+    torch._refs._broadcast_shapes = patched__broadcast_shapes
+    torch._meta_registrations._broadcast_shapes = patched__broadcast_shapes
+    if patch_details:
+        patch_details.append("torch", f__broadcast_shapes, patched__broadcast_shapes)
+
+    # torch._export.non_strict_utils._constrain_user_specified_dimhint_range
+    f___constrain_user_specified_dimhint_range = (
+        torch._export.non_strict_utils._constrain_user_specified_dimhint_range
+    )
+    torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
+        patched__constrain_user_specified_dimhint_range
+    )
+    if patch_details:
+        patch_details.append(
+            "torch",
+            f___constrain_user_specified_dimhint_range,
+            patched__constrain_user_specified_dimhint_range,
+        )
+
+    # torch._prims._broadcast_in_dim_meta
+    f_broadcast_in_dim = torch._prims.broadcast_in_dim
+    f__broadcast_in_dim_meta = torch._prims._broadcast_in_dim_meta
+    _patched_dim_f = (
+        patched__broadcast_in_dim_meta_level_2
+        if patch_torch == 2
+        else patched__broadcast_in_dim_meta
+    )
+    torch._prims._broadcast_in_dim_meta = _patched_dim_f
+    torch._prims.broadcast_in_dim = _patched_dim_f
+    if patch_details:
+        patch_details.append("torch", f__broadcast_in_dim_meta, _patched_dim_f)
+
+    # torch._refs._maybe_broadcast
+    f__maybe_broadcast = torch._refs._maybe_broadcast
+    torch._refs._maybe_broadcast = patched__maybe_broadcast
+    if patch_details:
+        patch_details.append("torch", f__maybe_broadcast, patched__maybe_broadcast)
+
+    # ShapeEnv
+    f_shape_env__evaluate_expr = ShapeEnv._evaluate_expr
+    ShapeEnv._evaluate_expr = patched_ShapeEnv._evaluate_expr
+    if patch_details:
+        patch_details.append(
+            "torch", f_shape_env__evaluate_expr, patched_ShapeEnv._evaluate_expr
+        )
+
+    # torch._export.non_strict_utils.produce_guards_and_solve_constraints
+    if catch_constraints:
+        if verbose:
+            print("[torch_export_patches] modifies shape constraints")
+        f_produce_guards_and_solve_constraints = (
+            torch._export.non_strict_utils.produce_guards_and_solve_constraints
+        )
+        f__check_input_constraints_for_graph = (
+            torch._export.utils._check_input_constraints_for_graph
+        )
+        torch._export.non_strict_utils.produce_guards_and_solve_constraints = (
+            lambda *args, **kwargs: _catch_produce_guards_and_solve_constraints(
+                f_produce_guards_and_solve_constraints, *args, verbose=verbose, **kwargs
+            )
+        )
+        torch._export.utils._check_input_constraints_for_graph = (
+            lambda *args, **kwargs: patch__check_input_constraints_for_graph(
+                f__check_input_constraints_for_graph, *args, verbose=verbose, **kwargs
+            )
+        )
+
+    if patch_torch and stop_if_static:
+        ShapeEnv._log_guard_remember = ShapeEnv._log_guard
+
+        if verbose:
+            print("[torch_export_patches] assert when a dynamic dimension turns static")
+            print("[torch_export_patches] replaces ShapeEnv._set_replacement")
+
+        f_shape_env__set_replacement = ShapeEnv._set_replacement
+        ShapeEnv._set_replacement = patched_ShapeEnv._set_replacement
+        if patch_details:
+            patch_details.append(
+                "torch", f_shape_env__set_replacement, patched_ShapeEnv._set_replacement
+            )
+
+        if verbose:
+            print("[torch_export_patches] replaces ShapeEnv._log_guard")
+        f_shape_env__log_guard = ShapeEnv._log_guard
+        ShapeEnv._log_guard = patched_ShapeEnv._log_guard
+        if patch_details:
+            patch_details.append("torch", f_shape_env__log_guard, patched_ShapeEnv._log_guard)
+
+        if stop_if_static > 1:
+            if verbose:
+                print("[torch_export_patches] replaces ShapeEnv._check_frozen")
+            f_shape_env__check_frozen = ShapeEnv._check_frozen
+            ShapeEnv._check_frozen = patched_ShapeEnv._check_frozen
+            if patch_details:
+                patch_details.append(
+                    "torch", f_shape_env__check_frozen, ShapeEnv._check_frozen
+                )
+    return (
+        f___constrain_user_specified_dimhint_range,
+        f__broadcast_in_dim_meta,
+        f__broadcast_shapes,
+        f__check_input_constraints_for_graph,
+        f__maybe_broadcast,
+        f_broadcast_in_dim,
+        f_infer_size,
+        f_jit_isinstance,
+        f_mark_static_address,
+        f_produce_guards_and_solve_constraints,
+        f_shape_env__check_frozen,
+        f_shape_env__evaluate_expr,
+        f_shape_env__log_guard,
+        f_shape_env__set_replacement,
+        f_vmap,
+    )
+
+
+def _unpatch_torch(
+    verbose: int,
+    _patch_details: PatchDetails,
+    patch_torch: int,
+    catch_constraints: bool,
+    stop_if_static: int,
+    f___constrain_user_specified_dimhint_range: Callable,
+    f__broadcast_in_dim_meta: Callable,
+    f__broadcast_shapes: Callable,
+    f__check_input_constraints_for_graph: Callable,
+    f__maybe_broadcast: Callable,
+    f_broadcast_in_dim: Callable,
+    f_infer_size: Callable,
+    f_jit_isinstance: Callable,
+    f_mark_static_address: Callable,
+    f_produce_guards_and_solve_constraints: Callable,
+    f_shape_env__check_frozen: Callable,
+    f_shape_env__evaluate_expr: Callable,
+    f_shape_env__log_guard: Callable,
+    f_shape_env__set_replacement: Callable,
+    f_vmap: Callable,
+):
+    import torch
+    import torch.jit
+    import torch._export.non_strict_utils  # produce_guards_and_solve_constraints
+    from torch.fx.experimental.symbolic_shapes import ShapeEnv
+
+    # this should disappear when torch.jit is removed
+    torch.vmap = f_vmap
+    torch.jit.isinstance = f_jit_isinstance
+    torch._dynamo.mark_static_address = f_mark_static_address
+    # tracked by https://github.com/pytorch/pytorch/issues/143495
+    torch._subclasses.fake_impls.infer_size = f_infer_size
+    torch._refs._broadcast_shapes = f__broadcast_shapes
+    torch._meta_registrations._broadcast_shapes = f__broadcast_shapes
+    torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
+        f___constrain_user_specified_dimhint_range
+    )
+    torch._prims._broadcast_in_dim_meta = f__broadcast_in_dim_meta
+    torch._prims.broadcast_in_dim = f_broadcast_in_dim
+    torch._refs._maybe_broadcast = f__maybe_broadcast
+    ShapeEnv._evaluate_expr = f_shape_env__evaluate_expr
+
+    if verbose:
+        print("[torch_export_patches] restored pytorch functions")
+
+    if patch_torch and stop_if_static:
+        if verbose:
+            print("[torch_export_patches] restored ShapeEnv._set_replacement")
+
+        ShapeEnv._set_replacement = f_shape_env__set_replacement
+
+        if verbose:
+            print("[torch_export_patches] restored ShapeEnv._log_guard")
+
+        ShapeEnv._log_guard = f_shape_env__log_guard
+
+        if stop_if_static > 1:
+            if verbose:
+                print("[torch_export_patches] restored ShapeEnv._check_frozen")
+            ShapeEnv._check_frozen = f_shape_env__check_frozen
+
+    if patch_torch and catch_constraints:
+        # to catch or skip dynamic_shapes issues
+        torch._export.non_strict_utils.produce_guards_and_solve_constraints = (
+            f_produce_guards_and_solve_constraints
+        )
+        torch._export.utils._check_input_constraints_for_graph = (
+            f__check_input_constraints_for_graph
+        )
+        if verbose:
+            print("[torch_export_patches] restored shape constraints")
+
+
+def _patch_transformers(verbose: int, patch_details: PatchDetails) -> Tuple[Callable, ...]:
+    import transformers
+
+    try:
+        import transformers.masking_utils as masking_utils
+    except ImportError:
+        masking_utils = None
+
+    try:
+        import transformers.integrations.sdpa_attention as sdpa_attention
+    except ImportError:
+        sdpa_attention = None
+
+    try:
+        import transformers.modeling_utils as modeling_utils
+    except ImportError:
+        modeling_utils = None
+
+    try:
+        import transformers.modeling_rope_utils as modeling_rope_utils
+    except ImportError:
+        modeling_rope_utils = None
+
+    if patch_details and modeling_rope_utils:
+        patch_details.append(
+            "patch_transformers",
+            modeling_rope_utils.dynamic_rope_update,
+            patch_transformers_list.patched_dynamic_rope_update,
+        )
+
+    if verbose:
+        print(f"[torch_export_patches] transformers.__version__={transformers.__version__!r}")
+    assert not sdpa_attention.sdpa_attention_forward.__name__.startswith("patched_"), (
+        f"Function 'sdpa_attention.sdpa_attention_forward' is already patched, "
+        f"sdpa_attention.sdpa_attention_forward={sdpa_attention.sdpa_attention_forward}"
+    )
+
+    if (  # vmap
+        masking_utils
+        and patch_transformers_list.patch_masking_utils
+        and hasattr(masking_utils, "_vmap_for_bhqkv")
+    ):
+        if verbose:
+            print("[torch_export_patches] patches transformers.masking_utils._vmap_for_bhqkv")
+        f_transformers__vmap_for_bhqkv = masking_utils._vmap_for_bhqkv
+        masking_utils._vmap_for_bhqkv = patch_transformers_list.patched__vmap_for_bhqkv
+        if patch_details:
+            patch_details.append(
+                "transformers",
+                f_transformers__vmap_for_bhqkv,
+                patch_transformers_list.patched__vmap_for_bhqkv,
+            )
+
+        if verbose:
+            print(
+                "[torch_export_patches] patches "
+                "transformers.masking_utils.sdpa_mask_recent_torch"
+            )
+        f_transformers_sdpa_mask_recent_torch = masking_utils.sdpa_mask_recent_torch
+        masking_utils.sdpa_mask_recent_torch = (
+            patch_transformers_list.patched_sdpa_mask_recent_torch
+        )
+        if patch_details:
+            patch_details.append(
+                "transformers",
+                f_transformers_sdpa_mask_recent_torch,
+                patch_transformers_list.patched_sdpa_mask_recent_torch,
+            )
+        if masking_utils.sdpa_mask == f_transformers_sdpa_mask_recent_torch:
+            if verbose:
+                print("[torch_export_patches] patches transformers.masking_utils.sdpa_mask")
+            f_transformers_sdpa_mask = masking_utils.sdpa_mask
+            masking_utils.sdpa_mask = patch_transformers_list.patched_sdpa_mask_recent_torch
+            if patch_details:
+                patch_details.append(
+                    "transformers",
+                    f_transformers_sdpa_mask,
+                    patch_transformers_list.patched_sdpa_mask_recent_torch,
+                )
+        else:
+            f_transformers_sdpa_mask = None
+
+    if (  # eager_mask
+        masking_utils
+        and patch_transformers_list.patch_masking_utils
+        and hasattr(masking_utils, "eager_mask")
+    ):
+        if verbose:
+            print("[torch_export_patches] patches transformers.masking_utils.eager_mask")
+        f_transformers_eager_mask = masking_utils.eager_mask
+        masking_utils.eager_mask = patch_transformers_list.patched_eager_mask
+        if patch_details:
+            patch_details.append(
+                "transformers",
+                f_transformers_eager_mask,
+                patch_transformers_list.patched_eager_mask,
+            )
+        if (
+            "eager" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
+            and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"]
+            == f_transformers_eager_mask
+        ):
+            if verbose:
+                print(
+                    "[torch_export_patches] patches "
+                    "transformers.masking_utils.eager_mask "
+                    "in ALL_MASK_ATTENTION_FUNCTIONS"
+                )
+            masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"] = (
+                patch_transformers_list.patched_eager_mask
+            )
+
+    if (  # sdpa_mask
+        masking_utils
+        and patch_transformers_list.patch_masking_utils
+        and hasattr(masking_utils, "sdpa_mask")
+        and f_transformers_sdpa_mask is not None
+    ):
+        if verbose:
+            print(
+                "[torch_export_patches] patches "
+                "transformers.masking_utils.sdpa_mask "
+                "in ALL_MASK_ATTENTION_FUNCTIONS"
+            )
+        if (
+            "sdpa" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
+            and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] == f_transformers_sdpa_mask
+        ):
+            masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] = (
+                patch_transformers_list.patched_sdpa_mask_recent_torch
+            )
+
+    if (  # sdpa_attention_forward
+        sdpa_attention is not None
+        and modeling_utils is not None
+        and hasattr(sdpa_attention, "sdpa_attention_forward")
+        and hasattr(sdpa_attention, "use_gqa_in_sdpa")
+        and hasattr(modeling_utils, "AttentionInterface")
+    ):
+        if verbose:
+            print(
+                "[torch_export_patches] patches "
+                "transformers.integrations.sdpa_attention.sdpa_attention_forward"
+            )
+        f_transformers_sdpa_attention_forward = sdpa_attention.sdpa_attention_forward
+        assert not f_transformers_sdpa_attention_forward.__name__.startswith("patched_"), (
+            f"Function 'sdpa_attention.sdpa_attention_forward' is already patched, "
+            f"sdpa_attention.sdpa_attention_forward={f_transformers_sdpa_attention_forward}"
+        )
+        sdpa_attention.sdpa_attention_forward = (
+            patch_transformers_list.patched_sdpa_attention_forward
+        )
+        modeling_utils.sdpa_attention_forward = (
+            patch_transformers_list.patched_sdpa_attention_forward
+        )
+        modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
+            patch_transformers_list.patched_sdpa_attention_forward
+        )
+        if patch_details:
+            patch_details.append(
+                "transformers",
+                f_transformers_sdpa_attention_forward,
+                patch_transformers_list.patched_sdpa_attention_forward,
+            )
+
+    revert_patches_info = patch_module_or_classes(
+        patch_transformers_list, verbose=verbose, patch_details=patch_details
+    )
+
+    return (
+        f_transformers__vmap_for_bhqkv,
+        f_transformers_eager_mask,
+        f_transformers_sdpa_attention_forward,
+        f_transformers_sdpa_mask,
+        f_transformers_sdpa_mask_recent_torch,
+        revert_patches_info,
+    )
+
+
+def _unpatch_transformers(
+    verbose: int,
+    _patch_details: PatchDetails,
+    f_transformers__vmap_for_bhqkv: Callable,
+    f_transformers_eager_mask: Callable,
+    f_transformers_sdpa_attention_forward: Callable,
+    f_transformers_sdpa_mask: Callable,
+    f_transformers_sdpa_mask_recent_torch: Callable,
+    revert_patches_info: Callable,
+):
+
+    try:
+        import transformers.masking_utils as masking_utils
+    except ImportError:
+        masking_utils = None
+
+    try:
+        import transformers.integrations.sdpa_attention as sdpa_attention
+    except ImportError:
+        sdpa_attention = None
+
+    try:
+        import transformers.modeling_utils as modeling_utils
+    except ImportError:
+        modeling_utils = None
+
+    try:
+        import transformers.masking_utils as masking_utils
+    except ImportError:
+        masking_utils = None
+    if verbose:
+        print("[torch_export_patches] unpatches transformers")
+
+    if (  # vmap
+        masking_utils
+        and patch_transformers_list.patch_masking_utils
+        and hasattr(masking_utils, "_vmap_for_bhqkv")
+    ):
+        assert f_transformers__vmap_for_bhqkv.__name__ == "_vmap_for_bhqkv", (
+            f"corrupted function '_vmap_for_bhqkv', its name is "
+            f"{f_transformers__vmap_for_bhqkv.__name__!r}"
+        )
+        masking_utils._vmap_for_bhqkv = f_transformers__vmap_for_bhqkv
+
+        if verbose:
+            print("[torch_export_patches] restored transformers.masking_utils._vmap_for_bhqkv")
+
+        assert f_transformers_sdpa_mask_recent_torch.__name__ == "sdpa_mask_recent_torch", (
+            f"corrupted function 'sdpa_mask_recent_torch', its name is "
+            f"{f_transformers_sdpa_mask_recent_torch.__name__!r}"
+        )
+        masking_utils.sdpa_mask_recent_torch = f_transformers_sdpa_mask_recent_torch
+
+        if verbose:
+            print(
+                "[torch_export_patches] restored "
+                "transformers.masking_utils.sdpa_mask_recent_torch"
+            )
+
+        if f_transformers_sdpa_mask is not None:
+            assert f_transformers_sdpa_mask.__name__ in (
+                "sdpa_mask",
+                "sdpa_mask_recent_torch",
+            ), (
+                f"corrupted function 'sdpa_mask', its name is "
+                f"{f_transformers_sdpa_mask.__name__!r}"
+            )
+            masking_utils.sdpa_mask = f_transformers_sdpa_mask
+            if verbose:
+                print("[torch_export_patches] restored transformers.masking_utils.sdpa_mask")
+
+    if (  # eager_mask
+        masking_utils
+        and patch_transformers_list.patch_masking_utils
+        and hasattr(masking_utils, "eager_mask")
+    ):
+        assert f_transformers_eager_mask.__name__ == "eager_mask", (
+            f"corrupted function 'eager_mask', its name is "
+            f"{f_transformers_eager_mask.__name__!r}"
+        )
+        masking_utils.eager_mask = f_transformers_eager_mask
+        if verbose:
+            print("[torch_export_patches] restored transformers.masking_utils.eager_mask")
+        assert masking_utils.eager_mask.__name__ == "eager_mask", (
+            f"corrupted function 'eager_mask', its name is "
+            f"{masking_utils.eager_mask.__name__!r}"
+        )
+        if (
+            "eager" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
+            and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"]
+            == patch_transformers_list.patched_eager_mask
+        ):
+            masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"] = f_transformers_eager_mask
+            if verbose:
+                print(
+                    "[torch_export_patches] restored "
+                    "transformers.masking_utils.eager_mask "
+                    "in ALL_MASK_ATTENTION_FUNCTIONS"
+                )
+        assert masking_utils.eager_mask.__name__ == "eager_mask", (
+            f"corrupted function 'eager_mask', its name is "
+            f"{masking_utils.eager_mask.__name__!r}"
+        )
+
+    if (  # sdpa_mask
+        masking_utils
+        and patch_transformers_list.patch_masking_utils
+        and hasattr(masking_utils, "sdpa_mask")
+    ):
+        if (
+            "sdpa" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
+            and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"]
+            == patch_transformers_list.patched_sdpa_mask_recent_torch
+        ):
+            masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] = f_transformers_sdpa_mask
+            if verbose:
+                print(
+                    "[torch_export_patches] restored "
+                    "transformers.masking_utils.sdpa_mask "
+                    "in ALL_MASK_ATTENTION_FUNCTIONS"
+                )
+
+    if (  # sdpa_attention_forward
+        sdpa_attention is not None
+        and modeling_utils is not None
+        and hasattr(sdpa_attention, "sdpa_attention_forward")
+        and hasattr(sdpa_attention, "use_gqa_in_sdpa")
+        and hasattr(modeling_utils, "AttentionInterface")
+    ):
+        sdpa_attention.sdpa_attention_forward = f_transformers_sdpa_attention_forward
+        modeling_utils.sdpa_attention_forward = f_transformers_sdpa_attention_forward
+        modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
+            f_transformers_sdpa_attention_forward
+        )
+        if verbose:
+            print(
+                "[torch_export_patches] restored "
+                "transformers.integrations.sdpa_attention."
+                "sdpa_attention_forward"
+            )
+
+    unpatch_module_or_classes(patch_transformers_list, revert_patches_info, verbose=verbose)
+
+
 @contextlib.contextmanager
 def torch_export_patches(
     patch_sympy: bool = True,
@@ -329,19 +939,13 @@ def torch_export_patches(
         finally:
             unregister_cache_serialization(done, verbose=verbose)
     else:
-        import torch
-        import torch._export.non_strict_utils  # produce_guards_and_solve_constraints
-        import torch.jit
-
         if verbose:
             print(
                 "[torch_export_patches] replace torch.jit.isinstance, "
                 "torch._dynamo.mark_static_address"
             )
 
-        ########
         # caches
-        ########
 
         cache_done = register_cache_serialization(
             patch_transformers=patch_transformers,
@@ -349,349 +953,41 @@ def torch_export_patches(
             verbose=verbose,
         )
 
-        #############
-        # patch sympy
-        #############
+        # patches
 
         if patch_sympy:
-            import sympy
-
-            f_sympy_name = getattr(sympy.core.numbers.IntegerConstant, "name", None)
-
-            if verbose:
-                print(f"[torch_export_patches] sympy.__version__={sympy.__version__!r}")
-                print("[torch_export_patches] patch sympy")
-
-            sympy.core.numbers.IntegerConstant.name = lambda self: f"IntCst{str(self)}"
-            if patch_details:
-                patch_details.append(
-                    "sympy",
-                    f_sympy_name or "sympy.core.numbers.IntegerConstant.name",
-                    sympy.core.numbers.IntegerConstant.name,
-                )
-
-        ###############
-        # patch pytorch
-        ###############
+            (f_sympy_name,) = _patch_sympy(verbose, patch_details)
 
         if patch_torch:
-            from torch.fx.experimental.symbolic_shapes import ShapeEnv
-            from .patches.patch_torch import (
-                patched_infer_size,
-                patched_vmap,
-                patched__broadcast_shapes,
-                patched__constrain_user_specified_dimhint_range,
-                _catch_produce_guards_and_solve_constraints,
-                patch__check_input_constraints_for_graph,
-                patched__broadcast_in_dim_meta,
-                patched__broadcast_in_dim_meta_level_2,
-                patched__maybe_broadcast,
-                patched_ShapeEnv,
+            (
+                f___constrain_user_specified_dimhint_range,
+                f__broadcast_in_dim_meta,
+                f__broadcast_shapes,
+                f__check_input_constraints_for_graph,
+                f__maybe_broadcast,
+                f_broadcast_in_dim,
+                f_infer_size,
+                f_jit_isinstance,
+                f_mark_static_address,
+                f_produce_guards_and_solve_constraints,
+                f_shape_env__check_frozen,
+                f_shape_env__evaluate_expr,
+                f_shape_env__log_guard,
+                f_shape_env__set_replacement,
+                f_vmap,
+            ) = _patch_torch(
+                verbose, patch_details, patch_torch, catch_constraints, stop_if_static
             )
-
-            if verbose:
-                print(f"[torch_export_patches] torch.__version__={torch.__version__!r}")
-                print(f"[torch_export_patches] stop_if_static={stop_if_static!r}")
-                print("[torch_export_patches] patch pytorch")
-
-            # torch.vmap
-            f_vmap = torch.vmap
-            torch.vmap = patched_vmap
-
-            # torch.jit.isinstance
-            f_jit_isinstance = torch.jit.isinstance
-            torch.jit.isinstance = isinstance
-
-            # torch._dynamo.mark_static_address
-            f_mark_static_address = torch._dynamo.mark_static_address
-            torch._dynamo.mark_static_address = lambda *_, **y_: None
-
-            # torch._subclasses.fake_impls.infer_size
-            f_infer_size = torch._subclasses.fake_impls.infer_size
-            torch._subclasses.fake_impls.infer_size = patched_infer_size
-            if patch_details:
-                patch_details.append("torch", f_infer_size, patched_infer_size)
-
-            # torch._refs._broadcast_shapes
-            f__broadcast_shapes = torch._refs._broadcast_shapes
-            torch._refs._broadcast_shapes = patched__broadcast_shapes
-            torch._meta_registrations._broadcast_shapes = patched__broadcast_shapes
-            if patch_details:
-                patch_details.append("torch", f__broadcast_shapes, patched__broadcast_shapes)
-
-            # torch._export.non_strict_utils._constrain_user_specified_dimhint_range
-            f___constrain_user_specified_dimhint_range = (
-                torch._export.non_strict_utils._constrain_user_specified_dimhint_range
-            )
-            torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
-                patched__constrain_user_specified_dimhint_range
-            )
-            if patch_details:
-                patch_details.append(
-                    "torch",
-                    f___constrain_user_specified_dimhint_range,
-                    patched__constrain_user_specified_dimhint_range,
-                )
-
-            # torch._prims._broadcast_in_dim_meta
-            f_broadcast_in_dim = torch._prims.broadcast_in_dim
-            f__broadcast_in_dim_meta = torch._prims._broadcast_in_dim_meta
-            _patched_dim_f = (
-                patched__broadcast_in_dim_meta_level_2
-                if patch_torch == 2
-                else patched__broadcast_in_dim_meta
-            )
-            torch._prims._broadcast_in_dim_meta = _patched_dim_f
-            torch._prims.broadcast_in_dim = _patched_dim_f
-            if patch_details:
-                patch_details.append("torch", f__broadcast_in_dim_meta, _patched_dim_f)
-
-            # torch._refs._maybe_broadcast
-            f__maybe_broadcast = torch._refs._maybe_broadcast
-            torch._refs._maybe_broadcast = patched__maybe_broadcast
-            if patch_details:
-                patch_details.append("torch", f__maybe_broadcast, patched__maybe_broadcast)
-
-            # ShapeEnv
-            f_shape_env__evaluate_expr = ShapeEnv._evaluate_expr
-            ShapeEnv._evaluate_expr = patched_ShapeEnv._evaluate_expr
-            if patch_details:
-                patch_details.append(
-                    "torch", f_shape_env__evaluate_expr, patched_ShapeEnv._evaluate_expr
-                )
-
-        # torch._export.non_strict_utils.produce_guards_and_solve_constraints
-        if patch_torch and catch_constraints:
-            if verbose:
-                print("[torch_export_patches] modifies shape constraints")
-            f_produce_guards_and_solve_constraints = (
-                torch._export.non_strict_utils.produce_guards_and_solve_constraints
-            )
-            f__check_input_constraints_for_graph = (
-                torch._export.utils._check_input_constraints_for_graph
-            )
-            torch._export.non_strict_utils.produce_guards_and_solve_constraints = (
-                lambda *args, **kwargs: _catch_produce_guards_and_solve_constraints(
-                    f_produce_guards_and_solve_constraints, *args, verbose=verbose, **kwargs
-                )
-            )
-            torch._export.utils._check_input_constraints_for_graph = (
-                lambda *args, **kwargs: patch__check_input_constraints_for_graph(
-                    f__check_input_constraints_for_graph, *args, verbose=verbose, **kwargs
-                )
-            )
-
-        if patch_torch and stop_if_static:
-            ShapeEnv._log_guard_remember = ShapeEnv._log_guard
-
-            if verbose:
-                print("[torch_export_patches] assert when a dynamic dimension turns static")
-                print("[torch_export_patches] replaces ShapeEnv._set_replacement")
-
-            f_shape_env__set_replacement = ShapeEnv._set_replacement
-            ShapeEnv._set_replacement = patched_ShapeEnv._set_replacement
-            if patch_details:
-                patch_details.append(
-                    "torch", f_shape_env__set_replacement, patched_ShapeEnv._set_replacement
-                )
-
-            if verbose:
-                print("[torch_export_patches] replaces ShapeEnv._log_guard")
-            f_shape_env__log_guard = ShapeEnv._log_guard
-            ShapeEnv._log_guard = patched_ShapeEnv._log_guard
-            if patch_details:
-                patch_details.append(
-                    "torch", f_shape_env__log_guard, patched_ShapeEnv._log_guard
-                )
-
-            if stop_if_static > 1:
-                if verbose:
-                    print("[torch_export_patches] replaces ShapeEnv._check_frozen")
-                f_shape_env__check_frozen = ShapeEnv._check_frozen
-                ShapeEnv._check_frozen = patched_ShapeEnv._check_frozen
-                if patch_details:
-                    patch_details.append(
-                        "torch", f_shape_env__check_frozen, ShapeEnv._check_frozen
-                    )
-
-        ####################
-        # patch transformers
-        ####################
 
         if patch_transformers:
-            try:
-                import transformers.masking_utils as masking_utils
-            except ImportError:
-                masking_utils = None
-
-            try:
-                import transformers.integrations.sdpa_attention as sdpa_attention
-            except ImportError:
-                sdpa_attention = None
-
-            try:
-                import transformers.modeling_utils as modeling_utils
-            except ImportError:
-                modeling_utils = None
-
-            try:
-                import transformers.modeling_rope_utils as modeling_rope_utils
-            except ImportError:
-                modeling_rope_utils = None
-
-            if patch_details and modeling_rope_utils:
-                patch_details.append(
-                    "patch_transformers",
-                    modeling_rope_utils.dynamic_rope_update,
-                    patch_transformers_list.patched_dynamic_rope_update,
-                )
-
-            if verbose:
-                import transformers
-
-                print(
-                    f"[torch_export_patches] transformers.__version__="
-                    f"{transformers.__version__!r}"
-                )
-            revert_patches_info = patch_module_or_classes(
-                patch_transformers_list, verbose=verbose, patch_details=patch_details
-            )
-
-            if (  # vmap
-                masking_utils
-                and patch_transformers_list.patch_masking_utils
-                and hasattr(masking_utils, "_vmap_for_bhqkv")
-            ):
-                if verbose:
-                    print(
-                        "[torch_export_patches] patches "
-                        "transformers.masking_utils._vmap_for_bhqkv"
-                    )
-                f_transformers__vmap_for_bhqkv = masking_utils._vmap_for_bhqkv
-                masking_utils._vmap_for_bhqkv = patch_transformers_list.patched__vmap_for_bhqkv
-                if patch_details:
-                    patch_details.append(
-                        "transformers",
-                        f_transformers__vmap_for_bhqkv,
-                        patch_transformers_list.patched__vmap_for_bhqkv,
-                    )
-
-                if verbose:
-                    print(
-                        "[torch_export_patches] patches "
-                        "transformers.masking_utils.sdpa_mask_recent_torch"
-                    )
-                f_transformers_sdpa_mask_recent_torch = masking_utils.sdpa_mask_recent_torch
-                masking_utils.sdpa_mask_recent_torch = (
-                    patch_transformers_list.patched_sdpa_mask_recent_torch
-                )
-                if patch_details:
-                    patch_details.append(
-                        "transformers",
-                        f_transformers_sdpa_mask_recent_torch,
-                        patch_transformers_list.patched_sdpa_mask_recent_torch,
-                    )
-                if masking_utils.sdpa_mask == f_transformers_sdpa_mask_recent_torch:
-                    if verbose:
-                        print(
-                            "[torch_export_patches] patches "
-                            "transformers.masking_utils.sdpa_mask"
-                        )
-                    f_transformers_sdpa_mask = masking_utils.sdpa_mask
-                    masking_utils.sdpa_mask = (
-                        patch_transformers_list.patched_sdpa_mask_recent_torch
-                    )
-                    if patch_details:
-                        patch_details.append(
-                            "transformers",
-                            f_transformers_sdpa_mask,
-                            patch_transformers_list.patched_sdpa_mask_recent_torch,
-                        )
-                else:
-                    f_transformers_sdpa_mask = None
-
-            if (  # eager_mask
-                masking_utils
-                and patch_transformers_list.patch_masking_utils
-                and hasattr(masking_utils, "eager_mask")
-            ):
-                if verbose:
-                    print(
-                        "[torch_export_patches] patches "
-                        "transformers.masking_utils.eager_mask"
-                    )
-                f_transformers_eager_mask = masking_utils.eager_mask
-                masking_utils.eager_mask = patch_transformers_list.patched_eager_mask
-                if patch_details:
-                    patch_details.append(
-                        "transformers",
-                        f_transformers_eager_mask,
-                        patch_transformers_list.patched_eager_mask,
-                    )
-                if (
-                    "eager" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
-                    and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"]
-                    == f_transformers_eager_mask
-                ):
-                    if verbose:
-                        print(
-                            "[torch_export_patches] patches "
-                            "transformers.masking_utils.eager_mask "
-                            "in ALL_MASK_ATTENTION_FUNCTIONS"
-                        )
-                    masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"] = (
-                        patch_transformers_list.patched_eager_mask
-                    )
-
-            if (  # sdpa_mask
-                masking_utils
-                and patch_transformers_list.patch_masking_utils
-                and hasattr(masking_utils, "sdpa_mask")
-                and f_transformers_sdpa_mask is not None
-            ):
-                if verbose:
-                    print(
-                        "[torch_export_patches] patches "
-                        "transformers.masking_utils.sdpa_mask "
-                        "in ALL_MASK_ATTENTION_FUNCTIONS"
-                    )
-                if (
-                    "sdpa" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
-                    and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"]
-                    == f_transformers_sdpa_mask
-                ):
-                    masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] = (
-                        patch_transformers_list.patched_sdpa_mask_recent_torch
-                    )
-
-            if (  # sdpa_attention_forward
-                sdpa_attention is not None
-                and modeling_utils is not None
-                and hasattr(sdpa_attention, "sdpa_attention_forward")
-                and hasattr(sdpa_attention, "use_gqa_in_sdpa")
-                and hasattr(modeling_utils, "AttentionInterface")
-            ):
-                if verbose:
-                    print(
-                        "[torch_export_patches] patches "
-                        "transformers.integrations.sdpa_attention.sdpa_attention_forward"
-                    )
-                f_sdpa_attention_forward = sdpa_attention.sdpa_attention_forward
-                sdpa_attention.sdpa_attention_forward = (
-                    patch_transformers_list.patched_sdpa_attention_forward
-                )
-                modeling_utils.sdpa_attention_forward = (
-                    patch_transformers_list.patched_sdpa_attention_forward
-                )
-                modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
-                    patch_transformers_list.patched_sdpa_attention_forward
-                )
-                if patch_details:
-                    patch_details.append(
-                        "transformers",
-                        f_sdpa_attention_forward,
-                        patch_transformers_list.patched_sdpa_attention_forward,
-                    )
+            (
+                f_transformers__vmap_for_bhqkv,
+                f_transformers_eager_mask,
+                f_transformers_sdpa_attention_forward,
+                f_transformers_sdpa_mask,
+                f_transformers_sdpa_mask_recent_torch,
+                revert_patches_info,
+            ) = _patch_transformers(verbose, patch_details)
 
         if custom_patches:
             if verbose:
@@ -700,9 +996,7 @@ def torch_export_patches(
                 custom_patches, verbose=verbose, patch_details=patch_details
             )
 
-        ########
         # export
-        ########
 
         fct_callable = replacement_before_exporting if patch_transformers else (lambda x: x)
 
@@ -712,73 +1006,50 @@ def torch_export_patches(
         try:
             yield fct_callable
         finally:
-            #######
-            # sympy
-            #######
+
+            # unpatch
 
             if verbose:
                 print("[torch_export_patches] remove patches")
 
             if patch_sympy:
-                # tracked by https://github.com/pytorch/pytorch/issues/143494
-                if f_sympy_name:
-                    sympy.core.numbers.IntegerConstant.name = f_sympy_name
-                else:
-                    delattr(sympy.core.numbers.IntegerConstant, "name")
-
-                if verbose:
-                    print("[torch_export_patches] restored sympy functions")
-
-            #######
-            # torch
-            #######
+                _unpatch_sympy(verbose, f_sympy_name)
 
             if patch_torch:
-                # this should disappear when torch.jit is removed
-                torch.vmap = f_vmap
-                torch.jit.isinstance = f_jit_isinstance
-                torch._dynamo.mark_static_address = f_mark_static_address
-                # tracked by https://github.com/pytorch/pytorch/issues/143495
-                torch._subclasses.fake_impls.infer_size = f_infer_size
-                torch._refs._broadcast_shapes = f__broadcast_shapes
-                torch._meta_registrations._broadcast_shapes = f__broadcast_shapes
-                torch._export.non_strict_utils._constrain_user_specified_dimhint_range = (
-                    f___constrain_user_specified_dimhint_range
+                _unpatch_torch(
+                    verbose,
+                    patch_details,
+                    patch_torch,
+                    catch_constraints,
+                    stop_if_static,
+                    f___constrain_user_specified_dimhint_range,
+                    f__broadcast_in_dim_meta,
+                    f__broadcast_shapes,
+                    f__check_input_constraints_for_graph,
+                    f__maybe_broadcast,
+                    f_broadcast_in_dim,
+                    f_infer_size,
+                    f_jit_isinstance,
+                    f_mark_static_address,
+                    f_produce_guards_and_solve_constraints,
+                    f_shape_env__check_frozen,
+                    f_shape_env__evaluate_expr,
+                    f_shape_env__log_guard,
+                    f_shape_env__set_replacement,
+                    f_vmap,
                 )
-                torch._prims._broadcast_in_dim_meta = f__broadcast_in_dim_meta
-                torch._prims.broadcast_in_dim = f_broadcast_in_dim
-                torch._refs._maybe_broadcast = f__maybe_broadcast
-                ShapeEnv._evaluate_expr = f_shape_env__evaluate_expr
 
-                if verbose:
-                    print("[torch_export_patches] restored pytorch functions")
-
-            if patch_torch and stop_if_static:
-                if verbose:
-                    print("[torch_export_patches] restored ShapeEnv._set_replacement")
-
-                ShapeEnv._set_replacement = f_shape_env__set_replacement
-
-                if verbose:
-                    print("[torch_export_patches] restored ShapeEnv._log_guard")
-
-                ShapeEnv._log_guard = f_shape_env__log_guard
-
-                if stop_if_static > 1:
-                    if verbose:
-                        print("[torch_export_patches] restored ShapeEnv._check_frozen")
-                    ShapeEnv._check_frozen = f_shape_env__check_frozen
-
-            if patch_torch and catch_constraints:
-                # to catch or skip dynamic_shapes issues
-                torch._export.non_strict_utils.produce_guards_and_solve_constraints = (
-                    f_produce_guards_and_solve_constraints
+            if patch_transformers:
+                _unpatch_transformers(
+                    verbose,
+                    patch_details,
+                    f_transformers__vmap_for_bhqkv,
+                    f_transformers_eager_mask,
+                    f_transformers_sdpa_attention_forward,
+                    f_transformers_sdpa_mask,
+                    f_transformers_sdpa_mask_recent_torch,
+                    revert_patches_info,
                 )
-                torch._export.utils._check_input_constraints_for_graph = (
-                    f__check_input_constraints_for_graph
-                )
-                if verbose:
-                    print("[torch_export_patches] restored shape constraints")
 
             if custom_patches:
                 if verbose:
@@ -786,147 +1057,6 @@ def torch_export_patches(
                 unpatch_module_or_classes(
                     custom_patches, revert_custom_patches_info, verbose=verbose
                 )
-
-            ##############
-            # transformers
-            ##############
-
-            if patch_transformers:
-                try:
-                    import transformers.masking_utils as masking_utils
-                except ImportError:
-                    masking_utils = None
-                if verbose:
-                    print("[torch_export_patches] unpatches transformers")
-                unpatch_module_or_classes(
-                    patch_transformers_list, revert_patches_info, verbose=verbose
-                )
-
-                if (  # vmap
-                    masking_utils
-                    and patch_transformers_list.patch_masking_utils
-                    and hasattr(masking_utils, "_vmap_for_bhqkv")
-                ):
-                    assert f_transformers__vmap_for_bhqkv.__name__ == "_vmap_for_bhqkv", (
-                        f"corrupted function '_vmap_for_bhqkv', its name is "
-                        f"{f_transformers__vmap_for_bhqkv.__name__!r}"
-                    )
-                    masking_utils._vmap_for_bhqkv = f_transformers__vmap_for_bhqkv
-
-                    if verbose:
-                        print(
-                            "[torch_export_patches] restored "
-                            "transformers.masking_utils._vmap_for_bhqkv"
-                        )
-
-                    assert (
-                        f_transformers_sdpa_mask_recent_torch.__name__
-                        == "sdpa_mask_recent_torch"
-                    ), (
-                        f"corrupted function 'sdpa_mask_recent_torch', its name is "
-                        f"{f_transformers_sdpa_mask_recent_torch.__name__!r}"
-                    )
-                    masking_utils.sdpa_mask_recent_torch = (
-                        f_transformers_sdpa_mask_recent_torch
-                    )
-
-                    if verbose:
-                        print(
-                            "[torch_export_patches] restored "
-                            "transformers.masking_utils.sdpa_mask_recent_torch"
-                        )
-
-                    if f_transformers_sdpa_mask is not None:
-                        assert f_transformers_sdpa_mask.__name__ in (
-                            "sdpa_mask",
-                            "sdpa_mask_recent_torch",
-                        ), (
-                            f"corrupted function 'sdpa_mask', its name is "
-                            f"{f_transformers_sdpa_mask.__name__!r}"
-                        )
-                        masking_utils.sdpa_mask = f_transformers_sdpa_mask
-                        if verbose:
-                            print(
-                                "[torch_export_patches] restored "
-                                "transformers.masking_utils.sdpa_mask"
-                            )
-
-                if (  # eager_mask
-                    masking_utils
-                    and patch_transformers_list.patch_masking_utils
-                    and hasattr(masking_utils, "eager_mask")
-                ):
-                    assert f_transformers_eager_mask.__name__ == "eager_mask", (
-                        f"corrupted function 'eager_mask', its name is "
-                        f"{f_transformers_eager_mask.__name__!r}"
-                    )
-                    masking_utils.eager_mask = f_transformers_eager_mask
-                    if verbose:
-                        print(
-                            "[torch_export_patches] restored "
-                            "transformers.masking_utils.eager_mask"
-                        )
-                    assert masking_utils.eager_mask.__name__ == "eager_mask", (
-                        f"corrupted function 'eager_mask', its name is "
-                        f"{masking_utils.eager_mask.__name__!r}"
-                    )
-                    if (
-                        "eager" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
-                        and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"]
-                        == patch_transformers_list.patched_eager_mask
-                    ):
-                        masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["eager"] = (
-                            f_transformers_eager_mask
-                        )
-                        if verbose:
-                            print(
-                                "[torch_export_patches] restored "
-                                "transformers.masking_utils.eager_mask "
-                                "in ALL_MASK_ATTENTION_FUNCTIONS"
-                            )
-                    assert masking_utils.eager_mask.__name__ == "eager_mask", (
-                        f"corrupted function 'eager_mask', its name is "
-                        f"{masking_utils.eager_mask.__name__!r}"
-                    )
-
-                if (  # sdpa_mask
-                    masking_utils
-                    and patch_transformers_list.patch_masking_utils
-                    and hasattr(masking_utils, "sdpa_mask")
-                ):
-                    if (
-                        "sdpa" in masking_utils.ALL_MASK_ATTENTION_FUNCTIONS
-                        and masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"]
-                        == patch_transformers_list.patched_sdpa_mask_recent_torch
-                    ):
-                        masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"] = (
-                            f_transformers_sdpa_mask
-                        )
-                        if verbose:
-                            print(
-                                "[torch_export_patches] restored "
-                                "transformers.masking_utils.sdpa_mask "
-                                "in ALL_MASK_ATTENTION_FUNCTIONS"
-                            )
-
-                if (  # sdpa_attention_forward
-                    sdpa_attention is not None
-                    and modeling_utils is not None
-                    and hasattr(sdpa_attention, "sdpa_attention_forward")
-                    and hasattr(sdpa_attention, "use_gqa_in_sdpa")
-                    and hasattr(modeling_utils, "AttentionInterface")
-                ):
-                    sdpa_attention.sdpa_attention_forward = f_sdpa_attention_forward
-                    modeling_utils.sdpa_attention_forward = f_sdpa_attention_forward
-                    modeling_utils.AttentionInterface._global_mapping["sdpa"] = (
-                        f_sdpa_attention_forward
-                    )
-                    if verbose:
-                        print(
-                            "[torch_export_patches] restored "
-                            "transformers.integrations.sdpa_attention."
-                            "sdpa_attention_forward"
-                        )
 
             ########
             # caches
