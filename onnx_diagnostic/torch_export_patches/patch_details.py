@@ -331,7 +331,7 @@ class PatchDetails:
             rows.append(patch.format_diff(format=format))
             rows.append("")
             if format == "rst":
-                rows.extend(["", "", "**impacted nodes**", "", "", ".. code-block:: raw", ""])
+                rows.extend(["", "", "**impacted nodes**", "", "", ".. code-block::", ""])
             for node in nodes:
                 rows.append(
                     f"    {node.target}({', '.join(map(str,node.args))}) -> {node.name}"
