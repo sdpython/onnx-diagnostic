@@ -492,7 +492,11 @@ def _patch_transformers(
     except ImportError:
         modeling_rope_utils = None
 
-    if patch_details and modeling_rope_utils:
+    if (
+        patch_details
+        and modeling_rope_utils
+        and hasattr(modeling_rope_utils, "dynamic_rope_update")
+    ):
         patch_details.append(
             "patch_transformers",
             modeling_rope_utils.dynamic_rope_update,
