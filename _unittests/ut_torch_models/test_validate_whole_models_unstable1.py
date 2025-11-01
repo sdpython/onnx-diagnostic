@@ -9,7 +9,7 @@ from onnx_diagnostic.ext_test_case import (
 from onnx_diagnostic.torch_models.validate import validate_model
 
 
-class TestValidateWholeModels1(ExtTestCase):
+class TestValidateWholeModelsUnstable1(ExtTestCase):
     @requires_torch("2.7")
     @hide_stdout()
     @ignore_warnings(FutureWarning)

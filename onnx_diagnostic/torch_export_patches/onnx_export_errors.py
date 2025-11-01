@@ -111,7 +111,9 @@ def patch_module_or_classes(
                     )
                 if "@patched_dynamic_rope_update" in inspect.getsource(getattr(cls, n)):
                     # a tweak to include that patch.
-                    p.add_dependency(patch_details.find("patched_dynamic_rope_update"))
+                    f = patch_details.find("patched_dynamic_rope_update")
+                    if f is not None:
+                        p.add_dependency(f)
             setattr(original, n, getattr(cls, n))
         res[cls] = keep
 
