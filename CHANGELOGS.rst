@@ -4,6 +4,7 @@ Change Logs
 0.8.0
 +++++
 
+* :pr:`283`: fix historical aggregation when multiple input sets are used
 * :pr:`282`: add tools to understand better which functions were patched
 * :pr:`280`: fixes patches for sdpa_attention_forward for different version of transformers
 * :pr:`278`: implements ``onnx_generate_with_genai``

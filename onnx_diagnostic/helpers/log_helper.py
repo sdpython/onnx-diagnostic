@@ -42,6 +42,8 @@ class CubeViewDef:
     :param name: name of the view, used mostly to debug
     :param plots: adds plot to the Excel sheet
     :param no_index: remove the index (but keeps the columns)
+    :param fix_aggregation_change: a column among the keys which changes aggregation value
+        for different dates
 
     Some examples of views. First example is an aggregated view
     for many metrics.
@@ -106,6 +108,7 @@ class CubeViewDef:
         name: Optional[str] = None,
         no_index: bool = False,
         plots: bool = False,
+        fix_aggregation_change: Optional[List["str"]] = None,
     ):
         self.key_index = key_index
         self.values = values
@@ -123,6 +126,7 @@ class CubeViewDef:
         self.name = name
         self.no_index = no_index
         self.plots = plots
+        self.fix_aggregation_change = fix_aggregation_change
 
     def __repr__(self) -> str:
         "usual"
@@ -750,6 +754,17 @@ class CubeLogs:
             f"values={sorted(self.values)}"
         )
 
+        if view_def.fix_aggregation_change and (
+            set(view_def.fix_aggregation_change) & set(self.keys_no_time)
+        ):
+            # before aggregation, let's fix some keys whose values changed over time
+            data_to_process = self._fix_aggregation_change(
+                self.data,
+                list(set(view_def.fix_aggregation_change) & set(self.keys_no_time)),
+            )
+        else:
+            data_to_process = self.data
+
         # aggregation
         if key_agg:
             final_stack = True
@@ -763,7 +778,7 @@ class CubeLogs:
                 print(f"[CubeLogs.view] aggregation of {set_key_agg}")
                 print(f"[CubeLogs.view] groupby {keys_no_agg}")
 
-            data_red = self.data[[*keys_no_agg, *values]]
+            data_red = data_to_process[[*keys_no_agg, *values]]
             assert set(key_index) <= set(data_red.columns), (
                 f"view_def.name={view_def.name!r}, "
                 f"nnable to find {set(key_index) - set(data_red.columns)}, "
@@ -792,7 +807,7 @@ class CubeLogs:
             key_index = self._filter_column(view_def.key_index, self.keys_time)
             if verbose:
                 print(f"[CubeLogs.view] no aggregation, index={key_index}")
-            data = self.data[[*self.keys_time, *values]]
+            data = data_to_process[[*self.keys_time, *values]]
             set_all_keys = set(self.keys_time)
             final_stack = False
 
@@ -829,7 +844,7 @@ class CubeLogs:
             key_columns = sorted(set_key_columns)
             unique = set()
 
-        _md = lambda s: {k: v for k, v in self.values_for_key.items() if k in s}  # noqa: E731
+        # md = lambda s: {k: v for k, v in self.values_for_key.items() if k in s}  # noqa: E731
         all_cols = set(key_columns) | set(key_index) | set(key_agg) | unique
         assert all_cols == set(self.keys_time), (
             f"view_def.name={view_def.name!r}, "
@@ -892,7 +907,7 @@ class CubeLogs:
             f"key={sorted(key_columns)}, key_agg={key_agg}, values={sorted(values)}, "
             f"columns={sorted(data.columns)}, ignored={view_def.ignore_columns}, "
             f"not unique={set(data.columns) - unique}"
-            f"\n--\n{not_unique.head()}"
+            f"\n--\n{not_unique.head(10)}"
         )
 
         # pivot
@@ -960,6 +975,70 @@ class CubeLogs:
             print(f"[CubeLogs.view] levels {piv.index.names}, {piv.columns.names}")
             print(f"[CubeLogs.view] -- done view {view_def.name!r}")
         return (piv, view_def) if return_view_def else piv
+
+    def _fix_aggregation_change(
+        self,
+        data: pandas.DataFrame,
+        columns_to_fix: Union[str, List[str]],
+        overwrite_or_merge: bool = True,
+    ) -> pandas.DataFrame:
+        """
+        Fixes columns used to aggregate values because their meaning changed over time.
+
+        :param data: data to fix
+        :param columns_to_fix: list of columns to fix
+        :param overwrite_or_merge: if True, overwrite all values by the concatenation
+            of all existing values, if merge, merges existing values found
+            and grouped by the other keys
+        :return: fixed data
+        """
+        if not isinstance(columns_to_fix, str):
+            for c in columns_to_fix:
+                data = self._fix_aggregation_change(data, c)
+            return data
+        # Let's process one column.
+        keys = set(self.keys_time) - {columns_to_fix}
+        select = data[self.keys_time]
+        select_agg = select.groupby(list(keys)).count()
+        assert select_agg[columns_to_fix].max() <= 1, (
+            f"Column {columns_to_fix!r} has two distinct values at least for one date\n"
+            f"{select_agg[select_agg[columns_to_fix] > 1]}"
+        )
+
+        # unique value (to fill NaN)
+        unique = "-".join(sorted(set(data[columns_to_fix].dropna())))
+
+        keys = set(self.keys_no_time) - {columns_to_fix}
+        select = data[self.keys_no_time]
+        select_agg = select.groupby(list(keys), as_index=True).apply(
+            lambda x: "-".join(sorted(set(x[columns_to_fix].dropna()))), include_groups=False
+        )
+        select_agg = select_agg.to_frame(name=columns_to_fix)
+        res = pandas.merge(
+            data.drop([columns_to_fix], axis=1),
+            select_agg,
+            how="left",
+            left_on=list(keys),
+            right_index=True,
+        )
+        val = f"?{unique}?"
+        res[columns_to_fix] = res[columns_to_fix].fillna(val).replace("", val)
+        assert (
+            data.shape == res.shape
+            and sorted(data.columns) == sorted(res.columns)
+            and sorted(data.index) == sorted(res.index)
+        ), (
+            f"Shape should match, data.shape={data.shape}, res.shape={res.shape}, "
+            f"lost={set(data.columns) - set(res.columns)}, "
+            f"added={set(res.columns) - set(data.columns)}"
+        )
+        res = res[data.columns]
+        assert data.columns.equals(res.columns) and data.index.equals(res.index), (
+            f"Columns or index mismatch "
+            f"data.columns.equals(res.columns)={data.columns.equals(res.columns)}, "
+            f"data.index.equals(res.columns)={data.index.equals(res.columns)}, "
+        )
+        return res
 
     def _dropna(
         self,
@@ -1886,6 +1965,7 @@ class CubeLogsPerformance(CubeLogs):
         * **cmd:** command lines
         * **raw-short:** raw data without all the unused columns
         """
+        fix_aggregation_change = ["model_speedup_input_set", "model_test_with"]
         fs = ["suite", "model_suite", "task", "model_name", "model_task"]
         index_cols = self._filter_column(fs, self.keys_time)
         assert index_cols, (
@@ -1984,6 +2064,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="agg-suite",
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "agg-all": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -2014,6 +2095,7 @@ class CubeLogsPerformance(CubeLogs):
                 name="agg-all",
                 order=order,
                 plots=True,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "disc": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -2023,6 +2105,7 @@ class CubeLogsPerformance(CubeLogs):
                 f_highlight=f_disc,
                 name="disc",
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "speedup": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -2032,6 +2115,7 @@ class CubeLogsPerformance(CubeLogs):
                 f_highlight=f_speedup,
                 name="speedup",
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "counts": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -2048,6 +2132,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="peak-gpu",
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "time": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -2058,6 +2143,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="time",
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "time_export": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -2066,6 +2152,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="time_export",
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "err": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -2076,6 +2163,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="err",
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "bucket-speedup": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -2085,6 +2173,7 @@ class CubeLogsPerformance(CubeLogs):
                 name="bucket-speedup",
                 f_highlight=f_bucket,
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "onnx": lambda: CubeViewDef(
                 key_index=index_cols,
@@ -2103,6 +2192,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="onnx",
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             ),
             "raw-short": lambda: CubeViewDef(
                 key_index=self.keys_time,
@@ -2111,6 +2201,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="raw-short",
                 no_index=True,
+                fix_aggregation_change=fix_aggregation_change,
             ),
         }
 
@@ -2123,6 +2214,7 @@ class CubeLogsPerformance(CubeLogs):
                 keep_columns_in_index=["suite"],
                 name="cmd",
                 order=order,
+                fix_aggregation_change=fix_aggregation_change,
             )
 
         assert name in implemented_views or name in {"cmd"}, (
