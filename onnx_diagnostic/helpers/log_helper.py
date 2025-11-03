@@ -754,14 +754,13 @@ class CubeLogs:
             f"values={sorted(self.values)}"
         )
 
-        if view_def.fix_aggregation_change:
+        if view_def.fix_aggregation_change and (
+            set(view_def.fix_aggregation_change) & set(self.keys_no_time)
+        ):
             # before aggregation, let's fix some keys whose values changed over time
-            assert set(view_def.fix_aggregation_change) <= set(self.keys_no_time), (
-                f"view_def.fix_aggregation_change={view_def.fix_aggregation_change} is not "
-                f"included in the keys {self.keys_no_time}"
-            )
             data_to_process = self._fix_aggregation_change(
-                self.data, view_def.fix_aggregation_change
+                self.data,
+                list(set(view_def.fix_aggregation_change) & set(self.keys_no_time)),
             )
         else:
             data_to_process = self.data
@@ -908,7 +907,7 @@ class CubeLogs:
             f"key={sorted(key_columns)}, key_agg={key_agg}, values={sorted(values)}, "
             f"columns={sorted(data.columns)}, ignored={view_def.ignore_columns}, "
             f"not unique={set(data.columns) - unique}"
-            f"\n--\n{not_unique.head()}"
+            f"\n--\n{not_unique.head(10)}"
         )
 
         # pivot
@@ -978,10 +977,20 @@ class CubeLogs:
         return (piv, view_def) if return_view_def else piv
 
     def _fix_aggregation_change(
-        self, data: pandas.DataFrame, columns_to_fix: Union[str, List[str]]
+        self,
+        data: pandas.DataFrame,
+        columns_to_fix: Union[str, List[str]],
+        overwrite_or_merge: bool = True,
     ) -> pandas.DataFrame:
         """
         Fixes columns used to aggregate values because their meaning changed over time.
+
+        :param data: data to fix
+        :param columns_to_fix: list of columns to fix
+        :param overwrite_or_merge: if True, overwrite all values by the concatenation
+            of all existing values, if merge, merges existing values found
+            and grouped by the other keys
+        :return: fixed data
         """
         if not isinstance(columns_to_fix, str):
             for c in columns_to_fix:
@@ -995,6 +1004,10 @@ class CubeLogs:
             f"Column {columns_to_fix!r} has two distinct values at least for one date\n"
             f"{select_agg[select_agg[columns_to_fix] > 1]}"
         )
+
+        # unique value (to fill NaN)
+        unique = "-".join(sorted(set(data[columns_to_fix].dropna())))
+
         keys = set(self.keys_no_time) - {columns_to_fix}
         select = data[self.keys_no_time]
         select_agg = select.groupby(list(keys), as_index=True).apply(
@@ -1008,9 +1021,22 @@ class CubeLogs:
             left_on=list(keys),
             right_index=True,
         )
-        assert data.shape == res.shape, (
+        val = f"?{unique}?"
+        res[columns_to_fix] = res[columns_to_fix].fillna(val).replace("", val)
+        assert (
+            data.shape == res.shape
+            and sorted(data.columns) == sorted(res.columns)
+            and sorted(data.index) == sorted(res.index)
+        ), (
             f"Shape should match, data.shape={data.shape}, res.shape={res.shape}, "
-            f"columns={data.columns} but it is now {res.columns}"
+            f"lost={set(data.columns) - set(res.columns)}, "
+            f"added={set(res.columns) - set(data.columns)}"
+        )
+        res = res[data.columns]
+        assert data.columns.equals(res.columns) and data.index.equals(res.index), (
+            f"Columns or index mismatch "
+            f"data.columns.equals(res.columns)={data.columns.equals(res.columns)}, "
+            f"data.index.equals(res.columns)={data.index.equals(res.columns)}, "
         )
         return res
 
