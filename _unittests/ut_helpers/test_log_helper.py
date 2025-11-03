@@ -614,6 +614,95 @@ class TestLogHelper(ExtTestCase):
         self.assertEqual(sbs_agg.index.names, ["date", "METRICS"])
         self.assertEqual(sorted(sbs_agg.columns.names), ["CONF", "exporter"])
 
+    def test_fix_non_consistent_historical_data_no_change(self):
+        # no change
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/01", time_p=0.51, exporter="E1", model_s="O", model="M"),
+                dict(date="2025/01/02", time_p=0.51, exporter="E1", model_s="O", model="M"),
+                dict(date="2025/01/03", time_p=0.53, exporter="E1", model_s="O", model="M"),
+            ]
+        )
+        cube = CubeLogs(
+            df, keys=["^model*", "exporter", "opt"], values=["time_p"], time="date"
+        ).load()
+        view, _view_def = cube.view(
+            CubeViewDef(["^model.*"], ["^time_.*"]), return_view_def=True
+        )
+        expected = {
+            ("time_p", pandas.Timestamp("2025-01-01 00:00:00")): {"ALL": 0.51},
+            ("time_p", pandas.Timestamp("2025-01-02 00:00:00")): {"ALL": 0.51},
+            ("time_p", pandas.Timestamp("2025-01-03 00:00:00")): {"ALL": 0.53},
+        }
+        self.assertEqual(expected, view.to_dict())
+
+        # no change
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/01", time_p=0.51, exporter="E1", model_s="O", model="M"),
+                dict(date="2025/01/02", time_p=0.51, exporter="E1", model_s="O", model="M"),
+                dict(date="2025/01/03", time_p=0.53, exporter="E1", model_s="O", model="M"),
+            ]
+        )
+        cube = CubeLogs(
+            df, keys=["^model*", "exporter", "opt"], values=["time_p"], time="date"
+        ).load()
+        view, _view_def = cube.view(
+            CubeViewDef(["^model.*"], ["^time_.*"], fix_aggregation_change=["model_s"]),
+            return_view_def=True,
+        )
+        self.assertEqual(expected, view.to_dict())
+
+    def test_fix_non_consistent_historical_data_mixed_values(self):
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/01", time_p=0.51, exporter="E1", model_s="O", model="M"),
+                dict(date="2025/01/02", time_p=0.51, exporter="E1", model_s="O", model="M"),
+                dict(date="2025/01/03", time_p=0.53, exporter="E1", model_s="A", model="M"),
+            ]
+        )
+        cube = CubeLogs(
+            df, keys=["^model*", "exporter", "opt"], values=["time_p"], time="date"
+        ).load()
+        view, _view_def = cube.view(
+            CubeViewDef(["^model.*"], ["^time_.*"], fix_aggregation_change=["model_s"]),
+            return_view_def=True,
+        )
+        raw = view.to_dict()
+        self.assertEqual(
+            {
+                ("time_p", pandas.Timestamp("2025-01-01 00:00:00")): {"A-O": 0.51},
+                ("time_p", pandas.Timestamp("2025-01-02 00:00:00")): {"A-O": 0.51},
+                ("time_p", pandas.Timestamp("2025-01-03 00:00:00")): {"A-O": 0.53},
+            },
+            raw,
+        )
+
+    def test_fix_non_consistent_historical_data_mixed_nan(self):
+        df = pandas.DataFrame(
+            [
+                dict(date="2025/01/01", time_p=0.51, exporter="E1", model_s="O", model="M"),
+                dict(date="2025/01/02", time_p=0.51, exporter="E1", model_s="O", model="M"),
+                dict(date="2025/01/03", time_p=0.53, exporter="E1", model="M"),
+            ]
+        )
+        cube = CubeLogs(
+            df, keys=["^model*", "exporter", "opt"], values=["time_p"], time="date"
+        ).load()
+        view, _view_def = cube.view(
+            CubeViewDef(["^model.*"], ["^time_.*"], fix_aggregation_change=["model_s"]),
+            return_view_def=True,
+        )
+        raw = view.to_dict()
+        self.assertEqual(
+            {
+                ("time_p", pandas.Timestamp("2025-01-01 00:00:00")): {"O": 0.51},
+                ("time_p", pandas.Timestamp("2025-01-02 00:00:00")): {"O": 0.51},
+                ("time_p", pandas.Timestamp("2025-01-03 00:00:00")): {"O": 0.53},
+            },
+            raw,
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
