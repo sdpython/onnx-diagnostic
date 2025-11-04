@@ -4,6 +4,8 @@ Change Logs
 0.8.1
 +++++
 
+* :pr:`286`: adds variable to track random nodes in models
+
 0.8.0
 +++++
 
