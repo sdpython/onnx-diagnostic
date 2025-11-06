@@ -149,7 +149,7 @@ def make_empty_cache(
 def generate_and_validate(
     model,
     input_ids: torch.Tensor,
-    eos_token_id: int,
+    eos_token_id: int = 2,
     max_new_tokens: int = 100,
     session: Optional[Union[InferenceSessionForTorch, onnx.ModelProto, str]] = None,
     atol: float = 0.1,
@@ -258,10 +258,10 @@ def generate_and_validate(
 def onnx_generate(
     model_or_path: Union[onnx.ModelProto, str, InferenceSessionForTorch],
     input_ids: torch.Tensor,
-    eos_token_id: int,
+    eos_token_id: int = 2,
     max_new_tokens=100,
     return_session: bool = False,
-) -> Union[torch.Tensor, Tuple[torch.Tensor, InferenceSessionForTorch]]:
+) -> Union[torch.Tensor, Tuple[torch.Tensor, InferenceSessionForTorch, Dict[str, Any]]]:
     """
     Implements a simple method ``generate`` for an ONNX model.
     The function does not expect any ``position_ids`` as input.
@@ -273,7 +273,7 @@ def onnx_generate(
     :param return_session: returns the instance of class
         :class:`InferenceSessionForTorch
         <onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch>`
-        created if necessary
+        created if necessary, the function returns the feeds for the next iteration
     :return: input tokens concatenated with new tokens
 
     .. runpython::
@@ -349,12 +349,19 @@ def onnx_generate(
     input_shapes = session.input_shapes
     input_names = session.input_names
     input_types = session.input_types
+    has_position_ids = "position_ids" in session.input_names
 
     assert (
         len(input_names) > 2
         and input_names[:2] == ["input_ids", "attention_mask"]
-        and input_names[2].startswith("past_key_values")
-    ), f"Only text generation is supported but input_names == {input_names}"
+        and input_names[3 if has_position_ids else 2].startswith("past_key_values")
+    ), (
+        f"Only text generation is supported but input_names == {input_names}, "
+        f"has_position_ids={has_position_ids}"
+    )
+    assert (
+        not has_position_ids or input_names[2] == "position_ids"
+    ), f"position_ids must the third input but input_names={input_names}"
 
     # First call: prefill
     feeds = dict(
@@ -366,6 +373,10 @@ def onnx_generate(
             input_ids.shape[0], input_names[2:], input_shapes[2:], input_types[2:]
         ),
     )
+    if has_position_ids:
+        feeds["position_ids"] = torch.unsqueeze(
+            torch.arange(input_ids.shape[1], dtype=torch.int64, device=input_ids.device), 0
+        )
 
     outputs = session.run(None, feeds)
 
@@ -389,11 +400,21 @@ def onnx_generate(
                 input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
             ),
         )
-        feeds.update(dict(zip(input_names[2:], outputs[1:])))
+        if has_position_ids:
+            feeds["position_ids"] = torch.unsqueeze(
+                torch.arange(
+                    input_ids.shape[1],
+                    input_ids.shape[1] + 1,
+                    dtype=torch.int64,
+                    device=input_ids.device,
+                ),
+                0,
+            )
+        feeds.update(dict(zip(input_names[3 if has_position_ids else 2 :], outputs[1:])))
         outputs = session.run(None, feeds)
 
     if return_session:
-        return input_ids, session
+        return input_ids, session, feeds
     return input_ids
 
 
