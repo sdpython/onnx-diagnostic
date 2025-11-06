@@ -5,6 +5,7 @@ Change Logs
 +++++
 
 * :pr:`287`: adds input ``'inputs_prompt'`` to test a LLM, meant to be used during validation
+* :pr:`288`: add .contiguous in torch.cond branch (attention patch for sdpa implementation)
 * :pr:`286`: adds variable to track random nodes in models
 
 0.8.0

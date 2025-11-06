@@ -48,7 +48,7 @@ class TestRtSession(ExtTestCase):
             )
 
         print("-- test_onnx_generate: generate")
-        res, session = onnx_generate(
+        res, session, _feeds = onnx_generate(
             model_name, input_ids[:1], 2, max_new_tokens=10, return_session=True
         )
         n_inputs = input_ids.shape[1]

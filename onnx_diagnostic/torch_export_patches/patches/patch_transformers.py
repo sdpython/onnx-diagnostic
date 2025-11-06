@@ -1452,7 +1452,7 @@ def patched_sdpa_attention_forward(
             scale=scaling,
             is_causal=True,
             **sdpa_kwargs,
-        ),
+        ).contiguous(),
         lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(
             query,
             key,
@@ -1461,7 +1461,7 @@ def patched_sdpa_attention_forward(
             scale=scaling,
             is_causal=False,
             **sdpa_kwargs,
-        ),
+        ).contiguous(),
         [query, key, value],
     )
     attn_output = attn_output.transpose(1, 2).contiguous()
