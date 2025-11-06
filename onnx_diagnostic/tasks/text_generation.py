@@ -56,6 +56,74 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
     return kwargs
 
 
+def _get_input_falcon_mamba(
+    model: torch.nn.Module,
+    config: Optional[Any],
+    dummy_max_token_id: int,
+    num_hidden_layers: int,
+    batch_size: int = 2,
+    sequence_length: int = 30,
+    sequence_length2: int = 3,
+    dynamic_rope: bool = False,
+    num_key_value_heads: Optional[int] = None,
+    head_dim: Optional[int] = None,
+    cls_cache: Optional[Union[type, str]] = None,
+    **kwargs,  # unused
+):
+    try:
+        from transformers.models.mamba.modeling_mamba import MambaCache
+    except ImportError:
+        from transformers.cache_utils import MambaCache
+
+    assert cls_cache in (
+        "MambaCache",
+        MambaCache,
+    ), f"Unexpected value for cls_cache={cls_cache} and config={config}"
+
+    batch = "batch"
+    seq_length_multiple = 8
+    sequence_length = (
+        (sequence_length + seq_length_multiple) // seq_length_multiple * seq_length_multiple
+    )
+    # sequence_inc = seq_length_multiple
+    sequence_length2 = seq_length_multiple
+
+    shapes = {
+        "input_ids": {0: batch, 1: "sequence_length"},
+        "attention_mask": {
+            0: batch,
+            1: "cache+seq",  # cache_length + seq_length
+        },
+        "cache_position": {
+            0: batch,
+            1: "cache+seq",  # cache_length + seq_length
+        },
+        "cache_params": [{0: batch} for _ in range(num_hidden_layers * 2)],
+    }
+    inputs = dict(
+        input_ids=torch.randint(
+            0, dummy_max_token_id, (batch_size, sequence_length + sequence_length2)
+        ).to(torch.int64),
+        attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
+            torch.int64
+        ),
+        cache_position=torch.arange(0, kwargs["conv_kernel"]).to(torch.int64),
+        # .expand((batch_size, -1))
+        cache_params=make_mamba_cache(
+            [
+                (
+                    torch.randn(
+                        batch_size, kwargs["intermediate_size"], kwargs["conv_kernel"]
+                    ),
+                    torch.randn(batch_size, kwargs["intermediate_size"], kwargs["state_size"]),
+                )
+                for i in range(num_hidden_layers)
+            ]
+        ),
+    )
+    return dict(inputs=inputs, dynamic_shapes=shapes)
+
+
 def get_inputs(
     model: torch.nn.Module,
     config: Optional[Any],
@@ -68,7 +136,7 @@ def get_inputs(
     num_key_value_heads: Optional[int] = None,
     head_dim: Optional[int] = None,
     cls_cache: Optional[Union[type, str]] = None,
-    add_second_input: int = 1,
+    add_second_input: Optional[int] = None,
     **kwargs,  # unused
 ):
     """
@@ -84,6 +152,7 @@ def get_inputs(
     :param dynamic_rope: use dynamic rope (see :class:`transformers.LlamaConfig`)
     :param cls_cache: cache class, by default it is
         :class:`transformers.cache_utils.DynamicCache`
+    :param add_second_input: adds other kinds of inputs
     :return: dictionary
     """
     batch = "batch"
@@ -91,60 +160,20 @@ def get_inputs(
     cache_length = "cache_length"  # torch.export.Dim("cache_length", min=1, max=4096)
 
     if config is not None and config.__class__.__name__ == "FalconMambaConfig":
-        try:
-            from transformers.models.mamba.modeling_mamba import MambaCache
-        except ImportError:
-            from transformers.cache_utils import MambaCache
-
-        assert cls_cache in (
-            "MambaCache",
-            MambaCache,
-        ), f"Unexpected value for cls_cache={cls_cache} and config={config}"
-        seq_length_multiple = 8
-        sequence_length = (
-            (sequence_length + seq_length_multiple)
-            // seq_length_multiple
-            * seq_length_multiple
+        res = _get_input_falcon_mamba(
+            model=model,
+            config=config,
+            dummy_max_token_id=dummy_max_token_id,
+            num_hidden_layers=num_hidden_layers,
+            batch_size=batch_size,
+            sequence_length=sequence_length,
+            sequence_length2=sequence_length2,
+            dynamic_rope=dynamic_rope,
+            num_key_value_heads=num_key_value_heads,
+            head_dim=head_dim,
+            cls_cache=cls_cache,
+            **kwargs,  # unused
         )
-        # sequence_inc = seq_length_multiple
-        sequence_length2 = seq_length_multiple
-
-        shapes = {
-            "input_ids": {0: batch, 1: "sequence_length"},
-            "attention_mask": {
-                0: batch,
-                1: "cache+seq",  # cache_length + seq_length
-            },
-            "cache_position": {
-                0: batch,
-                1: "cache+seq",  # cache_length + seq_length
-            },
-            "cache_params": [{0: batch} for _ in range(num_hidden_layers * 2)],
-        }
-        inputs = dict(
-            input_ids=torch.randint(
-                0, dummy_max_token_id, (batch_size, sequence_length + sequence_length2)
-            ).to(torch.int64),
-            attention_mask=torch.ones((batch_size, sequence_length + sequence_length2)).to(
-                torch.int64
-            ),
-            cache_position=torch.arange(0, kwargs["conv_kernel"]).to(torch.int64),
-            # .expand((batch_size, -1))
-            cache_params=make_mamba_cache(
-                [
-                    (
-                        torch.randn(
-                            batch_size, kwargs["intermediate_size"], kwargs["conv_kernel"]
-                        ),
-                        torch.randn(
-                            batch_size, kwargs["intermediate_size"], kwargs["state_size"]
-                        ),
-                    )
-                    for i in range(num_hidden_layers)
-                ]
-            ),
-        )
-        res = dict(inputs=inputs, dynamic_shapes=shapes)
     else:
         if head_dim is None:
             assert config, "head_dim is None, the value cannot be set without a configuration"
@@ -244,6 +273,7 @@ def get_inputs(
             )
         res = dict(inputs=inputs, dynamic_shapes=shapes)
     if add_second_input:
+        res["inputs_prompt"] = dict(input_ids=torch.randint(1000, 30000, (1, 11)))
         res["inputs2"] = get_inputs(
             model=model,
             config=config,

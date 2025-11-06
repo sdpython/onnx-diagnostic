@@ -186,7 +186,7 @@ if not os.path.exists(model_name):
 # seen earlier for a torch model.
 # Let's ask first the function to return the session to avoid creating on the second call.
 
-_res, session = onnx_generate(
+_res, session, _feeds = onnx_generate(
     model_name, inputs.input_ids, 2, max_new_tokens=2, return_session=True
 )
 

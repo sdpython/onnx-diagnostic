@@ -195,9 +195,12 @@ class patched_ShapeEnv:
         if self.frozen:
             self.counter["ignored_backward_guard"] += 1
             # PATCHED: raised an exception instead of logging.
+            import transformers
+
             raise AssertionError(
                 f"[patched_ShapeEnv] Ignored guard {expr} == {concrete_val}, "
-                f"this could result in accuracy problems"
+                f"this could result in accuracy problems, transformers.__version__="
+                f"{transformers.__version__!r}"
             )
 
     def _set_replacement(
