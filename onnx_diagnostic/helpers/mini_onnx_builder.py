@@ -52,7 +52,7 @@ def proto_from_array(
 
     tensor = TensorProto()
     tensor.dims.extend(arr_cpu.shape)
-    tensor.name = name
+    tensor.name = name or ""
     itype = dtype_to_tensor_dtype(arr_cpu.dtype)
     assert not hasattr(TensorProto, "INT4") or itype not in {
         TensorProto.INT4,

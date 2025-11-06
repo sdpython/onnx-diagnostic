@@ -10,13 +10,9 @@ from .ort_session import InferenceSessionForTorch
 
 
 def name_type_to_onnx_dtype(name: str) -> int:
-    if name == "tensor(int64)":
-        return onnx.TensorProto.INT64
-    if name == "tensor(float)":
-        return onnx.TensorProto.FLOAT
-    if name == "tensor(float16)":
-        return onnx.TensorProto.FLOAT16
-    raise AssertionError(f"Unexpected value {name!r}")
+    assert name.startswith("tensor(") and name.endswith(")"), f"Invalid value name={name!r}"
+    look = name[7:-1]
+    return getattr(onnx.TensorProto, look.upper())
 
 
 def make_feeds(

@@ -183,6 +183,7 @@ class TestLogHelper(ExtTestCase):
                     ["version.*", "model.*"],
                     ["time_latency", "time_baseline"],
                     key_agg=["model_name"],
+                    plots=True,
                 ),
             },
             verbose=1,
@@ -523,6 +524,14 @@ class TestLogHelper(ExtTestCase):
         self.assertEqual(sbs_agg.shape, (2, 11))
         self.assertEqual(sbs_agg.index.names, ["date", "METRICS"])
         self.assertEqual(sorted(sbs_agg.columns.names), ["CONF", "exporter"])
+        output = self.get_dump_file("test_cube_sbs_no_time.xlsx")
+        cube.to_excel(
+            output,
+            views=["time_p"],
+            time_mask=True,
+            verbose=0,
+            sbs=dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O")),
+        )
 
     def test_cube_sbs_with_time(self):
         df = pandas.DataFrame(

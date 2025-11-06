@@ -1169,7 +1169,8 @@ class CubeLogs:
             assuming they should remain stale
         :param sbs: configurations to compare side-by-side, this adds two tabs,
             one gathering raw data about the two configurations, the other one
-            is aggregated by metrics
+            is aggregated by metrics, example:
+            ``=dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))``
         """
         if verbose:
             print(f"[CubeLogs.to_excel] create Excel file {output}, shape={self.shape}")

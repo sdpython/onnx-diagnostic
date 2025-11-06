@@ -9,10 +9,22 @@ from onnx_diagnostic.ext_test_case import (
     ignore_warnings,
     requires_cuda,
 )
-from onnx_diagnostic.helpers.memory_peak import get_memory_rss, start_spying_on
+from onnx_diagnostic.helpers.memory_peak import get_memory_rss, start_spying_on, Monitor
 
 
 class TestMemoryPeak(ExtTestCase):
+    def test_basic(self):
+        m = Monitor()
+        self.assertEqual(
+            repr(m),
+            "Monitor(begin=0, end=0, peak=0, average=0, n=0, d_end=0, d_peak=0, d_avg=0)",
+        )
+        m.update(1)
+        self.assertEqual(
+            repr(m),
+            "Monitor(begin=1, end=1, peak=1, average=1, n=1, d_end=0, d_peak=0, d_avg=0.0)",
+        )
+
     @skipif_ci_apple("stuck")
     def test_memory(self):
         mem = get_memory_rss(os.getpid())

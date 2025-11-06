@@ -1,9 +1,12 @@
 import unittest
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.helpers.args_helper import get_parsed_args
+from onnx_diagnostic.helpers.args_helper import get_parsed_args, check_cuda_availability
 
 
 class TestHelpers(ExtTestCase):
+    def test_check_cuda_availability(self):
+        check_cuda_availability()
+
     def test_args(self):
         try:
             args = get_parsed_args(

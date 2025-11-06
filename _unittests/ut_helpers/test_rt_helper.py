@@ -1,5 +1,6 @@
 import os
 import unittest
+import onnx
 import torch
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
@@ -12,6 +13,7 @@ from onnx_diagnostic.helpers.rt_helper import (
     onnx_generate,
     generate_and_validate,
     onnx_generate_with_genai,
+    name_type_to_onnx_dtype,
 )
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -75,6 +77,12 @@ class TestRtSession(ExtTestCase):
         )
         self.assertNotEmpty(session)
         self.assertEqualArray(expected, res)
+
+    def test_name_type_to_onnx_dtype(self):
+        for name in ["int64", "int32", "int64", "float16", "float", "double", "bfloat16"]:
+            look = f"tensor({name})"
+            expected = getattr(onnx.TensorProto, name.upper())
+            self.assertEqual(expected, name_type_to_onnx_dtype(look))
 
 
 if __name__ == "__main__":

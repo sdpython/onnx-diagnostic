@@ -9,11 +9,15 @@ from onnx_diagnostic.helpers.bench_run import (
     get_machine,
     make_configs,
     run_benchmark,
+    _clean_string,
 )
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyValue
 
 
 class TestBenchRun(ExtTestCase):
+    def test__clean_string(self):
+        self.assertEqual("r", _clean_string("r"))
+
     def test_reg(self):
         text = ":m,6;"
         m = _extract_metrics(text)

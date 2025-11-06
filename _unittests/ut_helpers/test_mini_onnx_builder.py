@@ -1,11 +1,13 @@
 import unittest
 import numpy as np
+import onnx
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 from onnx_diagnostic.helpers.mini_onnx_builder import (
     create_onnx_model_from_input_tensors,
     create_input_tensors_from_onnx_model,
+    proto_from_array,
     MiniOnnxBuilder,
 )
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyValue
@@ -13,6 +15,13 @@ from onnx_diagnostic.helpers import string_type
 
 
 class TestMiniOnnxBuilder(ExtTestCase):
+    def test_proto_from_array(self):
+        self.assertRaise(lambda: proto_from_array(None), TypeError)
+        t = torch.tensor([[0, 2.0], [3, 0]]).to_sparse()
+        self.assertRaise(lambda: proto_from_array(t), NotImplementedError)
+        tp = proto_from_array(torch.tensor([[0, 2.0], [3, 0]]).to(torch.bfloat16))
+        self.assertEqual(tp.data_type, onnx.TensorProto.BFLOAT16)
+
     def test_mini_onnx_builder_sequence_onnx(self):
         builder = MiniOnnxBuilder()
         builder.append_output_sequence("name", [np.array([6, 7])])
@@ -30,6 +39,25 @@ class TestMiniOnnxBuilder(ExtTestCase):
         ref = InferenceSession(onx.SerializeToString(), providers=["CPUExecutionProvider"])
         got = ref.run(None, {})
         self.assertEqualAny([np.array([6, 7])], got[0])
+
+    def test_mini_onnx_builder_sequence_ort_randomize(self):
+        from onnxruntime import InferenceSession
+
+        builder = MiniOnnxBuilder()
+        builder.append_output_initializer(
+            "name1", np.array([6, 7], dtype=np.float32), randomize=True
+        )
+        builder.append_output_initializer(
+            "name2", np.array([-6, 7], dtype=np.float32), randomize=True
+        )
+        onx = builder.to_onnx()
+        ref = InferenceSession(onx.SerializeToString(), providers=["CPUExecutionProvider"])
+        got = ref.run(None, {})
+        self.assertEqual((2,), got[0].shape)
+        self.assertEqual(np.float32, got[0].dtype)
+        self.assertGreaterOrEqual(got[0].min(), 0)
+        self.assertEqual((2,), got[1].shape)
+        self.assertEqual(np.float32, got[1].dtype)
 
     def test_mini_onnx_builder(self):
         data = [

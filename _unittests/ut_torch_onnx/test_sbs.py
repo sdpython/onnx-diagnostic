@@ -48,7 +48,7 @@ class TestSideBySide(ExtTestCase):
                 verbose=1,
             ),
         )
-        self.assertEqual(len(results), 4)
+        self.assertEqual(len(results), 5)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))

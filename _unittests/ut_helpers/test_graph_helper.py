@@ -33,6 +33,8 @@ class TestGraphHelper(ExtTestCase):
             proto.graph.node, [i.name for i in [*proto.graph.input, *proto.graph.initializer]]
         )
         self.assertEqual([1, 2, 3], order)
+        gr = GraphRendering(proto)
+        self.assertEqual(repr(gr), "GraphRendering(<ModelProto>)")
 
     def test_graph_positions1(self):
         proto = oh.make_model(
