@@ -1169,7 +1169,8 @@ class CubeLogs:
             assuming they should remain stale
         :param sbs: configurations to compare side-by-side, this adds two tabs,
             one gathering raw data about the two configurations, the other one
-            is aggregated by metrics
+            is aggregated by metrics, example:
+            ``=dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O"))``
         """
         if verbose:
             print(f"[CubeLogs.to_excel] create Excel file {output}, shape={self.shape}")
@@ -1611,6 +1612,7 @@ class CubeLogsPerformance(CubeLogs):
             "n_node_initializer_small",
             "n_node_layer_normalization",
             "n_node_layer_normalization23",
+            "n_node_random",
             "n_node_reshape",
             "n_node_rotary_embedding",
             "n_node_rotary_embedding23",
@@ -1801,6 +1803,16 @@ class CubeLogsPerformance(CubeLogs):
                     + gdf(df, "op_onnx__BatchNormlization", 0)
                     + gdf(df, "op_onnx__InstanceNormlization", 0)
                     + gdf(df, "op_onnx__GroupNormalization", 0),
+                ),
+                n_node_random=lambda df: gpreserve(
+                    df,
+                    "time_latency_eager",
+                    gdf(df, "op_onnx__RandomNormal", 0)
+                    + gdf(df, "op_onnx__RandomNormalLike", 0)
+                    + gdf(df, "op_onnx__RandomUniform", 0)
+                    + gdf(df, "op_onnx__RandomUniformLike", 0)
+                    + gdf(df, "op_onnx__Multinomial", 0)
+                    + gdf(df, "op_onnx__Bernoulli", 0),
                 ),
                 n_node_attention=lambda df: gpreserve(
                     df,

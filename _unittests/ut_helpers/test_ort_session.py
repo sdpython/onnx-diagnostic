@@ -295,6 +295,22 @@ class TestOrtSession(ExtTestCase):
         self.assertIsInstance(got[0], torch.Tensor)
         self.assertEqualArray(expected[0], got[0])
 
+    def test_profiling(self):
+        model, feeds, expected = self._get_model_init(onnx.TensorProto.BFLOAT16)
+        wrap = InferenceSessionForTorch(
+            model,
+            providers="cpu",
+            graph_optimization_level=False,
+            enable_profiling=True,
+            optimized_model_filepath=self.get_dump_file("test_init_torch_bfloat16.onnx"),
+            log_severity_level=2,
+            log_verbosity_level=2,
+            disable_aot_function_inlining=1,
+        )
+        got = wrap.run(None, feeds)
+        self.assertIsInstance(got[0], torch.Tensor)
+        self.assertEqualArray(expected[0], got[0])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

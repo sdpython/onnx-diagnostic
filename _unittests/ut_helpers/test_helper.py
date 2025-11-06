@@ -62,19 +62,21 @@ class TestHelpers(ExtTestCase):
         s = string_type(obj)
         self.assertEqual(s, "dict(a:A7r1,b:#1[float],c:(int,))")
 
+    @hide_stdout()
     def test_string_dict(self):
         a = np.array([1], dtype=np.float32)
         obj = {"a": a, "b": {"r": 5.6}, "c": {1}}
-        s = string_type(obj)
+        s = string_type(obj, verbose=10)
         self.assertEqual(s, "dict(a:A1r1,b:dict(r:float),c:{int})")
 
+    @hide_stdout()
     def test_string_type_array(self):
         a = np.array([1], dtype=np.float32)
         t = torch.tensor([1])
         obj = {"a": a, "b": t}
-        s = string_type(obj, with_shape=False)
+        s = string_type(obj, with_shape=False, verbose=10)
         self.assertEqual(s, "dict(a:A1r1,b:T7r1)")
-        s = string_type(obj, with_shape=True)
+        s = string_type(obj, with_shape=True, verbose=10)
         self.assertEqual(s, "dict(a:A1s1,b:T7s1)")
 
     def test_string_sig_f(self):
@@ -91,6 +93,17 @@ class TestHelpers(ExtTestCase):
 
         ssig = string_sig(A(1, c=8))
         self.assertEqual(ssig, "A(a=1, c=8)")
+
+    def test_ort_value(self):
+        import onnxruntime as onnxrt
+
+        numpy_arr_input = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
+        ortvalue = onnxrt.OrtValue.ortvalue_from_numpy(numpy_arr_input)
+        self.assertEqual("OV1r2", string_type(ortvalue))
+        self.assertEqual("OV1s3x2", string_type(ortvalue, with_shape=True))
+        self.assertEqual(
+            "OV(NO-NUMPY:FIXIT)", string_type(ortvalue, with_shape=True, with_min_max=True)
+        )
 
     def test_pretty_onnx(self):
         proto = oh.make_model(
@@ -122,7 +135,8 @@ class TestHelpers(ExtTestCase):
                 [
                     oh.make_node("Sigmoid", ["Y"], ["sy"]),
                     oh.make_node("Mul", ["Y", "sy"], ["ysy"]),
-                    oh.make_node("Mul", ["X", "ysy"], ["final"]),
+                    oh.make_node("Cast", ["ysy"], ["ysyy"], to=1),
+                    oh.make_node("Mul", ["X", "ysyy"], ["final"]),
                 ],
                 "-nd-",
                 [

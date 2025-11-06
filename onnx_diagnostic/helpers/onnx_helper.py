@@ -331,7 +331,7 @@ def onnx_dtype_name(itype: int, exc: bool = True) -> str:
         print(onnx_dtype_name(7))
     """
     for k in dir(TensorProto):
-        if "FLOAT" in k or "INT" in k or "TEXT" in k or "BOOL" in k:
+        if k.upper() == k and k != "EXTERNAL":
             v = getattr(TensorProto, k)
             if v == itype:
                 return k

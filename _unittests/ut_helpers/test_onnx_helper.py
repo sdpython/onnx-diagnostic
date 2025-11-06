@@ -18,6 +18,7 @@ from onnx_diagnostic.helpers.onnx_helper import (
     tensor_statistics,
     enumerate_results,
     shadowing_names,
+    onnx_dtype_name,
 )
 
 
@@ -295,6 +296,7 @@ class TestOnnxHelper(ExtTestCase):
         self.assertEqual(2, len(list(enumerate_results(model, "X", verbose=2))))
         self.assertEqual(2, len(list(enumerate_results(model, "Z", verbose=2))))
 
+    @hide_stdout()
     def test_enumerate_results_loop(self):
         x = np.array([1, 2, 3, 4, 5]).astype(np.float32)
 
@@ -466,6 +468,13 @@ class TestOnnxHelper(ExtTestCase):
             ),
             shadowing_names(model),
         )
+
+    def test_onnx_dtype_name(self):
+        for k in dir(TensorProto):
+            if k.upper() == k and k not in {"DESCRIPTOR", "EXTERNAL"}:
+                self.assertEqual(k, onnx_dtype_name(getattr(TensorProto, k)))
+        self.assertRaise(lambda: onnx_dtype_name(1000), ValueError)
+        self.assertEqual(onnx_dtype_name(1000, exc=False), "UNEXPECTED")
 
 
 if __name__ == "__main__":

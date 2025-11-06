@@ -47,6 +47,8 @@ class Monitor:
 
     @property
     def delta_avg(self):
+        if self.n_measures == 0:
+            return 0
         return self.average / self.n_measures - self.begin
 
     def __repr__(self):

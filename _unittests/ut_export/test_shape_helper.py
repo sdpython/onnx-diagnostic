@@ -106,9 +106,14 @@ class TestShapeHelper(ExtTestCase):
         ]
         with torch_export_patches(patch_transformers=True):
             for cache, exds in caches:
-                with self.subTest(cache_name=cache.__class__.__name__):
+                with self.subTest(cache_name=cache.__class__.__name__, patch=True):
                     ds = all_dynamic_shapes_from_inputs(cache)
                     self.assertEqual(exds, ds)
+
+        for cache, exds in caches:
+            with self.subTest(cache_name=cache.__class__.__name__, patch=False):
+                ds = all_dynamic_shapes_from_inputs(cache)
+                self.assertEqual(exds, ds)
 
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
