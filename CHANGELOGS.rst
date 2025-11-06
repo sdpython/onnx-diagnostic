@@ -4,6 +4,7 @@ Change Logs
 0.8.1
 +++++
 
+* :pr:`287`: adds input ``'inputs_prompt'`` to test a LLM
 * :pr:`286`: adds variable to track random nodes in models
 
 0.8.0
