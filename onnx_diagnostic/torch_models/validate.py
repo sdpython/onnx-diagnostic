@@ -1463,6 +1463,9 @@ def validate_onnx_model(
     if verbose:
         print(f"[validate_onnx_model] -- keys={keys}")
     for k_input, k_expected, suffix in keys:
+        if k_input == "inputs_prompt":
+            # this must used onnx_generate
+            continue
         # make_feeds
         assert k_input in data, f"Unable to find {k_input!r} in {sorted(data)}"
         assert k_expected in data, f"Unable to find {k_expected!r} in {sorted(data)}"
