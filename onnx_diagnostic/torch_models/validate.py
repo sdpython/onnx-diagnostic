@@ -1574,6 +1574,7 @@ def call_torch_export_onnx(
         another one with whatever the function produces
     """
     available = {None, "", "ir", "os_ort", "ir+default"}
+    exporter_options = exporter_options or {}
     assert (
         optimization in available
     ), f"unexpected value for optimization={optimization}, available={available}"
