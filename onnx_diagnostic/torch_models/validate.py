@@ -344,6 +344,7 @@ def validate_model(
     ortfusiontype: Optional[str] = None,
     input_options: Optional[Dict[str, Any]] = None,
     model_options: Optional[Dict[str, Any]] = None,
+    exporter_options: Optional[Dict[str, Any]] = None,
     subfolder: Optional[str] = None,
     opset: Optional[int] = None,
     runtime: str = "onnxruntime",
@@ -394,6 +395,8 @@ def validate_model(
         used to export
     :param model_options: additional options when creating the model such as
         ``num_hidden_layers`` or ``attn_implementation``
+    :param exporter_options: additional options when exporting the model such as
+        ``report=True`` or ``verify=True``
     :param subfolder: version or subfolders to uses when retrieving a model id
     :param opset: onnx opset to use for the conversion
     :param runtime: onnx runtime to use to check about discrepancies,
@@ -473,6 +476,10 @@ def validate_model(
             version_exporter=exporter or "",
             version_runtime=runtime,
             version_inputs2=inputs2,
+            version_input_options=str(input_options),
+            version_drop_input=str(drop_inputs),
+            version_model_options=str(model_options),
+            version_exporter_options=str(exporter_options),
             time_preprocess_model_id=time_preprocess_model_id,
         )
     )
@@ -722,10 +729,14 @@ def validate_model(
         summary["time_total_validation_torch"] = time.perf_counter() - validation_begin
 
     if exporter:
-        print(
-            f"[validate_model] -- export the model with {exporter!r}, "
-            f"optimization={optimization!r}"
-        )
+        expop = exporter_options or {}
+        if verbose:
+            print(
+                f"[validate_model] -- export the model with {exporter!r}, "
+                f"optimization={optimization!r}"
+            )
+            if expop:
+                print(f"[validate_model] -- exporter options {expop}")
         exporter_begin = time.perf_counter()
         if patch_kwargs:
             if verbose:
@@ -755,6 +766,7 @@ def validate_model(
                     do_run=do_run,
                     dump_folder=dump_folder,
                     output_names=output_names,
+                    exporter_options=expop,
                 )
         else:
             data["inputs_export"] = data["inputs"]
@@ -768,6 +780,7 @@ def validate_model(
                 do_run=do_run,
                 dump_folder=dump_folder,
                 output_names=output_names,
+                exporter_options=expop,
             )
 
         summary.update(summary_export)
@@ -1105,6 +1118,7 @@ def call_exporter(
     do_run: bool = False,
     dump_folder: Optional[str] = None,
     output_names: Optional[List[str]] = None,
+    exporter_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Calls an exporter on a model;
@@ -1118,6 +1132,7 @@ def call_exporter(
     :param do_run: runs and compute discrepancies
     :param dump_folder: to dump additional information
     :param output_names: list of output names to use with the onnx exporter
+    :param exporter_options: exporter options
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1133,6 +1148,7 @@ def call_exporter(
             verbose=verbose,
             optimization=optimization,
             do_run=do_run,
+            exporter_options=exporter_options,
         )
         _restore_torch_export_export(summary)
         return summary, data
@@ -1145,6 +1161,7 @@ def call_exporter(
             verbose=verbose,
             optimization=optimization,
             output_names=output_names,
+            exporter_options=exporter_options,
         )
         _restore_torch_export_export(summary)
         return summary, data
@@ -1158,6 +1175,7 @@ def call_exporter(
             optimization=optimization,
             dump_folder=dump_folder,
             output_names=output_names,
+            exporter_options=exporter_options,
         )
         _restore_torch_export_export(summary)
         return summary, data
@@ -1170,6 +1188,7 @@ def call_exporter(
             verbose=verbose,
             optimization=optimization,
             output_names=output_names,
+            exporter_options=exporter_options,
         )
         _restore_torch_export_export(summary)
         return summary, data
@@ -1189,6 +1208,7 @@ def call_torch_export_export(
     verbose: int = 0,
     optimization: Optional[str] = None,
     do_run: bool = False,
+    exporter_options: Optional[Dict[str, Any]] = None,
 ):
     """
     Exports a model with :func:`torch.export.export`.
@@ -1201,9 +1221,11 @@ def call_torch_export_export(
     :param verbose: verbosity
     :param optimization: optimization to do
     :param do_run: runs and compute discrepancies
+    :param exporter_options: additional options given to the exporter
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
+    exporter_options = exporter_options or {}
     assert exporter in {
         "export",
         "export-strict",
@@ -1212,8 +1234,12 @@ def call_torch_export_export(
     assert not optimization, f"No optimization is implemented for exporter={exporter!r}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
+    assert ("-strict" in exporter) ^ ("strict" in exporter_options), (
+        f"Options strict cannot be specified in the exporter name {exporter!r} "
+        f"and in the options {exporter_options}"
+    )
     summary: Dict[str, Union[str, int, float]] = {}
-    strict = "-strict" in exporter
+    strict = "-strict" in exporter or exporter_options.pop("strict", False)
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
 
@@ -1223,6 +1249,7 @@ def call_torch_export_export(
     summary["export_args"] = string_type(args, with_shape=True)
     summary["export_kwargs"] = string_type(kwargs, with_shape=True)
     summary["export_dynamic_shapes"] = string_type(ds)
+    summary["export_options"] = str(exporter_options)
 
     # There is an issue with DynamicShape [[],[]] becomes []
     dse = use_dyn_not_str(ds)
@@ -1249,7 +1276,9 @@ def call_torch_export_export(
         data,
         (
             lambda m=model, args=args, kws=kwargs, dse=dse, s=strict: (
-                torch.export.export(m, args, kwargs=kws, dynamic_shapes=dse, strict=s)
+                torch.export.export(
+                    m, args, kwargs=kws, dynamic_shapes=dse, strict=s, **exporter_options
+                )
             )
         ),
     )
@@ -1527,6 +1556,7 @@ def call_torch_export_onnx(
     verbose: int = 0,
     optimization: Optional[str] = None,
     output_names: Optional[List[str]] = None,
+    exporter_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx.
@@ -1539,6 +1569,7 @@ def call_torch_export_onnx(
     :param verbose: verbosity
     :param optimization: optimization to do
     :param output_names: output names to use
+    :param exporter_options: addional options to give the exporter
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1570,6 +1601,7 @@ def call_torch_export_onnx(
     summary["export_dynamo"] = dynamo
     summary["export_args"] = string_type(args, with_shape=True)
     summary["export_kwargs"] = string_type(kwargs, with_shape=True)
+    summary["export_exporter"] = str(exporter_options)
     opset = data.get("model_opset", None)
     if opset:
         summary["export_opset"] = opset
@@ -1597,6 +1629,11 @@ def call_torch_export_onnx(
         export_export_kwargs["output_names"] = output_names
     if opset:
         export_export_kwargs["opset_version"] = opset
+    assert not (set(export_export_kwargs) & set(exporter_options)), (
+        f"Some options were defined twice, "
+        f"{set(export_export_kwargs) & set(exporter_options)}, "
+        f"you should remove them from exporter_options={exporter_options}"
+    )
     if verbose:
         print(
             f"[call_torch_export_onnx] export_export_kwargs="
@@ -1616,6 +1653,7 @@ def call_torch_export_onnx(
                     args,
                     kwargs=kws,
                     **ekws,
+                    **exporter_options,
                 )
             )
         ),
@@ -1688,6 +1726,7 @@ def call_torch_export_model_builder(
     verbose: int = 0,
     optimization: Optional[str] = None,
     output_names: Optional[List[str]] = None,
+    exporter_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx with :epkg:`ModelBuilder`.
@@ -1699,11 +1738,13 @@ def call_torch_export_model_builder(
     :param verbose: verbosity
     :param optimization: optimization to do
     :param output_names: list of output names to use
+    :param exporter_options: additional options to give the exporter
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
     from ..helpers.model_builder_helper import create_model_builder, save_model_builder
 
+    exporter_options = exporter_options or {}
     assert optimization in (
         None,
         "",
@@ -1731,7 +1772,12 @@ def call_torch_export_model_builder(
             ], p=precision, pr=provider, cd=cache_dir: (
                 save_model_builder(
                     create_model_builder(
-                        c, m, precision=p, execution_provider=pr, cache_dir=cd
+                        c,
+                        m,
+                        precision=p,
+                        execution_provider=pr,
+                        cache_dir=cd,
+                        **exporter_options,
                     )
                 )
             )
@@ -1848,6 +1894,7 @@ def call_torch_export_custom(
     optimization: Optional[str] = None,
     dump_folder: Optional[str] = None,
     output_names: Optional[List[str]] = None,
+    exporter_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx.
@@ -1861,9 +1908,11 @@ def call_torch_export_custom(
     :param optimization: optimization to do
     :param dump_folder: to store additional information
     :param output_names: list of output names to use
+    :param exporter_options: additional exporter options
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
+    exporter_options = exporter_options or {}
     available = {
         "",
         "default",
@@ -1899,11 +1948,20 @@ def call_torch_export_custom(
     assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
+    assert ("-strict" in exporter) ^ ("strict" in exporter_options), (
+        f"Options strict cannot be specified in the exporter name {exporter!r} "
+        f"and in the options {exporter_options}"
+    )
+    assert ("-fake" in exporter) ^ ("fake" in exporter_options), (
+        f"Options strict cannot be specified in the exporter name {exporter!r} "
+        f"and in the options {exporter_options}"
+    )
     summary: Dict[str, Union[str, int, float]] = {}
-    strict = "-strict" in exporter
+    strict = "-strict" in exporter or exporter_options.pop("strict", False)
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
-    if "-fake" in exporter:
+    fake = "-fake" in exporter or exporter_options.pop("fake", False)
+    if fake:
         from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
 
         if verbose:
@@ -1926,8 +1984,10 @@ def call_torch_export_custom(
     summary["export_exporter"] = exporter
     summary["export_optimization"] = optimization or ""
     summary["export_strict"] = strict
+    summary["export_fake"] = fake
     summary["export_args"] = string_type(args, with_shape=True)
     summary["export_kwargs"] = string_type(kwargs, with_shape=True)
+    summary["export_options"] = str(exporter_options)
 
     from experimental_experiment.torch_interpreter import to_onnx, ExportOptions
     from experimental_experiment.xbuilder import OptimizationOptions
@@ -1935,17 +1995,35 @@ def call_torch_export_custom(
     spl = optimization.split("+") if optimization else []
     os_ort = "os_ort" in spl
     optimization = "+".join(_ for _ in spl if _ != "os_ort")
-
-    export_options = ExportOptions(
-        strict=strict,
-        decomposition_table=(
+    inline = "-noinline" not in exporter or exporter_options.pop("inline", True)
+    decomposition_table = (
+        exporter_options.pop("decomposition_table")
+        if "decomposition_table" in exporter_options
+        else (
             "default"
             if ("-default" in exporter or "-dec" in exporter)
             else ("all" if ("-all" in exporter or "-decall" in exporter) else None)
-        ),
-        save_ep=(os.path.join(dump_folder, f"{exporter}.ep") if dump_folder else None),
+        )
     )
-    inline = "-noinline" not in exporter
+    large_model = bool(exporter_options.pop("large_model", True))
+    return_optimize_report = bool(exporter_options.pop("return_optimize_report", True))
+    export_modules_as_functions = bool(
+        exporter_options.pop("export_modules_as_functions", False)
+    )
+    external_threshold = int(exporter_options.pop("external_threshold", 1024))
+    summary["export_decomposition_table"] = str(decomposition_table)
+    summary["export_inline"] = str(inline)
+    summary["export_large_model"] = str(large_model)
+    summary["export_return_optimize_report"] = str(return_optimize_report)
+    summary["export_export_modules_as_functions"] = str(export_modules_as_functions)
+    summary["export_external_threshold"] = str(external_threshold)
+
+    export_options = ExportOptions(
+        strict=strict,
+        decomposition_table=decomposition_table,
+        save_ep=(os.path.join(dump_folder, f"{exporter}.ep") if dump_folder else None),
+        **exporter_options,
+    )
     options = OptimizationOptions(patterns=optimization) if optimization else None
     model = data["model"]
     kws = dict(
@@ -1953,10 +2031,12 @@ def call_torch_export_custom(
         export_options=export_options,
         options=options,
         optimize=bool(optimization),
-        large_model=True,
-        return_optimize_report=True,
         verbose=max(verbose - 2, 0),
         inline=inline,
+        large_model=large_model,
+        return_optimize_report=return_optimize_report,
+        export_modules_as_functions=export_modules_as_functions,
+        external_threshold=external_threshold,
     )
     if opset:
         kws["target_opset"] = opset
