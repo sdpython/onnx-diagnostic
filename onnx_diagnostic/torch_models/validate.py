@@ -1,11 +1,11 @@
-import gc
 import datetime
+import gc
 import inspect
 import os
 import pprint
 import sys
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 import time
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 import numpy as np
 import onnx
 import torch
@@ -273,8 +273,8 @@ def _quiet_or_not_quiet(
         summary[f"time_{suffix}_latency_std"] = a.std()
         summary[f"time_{suffix}_latency_min"] = a.min()
         summary[f"time_{suffix}_latency_max"] = a.max()
-        summary[f"time_{suffix}_latency_098"] = a[-i2]
-        summary[f"time_{suffix}_latency_095"] = a[-i5]
+        summary[f"time_{suffix}_latency_098"] = a[-(max(i2, 1))]
+        summary[f"time_{suffix}_latency_095"] = a[-max(i5, 1)]
         summary[f"time_{suffix}_latency_005"] = a[i5]
         summary[f"time_{suffix}_latency_002"] = a[i2]
         summary[f"time_{suffix}_n"] = len(a)
@@ -995,7 +995,8 @@ def _clean_data_remove_model_and_proto(data, summary):
 
 
 def _clean_data_remove_model_and_proto_(obj):
-    if isinstance(obj, dict):
+    if type(obj) is dict:
+        # do not use isinstance otherwise CausalLMOutputWithPast becomes a dictionary
         return {k: _clean_data_remove_model_and_proto_(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_clean_data_remove_model_and_proto_(v) for v in obj]
@@ -1352,7 +1353,6 @@ def _validate_do_run_model(
 
 
 def _validate_do_run_exported_program(data, summary, verbose, quiet):
-
     # We run a second time the model to check the patch did not
     # introduce any discrepancies
     if verbose:
@@ -1377,7 +1377,13 @@ def _validate_do_run_exported_program(data, summary, verbose, quiet):
     if "ERR_run_patched" in summary:
         return summary, data
 
-    disc = max_diff(data["run_expected"], expected)
+    verbose_diff = int(os.environ.get("MAXDIFF", "0"))
+    if verbose_diff >= 10:
+        print("[_validate_do_run_exported_program] with inputs_export")
+    disc = max_diff(data["run_expected"], expected, verbose=verbose_diff)
+    assert not verbose_diff or (
+        not np.isnan(disc["abs"]) and not np.isinf(disc["abs"])
+    ), f"something went wrong disc={disc}"
     for k, v in disc.items():
         summary[f"disc_patched_{k}"] = str(v)
     if verbose:
@@ -1622,7 +1628,14 @@ def call_torch_export_export(
         if "ERR_export_export" in summary:
             return summary, data
 
-        disc = max_diff(data["run_expected"], expected)
+        verbose_diff = int(os.environ.get("MAXDIFF", "0"))
+        if verbose_diff >= 10:
+            print("[call_torch_export_export] with inputs_export")
+        disc = max_diff(data["run_expected"], expected, verbose=verbose_diff)
+        assert not verbose_diff or (
+            not np.isnan(disc["abs"]) and not np.isinf(disc["abs"])
+        ), f"something went wrong disc={disc}"
+
         for k, v in disc.items():
             summary[f"disc_exported_{k}"] = str(v)
         if verbose:
@@ -1842,7 +1855,16 @@ def validate_onnx_model(
             print(f"[validate_onnx_model] got={string_type(got, with_shape=True)}")
 
         # compute discrepancies
-        disc = max_diff(data[k_expected], got, flatten=True)
+        verbose_diff = int(os.environ.get("MAXDIFF", "0"))
+        if verbose_diff >= 10:
+            print(
+                f"[validate_onnx_model] k_input={k_input!r}, "
+                f"k_expected={k_expected!r}, suffix={suffix!r}"
+            )
+        disc = max_diff(data[k_expected], got, flatten=True, verbose=verbose_diff)
+        assert not verbose_diff or (
+            not np.isnan(disc["abs"]) and not np.isinf(disc["abs"])
+        ), f"something went wrong disc={disc}"
         if verbose:
             print(f"[validate_onnx_model] discrepancies={string_diff(disc)}")
         for k, v in disc.items():
