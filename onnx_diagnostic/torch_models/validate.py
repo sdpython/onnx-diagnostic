@@ -1569,7 +1569,7 @@ def call_torch_export_onnx(
     :param verbose: verbosity
     :param optimization: optimization to do
     :param output_names: output names to use
-    :param exporter_options: addional options to give the exporter
+    :param exporter_options: additional options to give the exporter
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
