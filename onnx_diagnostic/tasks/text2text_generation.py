@@ -151,6 +151,7 @@ def get_inputs(
         assert (
             add_second_input > 0
         ), f"Not implemented for add_second_input={add_second_input}."
+        res["inputs_prompt"] = dict(input_ids=torch.randint(1000, 30000, (1, 11)))
         res["inputs2"] = get_inputs(
             model=model,
             config=config,

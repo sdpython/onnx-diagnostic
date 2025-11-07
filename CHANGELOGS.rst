@@ -4,6 +4,7 @@ Change Logs
 0.8.1
 +++++
 
+* :pr:`290`: adds one prompt for text2text-generation
 * :pr:`289`: adds command line options ``--exppo`` to give the exporter additional options
 * :pr:`287`: adds input ``'inputs_prompt'`` to test a LLM, meant to be used during validation
 * :pr:`288`: add .contiguous in torch.cond branch (attention patch for sdpa implementation)
