@@ -265,7 +265,7 @@ def get_parser_config() -> ArgumentParser:
         "--mop",
         metavar="KEY=VALUE",
         nargs="*",
-        help="Additional model options, use to change some parameters of the model, "
+        help="Additional model options, used to change some parameters of the model, "
         "example:\n  --mop attn_implementation=sdpa or --mop attn_implementation=eager",
         action=_ParseDict,
     )
@@ -442,11 +442,17 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         default=True,
         action=_BoolOrParseDictPatch,
         nargs="*",
-        help="Applies patches before exporting, it can be a boolean "
-        "to enable to disable the patches or be more finetuned. It is possible to "
-        "disable patch for torch by adding "
-        '--patch "patch_sympy=False" --patch "patch_torch=False", '
-        "default is True.",
+        help=textwrap.dedent(
+            """
+        Applies patches before exporting, it can be a boolean
+        to enable to disable the patches or be more finetuned
+        (default is True). It is possible to disable patch for torch
+        by adding:
+            --patch "patch_sympy=False" --patch "patch_torch=False"
+        """.strip(
+                "\n"
+            )
+        ),
     )
     parser.add_argument(
         "--rewrite",
@@ -476,10 +482,16 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         "--inputs2",
         default=1,
         type=int,
-        help="Validates or exports the model on a second set of inputs\n"
-        "to check the exported model supports dynamism. The values is used "
-        "as an increment to the first set of inputs. A high value may trick "
-        "a different behavior in the model and missed by the exporter.",
+        help=textwrap.dedent(
+            """
+        Validates or exports the model on a second set of inputs
+        to check the exported model supports dynamism. The values is used
+        as an increment to the first set of inputs. A high value may trick
+        a different behavior in the model and missed by the exporter.
+        """.strip(
+                "\n"
+            )
+        ),
     )
     parser.add_argument(
         "--runtime",
@@ -512,9 +524,15 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         parser.add_argument(
             "--ortfusiontype",
             required=False,
-            help="Applies onnxruntime fusion, this parameter should contain the\n"
-            "model type or multiple values separated by `|`. `ALL` can be used\n"
-            "to run them all.",
+            help=textwrap.dedent(
+                """
+                Applies onnxruntime fusion, this parameter should contain the
+                model type or multiple values separated by `|`. `ALL` can be used
+                to run them all.
+                """.strip(
+                    "\n"
+                )
+            ),
         )
     parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
     parser.add_argument("--dtype", help="Changes dtype if necessary.")
@@ -523,18 +541,32 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         "--iop",
         metavar="KEY=VALUE",
         nargs="*",
-        help="Additional input options, use to change the default"
-        "inputs use to export, example:\n  --iop cls_cache=SlidingWindowCache"
-        "\n  --iop cls_cache=StaticCache",
+        help=textwrap.dedent(
+            """
+        Additional input options, used to change the default
+        inputs use to export. Examples:
+            --iop cls_cache=SlidingWindowCache
+            --iop cls_cache=StaticCache
+        """.strip(
+                "\n"
+            )
+        ),
         action=_ParseDict,
     )
     parser.add_argument(
         "--mop",
         metavar="KEY=VALUE",
         nargs="*",
-        help="Additional model options, use to change some parameters of the model, "
-        "example:\n  --mop attn_implementation=sdpa --mop attn_implementation=eager\n  "
-        "--mop \"rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}\"",
+        help=textwrap.dedent(
+            """
+            Additional model options, used to change some parameters
+            of the model. Example:
+                --mop attn_implementation=sdpa --mop attn_implementation=eager"
+                --mop "rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}"
+            """.strip(
+                "\n"
+            )
+        ),
         action=_ParseDict,
     )
     if name == "validate":
@@ -566,9 +598,32 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         parser.add_argument(
             "--quiet-input-sets",
             default="",
-            help="Avoids raising an exception when an input sets does not work with "
-            "the exported model.\nExample: --quiet-input-sets=inputs,inputs22",
+            help=textwrap.dedent(
+                """
+                Avoids raising an exception when an input sets does not work with
+                the exported model. Example:
+                    --quiet-input-sets=inputs,inputs22
+                """.strip(
+                    "\n"
+                )
+            ),
         )
+    parser.add_argument(
+        "--expop",
+        metavar="KEY=VALUE",
+        nargs="*",
+        help=textwrap.dedent(
+            """
+            Additional exporter options, use to change some parameters
+            of the model. Examples:
+                --expop report=True
+                --expop report=True --expop verify=True
+            """.strip(
+                "\n"
+            )
+        ),
+        action=_ParseDict,
+    )
     return parser
 
 
@@ -634,6 +689,7 @@ def _cmd_validate(argv: List[Any]):
             output_names=(
                 None if len(args.outnames.strip()) < 2 else args.outnames.strip().split(",")
             ),
+            exporter_options=args.expop,
         )
         print("")
         print("-- summary --")
