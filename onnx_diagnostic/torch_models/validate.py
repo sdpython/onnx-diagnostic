@@ -1,11 +1,11 @@
-import gc
 import datetime
+import gc
 import inspect
 import os
 import pprint
 import sys
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 import time
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 import numpy as np
 import onnx
 import torch
@@ -273,8 +273,8 @@ def _quiet_or_not_quiet(
         summary[f"time_{suffix}_latency_std"] = a.std()
         summary[f"time_{suffix}_latency_min"] = a.min()
         summary[f"time_{suffix}_latency_max"] = a.max()
-        summary[f"time_{suffix}_latency_098"] = a[-i2]
-        summary[f"time_{suffix}_latency_095"] = a[-i5]
+        summary[f"time_{suffix}_latency_098"] = a[-(max(i2, 1))]
+        summary[f"time_{suffix}_latency_095"] = a[-max(i5, 1)]
         summary[f"time_{suffix}_latency_005"] = a[i5]
         summary[f"time_{suffix}_latency_002"] = a[i2]
         summary[f"time_{suffix}_n"] = len(a)
@@ -321,6 +321,483 @@ def make_patch_kwargs(
         f"if --patch=0 was specified on the command line, rewrites are disabled."
     )
     return patch_kwargs
+
+
+def _prepare_validation(
+    model_id,
+    subfolder,
+    same_as_pretrained,
+    use_pretrained,
+    patch,
+    rewrite,
+    do_run,
+    dtype,
+    device,
+    optimization,
+    quiet,
+    drop_inputs,
+    ortfusiontype,
+    stop_if_static,
+    exporter,
+    runtime,
+    inputs2,
+    input_options,
+    model_options,
+    exporter_options,
+    opset,
+    task,
+    verbose,
+    output_names,
+    dump_folder,
+):
+    main_validation_begin = time.perf_counter()
+    model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
+        model_id,
+        subfolder,
+        same_as_pretrained=same_as_pretrained,
+        use_pretrained=use_pretrained,
+    )
+    time_preprocess_model_id = time.perf_counter() - main_validation_begin
+    patch_kwargs = make_patch_kwargs(patch=patch, rewrite=rewrite)
+
+    summary = version_summary()
+    summary.update(
+        dict(
+            version_model_id=model_id,
+            version_do_run=str(do_run),
+            version_dtype=str(dtype or ""),
+            version_device=str(device or ""),
+            version_same_as_pretrained=str(same_as_pretrained),
+            version_use_pretrained=str(use_pretrained),
+            version_optimization=optimization or "",
+            version_quiet=str(quiet),
+            version_patch=str(patch),
+            version_patch_kwargs=str(patch_kwargs).replace(" ", ""),
+            version_rewrite=str(rewrite),
+            version_dump_folder=dump_folder or "",
+            version_drop_inputs=str(list(drop_inputs or "")),
+            version_ortfusiontype=ortfusiontype or "",
+            version_stop_if_static=str(stop_if_static),
+            version_exporter=exporter or "",
+            version_runtime=runtime,
+            version_inputs2=inputs2,
+            version_input_options=str(input_options),
+            version_drop_input=str(drop_inputs),
+            version_model_options=str(model_options),
+            version_exporter_options=str(exporter_options),
+            time_preprocess_model_id=time_preprocess_model_id,
+        )
+    )
+    if opset:
+        summary["version_opset"] = opset
+
+    folder_name = None
+    if dump_folder:
+        folder_name = _make_folder_name(
+            model_id,
+            exporter,
+            optimization,
+            dtype=dtype,
+            device=device,
+            subfolder=subfolder,
+            opset=opset,
+            drop_inputs=drop_inputs,
+            use_pretrained=use_pretrained,
+            same_as_pretrained=same_as_pretrained,
+            task=task,
+        )
+        dump_folder = os.path.join(dump_folder, folder_name)
+        if not os.path.exists(dump_folder):
+            os.makedirs(dump_folder)
+        summary["dump_folder"] = dump_folder
+        summary["dump_folder_name"] = folder_name
+        if verbose:
+            print(f"[validate_model] dump into {folder_name!r}")
+
+    if verbose:
+        if subfolder:
+            print(f"[validate_model] validate model id {model_id!r}, subfolder={subfolder!r}")
+        else:
+            print(f"[validate_model] validate model id {model_id!r}")
+        if task:
+            print(f"[validate_model] with task {task!r}")
+        print(f"[validate_model] patch={patch!r}")
+        if model_options:
+            print(f"[validate_model] model_options={model_options!r}")
+        print(f"[validate_model] get dummy inputs with input_options={input_options}...")
+        print(
+            f"[validate_model] rewrite={rewrite}, patch_kwargs={patch_kwargs}, "
+            f"stop_if_static={stop_if_static}"
+        )
+        print(f"[validate_model] exporter={exporter!r}, optimization={optimization!r}")
+        print(f"[validate_model] dump_folder={dump_folder!r}")
+        print(f"[validate_model] output_names={output_names}")
+        summary["model_id"] = model_id
+        summary["model_subfolder"] = subfolder or ""
+
+    return (
+        summary,
+        model_id,
+        subfolder,
+        same_as_pretrained,
+        use_pretrained,
+        dump_folder,
+        folder_name,
+        patch_kwargs,
+    )
+
+
+def _get_untrained_model_with_inputs(
+    summary,
+    model_id,
+    verbose,
+    task,
+    use_pretrained,
+    same_as_pretrained,
+    input_options,
+    model_options,
+    subfolder,
+    inputs2,
+    quiet,
+    dump_folder,
+):
+    iop = input_options or {}
+    mop = model_options or {}
+    data = _quiet_or_not_quiet(
+        quiet,
+        "create_torch_model",
+        summary,
+        None,
+        (
+            lambda mid=model_id, v=verbose, task=task, uptr=use_pretrained, tr=same_as_pretrained, iop=iop, sub=subfolder, i2=inputs2: (  # noqa: E501
+                get_untrained_model_with_inputs(
+                    mid,
+                    verbose=v,
+                    task=task,
+                    use_pretrained=uptr,
+                    same_as_pretrained=tr,
+                    inputs_kwargs=iop,
+                    model_kwargs=mop,
+                    subfolder=sub,
+                    add_second_input=i2,
+                )
+            )
+        ),
+    )
+
+    if dump_folder:
+        with open(os.path.join(dump_folder, "model_config.txt"), "w") as f:
+            f.write(f"model_id: {model_id}\n------\n")
+            f.write(
+                pprint.pformat(
+                    data["configuration"]
+                    if type(data["configuration"]) is dict
+                    else data["configuration"].to_dict()
+                )
+            )
+        dump_info = data.get("dump_info", None)
+        if dump_info:
+            with open(os.path.join(dump_folder, "model_dump_info.txt"), "w") as f:
+                f.write(f"model_id: {model_id}\n------\n")
+                f.write(pprint.pformat(dump_info))
+
+    return data, iop, mop
+
+
+def _update_data_for_modelbuilder(data, verbose):
+    # Models used with ModelBuilder do not like batch size > 1.
+    # Let's change that.
+    for k in ["inputs", "inputs2"]:
+        if k not in data:
+            continue
+        if verbose:
+            print(f"[validate_model] set batch=1 for data[{k!r}]")
+            print(f"[validate_model] batch=1 === {string_type(data[k], with_shape=True)}")
+        cpl = CoupleInputsDynamicShapes(
+            tuple(), data[k], dynamic_shapes=data["dynamic_shapes"]
+        )
+        with register_additional_serialization_functions(patch_transformers=True):  # type: ignore[arg-type]
+            data[k] = cpl.change_dynamic_dimensions(
+                desired_values=dict(batch=1), only_desired=True
+            )
+        if verbose:
+            print(f"[validate_model] batch=1 --> {string_type(data[k], with_shape=True)}")
+
+
+def _update_inputs_outputs(
+    data,
+    summary,
+    exporter,
+    iop,
+    mop,
+    dump_folder,
+    opset,
+    device,
+    dtype,
+    rewrite,
+    drop_inputs,
+    verbose,
+    second_input_keys,
+    model_id,
+):
+    # modelbuilder needs different treatments sometimes, so
+    # we mark it for later usage.
+    # for example, it has different past_kv ordering than
+    # flattened CacheObject
+    data["exporter"] = exporter
+    data["input_options"] = iop
+    data["model_options"] = mop
+    data["model_dump_folder"] = dump_folder
+    if dtype:
+        data["model_dtype"] = dtype if isinstance(dtype, str) else str(dtype)
+    if device:
+        data["model_device"] = str(device)
+    if opset:
+        data["model_opset"] = opset
+    if "rewrite" in data:
+        if rewrite:
+            summary["model_rewrite"] = str(data["rewrite"])
+            if verbose:
+                print(f"[validate_model] model_rewrite={summary['model_rewrite']}")
+        else:
+            del data["rewrite"]
+            if verbose:
+                print("[validate_model] no rewrite")
+    if os.environ.get("PRINT_CONFIG", "0") in (1, "1"):
+        print("[validate_model] -- PRINT CONFIG")
+        print("-- type(config)", type(data["configuration"]))
+        print(data["configuration"])
+        print("[validate_model] -- END PRINT CONFIG")
+    if iop:
+        summary["input_options"] = str(iop)
+    if mop:
+        summary["model_options"] = str(mop)
+    if "ERR_create" in summary:
+        return summary, data
+
+    if drop_inputs:
+        if verbose:
+            print(f"[validate_model] -- drop inputs: {drop_inputs!r}")
+            print(f"[validate_model] current inputs: {string_type(data['inputs'])}")
+            print(
+                f"[validate_model] current dynnamic_shapes: "
+                f"{string_type(data['dynamic_shapes'])}"
+            )
+        data["inputs"], data["dynamic_shapes"] = filter_inputs(
+            data["inputs"],
+            drop_names=drop_inputs,
+            model=data["model"],
+            dynamic_shapes=data["dynamic_shapes"],
+        )
+        if verbose:
+            print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
+            print(f"[validate_model] new dynamic_hapes: {string_type(data['dynamic_shapes'])}")
+        if second_input_keys:
+            for k in second_input_keys:
+                data[k], _ = filter_inputs(
+                    data[k],
+                    drop_names=drop_inputs,
+                    model=data["model"],
+                    dynamic_shapes=data["dynamic_shapes"],
+                )
+
+    if not empty(dtype):
+        if isinstance(dtype, str):
+            dtype = getattr(torch, dtype)
+        if verbose:
+            print(f"[validate_model] dtype conversion to {dtype}")
+        data["model"] = to_any(data["model"], dtype)  # type: ignore
+        data["inputs"] = to_any(data["inputs"], dtype)  # type: ignore
+        summary["model_dtype"] = str(dtype)
+        if second_input_keys:
+            for k in second_input_keys:
+                data[k] = to_any(data[k], dtype)  # type: ignore
+
+    if not empty(device):
+        if verbose:
+            print(f"[validate_model] device conversion to {device}")
+        data["model"] = to_any(data["model"], device)  # type: ignore
+        data["inputs"] = to_any(data["inputs"], device)  # type: ignore
+        summary["model_device"] = str(device)
+        if second_input_keys:
+            for k in second_input_keys:
+                data[k] = to_any(data[k], device)  # type: ignore
+
+    for k in ["task", "size", "n_weights"]:
+        summary[f"model_{k.replace('_','')}"] = data[k]
+    summary["second_input_keys"] = ",".join(second_input_keys)
+    summary["model_inputs_options"] = str(iop or "")
+    summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
+    summary["model_shapes"] = string_type(data["dynamic_shapes"])
+    summary["model_class"] = data["model"].__class__.__name__
+    summary["model_module"] = str(data["model"].__class__.__module__)
+    if summary["model_module"] in sys.modules:
+        summary["model_file"] = str(sys.modules[summary["model_module"]].__file__)  # type: ignore[index]
+    summary["model_config_class"] = data["configuration"].__class__.__name__
+    summary["model_config"] = str(
+        shrink_config(
+            data["configuration"]
+            if type(data["configuration"]) is dict
+            else data["configuration"].to_dict()
+        )
+    ).replace(" ", "")
+    summary["model_id"] = model_id
+
+
+def _verbose_validate(data, second_input_keys, verbose):
+    if verbose:
+        print("[validate_model] --")
+        print(f"[validate_model] task={data['task']}")
+        print(f"[validate_model] size={data['size'] / 2**20} Mb")
+        print(f"[validate_model] n_weights={data['n_weights'] / 1e6} millions parameters")
+        for k, v in data["inputs"].items():
+            print(f"[validate_model] +INPUT {k}={string_type(v, with_shape=True)}")
+        for k, v in data["dynamic_shapes"].items():
+            print(f"[validate_model] +SHAPE {k}={string_type(v)}")
+        print(f"[validate_model] second_input_keys={second_input_keys}")
+        print("[validate_model] --")
+
+
+def _call_exporter(
+    data,
+    summary,
+    exporter,
+    patch_kwargs,
+    stop_if_static,
+    verbose,
+    dump_folder,
+    quiet,
+    optimization,
+    do_run,
+    output_names,
+    exporter_options,
+):
+    if exporter:
+        expop = exporter_options or {}
+        if verbose:
+            print(
+                f"[validate_model] -- export the model with {exporter!r}, "
+                f"optimization={optimization!r}"
+            )
+            if expop:
+                print(f"[validate_model] -- exporter options {expop}")
+        exporter_begin = time.perf_counter()
+        if patch_kwargs:
+            if verbose:
+                print(
+                    f"[validate_model] applies patches before exporting "
+                    f"stop_if_static={stop_if_static}"
+                )
+            with torch_export_patches(  # type: ignore
+                stop_if_static=stop_if_static,
+                verbose=max(0, verbose - 1),
+                rewrite=data.get("rewrite", None),
+                dump_rewriting=(os.path.join(dump_folder, "rewrite") if dump_folder else None),
+                **patch_kwargs,  # type: ignore[arg-type]
+            ) as modificator:
+                data["inputs_export"] = modificator(data["inputs"])  # type: ignore
+
+                if do_run:
+                    _validate_do_run_exported_program(data, summary, verbose, quiet)
+
+                # data is modified inplace
+                summary_export, data = call_exporter(
+                    exporter=exporter,
+                    data=data,
+                    quiet=quiet,
+                    verbose=verbose,
+                    optimization=optimization,
+                    do_run=do_run,
+                    dump_folder=dump_folder,
+                    output_names=output_names,
+                    exporter_options=expop,
+                )
+        else:
+            data["inputs_export"] = data["inputs"]
+            # data is modified inplace
+            summary_export, data = call_exporter(
+                exporter=exporter,
+                data=data,
+                quiet=quiet,
+                verbose=verbose,
+                optimization=optimization,
+                do_run=do_run,
+                dump_folder=dump_folder,
+                output_names=output_names,
+                exporter_options=expop,
+            )
+
+        summary.update(summary_export)
+        summary["time_total_exporter"] = time.perf_counter() - exporter_begin
+
+
+def _dump_onnx_model(data, summary, dump_folder, verbose, exporter, folder_name):
+    dump_stats = None
+    if dump_folder:
+        if "exported_program" in data:
+            ep = data["exported_program"]
+            if verbose:
+                print(f"[validate_model] -- dumps exported program in {dump_folder!r}...")
+            assert isinstance(
+                folder_name, str
+            ), f"folder_name={folder_name!r} should be a string"
+            folder_name = folder_name.replace("/", "-")
+            with open(os.path.join(dump_folder, f"{folder_name}.ep"), "w") as f:
+                f.write(str(ep))
+            torch.export.save(ep, os.path.join(dump_folder, f"{folder_name}.pt2"))
+            with open(os.path.join(dump_folder, f"{folder_name}.graph"), "w") as f:
+                f.write(str(ep.graph))
+            if verbose:
+                print("[validate_model] done (dump ep)")
+        if "onnx_program" in data:
+            assert isinstance(
+                folder_name, str
+            ), f"folder_name={folder_name!r} should be a string"
+            folder_name = folder_name.replace("/", "-")
+            epo = data["onnx_program"]
+            if verbose:
+                print(f"[validate_model] dumps onnx program in {dump_folder!r}...")
+            onnx_filename = os.path.join(dump_folder, f"{folder_name}.onnx")
+            begin = time.perf_counter()
+            if isinstance(epo, onnx.model_container.ModelContainer):
+                epo.save(onnx_filename, all_tensors_to_one_file=True)
+            elif isinstance(epo, onnx.ModelProto):
+                if os.path.exists(f"{onnx_filename}.data"):
+                    os.remove(f"{onnx_filename}.data")
+                onnx.save(
+                    epo,
+                    onnx_filename,
+                    save_as_external_data=True,
+                    all_tensors_to_one_file=True,
+                    location=f"{os.path.split(onnx_filename)[-1]}.data",
+                )
+            else:
+                epo.save(onnx_filename, external_data=True)
+            duration = time.perf_counter() - begin
+            if verbose:
+                print(f"[validate_model] done (dump onnx) in {duration}")
+            data["onnx_filename"] = onnx_filename
+            summary["time_onnx_save"] = duration
+            summary.update(compute_statistics(onnx_filename))
+            del epo
+
+        if verbose:
+            print(f"[validate_model] dumps statistics in {dump_folder!r}...")
+        dump_stats = os.path.join(dump_folder, f"{folder_name}.stats")
+        with open(dump_stats, "w") as f:
+            for k, v in sorted(summary.items()):
+                f.write(f":{k}:{v};\n")
+        if verbose:
+            print("[validate_model] done (dump)")
+
+    if not exporter or (
+        not exporter.startswith(("onnx-", "custom-"))
+        and exporter not in ("custom", "modelbuilder")
+    ):
+        if verbose:
+            print("[validate_model] -- done (final)")
+        return False, dump_stats
+    return True, dump_stats
 
 
 def validate_model(
@@ -446,265 +923,200 @@ def validate_model(
         which refers to a set of inputs using an empty cache.
     """
     main_validation_begin = time.perf_counter()
-    model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
-        model_id,
-        subfolder,
-        same_as_pretrained=same_as_pretrained,
+    cont, summary, data, dump_stats, second_input_keys = _validate_model_step1(
+        model_id=model_id,
+        do_same=do_same,
+        do_run=do_run,
+        patch=patch,
+        rewrite=rewrite,
+        dtype=dtype,
+        device=device,
+        optimization=optimization,
+        quiet=quiet,
+        drop_inputs=drop_inputs,
+        ortfusiontype=ortfusiontype,
+        stop_if_static=stop_if_static,
+        exporter=exporter,
+        verbose=verbose,
+        task=task,
+        runtime=runtime,
+        inputs2=inputs2,
+        input_options=input_options,
+        model_options=model_options,
+        exporter_options=exporter_options,
+        opset=opset,
+        output_names=output_names,
+        repeat=repeat,
+        warmup=warmup,
+        dump_folder=dump_folder,
+        subfolder=subfolder,
         use_pretrained=use_pretrained,
+        same_as_pretrained=same_as_pretrained,
     )
-    time_preprocess_model_id = time.perf_counter() - main_validation_begin
-    patch_kwargs = make_patch_kwargs(patch=patch, rewrite=rewrite)
-
-    summary = version_summary()
-    summary.update(
-        dict(
-            version_model_id=model_id,
-            version_do_run=str(do_run),
-            version_dtype=str(dtype or ""),
-            version_device=str(device or ""),
-            version_same_as_pretrained=str(same_as_pretrained),
-            version_use_pretrained=str(use_pretrained),
-            version_optimization=optimization or "",
-            version_quiet=str(quiet),
-            version_patch=str(patch),
-            version_patch_kwargs=str(patch_kwargs).replace(" ", ""),
-            version_rewrite=str(rewrite),
-            version_dump_folder=dump_folder or "",
-            version_drop_inputs=str(list(drop_inputs or "")),
-            version_ortfusiontype=ortfusiontype or "",
-            version_stop_if_static=str(stop_if_static),
-            version_exporter=exporter or "",
-            version_runtime=runtime,
-            version_inputs2=inputs2,
-            version_input_options=str(input_options),
-            version_drop_input=str(drop_inputs),
-            version_model_options=str(model_options),
-            version_exporter_options=str(exporter_options),
-            time_preprocess_model_id=time_preprocess_model_id,
-        )
-    )
-    if opset:
-        summary["version_opset"] = opset
-
-    folder_name = None
     if dump_folder:
-        folder_name = _make_folder_name(
-            model_id,
-            exporter,
-            optimization,
-            dtype=dtype,
-            device=device,
-            subfolder=subfolder,
-            opset=opset,
-            drop_inputs=drop_inputs,
-            use_pretrained=use_pretrained,
-            same_as_pretrained=same_as_pretrained,
-            task=task,
-        )
-        dump_folder = os.path.join(dump_folder, folder_name)
-        if not os.path.exists(dump_folder):
-            os.makedirs(dump_folder)
-        summary["dump_folder"] = dump_folder
-        summary["dump_folder_name"] = folder_name
-        if verbose:
-            print(f"[validate_model] dump into {folder_name!r}")
+        with open(dump_stats, "w") as f:
+            for k, v in sorted(summary.items()):
+                f.write(f":{k}:{v};\n")
+    if not cont:
+        return summary, data
+    data, summary = _clean_data_remove_model_and_proto(data, summary)
+    _validate_model_step2(
+        summary=summary,
+        data=data,
+        do_run=do_run,
+        quiet=quiet,
+        verbose=verbose,
+        runtime=runtime,
+        repeat=repeat,
+        warmup=warmup,
+        second_input_keys=second_input_keys,
+        ort_logs=ort_logs,
+        quiet_input_sets=quiet_input_sets,
+        ortfusiontype=ortfusiontype,
+        model_id=model_id,
+    )
+
+    summary["time_total"] = time.perf_counter() - main_validation_begin
 
     if verbose:
-        if subfolder:
-            print(f"[validate_model] validate model id {model_id!r}, subfolder={subfolder!r}")
-        else:
-            print(f"[validate_model] validate model id {model_id!r}")
-        if task:
-            print(f"[validate_model] with task {task!r}")
-        print(f"[validate_model] patch={patch!r}")
-        if model_options:
-            print(f"[validate_model] model_options={model_options!r}")
-        print(f"[validate_model] get dummy inputs with input_options={input_options}...")
-        print(
-            f"[validate_model] rewrite={rewrite}, patch_kwargs={patch_kwargs}, "
-            f"stop_if_static={stop_if_static}"
-        )
-        print(f"[validate_model] exporter={exporter!r}, optimization={optimization!r}")
-        print(f"[validate_model] dump_folder={dump_folder!r}")
-        print(f"[validate_model] output_names={output_names}")
-        summary["model_id"] = model_id
-        summary["model_subfolder"] = subfolder or ""
+        print("[validate_model] -- done (final)")
+    with open(dump_stats, "w") as f:
+        for k, v in sorted(summary.items()):
+            f.write(f":{k}:{v};\n")
+    return summary, data
 
-    iop = input_options or {}
-    mop = model_options or {}
-    data = _quiet_or_not_quiet(
-        quiet,
-        "create_torch_model",
+
+def _clean_data_remove_model_and_proto(data, summary):
+    assert isinstance(data, dict) and isinstance(data, dict)
+    data = _clean_data_remove_model_and_proto_(data)
+    summary = _clean_data_remove_model_and_proto_(summary)
+    gc.collect()
+    return data, summary
+
+
+def _clean_data_remove_model_and_proto_(obj):
+    if type(obj) is dict:
+        # do not use isinstance otherwise CausalLMOutputWithPast becomes a dictionary
+        return {k: _clean_data_remove_model_and_proto_(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_clean_data_remove_model_and_proto_(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_clean_data_remove_model_and_proto_(v) for v in obj)
+    if isinstance(obj, set):
+        return {_clean_data_remove_model_and_proto_(v) for v in obj}
+    if isinstance(obj, (torch.nn.Module, onnx.ModelProto)):
+        return None
+    return obj
+
+
+def _validate_model_step1(
+    model_id,
+    do_same,
+    do_run,
+    patch,
+    rewrite,
+    dtype,
+    device,
+    optimization,
+    quiet,
+    drop_inputs,
+    ortfusiontype,
+    stop_if_static,
+    exporter,
+    verbose,
+    task,
+    runtime,
+    inputs2,
+    input_options,
+    model_options,
+    exporter_options,
+    opset,
+    output_names,
+    repeat,
+    warmup,
+    dump_folder,
+    subfolder,
+    use_pretrained,
+    same_as_pretrained,
+):
+    assert not do_same or do_run, (
+        f"Discrepancies cannot be measured if the model is not run, "
+        f"do_run={do_run}, do_same={do_same}"
+    )
+    (
         summary,
-        None,
-        (
-            lambda mid=model_id, v=verbose, task=task, uptr=use_pretrained, tr=same_as_pretrained, iop=iop, sub=subfolder, i2=inputs2: (  # noqa: E501
-                get_untrained_model_with_inputs(
-                    mid,
-                    verbose=v,
-                    task=task,
-                    use_pretrained=uptr,
-                    same_as_pretrained=tr,
-                    inputs_kwargs=iop,
-                    model_kwargs=mop,
-                    subfolder=sub,
-                    add_second_input=i2,
-                )
-            )
-        ),
+        model_id,
+        subfolder,
+        same_as_pretrained,
+        use_pretrained,
+        dump_folder,
+        folder_name,
+        patch_kwargs,
+    ) = _prepare_validation(
+        model_id=model_id,
+        subfolder=subfolder,
+        same_as_pretrained=same_as_pretrained,
+        use_pretrained=use_pretrained,
+        patch=patch,
+        rewrite=rewrite,
+        do_run=do_run,
+        dtype=dtype,
+        device=device,
+        optimization=optimization,
+        quiet=quiet,
+        drop_inputs=drop_inputs,
+        ortfusiontype=ortfusiontype,
+        stop_if_static=stop_if_static,
+        exporter=exporter,
+        runtime=runtime,
+        inputs2=inputs2,
+        input_options=input_options,
+        model_options=model_options,
+        exporter_options=exporter_options,
+        opset=opset,
+        task=task,
+        verbose=verbose,
+        output_names=output_names,
+        dump_folder=dump_folder,
+    )
+
+    data, iop, mop = _get_untrained_model_with_inputs(
+        summary=summary,
+        model_id=model_id,
+        verbose=verbose,
+        task=task,
+        use_pretrained=use_pretrained,
+        same_as_pretrained=same_as_pretrained,
+        input_options=input_options,
+        model_options=model_options,
+        subfolder=subfolder,
+        inputs2=inputs2,
+        quiet=quiet,
+        dump_folder=dump_folder,
     )
 
     second_input_keys = [k for k in data if k.startswith("inputs") and k != "inputs"]
-
-    if dump_folder:
-        with open(os.path.join(dump_folder, "model_config.txt"), "w") as f:
-            f.write(f"model_id: {model_id}\n------\n")
-            f.write(
-                pprint.pformat(
-                    data["configuration"]
-                    if type(data["configuration"]) is dict
-                    else data["configuration"].to_dict()
-                )
-            )
-        dump_info = data.get("dump_info", None)
-        if dump_info:
-            with open(os.path.join(dump_folder, "model_dump_info.txt"), "w") as f:
-                f.write(f"model_id: {model_id}\n------\n")
-                f.write(pprint.pformat(dump_info))
-
     if exporter == "modelbuilder":
-        # Models used with ModelBuilder do not like batch size > 1.
-        # Let's change that.
-        for k in ["inputs", "inputs2"]:
-            if k not in data:
-                continue
-            if verbose:
-                print(f"[validate_model] set batch=1 for data[{k!r}]")
-                print(f"[validate_model] batch=1 === {string_type(data[k], with_shape=True)}")
-            cpl = CoupleInputsDynamicShapes(
-                tuple(), data[k], dynamic_shapes=data["dynamic_shapes"]
-            )
-            with register_additional_serialization_functions(patch_transformers=True):  # type: ignore[arg-type]
-                data[k] = cpl.change_dynamic_dimensions(
-                    desired_values=dict(batch=1), only_desired=True
-                )
-            if verbose:
-                print(f"[validate_model] batch=1 --> {string_type(data[k], with_shape=True)}")
+        _update_data_for_modelbuilder(data, verbose)
 
-    # modelbuilder needs different treatments sometimes, so
-    # we mark it for later usage.
-    # for example, it has different past_kv ordering than
-    # flattened CacheObject
-    data["exporter"] = exporter
-    data["input_options"] = iop
-    data["model_options"] = mop
-    data["model_dump_folder"] = dump_folder
-    if dtype:
-        data["model_dtype"] = dtype if isinstance(dtype, str) else str(dtype)
-    if device:
-        data["model_device"] = str(device)
-    if opset:
-        data["model_opset"] = opset
-    if "rewrite" in data:
-        if rewrite:
-            summary["model_rewrite"] = str(data["rewrite"])
-            if verbose:
-                print(f"[validate_model] model_rewrite={summary['model_rewrite']}")
-        else:
-            del data["rewrite"]
-            if verbose:
-                print("[validate_model] no rewrite")
-    if os.environ.get("PRINT_CONFIG", "0") in (1, "1"):
-        print("[validate_model] -- PRINT CONFIG")
-        print("-- type(config)", type(data["configuration"]))
-        print(data["configuration"])
-        print("[validate_model] -- END PRINT CONFIG")
-    if iop:
-        summary["input_options"] = str(iop)
-    if mop:
-        summary["model_options"] = str(mop)
-    if "ERR_create" in summary:
-        return summary, data
+    _update_inputs_outputs(
+        data=data,
+        summary=summary,
+        exporter=exporter,
+        iop=iop,
+        mop=mop,
+        dump_folder=dump_folder,
+        opset=opset,
+        device=device,
+        dtype=dtype,
+        rewrite=rewrite,
+        drop_inputs=drop_inputs,
+        verbose=verbose,
+        second_input_keys=second_input_keys,
+        model_id=model_id,
+    )
 
-    if drop_inputs:
-        if verbose:
-            print(f"[validate_model] -- drop inputs: {drop_inputs!r}")
-            print(f"[validate_model] current inputs: {string_type(data['inputs'])}")
-            print(
-                f"[validate_model] current dynnamic_shapes: "
-                f"{string_type(data['dynamic_shapes'])}"
-            )
-        data["inputs"], data["dynamic_shapes"] = filter_inputs(
-            data["inputs"],
-            drop_names=drop_inputs,
-            model=data["model"],
-            dynamic_shapes=data["dynamic_shapes"],
-        )
-        if verbose:
-            print(f"[validate_model] new inputs: {string_type(data['inputs'])}")
-            print(f"[validate_model] new dynamic_hapes: {string_type(data['dynamic_shapes'])}")
-        if second_input_keys:
-            for k in second_input_keys:
-                data[k], _ = filter_inputs(
-                    data[k],
-                    drop_names=drop_inputs,
-                    model=data["model"],
-                    dynamic_shapes=data["dynamic_shapes"],
-                )
-
-    if not empty(dtype):
-        if isinstance(dtype, str):
-            dtype = getattr(torch, dtype)
-        if verbose:
-            print(f"[validate_model] dtype conversion to {dtype}")
-        data["model"] = to_any(data["model"], dtype)  # type: ignore
-        data["inputs"] = to_any(data["inputs"], dtype)  # type: ignore
-        summary["model_dtype"] = str(dtype)
-        if second_input_keys:
-            for k in second_input_keys:
-                data[k] = to_any(data[k], dtype)  # type: ignore
-
-    if not empty(device):
-        if verbose:
-            print(f"[validate_model] device conversion to {device}")
-        data["model"] = to_any(data["model"], device)  # type: ignore
-        data["inputs"] = to_any(data["inputs"], device)  # type: ignore
-        summary["model_device"] = str(device)
-        if second_input_keys:
-            for k in second_input_keys:
-                data[k] = to_any(data[k], device)  # type: ignore
-
-    for k in ["task", "size", "n_weights"]:
-        summary[f"model_{k.replace('_','')}"] = data[k]
-    summary["second_input_keys"] = ",".join(second_input_keys)
-    summary["model_inputs_options"] = str(input_options or "")
-    summary["model_inputs"] = string_type(data["inputs"], with_shape=True)
-    summary["model_shapes"] = string_type(data["dynamic_shapes"])
-    summary["model_class"] = data["model"].__class__.__name__
-    summary["model_module"] = str(data["model"].__class__.__module__)
-    if summary["model_module"] in sys.modules:
-        summary["model_file"] = str(sys.modules[summary["model_module"]].__file__)  # type: ignore[index]
-    summary["model_config_class"] = data["configuration"].__class__.__name__
-    summary["model_config"] = str(
-        shrink_config(
-            data["configuration"]
-            if type(data["configuration"]) is dict
-            else data["configuration"].to_dict()
-        )
-    ).replace(" ", "")
-    summary["model_id"] = model_id
-
-    if verbose:
-        print("[validate_model] --")
-        print(f"[validate_model] task={data['task']}")
-        print(f"[validate_model] size={data['size'] / 2**20} Mb")
-        print(f"[validate_model] n_weights={data['n_weights'] / 1e6} millions parameters")
-        for k, v in data["inputs"].items():
-            print(f"[validate_model] +INPUT {k}={string_type(v, with_shape=True)}")
-        for k, v in data["dynamic_shapes"].items():
-            print(f"[validate_model] +SHAPE {k}={string_type(v)}")
-        print(f"[validate_model] second_input_keys={second_input_keys}")
-        print("[validate_model] --")
+    _verbose_validate(data, second_input_keys, verbose)
 
     if do_run:
         validation_begin = time.perf_counter()
@@ -728,148 +1140,48 @@ def validate_model(
 
         summary["time_total_validation_torch"] = time.perf_counter() - validation_begin
 
-    if exporter:
-        expop = exporter_options or {}
-        if verbose:
-            print(
-                f"[validate_model] -- export the model with {exporter!r}, "
-                f"optimization={optimization!r}"
-            )
-            if expop:
-                print(f"[validate_model] -- exporter options {expop}")
-        exporter_begin = time.perf_counter()
-        if patch_kwargs:
-            if verbose:
-                print(
-                    f"[validate_model] applies patches before exporting "
-                    f"stop_if_static={stop_if_static}"
-                )
-            with torch_export_patches(  # type: ignore
-                stop_if_static=stop_if_static,
-                verbose=max(0, verbose - 1),
-                rewrite=data.get("rewrite", None),
-                dump_rewriting=(os.path.join(dump_folder, "rewrite") if dump_folder else None),
-                **patch_kwargs,  # type: ignore[arg-type]
-            ) as modificator:
-                data["inputs_export"] = modificator(data["inputs"])  # type: ignore
+    _call_exporter(
+        data=data,
+        summary=summary,
+        exporter=exporter,
+        patch_kwargs=patch_kwargs,
+        stop_if_static=stop_if_static,
+        verbose=verbose,
+        dump_folder=dump_folder,
+        quiet=quiet,
+        optimization=optimization,
+        do_run=do_run,
+        output_names=output_names,
+        exporter_options=exporter_options,
+    )
 
-                if do_run:
-                    _validate_do_run_exported_program(data, summary, verbose, quiet)
+    cont, dump_stats = _dump_onnx_model(
+        data=data,
+        summary=summary,
+        dump_folder=dump_folder,
+        verbose=verbose,
+        exporter=exporter,
+        folder_name=folder_name,
+    )
+    return cont, summary, data, dump_stats, second_input_keys
 
-                # data is modified inplace
-                summary_export, data = call_exporter(
-                    exporter=exporter,
-                    data=data,
-                    quiet=quiet,
-                    verbose=verbose,
-                    optimization=optimization,
-                    do_run=do_run,
-                    dump_folder=dump_folder,
-                    output_names=output_names,
-                    exporter_options=expop,
-                )
-        else:
-            data["inputs_export"] = data["inputs"]
-            # data is modified inplace
-            summary_export, data = call_exporter(
-                exporter=exporter,
-                data=data,
-                quiet=quiet,
-                verbose=verbose,
-                optimization=optimization,
-                do_run=do_run,
-                dump_folder=dump_folder,
-                output_names=output_names,
-                exporter_options=expop,
-            )
 
-        summary.update(summary_export)
-        summary["time_total_exporter"] = time.perf_counter() - exporter_begin
-
-    dump_stats = None
-    if dump_folder:
-        if "exported_program" in data:
-            ep = data["exported_program"]
-            if verbose:
-                print(f"[validate_model] -- dumps exported program in {dump_folder!r}...")
-            assert isinstance(
-                folder_name, str
-            ), f"folder_name={folder_name!r} should be a string"
-            folder_name = folder_name.replace("/", "-")
-            with open(os.path.join(dump_folder, f"{folder_name}.ep"), "w") as f:
-                f.write(str(ep))
-            torch.export.save(ep, os.path.join(dump_folder, f"{folder_name}.pt2"))
-            with open(os.path.join(dump_folder, f"{folder_name}.graph"), "w") as f:
-                f.write(str(ep.graph))
-            if verbose:
-                print("[validate_model] done (dump ep)")
-        if "onnx_program" in data:
-            assert isinstance(
-                folder_name, str
-            ), f"folder_name={folder_name!r} should be a string"
-            folder_name = folder_name.replace("/", "-")
-            epo = data["onnx_program"]
-            if verbose:
-                print(f"[validate_model] dumps onnx program in {dump_folder!r}...")
-            onnx_filename = os.path.join(dump_folder, f"{folder_name}.onnx")
-            begin = time.perf_counter()
-            if isinstance(epo, onnx.model_container.ModelContainer):
-                epo.save(onnx_filename, all_tensors_to_one_file=True)
-            elif isinstance(epo, onnx.ModelProto):
-                if os.path.exists(f"{onnx_filename}.data"):
-                    os.remove(f"{onnx_filename}.data")
-                onnx.save(
-                    epo,
-                    onnx_filename,
-                    save_as_external_data=True,
-                    all_tensors_to_one_file=True,
-                    location=f"{os.path.split(onnx_filename)[-1]}.data",
-                )
-            else:
-                epo.save(onnx_filename, external_data=True)
-            duration = time.perf_counter() - begin
-            if verbose:
-                print(f"[validate_model] done (dump onnx) in {duration}")
-            data["onnx_filename"] = onnx_filename
-            summary["time_onnx_save"] = duration
-            summary.update(compute_statistics(onnx_filename))
-            del epo
-
-        if verbose:
-            print(f"[validate_model] dumps statistics in {dump_folder!r}...")
-        dump_stats = os.path.join(dump_folder, f"{folder_name}.stats")
-        with open(dump_stats, "w") as f:
-            for k, v in sorted(summary.items()):
-                f.write(f":{k}:{v};\n")
-        if verbose:
-            print("[validate_model] done (dump)")
-
-    if not exporter or (
-        not exporter.startswith(("onnx-", "custom-"))
-        and exporter not in ("custom", "modelbuilder")
-    ):
-        if verbose:
-            print("[validate_model] -- done (final)")
-        if dump_stats:
-            with open(dump_stats, "w") as f:
-                for k, v in sorted(summary.items()):
-                    f.write(f":{k}:{v};\n")
-        return summary, data
-
+def _validate_model_step2(
+    summary,
+    data,
+    do_run,
+    quiet,
+    verbose,
+    runtime,
+    repeat,
+    warmup,
+    second_input_keys,
+    ort_logs,
+    quiet_input_sets,
+    ortfusiontype,
+    model_id,
+):
     if do_run:
-        # Let's move the model to CPU to make sure it frees GPU memory.
-        if verbose:
-            # It does not really work for the time being and the model
-            # gets loaded twice, one by torch, one by onnxruntime
-            print("[validation_model] -- delete the model")
-            for key in ["model", "onnx_program", "config"]:
-                if key in data:
-                    del data[key]
-            if device is not None and "cuda" in str(device).lower():
-                torch.cuda.empty_cache()
-            gc.collect()
-            print("[validation_model] -- done")
-
         validation_begin = time.perf_counter()
         summary_valid, data = validate_onnx_model(
             data=data,
@@ -948,16 +1260,6 @@ def validate_model(
                 summary.update(summary_valid)
 
     _compute_final_statistics(summary)
-    summary["time_total"] = time.perf_counter() - main_validation_begin
-
-    if verbose:
-        print("[validate_model] -- done (final)")
-    if dump_stats:
-        # Dumps again the statistics.
-        with open(dump_stats, "w") as f:
-            for k, v in sorted(summary.items()):
-                f.write(f":{k}:{v};\n")
-    return summary, data
 
 
 def compute_statistics(onnx_filename: str) -> Dict[str, Union[float, int]]:
@@ -1041,7 +1343,7 @@ def _validate_do_run_model(
 
     summary[expected_tag] = string_type(expected, with_shape=True)
     if verbose:
-        print(f"[validate_model] done ([{tag}])")
+        print(f"[validate_model] done ([{tag}]) - {string_type(expected, with_shape=True)}")
     data[expected_tag] = expected
     assert hash_inputs == string_type(data[key], with_shape=True), (
         f"The model execution did modified the inputs:\n"
@@ -1051,7 +1353,6 @@ def _validate_do_run_model(
 
 
 def _validate_do_run_exported_program(data, summary, verbose, quiet):
-
     # We run a second time the model to check the patch did not
     # introduce any discrepancies
     if verbose:
@@ -1076,7 +1377,13 @@ def _validate_do_run_exported_program(data, summary, verbose, quiet):
     if "ERR_run_patched" in summary:
         return summary, data
 
-    disc = max_diff(data["run_expected"], expected)
+    verbose_diff = int(os.environ.get("MAXDIFF", "0"))
+    if verbose_diff >= 10:
+        print("[_validate_do_run_exported_program] with inputs_export")
+    disc = max_diff(data["run_expected"], expected, verbose=verbose_diff)
+    assert not verbose_diff or (
+        not np.isnan(disc["abs"]) and not np.isinf(disc["abs"])
+    ), f"something went wrong disc={disc}"
     for k, v in disc.items():
         summary[f"disc_patched_{k}"] = str(v)
     if verbose:
@@ -1321,7 +1628,14 @@ def call_torch_export_export(
         if "ERR_export_export" in summary:
             return summary, data
 
-        disc = max_diff(data["run_expected"], expected)
+        verbose_diff = int(os.environ.get("MAXDIFF", "0"))
+        if verbose_diff >= 10:
+            print("[call_torch_export_export] with inputs_export")
+        disc = max_diff(data["run_expected"], expected, verbose=verbose_diff)
+        assert not verbose_diff or (
+            not np.isnan(disc["abs"]) and not np.isinf(disc["abs"])
+        ), f"something went wrong disc={disc}"
+
         for k, v in disc.items():
             summary[f"disc_exported_{k}"] = str(v)
         if verbose:
@@ -1541,7 +1855,16 @@ def validate_onnx_model(
             print(f"[validate_onnx_model] got={string_type(got, with_shape=True)}")
 
         # compute discrepancies
-        disc = max_diff(data[k_expected], got, flatten=True)
+        verbose_diff = int(os.environ.get("MAXDIFF", "0"))
+        if verbose_diff >= 10:
+            print(
+                f"[validate_onnx_model] k_input={k_input!r}, "
+                f"k_expected={k_expected!r}, suffix={suffix!r}"
+            )
+        disc = max_diff(data[k_expected], got, flatten=True, verbose=verbose_diff)
+        assert not verbose_diff or (
+            not np.isnan(disc["abs"]) and not np.isinf(disc["abs"])
+        ), f"something went wrong disc={disc}"
         if verbose:
             print(f"[validate_onnx_model] discrepancies={string_diff(disc)}")
         for k, v in disc.items():

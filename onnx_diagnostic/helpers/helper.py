@@ -1016,6 +1016,8 @@ def max_diff(
 
     You may use :func:`string_diff` to display the discrepancies in one string.
     """
+    if verbose >= 10:
+        print(f"[max_diff] {type(expected)} ? {type(got)}")
     if expected is None and got is None:
         return dict(abs=0, rel=0, sum=0, n=0, dnan=0)
 
@@ -1061,8 +1063,8 @@ def max_diff(
     if expected.__class__.__name__ == "CausalLMOutputWithPast":
         if verbose >= 6:
             print(
-                f"[max_diff] CausalLMOutputWithPast: {string_type(expected)} "
-                f"? {string_type(got)}"
+                f"[max_diff] CausalLMOutputWithPast: {string_type(expected, with_shape=True)} "
+                f"? {string_type(got, with_shape=True)}"
             )
         if got.__class__.__name__ == "CausalLMOutputWithPast":
             return max_diff(
