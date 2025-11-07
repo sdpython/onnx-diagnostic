@@ -1234,7 +1234,7 @@ def call_torch_export_export(
     assert not optimization, f"No optimization is implemented for exporter={exporter!r}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
-    assert ("-strict" in exporter) ^ ("strict" in exporter_options), (
+    assert ("-strict" not in exporter) or ("strict" not in exporter_options), (
         f"Options strict cannot be specified in the exporter name {exporter!r} "
         f"and in the options {exporter_options}"
     )
@@ -1949,11 +1949,11 @@ def call_torch_export_custom(
     assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
-    assert ("-strict" in exporter) ^ ("strict" in exporter_options), (
+    assert ("-strict" not in exporter) or ("strict" not in exporter_options), (
         f"Options strict cannot be specified in the exporter name {exporter!r} "
         f"and in the options {exporter_options}"
     )
-    assert ("-fake" in exporter) ^ ("fake" in exporter_options), (
+    assert ("-fake" not in exporter) or ("fake" not in exporter_options), (
         f"Options strict cannot be specified in the exporter name {exporter!r} "
         f"and in the options {exporter_options}"
     )
