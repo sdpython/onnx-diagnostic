@@ -1343,7 +1343,7 @@ def _validate_do_run_model(
 
     summary[expected_tag] = string_type(expected, with_shape=True)
     if verbose:
-        print(f"[validate_model] done ([{tag}])")
+        print(f"[validate_model] done ([{tag}]) - {string_type(expected, with_shape=True)}")
     data[expected_tag] = expected
     assert hash_inputs == string_type(data[key], with_shape=True), (
         f"The model execution did modified the inputs:\n"

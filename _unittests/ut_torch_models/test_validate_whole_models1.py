@@ -122,7 +122,7 @@ class TestValidateWholeModels1(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_experimental()
-    @requires_transformers("4.52")  # fix it
+    @requires_transformers("4.52")  # empty_cache None does not work
     def test_i_validate_model_custom(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
@@ -151,7 +151,7 @@ class TestValidateWholeModels1(ExtTestCase):
     @requires_torch("2.7")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
-    @requires_transformers("4.52")
+    @requires_transformers("4.52")  # empty_cache None does not work
     @requires_experimental()
     def test_j_validate_model_custom_torch(self):
         mid = "arnir0/Tiny-LLM"
