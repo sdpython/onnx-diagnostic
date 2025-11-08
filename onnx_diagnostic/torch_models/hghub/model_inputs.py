@@ -53,7 +53,7 @@ def get_untrained_model_with_inputs(
     add_second_input: int = 1,
     subfolder: Optional[str] = None,
     use_only_preinstalled: bool = False,
-    config_reduction: Optional[Callable[["Config", str], Dict]] = None,  # noqa: F821
+    config_reduction: Optional[Callable[[Any, str], Dict]] = None,
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
@@ -79,7 +79,9 @@ def get_untrained_model_with_inputs(
     :param config_reduction: if specified, this function is used to reduce the
         model size by tweaking the configuration, it returns a dictionary with values
         to update, if empty, function:`reduce_model_config
-        <onnx_diagnostic.torch_models.hghub.reduce_model_config>`
+        <onnx_diagnostic.torch_models.hghub.reduce_model_config>`,
+        this function takes a configuration and a task (string)
+        as arguments
     :return: dictionary with a model, inputs, dynamic shapes, and the configuration,
         some necessary rewriting as well
 

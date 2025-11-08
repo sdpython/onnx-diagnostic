@@ -1998,6 +1998,7 @@ except ImportError:
     patch_qwen2_5 = False
 
 if patch_qwen2_5:
+    import torch.nn.functional as F
 
     class patched_Qwen2_5_VLForConditionalGeneration:
         _PATCHES_ = ["prepare_inputs_for_generation"]
@@ -2087,6 +2088,225 @@ if patch_qwen2_5:
                 model_inputs["pixel_values_videos"] = None
 
             return model_inputs
+
+    class patched_Qwen2_5_VisionTransformerPretrainedModel:
+        _PATCHES_ = ["get_window_index", "forward"]
+        _PATCHED_CLASS_ = (
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VisionTransformerPretrainedModel
+        )
+
+        def get_window_index(self, grid_thw):
+            window_index: list = []
+            # PATCHED
+            cu_window_seqlens: list = [torch.tensor([0], dtype=torch.int64)]
+            window_index_id = 0
+            vit_merger_window_size = (
+                self.window_size // self.spatial_merge_size // self.patch_size
+            )
+
+            for grid_t, grid_h, grid_w in grid_thw:
+                llm_grid_h, llm_grid_w = (
+                    grid_h // self.spatial_merge_size,
+                    grid_w // self.spatial_merge_size,
+                )
+                index = torch.arange(grid_t * llm_grid_h * llm_grid_w).reshape(
+                    grid_t, llm_grid_h, llm_grid_w
+                )
+                pad_h = vit_merger_window_size - llm_grid_h % vit_merger_window_size
+                pad_w = vit_merger_window_size - llm_grid_w % vit_merger_window_size
+                num_windows_h = (llm_grid_h + pad_h) // vit_merger_window_size
+                num_windows_w = (llm_grid_w + pad_w) // vit_merger_window_size
+                index_padded = F.pad(index, (0, pad_w, 0, pad_h), "constant", -100)
+                index_padded = index_padded.reshape(
+                    grid_t,
+                    num_windows_h,
+                    vit_merger_window_size,
+                    num_windows_w,
+                    vit_merger_window_size,
+                )
+                index_padded = index_padded.permute(0, 1, 3, 2, 4).reshape(
+                    grid_t,
+                    num_windows_h * num_windows_w,
+                    vit_merger_window_size,
+                    vit_merger_window_size,
+                )
+                seqlens = (index_padded != -100).sum([2, 3]).reshape(-1)
+                index_padded = index_padded.reshape(-1)
+                index_new = index_padded[index_padded != -100]
+                window_index.append(index_new + window_index_id)
+                cu_seqlens_tmp = (
+                    seqlens.cumsum(0) * self.spatial_merge_unit + cu_window_seqlens[-1]
+                )
+                # PATCHED
+                # cu_window_seqlens.extend(cu_seqlens_tmp.tolist())
+                cu_window_seqlens.append(cu_seqlens_tmp)
+                window_index_id += (grid_t * llm_grid_h * llm_grid_w).item()
+            window_index = torch.cat(window_index, dim=0)
+
+            return window_index, cu_window_seqlens
+
+        def forward(
+            self, hidden_states: torch.Tensor, grid_thw: torch.Tensor, **kwargs
+        ) -> torch.Tensor:
+            """
+            Args:
+                hidden_states (`torch.Tensor` of shape `(seq_len, hidden_size)`):
+                    The final hidden states of the model.
+                grid_thw (`torch.Tensor` of shape `(num_images_or_videos, 3)`):
+                    The temporal, height and width of feature shape of each image in LLM.
+
+            Returns:
+                `torch.Tensor`: hidden_states.
+            """
+            hidden_states = self.patch_embed(hidden_states)
+            rotary_pos_emb = self.rot_pos_emb(grid_thw)
+            window_index, cu_window_seqlens = self.get_window_index(grid_thw)
+            # PATCHED
+            # cu_window_seqlens = torch.tensor(
+            #    cu_window_seqlens,
+            #    device=hidden_states.device,
+            #    dtype=grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
+            # )
+            cu_window_seqlens = (
+                torch.cat(cu_window_seqlens, dim=0).to(hidden_states.device).to(grid_thw.dtype)
+            )
+            cu_window_seqlens = torch.unique_consecutive(cu_window_seqlens)
+
+            seq_len, _ = hidden_states.size()
+            hidden_states = hidden_states.reshape(
+                seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1
+            )
+            hidden_states = hidden_states[window_index, :, :]
+            hidden_states = hidden_states.reshape(seq_len, -1)
+            rotary_pos_emb = rotary_pos_emb.reshape(
+                seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1
+            )
+            rotary_pos_emb = rotary_pos_emb[window_index, :, :]
+            rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
+            emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
+            position_embeddings = (emb.cos(), emb.sin())
+
+            cu_seqlens = torch.repeat_interleave(
+                grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]
+            ).cumsum(
+                dim=0,
+                # Select dtype based on the following factors:
+                #  - FA2 requires that cu_seqlens_q must have dtype int32
+                #  - torch.onnx.export requires that cu_seqlens_q must have same dtype
+                # as grid_thw
+                # See https://github.com/huggingface/transformers/pull/34852
+                # for more information
+                dtype=grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
+            )
+            cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
+
+            for layer_num, blk in enumerate(self.blocks):
+                if layer_num in self.fullatt_block_indexes:
+                    cu_seqlens_now = cu_seqlens
+                else:
+                    cu_seqlens_now = cu_window_seqlens
+
+                hidden_states = blk(
+                    hidden_states,
+                    cu_seqlens=cu_seqlens_now,
+                    position_embeddings=position_embeddings,
+                    **kwargs,
+                )
+
+            hidden_states = self.merger(hidden_states)
+            reverse_indices = torch.argsort(window_index)
+            hidden_states = hidden_states[reverse_indices, :]
+
+            return hidden_states
+
+    class patched_Qwen2_5_VLVisionAttention:
+        _PATCHES_ = ["forward"]
+        _PATCHED_CLASS_ = (
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLVisionAttention
+        )
+
+        def forward(
+            self,
+            hidden_states: torch.Tensor,
+            cu_seqlens: torch.Tensor,
+            rotary_pos_emb: Optional[torch.Tensor] = None,
+            position_embeddings: Optional[tuple[torch.Tensor, torch.Tensor]] = None,
+            **kwargs,
+        ) -> torch.Tensor:
+            seq_length = hidden_states.shape[0]
+            query_states, key_states, value_states = (
+                self.qkv(hidden_states)
+                .reshape(seq_length, 3, self.num_heads, -1)
+                .permute(1, 0, 2, 3)
+                .unbind(0)
+            )
+            cos, sin = position_embeddings
+            query_states, key_states = (
+                transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_rotary_pos_emb_vision(
+                    query_states, key_states, cos, sin
+                )
+            )
+
+            query_states = query_states.transpose(0, 1).unsqueeze(0)
+            key_states = key_states.transpose(0, 1).unsqueeze(0)
+            value_states = value_states.transpose(0, 1).unsqueeze(0)
+
+            attention_interface: Callable = (
+                transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.eager_attention_forward
+            )
+            if self.config._attn_implementation != "eager":
+                # PATCHED
+                # attention_interface = ALL_ATTENTION_FUNCTIONS[
+                #       self.config._attn_implementation]
+                attention_interface = transformers.modeling_utils.ALL_ATTENTION_FUNCTIONS[
+                    self.config._attn_implementation
+                ]
+
+            if self.config._attn_implementation == "flash_attention_2":
+                # Flash Attention 2: Use cu_seqlens for variable length attention
+                max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
+                attn_output, _ = attention_interface(
+                    self,
+                    query_states,
+                    key_states,
+                    value_states,
+                    attention_mask=None,
+                    scaling=self.scaling,
+                    dropout=0.0 if not self.training else self.attention_dropout,
+                    cu_seq_lens_q=cu_seqlens,
+                    cu_seq_lens_k=cu_seqlens,
+                    max_length_q=max_seqlen,
+                    max_length_k=max_seqlen,
+                    is_causal=False,
+                    **kwargs,
+                )
+            else:
+                # Other implementations: Process each chunk separately
+                lengths = cu_seqlens[1:] - cu_seqlens[:-1]
+                splits = [
+                    torch.split(tensor, lengths.tolist(), dim=2)
+                    for tensor in (query_states, key_states, value_states)
+                ]
+
+                attn_outputs = [
+                    attention_interface(
+                        self,
+                        q,
+                        k,
+                        v,
+                        attention_mask=None,
+                        scaling=self.scaling,
+                        dropout=0.0 if not self.training else self.attention_dropout,
+                        is_causal=False,
+                        **kwargs,
+                    )[0]
+                    for q, k, v in zip(*splits)
+                ]
+                attn_output = torch.cat(attn_outputs, dim=1)
+
+            attn_output = attn_output.reshape(seq_length, -1).contiguous()
+            attn_output = self.proj(attn_output)
+            return attn_output
 
 
 try:

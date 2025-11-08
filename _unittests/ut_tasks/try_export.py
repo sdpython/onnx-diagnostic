@@ -33,7 +33,8 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         """
         from transformers import AutoModel, AutoProcessor
 
-        model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
+        # model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
+        model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
         if os.environ.get("PRETRAINED", ""):
             model = AutoModel.from_pretrained(model_id, device_map="auto", dtype="auto").eval()
         else:
@@ -45,6 +46,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         "num_hidden_layers": 2,
                         "layer_types": ["full_attention", "full_attention"],
                     },
+                    # "_attn_implementation": "flash_attention_2",
                 }
 
             config_reduction = _config_reduction
@@ -65,26 +67,36 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         )
 
         print(f"-- inputs: {self.string_type(inputs, with_shape=True)}")
-        expected = model.visual(**inputs)
-        print(f"-- expected: {self.string_type(expected, with_shape=True)}")
+        # this is too long
+        # expected = model.visual(**inputs)
+        # print(f"-- expected: {self.string_type(expected, with_shape=True)}")
 
-        filename = self.get_dump_file("test_imagetext2text_qwen_2_5_vl_instruct_visual.onnx")
+        exporter = "custom"  # "onnx-dynamo"
+        filename = self.get_dump_file(
+            f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{exporter}.onnx"
+        )
+        fileep = self.get_dump_file(
+            f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{exporter}.graph"
+        )
         print()
         with torch_export_patches(
             patch_torch=False,
             patch_sympy=False,
             patch_transformers=True,
             verbose=1,
+            stop_if_static=2,
         ):
             to_onnx(
-                model,
+                model.visual,
                 kwargs=inputs,
                 dynamic_shapes=dict(
                     hidden_states={0: "hidden_width", 1: "hidden_height"},
                     grid_thw={0: "n_images"},
                 ),
                 filename=filename,
-                exporter="custom",
+                exporter=exporter,
+                verbose=1,
+                save_ep=fileep,
             )
 
 
