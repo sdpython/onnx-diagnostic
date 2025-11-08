@@ -2216,8 +2216,53 @@ if patch_qwen2_5:
             hidden_states = self.merger(hidden_states)
             reverse_indices = torch.argsort(window_index)
             hidden_states = hidden_states[reverse_indices, :]
-
             return hidden_states
+
+    @torch.library.custom_op("custom::qwen25_attention", mutates_args={})
+    def qwen25_attention(
+        query_states: torch.Tensor,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        cu_seqlens: torch.Tensor,
+        _cu_seqlens: torch.Tensor,
+        max_seqlen: torch.Tensor,
+        _max_seqlen: torch.Tensor,
+        scale: torch.Tensor,
+    ) -> torch.Tensor:
+        return torch.empty(
+            key_states.shape[0],
+            value_states.shape[1],
+            max_seqlen,
+            value_states.shape[-1],
+            dtype=query_states.dtype,
+            device=query_states.device,
+        )
+
+    def make_undefined_dimension(i: int) -> torch.SymInt:
+        t = torch.ones((i * 2,))
+        t[:i] = 0
+        res = torch.nonzero(t).shape[0]
+        return res
+
+    @qwen25_attention.register_fake
+    def qwen25_attention_shape(
+        query_states,
+        key_states,
+        value_states,
+        cu_seqlens,
+        _cu_seqlens,
+        max_seqlen,
+        _max_seqlen,
+        scale,
+    ):
+        return torch.empty(
+            key_states.shape[0],
+            value_states.shape[1],
+            max_seqlen,  # make_undefined_dimension(max_seqlen), new dimension does not work
+            value_states.shape[-1],
+            dtype=query_states.dtype,
+            device=query_states.device,
+        )
 
     class patched_Qwen2_5_VLVisionAttention:
         _PATCHES_ = ["forward"]
@@ -2262,7 +2307,22 @@ if patch_qwen2_5:
                     self.config._attn_implementation
                 ]
 
-            if self.config._attn_implementation == "flash_attention_2":
+            if (
+                self.config._attn_implementation == "flash_attention_2"
+                or torch.compiler.is_exporting()
+            ):
+                max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
+                attn_output = torch.ops.custom.qwen25_attention(
+                    query_states,
+                    key_states,
+                    value_states,
+                    cu_seqlens,
+                    cu_seqlens,
+                    max_seqlen,
+                    max_seqlen,
+                    torch.tensor(self.scaling, dtype=torch.float32),
+                )
+            elif self.config._attn_implementation == "flash_attention_2":
                 # Flash Attention 2: Use cu_seqlens for variable length attention
                 max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
                 attn_output, _ = attention_interface(

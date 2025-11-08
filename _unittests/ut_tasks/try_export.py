@@ -6,6 +6,8 @@ from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.export.api import to_onnx
 
+# from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
+
 
 class TestTryExportHuggingFaceHubModel(ExtTestCase):
     @never_test()
@@ -78,9 +80,16 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         fileep = self.get_dump_file(
             f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{exporter}.graph"
         )
+        dynamic_shapes = dict(
+            hidden_states={0: "hidden_width", 1: "hidden_height"},
+            grid_thw={0: "n_images"},
+        )
+
+        # fake_inputs = make_fake_with_dynamic_dimensions(inputs, dynamic_shapes)[0]
+        export_inputs = inputs
         print()
         with torch_export_patches(
-            patch_torch=False,
+            patch_torch=True,
             patch_sympy=False,
             patch_transformers=True,
             verbose=1,
@@ -88,11 +97,8 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         ):
             to_onnx(
                 model.visual,
-                kwargs=inputs,
-                dynamic_shapes=dict(
-                    hidden_states={0: "hidden_width", 1: "hidden_height"},
-                    grid_thw={0: "n_images"},
-                ),
+                kwargs=export_inputs,
+                dynamic_shapes=dynamic_shapes,
                 filename=filename,
                 exporter=exporter,
                 verbose=1,
