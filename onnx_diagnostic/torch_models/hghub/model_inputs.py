@@ -3,7 +3,7 @@ import inspect
 import os
 import pprint
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 import torch
 import transformers
 from ...helpers.config_helper import update_config, build_diff_config
@@ -53,6 +53,7 @@ def get_untrained_model_with_inputs(
     add_second_input: int = 1,
     subfolder: Optional[str] = None,
     use_only_preinstalled: bool = False,
+    config_reduction: Optional[Callable[["Config", str], Dict]] = None,  # noqa: F821
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
@@ -75,6 +76,10 @@ def get_untrained_model_with_inputs(
         supports different shapes
     :param subfolder: subfolder to use for this model id
     :param use_only_preinstalled: use only preinstalled version
+    :param config_reduction: if specified, this function is used to reduce the
+        model size by tweaking the configuration, it returns a dictionary with values
+        to update, if empty, function:`reduce_model_config
+        <onnx_diagnostic.torch_models.hghub.reduce_model_config>`
     :return: dictionary with a model, inputs, dynamic shapes, and the configuration,
         some necessary rewriting as well
 
@@ -157,7 +162,13 @@ def get_untrained_model_with_inputs(
 
         # updating the configuration
         config0 = copy.deepcopy(config)
-        mkwargs = reduce_model_config(config, task) if not same_as_pretrained else {}
+        if config_reduction:
+            assert (
+                not same_as_pretrained
+            ), "config_reduction should be None if same_as_pretrained is True"
+            mkwargs = config_reduction(config, task)
+        else:
+            mkwargs = reduce_model_config(config, task) if not same_as_pretrained else {}
         if model_kwargs:
             for k, v in model_kwargs.items():
                 if isinstance(v, dict):

@@ -608,20 +608,20 @@ class patched_GenerationMixin:
             #         if input_ids.shape[1] != cache_position.shape[0]:
             #             input_ids = input_ids[:, cache_position]
             def branch_1(inputs_embeds, cache_position):
-                return inputs_embeds[:, -cache_position.shape[0] :]
+                return inputs_embeds[:, -cache_position.shape[0] :].clone()
 
             def branch_2(input_ids, cache_position):
-                return input_ids[:, -cache_position.shape[0] :]
+                return input_ids[:, -cache_position.shape[0] :].clone()
 
             def branch_3(input_ids, cache_position):
-                return input_ids[:, cache_position]
+                return input_ids[:, cache_position].clone()
 
             inputs_embeds, input_ids = torch.cond(
                 input_ids.shape[1] == 0,
                 (
                     lambda input_ids, inputs_embeds, cache_position: (
                         branch_1(inputs_embeds, cache_position),
-                        input_ids,
+                        input_ids.clone(),
                     )
                 ),
                 (
@@ -1917,67 +1917,176 @@ def rewrite_loop_for_square_mask(mask: torch.Tensor, seq: torch.Tensor):
     return mask * filt
 
 
-class patched_VisionAttention(torch.nn.Module):
-    _PATCHES_ = ["forward"]
-    _PATCHED_CLASS_ = transformers.models.qwen2_vl.modeling_qwen2_vl.VisionAttention
+try:
+    import transformers.models.qwen2_vl
 
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        cu_seqlens: torch.Tensor,
-        rotary_pos_emb: Optional[torch.Tensor] = None,
-        position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-    ) -> torch.Tensor:
-        seq_length = hidden_states.shape[0]
-        q, k, v = (
-            self.qkv(hidden_states)
-            .reshape(seq_length, 3, self.num_heads, -1)
-            .permute(1, 0, 2, 3)
-            .unbind(0)
-        )
-        if position_embeddings is None:
-            transformers.models.qwen2_vl.modeling_qwen2_vl.logger.warning_once(
-                "The attention layers in this model are transitioning from "
-                " computing the RoPE embeddings internally "
-                "through `rotary_pos_emb` (2D tensor of RoPE theta values), "
-                "to using externally computed "
-                "`position_embeddings` (Tuple of tensors, containing cos and sin)."
-                " In v4.54 `rotary_pos_emb` will be "
-                "removed and `position_embeddings` will be mandatory."
+    patch_qwen2 = True
+except ImportError:
+    patch_qwen2 = False
+
+if patch_qwen2:
+
+    class patched_VisionAttention(torch.nn.Module):
+        _PATCHES_ = ["forward"]
+        _PATCHED_CLASS_ = transformers.models.qwen2_vl.modeling_qwen2_vl.VisionAttention
+
+        def forward(
+            self,
+            hidden_states: torch.Tensor,
+            cu_seqlens: torch.Tensor,
+            rotary_pos_emb: Optional[torch.Tensor] = None,
+            position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        ) -> torch.Tensor:
+            seq_length = hidden_states.shape[0]
+            q, k, v = (
+                self.qkv(hidden_states)
+                .reshape(seq_length, 3, self.num_heads, -1)
+                .permute(1, 0, 2, 3)
+                .unbind(0)
             )
-            emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
-            cos = emb.cos()
-            sin = emb.sin()
-        else:
-            cos, sin = position_embeddings
-        q, k = transformers.models.qwen2_vl.modeling_qwen2_vl.apply_rotary_pos_emb_vision(
-            q, k, cos, sin
+            if position_embeddings is None:
+                transformers.models.qwen2_vl.modeling_qwen2_vl.logger.warning_once(
+                    "The attention layers in this model are transitioning from "
+                    " computing the RoPE embeddings internally "
+                    "through `rotary_pos_emb` (2D tensor of RoPE theta values), "
+                    "to using externally computed "
+                    "`position_embeddings` (Tuple of tensors, containing cos and sin)."
+                    " In v4.54 `rotary_pos_emb` will be "
+                    "removed and `position_embeddings` will be mandatory."
+                )
+                emb = torch.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
+                cos = emb.cos()
+                sin = emb.sin()
+            else:
+                cos, sin = position_embeddings
+            q, k = transformers.models.qwen2_vl.modeling_qwen2_vl.apply_rotary_pos_emb_vision(
+                q, k, cos, sin
+            )
+
+            attention_mask = torch.full(
+                [1, seq_length, seq_length],
+                torch.finfo(q.dtype).min,
+                device=q.device,
+                dtype=q.dtype,
+            )
+            # for i in range(1, len(cu_seqlens)):
+            #     attention_mask[..., cu_seqlens[i - 1] : cu_seqlens[i],
+            #                         cu_seqlens[i - 1] : cu_seqlens[i]] = 0
+            attention_mask = rewrite_loop_for_square_mask(attention_mask, cu_seqlens)
+
+            q = q.transpose(0, 1)
+            k = k.transpose(0, 1)
+            v = v.transpose(0, 1)
+            attn_weights = torch.matmul(q, k.transpose(1, 2)) / math.sqrt(self.head_dim)
+            attn_weights = attn_weights + attention_mask
+            attn_weights = torch.nn.functional.softmax(
+                attn_weights, dim=-1, dtype=torch.float32
+            ).to(q.dtype)
+            attn_output = torch.matmul(attn_weights, v)
+            attn_output = attn_output.transpose(0, 1)
+            attn_output = attn_output.reshape(seq_length, -1)
+            attn_output = self.proj(attn_output)
+            return attn_output
+
+
+try:
+    import transformers.models.qwen2_5_vl
+    import transformers.models.qwen2_5_vl.modeling_qwen2_5_vl
+
+    patch_qwen2_5 = True
+except ImportError:
+    patch_qwen2_5 = False
+
+if patch_qwen2_5:
+
+    class patched_Qwen2_5_VLForConditionalGeneration:
+        _PATCHES_ = ["prepare_inputs_for_generation"]
+        _PATCHED_CLASS_ = (
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLForConditionalGeneration
         )
 
-        attention_mask = torch.full(
-            [1, seq_length, seq_length],
-            torch.finfo(q.dtype).min,
-            device=q.device,
-            dtype=q.dtype,
-        )
-        # for i in range(1, len(cu_seqlens)):
-        #     attention_mask[..., cu_seqlens[i - 1] : cu_seqlens[i],
-        #                         cu_seqlens[i - 1] : cu_seqlens[i]] = 0
-        attention_mask = rewrite_loop_for_square_mask(attention_mask, cu_seqlens)
+        def prepare_inputs_for_generation(
+            self,
+            input_ids,
+            past_key_values=None,
+            attention_mask=None,
+            inputs_embeds=None,
+            cache_position=None,
+            position_ids=None,
+            use_cache=True,
+            pixel_values=None,
+            pixel_values_videos=None,
+            image_grid_thw=None,
+            video_grid_thw=None,
+            second_per_grid_ts=None,
+            **kwargs,
+        ):
+            # Overwritten -- in specific circumstances we don't want to f
+            # forward image inputs to the model
+            from transformers.generation import GenerationMixin
 
-        q = q.transpose(0, 1)
-        k = k.transpose(0, 1)
-        v = v.transpose(0, 1)
-        attn_weights = torch.matmul(q, k.transpose(1, 2)) / math.sqrt(self.head_dim)
-        attn_weights = attn_weights + attention_mask
-        attn_weights = torch.nn.functional.softmax(
-            attn_weights, dim=-1, dtype=torch.float32
-        ).to(q.dtype)
-        attn_output = torch.matmul(attn_weights, v)
-        attn_output = attn_output.transpose(0, 1)
-        attn_output = attn_output.reshape(seq_length, -1)
-        attn_output = self.proj(attn_output)
-        return attn_output
+            model_inputs = GenerationMixin.prepare_inputs_for_generation(
+                self,
+                input_ids,
+                past_key_values=past_key_values,
+                attention_mask=attention_mask,
+                inputs_embeds=inputs_embeds,
+                cache_position=cache_position,
+                position_ids=position_ids,
+                pixel_values=pixel_values,
+                pixel_values_videos=pixel_values_videos,
+                image_grid_thw=image_grid_thw,
+                video_grid_thw=video_grid_thw,
+                second_per_grid_ts=second_per_grid_ts,
+                use_cache=use_cache,
+                **kwargs,
+            )
+
+            # Qwen2-5-VL position_ids are prepared with rope_deltas
+            if position_ids is None:
+                # Calculate RoPE index once per generation in the pre-fill stage only.
+                # When compiling, we can't check tensor values thus we check only input length
+                # It is safe to assume that `length!=1` means we're in pre-fill
+                # because compiled models currently cannot do assisted decoding
+                if cache_position[0] == 0 or self.model.rope_deltas is None:
+                    vision_positions, rope_deltas = self.model.get_rope_index(
+                        model_inputs.get("input_ids", None),
+                        image_grid_thw=image_grid_thw,
+                        video_grid_thw=video_grid_thw,
+                        second_per_grid_ts=second_per_grid_ts,
+                        attention_mask=attention_mask,
+                    )
+                    self.model.rope_deltas = rope_deltas
+                # then use the prev pre-calculated rope-deltas to get the correct position ids
+                elif (
+                    "position_ids" in model_inputs and model_inputs["position_ids"] is not None
+                ):
+                    batch_size, seq_length = model_inputs["position_ids"].shape
+                    device = model_inputs["position_ids"].device
+                    position_ids = torch.arange(seq_length, device=device)
+                    position_ids = position_ids.view(1, 1, -1).expand(3, batch_size, -1)
+                    delta = cache_position[0] + self.model.rope_deltas
+                    delta = delta.repeat_interleave(batch_size // delta.shape[0], dim=0)
+                    vision_positions = position_ids + delta.expand_as(position_ids)
+
+                # Concatenate "text + vision" positions into [4, bs, seq-len]
+                if "position_ids" not in model_inputs or model_inputs["position_ids"] is None:
+                    text_positions = torch.arange(input_ids.shape[1], device=input_ids.device)[
+                        None, None, :
+                    ]
+                else:
+                    text_positions = model_inputs["position_ids"][None, ...]
+                # text_positions = model_inputs["position_ids"][None, ...]
+                assert vision_positions is not None, "vision_positions are missing"
+                model_inputs["position_ids"] = torch.cat(
+                    [text_positions, vision_positions], dim=0
+                )
+
+            if cache_position[0] != 0:
+                model_inputs["pixel_values"] = None
+                model_inputs["pixel_values_videos"] = None
+
+            return model_inputs
 
 
 try:
