@@ -4,6 +4,8 @@ Change Logs
 0.8.2
 +++++
 
+* :pr:`292`: new patches for Qwen models
+
 0.8.1
 +++++
 

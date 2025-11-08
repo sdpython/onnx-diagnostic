@@ -406,7 +406,7 @@ if hasattr(transformers.cache_utils, "EncoderDecoderCache"):
         )
 
 else:
-    make_encoder_decoder_cache = None
+    make_encoder_decoder_cache = None  # type: ignore[assignment]
 
 
 def make_mamba_cache(
@@ -517,7 +517,7 @@ if hasattr(transformers.cache_utils, "SlidingWindowCache"):
         return finalize_cache(cache)
 
 else:
-    make_sliding_window_cache = None
+    make_sliding_window_cache = None  # type: ignore[assignment]
 
 if hasattr(transformers.cache_utils, "HybridCache"):
 
@@ -681,7 +681,7 @@ if hasattr(transformers.cache_utils, "HybridCache"):
         return finalize_cache(cache)
 
 else:
-    make_hybrid_cache = None
+    make_hybrid_cache = None  # type: ignore[assignment]
 
 
 def finalize_cache(cache: transformers.cache_utils.Cache) -> transformers.cache_utils.Cache:

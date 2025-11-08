@@ -1,0 +1,92 @@
+import os
+import unittest
+import torch
+from onnx_diagnostic.ext_test_case import ExtTestCase, never_test, ignore_warnings
+from onnx_diagnostic.torch_export_patches import torch_export_patches
+from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
+from onnx_diagnostic.export.api import to_onnx
+
+
+class TestTryExportHuggingFaceHubModel(ExtTestCase):
+    @never_test()
+    @ignore_warnings(UserWarning)
+    def test_imagetext2text_qwen_2_5_vl_instruct_visual(self):
+        """
+        clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k qwen_2_5
+
+        ::
+
+            kwargs=dict(
+                cache_position:T7s3602,
+                input_ids:T7s1x3602,
+                inputs_embeds:None,
+                attention_mask:T7s1x3602,
+                position_ids:T7s4x1x3602,
+                pixel_values:T1s14308x1176,
+                pixel_values_videos:None,
+                image_grid_thw:T7s1x3,
+                video_grid_thw:None,
+                second_per_grid_ts:None,
+                use_cache:bool,
+                return_dict:bool
+            )
+        """
+        from transformers import AutoModel, AutoProcessor
+
+        model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
+        if os.environ.get("PRETRAINED", ""):
+            model = AutoModel.from_pretrained(model_id, device_map="auto", dtype="auto").eval()
+        else:
+
+            def _config_reduction(config, task):
+                return {
+                    "num_hidden_layers": 2,
+                    "text_config": {
+                        "num_hidden_layers": 2,
+                        "layer_types": ["full_attention", "full_attention"],
+                    },
+                }
+
+            config_reduction = _config_reduction
+            data = get_untrained_model_with_inputs(
+                model_id, verbose=1, add_second_input=False, config_reduction=config_reduction
+            )
+            model = data["model"]
+
+        model = model.to("cpu").to(torch.float32)
+
+        print(f"-- model.device={model.device}")
+        processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
+        print(f"-- processor={type(processor)}")
+
+        inputs = dict(
+            hidden_states=torch.rand((14308, 1176), dtype=torch.float32),
+            grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64),
+        )
+
+        print(f"-- inputs: {self.string_type(inputs, with_shape=True)}")
+        expected = model.visual(**inputs)
+        print(f"-- expected: {self.string_type(expected, with_shape=True)}")
+
+        filename = self.get_dump_file("test_imagetext2text_qwen_2_5_vl_instruct_visual.onnx")
+        print()
+        with torch_export_patches(
+            patch_torch=False,
+            patch_sympy=False,
+            patch_transformers=True,
+            verbose=1,
+        ):
+            to_onnx(
+                model,
+                kwargs=inputs,
+                dynamic_shapes=dict(
+                    hidden_states={0: "hidden_width", 1: "hidden_height"},
+                    grid_thw={0: "n_images"},
+                ),
+                filename=filename,
+                exporter="custom",
+            )
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

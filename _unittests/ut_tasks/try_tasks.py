@@ -9,7 +9,7 @@ from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 
 
-class TestHuggingFaceHubModel(ExtTestCase):
+class TestTryHuggingFaceHubModel(ExtTestCase):
     @never_test()
     def test_image_classification(self):
         # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k image_c
@@ -1014,7 +1014,8 @@ class TestHuggingFaceHubModel(ExtTestCase):
         from transformers import AutoModel, AutoProcessor
         from qwen_vl_utils import process_vision_info
 
-        model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
+        # model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
+        model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
         if os.environ.get("PRETRAINED", ""):
             model = AutoModel.from_pretrained(model_id, device_map="auto", dtype="auto").eval()
         else:
@@ -1075,7 +1076,7 @@ class TestHuggingFaceHubModel(ExtTestCase):
                 verbose=1,
             ),
             steal_forward(
-                model,
+                [model, model.visual],
                 dump_file=self.get_dump_file("test_imagetext2text_qwen_2_5_vl_instruct.onnx"),
                 dump_drop={"attention_mask", "past_key_values", "pixel_values"},
                 save_as_external_data=False,
