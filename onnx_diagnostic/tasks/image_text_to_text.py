@@ -311,7 +311,11 @@ def get_inputs_default(
         attention_mask=torch.cat(
             [
                 torch.ones((batch_size, sequence_length), dtype=torch.int64),
-                input_ids.ne(pad_token_id).to(torch.int64),
+                (
+                    torch.ones(input_ids.shape)
+                    if pad_token_id is None
+                    else input_ids.ne(pad_token_id)
+                ).to(torch.int64),
             ],
             axis=-1,
         ),

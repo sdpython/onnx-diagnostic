@@ -787,6 +787,8 @@ def string_type(
         return f"ultralytics.{obj.__class__.__name__}(...)"
     if obj.__class__.__name__ == "FakeTensorMode":
         return f"{obj}"
+    if obj.__class__.__name__ == "FakeTensorContext":
+        return "FakeTensorContext(...)"
 
     if verbose:
         print(f"[string_type] END:{type(obj)}")

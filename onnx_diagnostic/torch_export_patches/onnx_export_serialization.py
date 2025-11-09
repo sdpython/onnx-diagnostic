@@ -4,14 +4,18 @@ import packaging.version as pv
 import optree
 import torch
 import transformers
-from transformers.cache_utils import (
-    DynamicCache,
-    EncoderDecoderCache,
-    HybridCache,
-    SlidingWindowCache,
-    StaticCache,
-)
+from transformers.cache_utils import DynamicCache, StaticCache
 
+try:
+    from transformers.cache_utils import (
+        EncoderDecoderCache,
+        HybridCache,
+        SlidingWindowCache,
+    )
+except ImportError:
+    EncoderDecoderCache = None
+    HybridCache = None
+    SlidingWindowCache = None
 from ..helpers import string_type
 from .serialization import _lower_name_with_
 

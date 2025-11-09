@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Sequence, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import torch
 
 
@@ -14,6 +14,8 @@ def to_onnx(
     output_names: Optional[List[str]] = None,
     output_dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
     exporter: str = "onnx-dynamo",
+    exporter_kwargs: Optional[Dict[str, Any]] = None,
+    save_ep: Optional[str] = None,
 ) -> Any:
     """
     Common API for exporters. By default, the models are optimized to use the
@@ -32,6 +34,8 @@ def to_onnx(
     :param output_names: to change the output of the onnx model
     :param output_dynamic_shapes: to overwrite the dynamic shapes names
     :param exporter: exporter to use (``onnx-dynamo``, ``modelbuilder``, ``custom``)
+    :param exporter_kwargs: additional parameters sent to the exporter
+    :param save_ep: saves the exported program
     :return: the output of the selected exporter, usually a structure including
         an onnx model
 
@@ -48,7 +52,10 @@ def to_onnx(
         )
     """
     if exporter == "custom":
-        from experimental_experiment.torch_interpreter import to_onnx as _to_onnx
+        from experimental_experiment.torch_interpreter import (
+            to_onnx as _to_onnx,
+            ExportOptions,
+        )
         from experimental_experiment.xbuilder import OptimizationOptions
 
         return _to_onnx(
@@ -63,7 +70,9 @@ def to_onnx(
             dynamic_shapes=dynamic_shapes,
             large_model=True,
             output_dynamic_shapes=output_dynamic_shapes,
+            export_options=ExportOptions(save_ep=save_ep),
             options=OptimizationOptions(patterns="default+onnxruntime"),
+            **(exporter_kwargs or {}),
         )
     if exporter in ("dynamo", "onnx-dynamo"):
         import onnxscript.rewriter.ort_fusions as ort_fusions
@@ -80,6 +89,7 @@ def to_onnx(
             opset_version=target_opset,
             dynamic_shapes=dynamic_shapes,
             dynamo=True,
+            **(exporter_kwargs or {}),
         )
         ort_fusions.optimize_for_ort(epo.model)
         epo.save(filename)
@@ -117,6 +127,7 @@ def to_onnx(
             precision=str(first_float[0].dtype).split(".")[-1],
             execution_provider="cuda" if first.is_cuda else "cpu",
             cache_dir=os.path.dirname(filename),
+            **(exporter_kwargs or {}),
         )
         save_model_builder(onx, os.path.dirname(filename))
         return onx

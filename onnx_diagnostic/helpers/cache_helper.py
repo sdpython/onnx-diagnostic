@@ -391,17 +391,22 @@ def make_static_cache(
     return finalize_cache(cache)
 
 
-def make_encoder_decoder_cache(
-    self_attention_cache: transformers.cache_utils.DynamicCache,
-    cross_attention_cache: transformers.cache_utils.DynamicCache,
-) -> transformers.cache_utils.EncoderDecoderCache:
-    """Creates an EncoderDecoderCache."""
-    return transformers.cache_utils.EncoderDecoderCache(
-        # self_attention_cache=self_attention_cache,
-        # cross_attention_cache=cross_attention_cache
-        self_attention_cache,
-        cross_attention_cache,
-    )
+if hasattr(transformers.cache_utils, "EncoderDecoderCache"):
+
+    def make_encoder_decoder_cache(
+        self_attention_cache: transformers.cache_utils.DynamicCache,
+        cross_attention_cache: transformers.cache_utils.DynamicCache,
+    ) -> transformers.cache_utils.EncoderDecoderCache:
+        """Creates an EncoderDecoderCache."""
+        return transformers.cache_utils.EncoderDecoderCache(
+            # self_attention_cache=self_attention_cache,
+            # cross_attention_cache=cross_attention_cache
+            self_attention_cache,
+            cross_attention_cache,
+        )
+
+else:
+    make_encoder_decoder_cache = None  # type: ignore[assignment]
 
 
 def make_mamba_cache(
@@ -454,220 +459,229 @@ def make_mamba_cache(
     return finalize_cache(cache)
 
 
-def make_sliding_window_cache(
-    key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
-) -> transformers.cache_utils.SlidingWindowCache:
-    "Creates a :class:`transformers.cache_utils.SlidingWindowCache`."
-    key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
+if hasattr(transformers.cache_utils, "SlidingWindowCache"):
 
-    class _config:
-        def __init__(self):
-            self.head_dim = key_value_pairs[0][0].shape[-1]
-            self.num_attention_heads = key_value_pairs[0][0].shape[1]
-            self.num_hidden_layers = len(key_value_pairs)
-            self.sliding_window = key_value_pairs[0][0].shape[2]
+    def make_sliding_window_cache(
+        key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
+    ) -> transformers.cache_utils.SlidingWindowCache:
+        "Creates a :class:`transformers.cache_utils.SlidingWindowCache`."
+        key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
 
-        def get_text_config(self, *args, **kwargs):
-            return self
+        class _config:
+            def __init__(self):
+                self.head_dim = key_value_pairs[0][0].shape[-1]
+                self.num_attention_heads = key_value_pairs[0][0].shape[1]
+                self.num_hidden_layers = len(key_value_pairs)
+                self.sliding_window = key_value_pairs[0][0].shape[2]
 
-    cache = transformers.cache_utils.SlidingWindowCache(
-        config=_config(),
-        max_batch_size=key_value_pairs[0][0].shape[0],
-        max_cache_len=key_value_pairs[0][0].shape[2],  # same as sliding_window
-        device=key_value_pairs[0][0].device,
-        dtype=key_value_pairs[0][0].dtype,
-    )
-    ca = CacheKeyValue(cache)
-    if hasattr(cache, "layers") and len(ca.key_cache) == 0:
-        # transformers>= 4.55.2, layers are empty
-        cache_position = torch.arange(key_value_pairs[0][0].shape[2], dtype=torch.int64)
-        for i, (key, value) in enumerate(key_value_pairs):
-            cache.update(key, value, i, cache_kwargs={"cache_position": cache_position})
-        return cache
+            def get_text_config(self, *args, **kwargs):
+                return self
 
-    for i in range(len(key_value_pairs)):
-        assert ca.key_cache[i].shape == key_value_pairs[i][0].shape, (
-            f"Shape mismatch, expected {cache.key_cache[i].shape}, "
-            f"got {key_value_pairs[i][0].shape}"
+        cache = transformers.cache_utils.SlidingWindowCache(
+            config=_config(),
+            max_batch_size=key_value_pairs[0][0].shape[0],
+            max_cache_len=key_value_pairs[0][0].shape[2],  # same as sliding_window
+            device=key_value_pairs[0][0].device,
+            dtype=key_value_pairs[0][0].dtype,
         )
-        ca.key_cache[i][:, :, :, :] = key_value_pairs[i][0]
-        assert ca.value_cache[i].shape == key_value_pairs[i][1].shape, (
-            f"Shape mismatch, expected {cache.value_cache[i].shape}, "
-            f"got {key_value_pairs[i][1].shape}"
+        ca = CacheKeyValue(cache)
+        if hasattr(cache, "layers") and len(ca.key_cache) == 0:
+            # transformers>= 4.55.2, layers are empty
+            cache_position = torch.arange(key_value_pairs[0][0].shape[2], dtype=torch.int64)
+            for i, (key, value) in enumerate(key_value_pairs):
+                cache.update(key, value, i, cache_kwargs={"cache_position": cache_position})
+            return cache
+
+        for i in range(len(key_value_pairs)):
+            assert ca.key_cache[i].shape == key_value_pairs[i][0].shape, (
+                f"Shape mismatch, expected {cache.key_cache[i].shape}, "
+                f"got {key_value_pairs[i][0].shape}"
+            )
+            ca.key_cache[i][:, :, :, :] = key_value_pairs[i][0]
+            assert ca.value_cache[i].shape == key_value_pairs[i][1].shape, (
+                f"Shape mismatch, expected {cache.value_cache[i].shape}, "
+                f"got {key_value_pairs[i][1].shape}"
+            )
+            ca.value_cache[i][:, :, :, :] = key_value_pairs[i][1]
+        if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
+            # The cache constructor contains the two following lines
+            # (in cache_utils.py) which append empty layers when the cache is
+            # initialized. We need to remove them.
+            # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
+            # self.append_new_layers(self.num_hidden_layers - 1)
+            cache.layers[:] = cache.layers[-len(key_value_pairs) :]
+        assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
+            f"Unexpected number of layers in the cache ({len(cache.layers)}), "
+            f"{len(key_value_pairs)} expected."
         )
-        ca.value_cache[i][:, :, :, :] = key_value_pairs[i][1]
-    if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
-        # The cache constructor contains the two following lines
-        # (in cache_utils.py) which append empty layers when the cache is
-        # initialized. We need to remove them.
-        # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
-        # self.append_new_layers(self.num_hidden_layers - 1)
-        cache.layers[:] = cache.layers[-len(key_value_pairs) :]
-    assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
-        f"Unexpected number of layers in the cache ({len(cache.layers)}), "
-        f"{len(key_value_pairs)} expected."
-    )
-    return finalize_cache(cache)
+        return finalize_cache(cache)
 
+else:
+    make_sliding_window_cache = None  # type: ignore[assignment]
 
-def make_hybrid_cache(
-    key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
-    max_cache_len: Optional[int] = None,
-    max_batch_size: Optional[int] = None,
-    sliding_window: Optional[int] = None,
-) -> transformers.cache_utils.HybridCache:
-    """
-    Creates an instance of :class:`transformers.cache_utils.HybridCache`.
-    This version is valid for ``transformers < 4.50``.
+if hasattr(transformers.cache_utils, "HybridCache"):
 
-    :param key_value_pairs: list of pairs of (key, values)
-    :return: :class:`transformers.cache_utils.HybridCache`
+    def make_hybrid_cache(
+        key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
+        max_cache_len: Optional[int] = None,
+        max_batch_size: Optional[int] = None,
+        sliding_window: Optional[int] = None,
+    ) -> transformers.cache_utils.HybridCache:
+        """
+        Creates an instance of :class:`transformers.cache_utils.HybridCache`.
+        This version is valid for ``transformers < 4.50``.
 
-    Example:
+        :param key_value_pairs: list of pairs of (key, values)
+        :return: :class:`transformers.cache_utils.HybridCache`
 
-    .. runpython::
-        :showcode:
+        Example:
 
-        import torch
-        from onnx_diagnostic.helpers import string_type
-        from onnx_diagnostic.helpers.cache_helper import make_hybrid_cache
+        .. runpython::
+            :showcode:
 
-        n_layers = 2
-        bsize, nheads, slen, dim = 2, 4, 3, 7
+            import torch
+            from onnx_diagnostic.helpers import string_type
+            from onnx_diagnostic.helpers.cache_helper import make_hybrid_cache
 
-        past_key_values = make_hybrid_cache(
-            [
-                (
-                    torch.randn(bsize, nheads, slen, dim),
-                    torch.randn(bsize, nheads, slen, dim),
-                )
-                for i in range(n_layers)
-            ]
-        )
-        print(string_type(past_key_values, with_shape=True))
+            n_layers = 2
+            bsize, nheads, slen, dim = 2, 4, 3, 7
 
-    This part defines how the shapes are working in one HybridCache.
+            past_key_values = make_hybrid_cache(
+                [
+                    (
+                        torch.randn(bsize, nheads, slen, dim),
+                        torch.randn(bsize, nheads, slen, dim),
+                    )
+                    for i in range(n_layers)
+                ]
+            )
+            print(string_type(past_key_values, with_shape=True))
 
-    .. code-block:: python
+        This part defines how the shapes are working in one HybridCache.
 
-        self.max_cache_len = (
-            max_cache_len if max_cache_len is not None else config.max_position_embeddings)
+        .. code-block:: python
 
-        # Sliding layers can't be larger than the overall max cache len
-        self.sliding_window_len = min(config.sliding_window, self.max_cache_len)
-        self.max_batch_size = max_batch_size
+            self.max_cache_len = (
+                max_cache_len if max_cache_len is not None else config.max_position_embeddings)
 
-        self.head_dim = (
-            config.head_dim if hasattr(config, "head_dim")
-            else config.hidden_size // config.num_attention_heads
-        )
+            # Sliding layers can't be larger than the overall max cache len
+            self.sliding_window_len = min(config.sliding_window, self.max_cache_len)
+            self.max_batch_size = max_batch_size
 
-        self._dtype = dtype
-        self.num_key_value_heads = (
-            config.num_attention_heads
-            if getattr(config, "num_key_value_heads", None) is None
-            else config.num_key_value_heads
-        )
+            self.head_dim = (
+                config.head_dim if hasattr(config, "head_dim")
+                else config.hidden_size // config.num_attention_heads
+            )
 
-        # If the attribute does not exist in the config, fallback to a simple StaticCache
-        if hasattr(config, "layer_types"):
-            self.is_sliding = [
-                layer_type != "full_attention" for layer_type in config.layer_types]
-        else:
-            self.is_sliding = [False] * config.num_hidden_layers
+            self._dtype = dtype
+            self.num_key_value_heads = (
+                config.num_attention_heads
+                if getattr(config, "num_key_value_heads", None) is None
+                else config.num_key_value_heads
+            )
 
-        self.key_cache: list[torch.Tensor] = []
-        self.value_cache: list[torch.Tensor] = []
-        global_cache_shape = (self.max_batch_size, self.num_key_value_heads,
-                                self.max_cache_len, self.head_dim)
-        sliding_cache_shape = (self.max_batch_size, self.num_key_value_heads,
-                                self.sliding_window_len, self.head_dim)
-        self.sliding_window = min(config.sliding_window, max_cache_len)
-        device = torch.device(device) if device is not None else None
-        for i in range(config.num_hidden_layers):
-            layer_device = layer_device_map[i] if layer_device_map is not None else device
-            cache_shape = sliding_cache_shape if self.is_sliding[i] else global_cache_shape
-            new_layer_key_cache = torch.zeros(
-                cache_shape, dtype=self._dtype, device=layer_device)
-            new_layer_value_cache = torch.zeros(
-                cache_shape, dtype=self._dtype, device=layer_device)
-            torch._dynamo.mark_static_address(new_layer_key_cache)
-            torch._dynamo.mark_static_address(new_layer_value_cache)
-            self.key_cache.append(new_layer_key_cache)
-            self.value_cache.append(new_layer_value_cache)
-    """
-    key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
-    layer_types = None
-    if key_value_pairs:
-        assert (
-            not max_batch_size and not max_cache_len
-        ), "key_value_pairs is not empty, do not specify max_cache_len and max_batch_size"
-        max_batch_size = key_value_pairs[0][0].shape[0]
-        sets_of_dim = set(kv[0].shape[2] for kv in key_value_pairs)
-        if len(sets_of_dim) == 1:
-            max_cache_len = sets_of_dim.pop()
-            sliding_window = max_cache_len
+            # If the attribute does not exist in the config, fallback to a simple StaticCache
+            if hasattr(config, "layer_types"):
+                self.is_sliding = [
+                    layer_type != "full_attention" for layer_type in config.layer_types]
+            else:
+                self.is_sliding = [False] * config.num_hidden_layers
+
+            self.key_cache: list[torch.Tensor] = []
+            self.value_cache: list[torch.Tensor] = []
+            global_cache_shape = (self.max_batch_size, self.num_key_value_heads,
+                                    self.max_cache_len, self.head_dim)
+            sliding_cache_shape = (self.max_batch_size, self.num_key_value_heads,
+                                    self.sliding_window_len, self.head_dim)
+            self.sliding_window = min(config.sliding_window, max_cache_len)
+            device = torch.device(device) if device is not None else None
+            for i in range(config.num_hidden_layers):
+                layer_device = layer_device_map[i] if layer_device_map is not None else device
+                cache_shape = sliding_cache_shape if self.is_sliding[i] else global_cache_shape
+                new_layer_key_cache = torch.zeros(
+                    cache_shape, dtype=self._dtype, device=layer_device)
+                new_layer_value_cache = torch.zeros(
+                    cache_shape, dtype=self._dtype, device=layer_device)
+                torch._dynamo.mark_static_address(new_layer_key_cache)
+                torch._dynamo.mark_static_address(new_layer_value_cache)
+                self.key_cache.append(new_layer_key_cache)
+                self.value_cache.append(new_layer_value_cache)
+        """
+        key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
+        layer_types = None
+        if key_value_pairs:
+            assert (
+                not max_batch_size and not max_cache_len
+            ), "key_value_pairs is not empty, do not specify max_cache_len and max_batch_size"
+            max_batch_size = key_value_pairs[0][0].shape[0]
+            sets_of_dim = set(kv[0].shape[2] for kv in key_value_pairs)
+            if len(sets_of_dim) == 1:
+                max_cache_len = sets_of_dim.pop()
+                sliding_window = max_cache_len
+            else:
+                assert (
+                    len(sets_of_dim) == 2
+                ), f"Not implemented for more than 2 dimensions {sets_of_dim}"
+                max_cache_len = max(sets_of_dim)
+                sliding_window = min(sets_of_dim)
+                layer_types = [
+                    "full_attention" if i == max_cache_len else "sliding_attention"
+                    for i in [kv[0].shape[2] for kv in key_value_pairs]
+                ]
         else:
             assert (
-                len(sets_of_dim) == 2
-            ), f"Not implemented for more than 2 dimensions {sets_of_dim}"
-            max_cache_len = max(sets_of_dim)
-            sliding_window = min(sets_of_dim)
-            layer_types = [
-                "full_attention" if i == max_cache_len else "sliding_attention"
-                for i in [kv[0].shape[2] for kv in key_value_pairs]
-            ]
-    else:
-        assert (
-            max_batch_size and max_cache_len
-        ), "key_value_pairs is empty, max_batch_size and max_cache_len are required"
-        if sliding_window is None:
-            sliding_window = max_cache_len
-    _max_cache_len = max_cache_len
-    _sliding_window = sliding_window
+                max_batch_size and max_cache_len
+            ), "key_value_pairs is empty, max_batch_size and max_cache_len are required"
+            if sliding_window is None:
+                sliding_window = max_cache_len
+        _max_cache_len = max_cache_len
+        _sliding_window = sliding_window
 
-    class _config:
-        max_cache_len = _max_cache_len
-        batch_size = max_batch_size
-        num_heads = key_value_pairs[0][0].shape[1] if key_value_pairs else None
-        head_dim = key_value_pairs[0][0].shape[-1] if key_value_pairs else None
-        num_attention_heads = key_value_pairs[0][1].shape[1] if key_value_pairs else None
-        num_hidden_layers = len(key_value_pairs)
-        sliding_window = _sliding_window
-        num_key_value_heads = key_value_pairs[0][1].shape[1]  # transformers 4.48.3
+        class _config:
+            max_cache_len = _max_cache_len
+            batch_size = max_batch_size
+            num_heads = key_value_pairs[0][0].shape[1] if key_value_pairs else None
+            head_dim = key_value_pairs[0][0].shape[-1] if key_value_pairs else None
+            num_attention_heads = key_value_pairs[0][1].shape[1] if key_value_pairs else None
+            num_hidden_layers = len(key_value_pairs)
+            sliding_window = _sliding_window
+            num_key_value_heads = key_value_pairs[0][1].shape[1]  # transformers 4.48.3
 
-        def get_text_config(self, *args, **kwargs):
-            return self
+            def get_text_config(self, *args, **kwargs):
+                return self
 
-    if layer_types:
-        _config.layer_types = layer_types  # type: ignore[attr-defined]
+        if layer_types:
+            _config.layer_types = layer_types  # type: ignore[attr-defined]
 
-    cache = transformers.cache_utils.HybridCache(
-        config=_config(), max_cache_len=max_cache_len, max_batch_size=max_batch_size
-    )
-    for i, (key, value) in enumerate(key_value_pairs):
-        cache.update(
-            key,
-            value,
-            i,
-            cache_kwargs={
-                "cache_position": torch.arange(0, key.shape[2], dtype=torch.int64).to(
-                    key.device
-                )
-            },
+        cache = transformers.cache_utils.HybridCache(
+            config=_config(), max_cache_len=max_cache_len, max_batch_size=max_batch_size
         )
-    if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
-        # The cache constructor contains the two following lines
-        # (in cache_utils.py) which append empty layers when the cache is
-        # initialized. We need to remove them.
-        # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
-        # self.append_new_layers(self.num_hidden_layers - 1)
-        cache.layers[:] = cache.layers[-len(key_value_pairs) :]
-    assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
-        f"Unexpected number of layers in the cache ({len(cache.layers)}), "
-        f"{len(key_value_pairs)} expected."
-    )
-    return finalize_cache(cache)
+        for i, (key, value) in enumerate(key_value_pairs):
+            cache.update(
+                key,
+                value,
+                i,
+                cache_kwargs={
+                    "cache_position": torch.arange(0, key.shape[2], dtype=torch.int64).to(
+                        key.device
+                    )
+                },
+            )
+        if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
+            # The cache constructor contains the two following lines
+            # (in cache_utils.py) which append empty layers when the cache is
+            # initialized. We need to remove them.
+            # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
+            # self.append_new_layers(self.num_hidden_layers - 1)
+            cache.layers[:] = cache.layers[-len(key_value_pairs) :]
+        assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
+            f"Unexpected number of layers in the cache ({len(cache.layers)}), "
+            f"{len(key_value_pairs)} expected."
+        )
+        return finalize_cache(cache)
+
+else:
+    make_hybrid_cache = None  # type: ignore[assignment]
 
 
 def finalize_cache(cache: transformers.cache_utils.Cache) -> transformers.cache_utils.Cache:
