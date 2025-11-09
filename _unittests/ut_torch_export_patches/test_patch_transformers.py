@@ -6,7 +6,9 @@ import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, ignore_warnings
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
+from onnx_diagnostic.torch_models.hghub.hub_api import get_cached_configuration
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
+from onnx_diagnostic.torch_export_patches.patches.patch_transformers import patch_qwen2_5
 
 
 class TestPatchPatchTransformers(ExtTestCase):
@@ -217,6 +219,72 @@ class TestPatchPatchTransformers(ExtTestCase):
         fake_inputs, _ = make_fake_with_dynamic_dimensions((query, key, value), ds)
         epd = torch.export.export(model, fake_inputs, dynamic_shapes=use_dyn_not_str(ds))
         got = epd.module()(query, key, value)
+        self.assertEqualArray(expected, got)
+
+    @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
+    def test_patched_qwen2_5_vl_rot_pos_emb(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+            patched_Qwen2_5_VisionTransformerPretrainedModel,
+        )
+
+        config = get_cached_configuration("Qwen/Qwen2.5-VL-7B-Instruct")
+        patched_class = patched_Qwen2_5_VisionTransformerPretrainedModel._PATCHED_CLASS_
+        instance = patched_class(config.vision_config)
+        grid_thw = torch.tensor([[1, 34, 38], [1, 34, 38]], dtype=torch.int64)
+        expected = instance.rot_pos_emb(grid_thw)
+        got = patched_Qwen2_5_VisionTransformerPretrainedModel.rot_pos_emb(instance, grid_thw)
+        self.assertEqualArray(expected, got)
+
+    @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
+    def test_patched_qwen2_5_vl_get_window_index(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+            patched_Qwen2_5_VisionTransformerPretrainedModel,
+        )
+
+        config = get_cached_configuration("Qwen/Qwen2.5-VL-7B-Instruct")
+        patched_class = patched_Qwen2_5_VisionTransformerPretrainedModel._PATCHED_CLASS_
+        instance = patched_class(config.vision_config)
+        grid_thw = torch.tensor([[1, 34, 38]], dtype=torch.int64)
+        window_index1, cu_window_seqlens1 = instance.get_window_index(grid_thw)
+        window_index2, cu_window_seqlens2 = (
+            patched_Qwen2_5_VisionTransformerPretrainedModel.get_window_index(
+                instance, grid_thw
+            )
+        )
+        self.assertEqualArray(window_index1, window_index2)
+        self.assertEqualArray(torch.tensor(cu_window_seqlens1), cu_window_seqlens2)
+
+        grid_thw = torch.tensor([[1, 34, 38], [1, 34, 38]], dtype=torch.int64)
+        window_index1, cu_window_seqlens1 = instance.get_window_index(grid_thw)
+        window_index2, cu_window_seqlens2 = (
+            patched_Qwen2_5_VisionTransformerPretrainedModel.get_window_index(
+                instance, grid_thw
+            )
+        )
+        self.assertEqualArray(window_index1, window_index2)
+        print("----", torch.tensor(cu_window_seqlens1)[24:30], cu_window_seqlens2[24:30])
+        self.assertEqualArray(torch.tensor(cu_window_seqlens1), cu_window_seqlens2)
+
+    @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
+    def test_patched_qwen2_5_vl_forward(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+            patched_Qwen2_5_VisionTransformerPretrainedModel,
+        )
+
+        config = get_cached_configuration("Qwen/Qwen2.5-VL-7B-Instruct")
+        patched_class = patched_Qwen2_5_VisionTransformerPretrainedModel._PATCHED_CLASS_
+        instance = patched_class(config.vision_config)
+        hidden_states = torch.rand((1292, 1176), dtype=torch.float32)
+        grid_thw = torch.tensor([[1, 34, 38]], dtype=torch.int64)
+        expected = instance.forward(hidden_states, grid_thw)
+        f_get_window_index = patched_class.get_window_index
+        patched_class.get_window_index = (
+            patched_Qwen2_5_VisionTransformerPretrainedModel.get_window_index
+        )
+        got = patched_Qwen2_5_VisionTransformerPretrainedModel.forward(
+            instance, hidden_states, grid_thw
+        )
+        patched_class.get_window_index = f_get_window_index
         self.assertEqualArray(expected, got)
 
 
