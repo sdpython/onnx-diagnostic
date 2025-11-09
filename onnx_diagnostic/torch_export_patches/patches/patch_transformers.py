@@ -2304,16 +2304,6 @@ if patch_qwen2_5:
                 or torch.compiler.is_exporting()
             ):
                 max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
-                # attn_output = torch.ops.custom.qwen25_attention(
-                #    query_states,
-                #    key_states,
-                #    value_states,
-                #    cu_seqlens,
-                #    cu_seqlens,
-                #    max_seqlen,
-                #    max_seqlen,
-                #    torch.tensor(self.scaling, dtype=torch.float32),
-                # )
                 attn_output = torch.onnx.ops.symbolic(
                     "custom::qwen25_attention",
                     (
