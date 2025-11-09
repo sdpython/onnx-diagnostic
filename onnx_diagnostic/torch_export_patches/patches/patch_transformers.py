@@ -2097,11 +2097,11 @@ if patch_qwen2_5:
 
         def rot_pos_emb(self, grid_thw):
             pos_ids = []
-            for thw in grid_thw:
+            for thw_ in grid_thw:
                 # PATCHED: avoid unbind
-                t = thw[0]
-                h = thw[1]
-                w = thw[2]
+                t = thw_[0]
+                h = thw_[1]
+                w = thw_[2]
                 hpos_ids = torch.arange(h).unsqueeze(1).expand(-1, w)
                 hpos_ids = hpos_ids.reshape(
                     h // self.spatial_merge_size,
