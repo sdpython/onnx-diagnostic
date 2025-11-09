@@ -2090,10 +2090,43 @@ if patch_qwen2_5:
             return model_inputs
 
     class patched_Qwen2_5_VisionTransformerPretrainedModel:
-        _PATCHES_ = ["get_window_index", "forward"]
+        _PATCHES_ = ["get_window_index", "forward", "rot_pos_emb"]
         _PATCHED_CLASS_ = (
             transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VisionTransformerPretrainedModel
         )
+
+        def rot_pos_emb(self, grid_thw):
+            pos_ids = []
+            for thw in grid_thw:
+                # PATCHED: avoid unbind
+                t = thw[0]
+                h = thw[1]
+                w = thw[2]
+                hpos_ids = torch.arange(h).unsqueeze(1).expand(-1, w)
+                hpos_ids = hpos_ids.reshape(
+                    h // self.spatial_merge_size,
+                    self.spatial_merge_size,
+                    w // self.spatial_merge_size,
+                    self.spatial_merge_size,
+                )
+                hpos_ids = hpos_ids.permute(0, 2, 1, 3)
+                hpos_ids = hpos_ids.flatten()
+
+                wpos_ids = torch.arange(w).unsqueeze(0).expand(h, -1)
+                wpos_ids = wpos_ids.reshape(
+                    h // self.spatial_merge_size,
+                    self.spatial_merge_size,
+                    w // self.spatial_merge_size,
+                    self.spatial_merge_size,
+                )
+                wpos_ids = wpos_ids.permute(0, 2, 1, 3)
+                wpos_ids = wpos_ids.flatten()
+                pos_ids.append(torch.stack([hpos_ids, wpos_ids], dim=-1).repeat(t, 1))
+            pos_ids = torch.cat(pos_ids, dim=0)
+            max_grid_size = grid_thw[:, 1:].max()
+            rotary_pos_emb_full = self.rotary_pos_emb(max_grid_size)
+            rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(1)
+            return rotary_pos_emb
 
         def get_window_index(self, grid_thw):
             window_index: list = []
@@ -2104,7 +2137,11 @@ if patch_qwen2_5:
                 self.window_size // self.spatial_merge_size // self.patch_size
             )
 
-            for grid_t, grid_h, grid_w in grid_thw:
+            for _thw in grid_thw:
+                # PATCHED: avoid unbind
+                grid_t = _thw[0]
+                grid_h = _thw[1]
+                grid_w = _thw[2]
                 llm_grid_h, llm_grid_w = (
                     grid_h // self.spatial_merge_size,
                     grid_w // self.spatial_merge_size,
@@ -2279,12 +2316,13 @@ if patch_qwen2_5:
             **kwargs,
         ) -> torch.Tensor:
             seq_length = hidden_states.shape[0]
-            query_states, key_states, value_states = (
+            # PATCHED: avoid the use of unbind
+            qkv = (
                 self.qkv(hidden_states)
                 .reshape(seq_length, 3, self.num_heads, -1)
                 .permute(1, 0, 2, 3)
-                .unbind(0)
             )
+            query_states, key_states, value_states = qkv[0], qkv[1], qkv[2]
             cos, sin = position_embeddings
             query_states, key_states = (
                 transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_rotary_pos_emb_vision(
