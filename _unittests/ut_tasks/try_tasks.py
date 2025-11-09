@@ -1044,7 +1044,8 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
                 "content": [
                     {
                         "type": "image",
-                        "image": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg",
+                        # "image": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg",
+                        "image": "https://github.com/sdpython/teachpyx/blob/main/_doc/practice/tds-base/int.png?raw=true",
                     },
                     {"type": "text", "text": "Describe this image."},
                 ],

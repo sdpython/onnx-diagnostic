@@ -64,8 +64,8 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         print(f"-- processor={type(processor)}")
 
         inputs = dict(
-            hidden_states=torch.rand((14308, 1176), dtype=torch.float32),
-            grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64),
+            hidden_states=torch.rand((1292, 1176), dtype=torch.float32),
+            grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64),
         )
 
         print(f"-- inputs: {self.string_type(inputs, with_shape=True)}")
@@ -89,7 +89,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         export_inputs = inputs
         print()
         with torch_export_patches(
-            patch_torch=True,
+            patch_torch=False,
             patch_sympy=False,
             patch_transformers=True,
             verbose=1,
