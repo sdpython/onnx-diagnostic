@@ -2141,9 +2141,9 @@ if patch_qwen2_5:
             return rotary_pos_emb
 
         def get_window_index(self, grid_thw):
-            window_index: list = []
+            window_index: list = []  # type: ignore[annotation-unchecked]
             # PATCHED
-            cu_window_seqlens: list = [torch.tensor([0], dtype=torch.int64)]
+            cu_window_seqlens: list = [torch.tensor([0], dtype=torch.int64)]  # type: ignore[annotation-unchecked]
             window_index_id = 0
             vit_merger_window_size = (
                 self.window_size // self.spatial_merge_size // self.patch_size
@@ -2314,8 +2314,12 @@ if patch_qwen2_5:
                 .reshape(seq_length, 3, self.num_heads, -1)
                 .permute(1, 0, 2, 3)
             )
+
             query_states, key_states, value_states = qkv[0], qkv[1], qkv[2]
             cos, sin = position_embeddings
+
+            # This part should be moved into the loop
+            # iteration to enable fusion inside the loop.
             query_states, key_states = (
                 transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_rotary_pos_emb_vision(
                     query_states, key_states, cos, sin

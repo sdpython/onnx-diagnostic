@@ -1998,7 +1998,8 @@ class CubeLogsPerformance(CubeLogs):
         * **raw-short:** raw data without all the unused columns
         """
         # This does not work.
-        fix_aggregation_change = []  # "model_speedup_input_set", "model_test_with"]
+        # used to be ["model_speedup_input_set", "model_test_with"]
+        fix_aggregation_change = []
         fs = ["suite", "model_suite", "task", "model_name", "model_task"]
         index_cols = self._filter_column(fs, self.keys_time)
         assert index_cols, (
