@@ -349,6 +349,8 @@ class TestHelpers(ExtTestCase):
                     "STRING",
                     "UINT4",
                     "INT4",
+                    "INT2",
+                    "UINT2",
                     "FLOAT4E2M1",
                     "FLOAT8E5M2FNUZ",
                     "FLOAT8E5M2",

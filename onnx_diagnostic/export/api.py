@@ -92,7 +92,8 @@ def to_onnx(
             **(exporter_kwargs or {}),
         )
         ort_fusions.optimize_for_ort(epo.model)
-        epo.save(filename)
+        if filename:
+            epo.save(filename)
         return epo
 
     if exporter == "modelbuilder":

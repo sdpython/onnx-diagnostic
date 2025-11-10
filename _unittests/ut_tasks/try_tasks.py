@@ -1011,6 +1011,7 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
                 return_dict:bool
             )
         """
+        import transformers
         from transformers import AutoModel, AutoProcessor
         from qwen_vl_utils import process_vision_info
 
@@ -1067,6 +1068,20 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
 
         print(f"-- processor {type(processor)}")
         print(f"-- inputs={self.string_type(inputs, with_shape=True, with_min_max=True)}")
+
+        f_ = transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_multimodal_rotary_pos_emb
+
+        def _apply_multimodal_rotary_pos_emb(*args, **kwargs):
+            print(
+                "-- apply_multimodal_rotary_pos_emb:",
+                self.string_type(args, with_shape=True),
+                self.string_type(kwargs, with_shape=True),
+            )
+            return f_(*args, **kwargs)
+
+        transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_multimodal_rotary_pos_emb = (
+            _apply_multimodal_rotary_pos_emb
+        )
 
         print()
         with (
