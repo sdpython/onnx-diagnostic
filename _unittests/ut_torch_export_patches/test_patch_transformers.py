@@ -2,6 +2,7 @@ import unittest
 import torch
 import transformers
 import transformers.integrations.sdpa_attention as sdpa_attention
+import onnx
 import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_transformers
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, ignore_warnings
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy, fake_torchdynamo_exporting
@@ -387,13 +388,54 @@ class TestPatchPatchTransformers(ExtTestCase):
         expected = instance.forward(**inputs)
         got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
         self.assertEqualArray(expected, got)
-        if 1:  # with torch_export_patches(patch_transformers=False, patch_torch=True):
-            with fake_torchdynamo_exporting():
-                assert (
-                    _is_torchdynamo_exporting()
-                ), f"exporting is not set to true? {torch.compiler.is_exporting_flag}"
-                got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
-                self.assertEqualArray(expected, got)
+        with fake_torchdynamo_exporting():
+            assert (
+                _is_torchdynamo_exporting()
+            ), f"exporting is not set to true? {torch.compiler.is_exporting_flag}"
+            got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
+            self.assertEqualArray(expected, got)
+
+    @requires_transformers("4.55")
+    @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
+    def test_qwen2_5_vl_vision_attention_iteration(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+            patched_Qwen2_5_VLVisionAttentionOneIteration,
+        )
+
+        model = patched_Qwen2_5_VLVisionAttentionOneIteration()
+        inputs = (
+            torch.tensor([736, 800], dtype=torch.int64),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+        )
+        ds = (
+            {},
+            {0: "batch", 1: "length", 2: "dim"},
+            {0: "batch", 1: "length", 2: "dim"},
+            {0: "batch", 1: "length", 2: "dim"},
+        )
+        for exporter in ("custom", "onnx-dynamo"):
+            # onnx-dynamo needs OpOverload(op='aten.sym_storage_offset' (transformers>=5.0?)
+            filename = self.get_dump_file(
+                f"test_qwen2_5_vl_vision_attention_iteration.{exporter}.onnx"
+            )
+            to_onnx(
+                model,
+                inputs,
+                dynamic_shapes=ds,
+                exporter=exporter,
+                filename=filename,
+                exporter_kwargs={"report": True} if exporter == "onnx-dynamo" else {},
+            )
+            self.assert_onnx_disc(
+                f"test_qwen2_5_vl_vision_attention_iteration-{exporter}",
+                onnx.load(filename),
+                model,
+                inputs,
+                atol=1e-3,
+                rtol=1,
+            )
 
 
 if __name__ == "__main__":

@@ -2265,6 +2265,34 @@ if patch_qwen2_5:
             hidden_states = hidden_states[reverse_indices, :]
             return hidden_states
 
+    class patched_Qwen2_5_VLVisionAttentionOneIteration(torch.nn.Module):
+        def forward(
+            self,
+            start_end,
+            query_states,
+            key_states,
+            value_states,
+            scaling: float = 1.0,
+            dropout: float = 0.0,
+            **kwargs,
+        ):
+            a = start_end[0].item()
+            b = start_end[1].item()
+            q = query_states[:, :, a:b, :]
+            k = key_states[:, :, a:b, :]
+            v = value_states[:, :, a:b, :]
+            return patched_sdpa_attention_forward(
+                self,
+                q,
+                k,
+                v,
+                attention_mask=None,
+                scaling=scaling,
+                dropout=dropout,
+                is_causal=False,
+                **kwargs,
+            )[0]
+
     class patched_Qwen2_5_VLVisionAttention:
         _PATCHES_ = ["forward"]
         _PATCHED_CLASS_ = (
@@ -2361,22 +2389,15 @@ if patch_qwen2_5:
                     attention_interface = patched_sdpa_attention_forward
 
                 def _iteration(start_end, query_states, key_states, value_states):
-                    a = start_end[0]
-                    b = start_end[1]
-                    q = query_states[:, :, a:b, :]
-                    k = key_states[:, :, a:b, :]
-                    v = value_states[:, :, a:b, :]
-                    return attention_interface(
+                    return patched_Qwen2_5_VLVisionAttentionOneIteration.forward(
                         self,
-                        q,
-                        k,
-                        v,
-                        attention_mask=None,
+                        start_end,
+                        query_states,
+                        key_states,
+                        value_states,
                         scaling=self.scaling,
                         dropout=0.0 if not self.training else self.attention_dropout,
-                        is_causal=False,
-                        **kwargs,
-                    )[0]
+                    )
 
                 starts = cu_seqlens[:-1]
                 ends = cu_seqlens[1:]
