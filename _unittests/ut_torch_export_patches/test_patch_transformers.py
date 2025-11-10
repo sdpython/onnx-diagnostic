@@ -4,7 +4,7 @@ import transformers
 import transformers.integrations.sdpa_attention as sdpa_attention
 import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_transformers
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, ignore_warnings
-from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
+from onnx_diagnostic.helpers.torch_helper import torch_deepcopy, fake_torchdynamo_exporting
 from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
 from onnx_diagnostic.torch_models.hghub.hub_api import get_cached_configuration
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -225,6 +225,45 @@ class TestPatchPatchTransformers(ExtTestCase):
 
     @requires_transformers("4.55")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
+    def test_qwen_apply_multimodal_rotary_pos_emb(self):
+        apply_multimodal_rotary_pos_emb = (
+            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_multimodal_rotary_pos_emb
+        )
+
+        class Model(torch.nn.Module):
+            def forward(self, q, k, cos, sin):
+                return apply_multimodal_rotary_pos_emb(q, k, cos, sin, [16, 24, 24])
+
+        inputs = (
+            torch.rand((1, 16, 348, 128), dtype=torch.float16),
+            torch.rand((1, 2, 348, 128), dtype=torch.float16),
+            torch.rand((3, 1, 348, 128), dtype=torch.float16),
+            torch.rand((3, 1, 348, 128), dtype=torch.float16),
+        )
+        model = Model()
+        ds = (
+            {0: "a", 1: "b", 2: "c"},
+            {0: "a", 1: "e", 2: "c"},
+            {2: "c"},
+            {2: "c"},
+        )
+        with torch_export_patches(patch_torch=False, stop_if_static=2):
+            onx = to_onnx(model, inputs, dynamic_shapes=ds, exporter="onnx-dynamo")
+
+        proto = onx.model_proto
+        self.dump_onnx("test_qwen_apply_multimodal_rotary_pos_emb.onnx", proto)
+        self.assert_onnx_disc(
+            "test_qwen_apply_multimodal_rotary_pos_emb",
+            proto,
+            model,
+            inputs,
+            verbose=1,
+            atol=1e-3,
+            rtol=1,
+        )
+
+    @requires_transformers("4.55")
+    @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_patched_qwen2_5_vl_rot_pos_emb(self):
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
             patched_Qwen2_5_VisionTransformerPretrainedModel,
@@ -291,44 +330,69 @@ class TestPatchPatchTransformers(ExtTestCase):
         patched_class.get_window_index = f_get_window_index
         self.assertEqualArray(expected, got)
 
+    @classmethod
+    def _get_cu_seqlens(cls):
+        return torch.tensor(
+            [
+                0,
+                64,
+                128,
+                192,
+                256,
+                304,
+                368,
+                432,
+                496,
+                560,
+                608,
+                672,
+                736,
+                800,
+                864,
+                912,
+                976,
+                1040,
+                1104,
+                1168,
+                1216,
+                1232,
+                1248,
+                1264,
+                1280,
+                1292,
+            ],
+            dtype=torch.int64,
+        )
+
     @requires_transformers("4.55")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
-    def test_qwen_apply_multimodal_rotary_pos_emb(self):
-        apply_multimodal_rotary_pos_emb = (
-            transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_multimodal_rotary_pos_emb
+    def test_patched_qwen2_5_vl_vision_attention_forward(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+            patched_Qwen2_5_VLVisionAttention,
+            _is_torchdynamo_exporting,
         )
 
-        class Model(torch.nn.Module):
-            def forward(self, q, k, cos, sin):
-                return apply_multimodal_rotary_pos_emb(q, k, cos, sin, [16, 24, 24])
-
-        inputs = (
-            torch.rand((1, 16, 348, 128), dtype=torch.float16),
-            torch.rand((1, 2, 348, 128), dtype=torch.float16),
-            torch.rand((3, 1, 348, 128), dtype=torch.float16),
-            torch.rand((3, 1, 348, 128), dtype=torch.float16),
+        config = get_cached_configuration("Qwen/Qwen2.5-VL-7B-Instruct")
+        config._attn_implementation = "sdpa"
+        patched_class = patched_Qwen2_5_VLVisionAttention._PATCHED_CLASS_
+        instance = patched_class(config.vision_config)
+        inputs = dict(
+            hidden_states=torch.rand((1292, 1280), dtype=torch.float32),
+            cu_seqlens=self._get_cu_seqlens(),
+            position_embeddings=(  # position_embeddings = cos, sin
+                torch.rand((1292, 80), dtype=torch.float32),
+                torch.rand((1292, 80), dtype=torch.float32),
+            ),
         )
-        model = Model()
-        ds = (
-            {0: "a", 1: "b", 2: "c"},
-            {0: "a", 1: "e", 2: "c"},
-            {2: "c"},
-            {2: "c"},
-        )
-        with torch_export_patches(patch_torch=False, stop_if_static=2):
-            onx = to_onnx(model, inputs, dynamic_shapes=ds, exporter="onnx-dynamo")
-
-        proto = onx.model_proto
-        self.dump_onnx("test_qwen_apply_multimodal_rotary_pos_emb.onnx", proto)
-        self.assert_onnx_disc(
-            "test_qwen_apply_multimodal_rotary_pos_emb",
-            proto,
-            model,
-            inputs,
-            verbose=1,
-            atol=1e-3,
-            rtol=1,
-        )
+        expected = instance.forward(**inputs)
+        got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
+        self.assertEqualArray(expected, got)
+        with fake_torchdynamo_exporting():
+            assert (
+                _is_torchdynamo_exporting()
+            ), f"exporting is not set to true? {torch.compiler.is_exporting_flag}"
+            got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
+            self.assertEqualArray(expected, got)
 
 
 if __name__ == "__main__":

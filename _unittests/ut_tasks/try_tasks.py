@@ -1092,7 +1092,7 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
                 verbose=1,
             ),
             steal_forward(
-                [model, model.visual],
+                [model, model.visual, model.visual.blocks[0].attn],
                 dump_file=self.get_dump_file("test_imagetext2text_qwen_2_5_vl_instruct.onnx"),
                 dump_drop={"attention_mask", "past_key_values", "pixel_values"},
                 save_as_external_data=False,

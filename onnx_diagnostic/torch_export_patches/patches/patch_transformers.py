@@ -2299,7 +2299,7 @@ if patch_qwen2_5:
 
             if (
                 self.config._attn_implementation == "flash_attention_2"
-                or torch.compiler.is_exporting()
+                and _is_torchdynamo_exporting()
             ):
                 max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
                 attn_output = torch.onnx.ops.symbolic(
@@ -2341,6 +2341,33 @@ if patch_qwen2_5:
                     is_causal=False,
                     **kwargs,
                 )
+            elif _is_torchdynamo_exporting():
+
+                def _iteration(a, b, query_states, key_states, value_states):
+                    q = query_states[:, :, a:b, :]
+                    k = key_states[:, :, a:b, :]
+                    v = value_states[:, :, a:b, :]
+                    return attention_interface(
+                        self,
+                        q,
+                        k,
+                        v,
+                        attention_mask=None,
+                        scaling=self.scaling,
+                        dropout=0.0 if not self.training else self.attention_dropout,
+                        is_causal=False,
+                        **kwargs,
+                    )[0]
+
+                starts = cu_seqlens[:-1]
+                ends = cu_seqlens[1:]
+                attn_outputs = [
+                    _iteration(a, b, query_states, key_states, value_states)
+                    for a, b in zip(starts, ends)
+                ]
+                for att in attn_outputs:
+                    print("B", _is_torchdynamo_exporting(), att.shape)
+                attn_output = torch.cat(attn_outputs, dim=1)
             else:
                 # Other implementations: Process each chunk separately
                 lengths = cu_seqlens[1:] - cu_seqlens[:-1]
@@ -2363,6 +2390,8 @@ if patch_qwen2_5:
                     )[0]
                     for q, k, v in zip(*splits)
                 ]
+                for att in attn_outputs:
+                    print("A", _is_torchdynamo_exporting(), att.shape)
                 attn_output = torch.cat(attn_outputs, dim=1)
 
             attn_output = attn_output.reshape(seq_length, -1).contiguous()
