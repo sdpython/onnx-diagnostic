@@ -15,7 +15,7 @@ from onnx_diagnostic.export.api import to_onnx
 
 
 class TestPatchPatchTransformers(ExtTestCase):
-    @unittest.sipIf(
+    @unittest.skipIf(
         not hasattr(transformers.masking_utils, "sdpa_mask_recent_torch"),
         "removed in transformers==5.0",
     )
