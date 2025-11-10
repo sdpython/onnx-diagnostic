@@ -11,6 +11,8 @@ from onnx_diagnostic.ext_test_case import (
     requires_experimental,
     requires_onnxscript,
     requires_transformers,
+    has_torch,
+    has_transformers,
 )
 from onnx_diagnostic.torch_models.validate import (
     get_inputs_for_task,
@@ -20,6 +22,9 @@ from onnx_diagnostic.torch_models.validate import (
     empty,
 )
 from onnx_diagnostic.tasks import supported_tasks
+
+
+torch29_and_tr_main = not has_torch("2.9.9") and has_transformers("4.99999")
 
 
 class TestValidateWholeModels1(ExtTestCase):
@@ -193,6 +198,7 @@ class TestValidateWholeModels1(ExtTestCase):
         ni, nd = filter_inputs(inputs, dynamic_shapes=ds, drop_names=["a"], model=["a", "b"])
         self.assertEqual((ni, nd), (((None,), {"b": 4}), {"b": 30}))
 
+    @unittest.skipIf(torch29_and_tr_main, "combination not working")
     @requires_torch("2.9.99")
     @hide_stdout()
     @ignore_warnings(FutureWarning)

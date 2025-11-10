@@ -1401,6 +1401,18 @@ def patched_sdpa_attention_forward(
         is_causal = attention_mask is None and is_causal
 
         if not is_causal:
+            torch._check(query.shape[0] > 0)
+            torch._check(query.shape[1] > 0)
+            torch._check(query.shape[2] > 0)
+            torch._check(query.shape[3] > 0)
+            torch._check(key.shape[0] > 0)
+            torch._check(key.shape[1] > 0)
+            torch._check(key.shape[2] > 0)
+            torch._check(key.shape[3] > 0)
+            torch._check(value.shape[0] > 0)
+            torch._check(value.shape[1] > 0)
+            torch._check(value.shape[2] > 0)
+            torch._check(value.shape[3] > 0)
             return (
                 torch.nn.functional.scaled_dot_product_attention(
                     query,
@@ -2129,9 +2141,9 @@ if patch_qwen2_5:
             return rotary_pos_emb
 
         def get_window_index(self, grid_thw):
-            window_index: list = []
+            window_index: list = []  # type: ignore[annotation-unchecked]
             # PATCHED
-            cu_window_seqlens: list = [torch.tensor([0], dtype=torch.int64)]
+            cu_window_seqlens: list = [torch.tensor([0], dtype=torch.int64)]  # type: ignore[annotation-unchecked]
             window_index_id = 0
             vit_merger_window_size = (
                 self.window_size // self.spatial_merge_size // self.patch_size
@@ -2172,7 +2184,7 @@ if patch_qwen2_5:
                 index_new = index_padded[index_padded != -100]
                 window_index.append(index_new + window_index_id)
                 cu_seqlens_tmp = (
-                    seqlens.cumsum(0) * self.spatial_merge_unit + cu_window_seqlens[-1]
+                    seqlens.cumsum(0) * self.spatial_merge_unit + cu_window_seqlens[-1][-1:]
                 )
                 # PATCHED
                 # cu_window_seqlens.extend(cu_seqlens_tmp.tolist())
@@ -2180,7 +2192,7 @@ if patch_qwen2_5:
                 window_index_id += (grid_t * llm_grid_h * llm_grid_w).item()
             window_index = torch.cat(window_index, dim=0)
 
-            return window_index, cu_window_seqlens
+            return window_index, torch.cat(cu_window_seqlens, dim=0)
 
         def forward(
             self, hidden_states: torch.Tensor, grid_thw: torch.Tensor, **kwargs
@@ -2204,9 +2216,7 @@ if patch_qwen2_5:
             #    device=hidden_states.device,
             #    dtype=grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
             # )
-            cu_window_seqlens = (
-                torch.cat(cu_window_seqlens, dim=0).to(hidden_states.device).to(grid_thw.dtype)
-            )
+            cu_window_seqlens = cu_window_seqlens.to(hidden_states.device).to(grid_thw.dtype)
             cu_window_seqlens = torch.unique_consecutive(cu_window_seqlens)
 
             seq_len, _ = hidden_states.size()
@@ -2255,6 +2265,34 @@ if patch_qwen2_5:
             hidden_states = hidden_states[reverse_indices, :]
             return hidden_states
 
+    class patched_Qwen2_5_VLVisionAttentionOneIteration(torch.nn.Module):
+        def forward(
+            self,
+            start_end,
+            query_states,
+            key_states,
+            value_states,
+            scaling: float = 1.0,
+            dropout: float = 0.0,
+            **kwargs,
+        ):
+            a = start_end[0].item()
+            b = start_end[1].item()
+            q = query_states[:, :, a:b, :]
+            k = key_states[:, :, a:b, :]
+            v = value_states[:, :, a:b, :]
+            return patched_sdpa_attention_forward(
+                self,
+                q,
+                k,
+                v,
+                attention_mask=None,
+                scaling=scaling,
+                dropout=dropout,
+                is_causal=False,
+                **kwargs,
+            )[0]
+
     class patched_Qwen2_5_VLVisionAttention:
         _PATCHES_ = ["forward"]
         _PATCHED_CLASS_ = (
@@ -2276,8 +2314,12 @@ if patch_qwen2_5:
                 .reshape(seq_length, 3, self.num_heads, -1)
                 .permute(1, 0, 2, 3)
             )
+
             query_states, key_states, value_states = qkv[0], qkv[1], qkv[2]
             cos, sin = position_embeddings
+
+            # This part should be moved into the loop
+            # iteration to enable fusion inside the loop.
             query_states, key_states = (
                 transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_rotary_pos_emb_vision(
                     query_states, key_states, cos, sin
@@ -2301,7 +2343,7 @@ if patch_qwen2_5:
 
             if (
                 self.config._attn_implementation == "flash_attention_2"
-                or torch.compiler.is_exporting()
+                and _is_torchdynamo_exporting()
             ):
                 max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
                 attn_output = torch.onnx.ops.symbolic(
@@ -2343,6 +2385,43 @@ if patch_qwen2_5:
                     is_causal=False,
                     **kwargs,
                 )
+            elif _is_torchdynamo_exporting():
+                if (
+                    attention_interface
+                    is transformers.integrations.sdpa_attention.sdpa_attention_forward
+                ):
+                    attention_interface = patched_sdpa_attention_forward
+
+                def _iteration(start_end, query_states, key_states, value_states):
+                    return patched_Qwen2_5_VLVisionAttentionOneIteration.forward(
+                        self,
+                        start_end,
+                        query_states,
+                        key_states,
+                        value_states,
+                        scaling=self.scaling,
+                        dropout=0.0 if not self.training else self.attention_dropout,
+                    )
+
+                starts = cu_seqlens[:-1]
+                ends = cu_seqlens[1:]
+                # cu_seqlens = [0, 10, 14, 27]
+                # starts: [0, 10, 14]
+                # ends: [10, 14, 17]
+                # starts_ends: [[0, 10], [10, 14], [14, 27]]
+                starts_ends = torch.cat([starts.unsqueeze(1), ends.unsqueeze(1)], dim=1)
+                attn_outputs = [
+                    _iteration(start_end, query_states, key_states, value_states)
+                    for start_end in starts_ends
+                ]
+                # attn_outputs = torch._higher_order_ops.while_loop(
+                # attn_outputs = torch.ops.higher_order.while_loop(
+                #    (lambda it, starts_ends, *_args: it < starts_ends.shape[0]),
+                #    _iteration,
+                #    (torch.tensor(0),
+                #       starts_ends, query_states, key_states, value_states), tuple(),
+                # )
+                attn_output = torch.cat(attn_outputs, dim=1)
             else:
                 # Other implementations: Process each chunk separately
                 lengths = cu_seqlens[1:] - cu_seqlens[:-1]

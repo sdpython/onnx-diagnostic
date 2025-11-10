@@ -1214,13 +1214,14 @@ class ExtTestCase(unittest.TestCase):
         from .helpers.ort_session import InferenceSessionForTorch
 
         kws = dict(with_shape=True, with_min_max=verbose > 1)
-        if verbose:
-            vname = test_name or "assert_onnx_disc"
+        vname = test_name or "assert_onnx_disc"
         if test_name:
             name = f"{test_name}.onnx"
-            print(f"[{vname}] save the onnx model into {name!r}")
+            if verbose:
+                print(f"[{vname}] save the onnx model into {name!r}")
             name = self.dump_onnx(name, proto)
-            print(f"[{vname}] file size {os.stat(name).st_size // 2**10:1.3f} kb")
+            if verbose:
+                print(f"[{vname}] file size {os.stat(name).st_size // 2**10:1.3f} kb")
         if verbose:
             print(f"[{vname}] make feeds {string_type(inputs, **kws)}")
         if use_ort:

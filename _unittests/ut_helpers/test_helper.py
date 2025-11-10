@@ -342,13 +342,15 @@ class TestHelpers(ExtTestCase):
                     continue
                 if name in {"NAME_FIELD_NUMBER"}:
                     continue
-                if name not in {"STRING", "UINT4", "INT4", "FLOAT4E2M1"}:
+                if name not in {"STRING", "UINT4", "INT4", "FLOAT4E2M1", "INT2", "UINT2"}:
                     size_type(i)
 
                 if name not in {
                     "STRING",
                     "UINT4",
                     "INT4",
+                    "INT2",
+                    "UINT2",
                     "FLOAT4E2M1",
                     "FLOAT8E5M2FNUZ",
                     "FLOAT8E5M2",

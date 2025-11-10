@@ -450,6 +450,11 @@ def fake_torchdynamo_exporting():
     """
     memorize = torch.compiler._is_exporting_flag
     torch.compiler._is_exporting_flag = True
+    assert torch.compiler.is_exporting(), (
+        f"Changes not detected "
+        f"torch.compiler._is_exporting_flag={torch.compiler._is_exporting_flag} "
+        f"and torch.compiler.is_exporting()={torch.compiler.is_exporting()}"
+    )
     try:
         yield
     finally:

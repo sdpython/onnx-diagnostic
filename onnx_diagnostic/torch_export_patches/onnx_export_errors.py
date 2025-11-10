@@ -32,7 +32,7 @@ def get_patches(mod, verbose: int = 0) -> Tuple[str, List[Any]]:
             v = getattr(mod, k)
             if hasattr(v, "_PATCHED_CLASS_") and hasattr(v, "_PATCHES_"):
                 to_patch.append(v)
-            else:
+            elif v.__doc__:
                 # a function
                 doc = v.__doc__.lstrip()
                 if doc.startswith("manual patch"):

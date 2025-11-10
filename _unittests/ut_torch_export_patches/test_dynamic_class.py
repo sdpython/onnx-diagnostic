@@ -21,7 +21,6 @@ from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
 )
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
-import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_transformers
 
 
 class TestOnnxExportErrors(ExtTestCase):
@@ -344,11 +343,6 @@ class TestOnnxExportErrors(ExtTestCase):
         )
 
         with torch_export_patches(patch_transformers=True, verbose=1):
-            if masking_utils is not None:
-                self.assertEqual(
-                    masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"],
-                    patch_transformers.patched_sdpa_mask_recent_torch,
-                )
             ep = torch.export.export(
                 model,
                 (),

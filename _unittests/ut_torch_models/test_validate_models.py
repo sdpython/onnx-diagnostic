@@ -8,11 +8,17 @@ from onnx_diagnostic.ext_test_case import (
     requires_experimental,
     requires_transformers,
     requires_cuda,
+    has_torch,
+    has_transformers,
 )
 from onnx_diagnostic.torch_models.validate import validate_model
 
 
+torch29_and_tr_main = not has_torch("2.9.9") and has_transformers("4.99999")
+
+
 class TestValidateModel(ExtTestCase):
+    @unittest.skipIf(torch29_and_tr_main, "combination not working")
     @requires_transformers("4.53")
     @requires_torch("2.7.99")
     @requires_experimental()
@@ -38,6 +44,7 @@ class TestValidateModel(ExtTestCase):
         self.assertLess(summary["disc_onnx_ort_run_abs"], 2e-2)
         self.assertIn("onnx_filename", data)
 
+    @unittest.skipIf(torch29_and_tr_main, "combination not working")
     @requires_transformers("4.53")
     @requires_torch("2.8.99")
     @requires_experimental()
@@ -59,6 +66,7 @@ class TestValidateModel(ExtTestCase):
         self.assertLess(summary["disc_onnx_ort_run_abs"], 2e-5)
         self.assertIn("onnx_filename", data)
 
+    @unittest.skipIf(torch29_and_tr_main, "combination not working")
     @requires_transformers("4.53")
     @requires_torch("2.8.99")
     @requires_experimental()

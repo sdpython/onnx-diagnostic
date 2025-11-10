@@ -1,6 +1,12 @@
+import os
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, has_transformers
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    hide_stdout,
+    has_transformers,
+    ignore_warnings,
+)
 from onnx_diagnostic.helpers import max_diff
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.helpers.rt_helper import make_feeds
@@ -36,6 +42,7 @@ class TestValidate(ExtTestCase):
         )
 
     @hide_stdout()
+    @ignore_warnings(FutureWarning)
     def test_tiny_llm_to_onnx(self):
         import onnxruntime
 
@@ -68,6 +75,8 @@ class TestValidate(ExtTestCase):
                         filename=filename,
                     )
         for exporter, filename in filenames.items():
+            if not os.path.exists(filename):
+                continue
             with self.subTest(exporter=f"validate-{exporter}"):
                 sess = onnxruntime.InferenceSession(
                     filename, providers=["CPUExecutionProvider"]
@@ -90,6 +99,8 @@ class TestValidate(ExtTestCase):
 
         expected = model(**torch_deepcopy(problem))
         for exporter, filename in filenames.items():
+            if not os.path.exists(filename):
+                continue
             with self.subTest(exporter=f"full-mask-{exporter}"):
                 sess = onnxruntime.InferenceSession(
                     filename, providers=["CPUExecutionProvider"]

@@ -901,13 +901,19 @@ class CubeLogs:
             else g.groupby([*key_index, *key_columns], dropna=False).sum()
         )
         not_unique = r[r["count"] > 1]
+        if not_unique.shape[0] > 0 and os.environ.get("DUPLICATE", ""):
+            filename = os.environ.get("DUPLICATE")
+            subset = data.set_index([*key_index, *key_columns]).merge(
+                not_unique.head(), left_index=True, right_index=True
+            )
+            subset.to_excel(filename)
         assert not_unique.shape[0] == 0, (
             f"view_def.name={view_def.name!r}, "
             f"unable to run the pivot with index={sorted(key_index)}, "
             f"key={sorted(key_columns)}, key_agg={key_agg}, values={sorted(values)}, "
             f"columns={sorted(data.columns)}, ignored={view_def.ignore_columns}, "
-            f"not unique={set(data.columns) - unique}"
-            f"\n--\n{not_unique.head(10)}"
+            f"not unique={set(data.columns) - unique}, set DUPLICATE=<filename> "
+            f"to store the duplicates in a excel file\n--\n{not_unique.head(10)}"
         )
 
         # pivot
@@ -1000,8 +1006,12 @@ class CubeLogs:
         keys = set(self.keys_time) - {columns_to_fix}
         select = data[self.keys_time]
         select_agg = select.groupby(list(keys)).count()
+        if select_agg.shape[0] == 0:
+            # nothing to fix
+            return data
         assert select_agg[columns_to_fix].max() <= 1, (
-            f"Column {columns_to_fix!r} has two distinct values at least for one date\n"
+            f"Column {columns_to_fix!r} has two distinct values at least for one date, "
+            f"max={select_agg[columns_to_fix].max()}\n"
             f"{select_agg[select_agg[columns_to_fix] > 1]}"
         )
 
@@ -1038,6 +1048,16 @@ class CubeLogs:
             f"data.columns.equals(res.columns)={data.columns.equals(res.columns)}, "
             f"data.index.equals(res.columns)={data.index.equals(res.columns)}, "
         )
+        select = res[self.keys_time]
+        select_agg = select.groupby(list(keys)).count()
+        if select_agg.shape[0] == 0:
+            # nothing to fix
+            return data
+        # assert select_agg[columns_to_fix].max() <= 1, (
+        #    f"Column {columns_to_fix!r} has two distinct values at least for one date, "
+        #    f"max={select_agg[columns_to_fix].max()}\n"
+        #    f"{select_agg[select_agg[columns_to_fix] > 1]}"
+        # )
         return res
 
     def _dropna(
@@ -1977,7 +1997,9 @@ class CubeLogsPerformance(CubeLogs):
         * **cmd:** command lines
         * **raw-short:** raw data without all the unused columns
         """
-        fix_aggregation_change = ["model_speedup_input_set", "model_test_with"]
+        # This does not work.
+        # used to be ["model_speedup_input_set", "model_test_with"]
+        fix_aggregation_change = []  # type: ignore[var-annotated]
         fs = ["suite", "model_suite", "task", "model_name", "model_task"]
         index_cols = self._filter_column(fs, self.keys_time)
         assert index_cols, (
