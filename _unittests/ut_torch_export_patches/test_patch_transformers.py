@@ -4,7 +4,12 @@ import transformers
 import transformers.integrations.sdpa_attention as sdpa_attention
 import onnx
 import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, ignore_warnings
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    requires_transformers,
+    ignore_warnings,
+    has_onnxscript,
+)
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy, fake_torchdynamo_exporting
 from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
 from onnx_diagnostic.torch_models.hghub.hub_api import get_cached_configuration
@@ -437,6 +442,8 @@ class TestPatchPatchTransformers(ExtTestCase):
         del inputs["position_embeddings"]
         for exporter in ("custom", "onnx-dynamo"):
             # onnx-dynamo needs OpOverload(op='aten.sym_storage_offset' (transformers>=5.0?)
+            if exporter == "onnx-dynamo" and not has_onnxscript("0.5.7"):
+                raise unittest.SkipTest("needs onnxscript>=0.5.7")
             filename = self.get_dump_file(
                 f"test_patched_qwen2_5_vl_vision_attention_forward.{exporter}.onnx"
             )
