@@ -221,6 +221,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         got = epd.module()(query, key, value)
         self.assertEqualArray(expected, got)
 
+    @requires_transformers("4.55")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_patched_qwen2_5_vl_rot_pos_emb(self):
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
@@ -235,6 +236,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         got = patched_Qwen2_5_VisionTransformerPretrainedModel.rot_pos_emb(instance, grid_thw)
         self.assertEqualArray(expected, got)
 
+    @requires_transformers("4.55")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_patched_qwen2_5_vl_get_window_index(self):
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
@@ -262,9 +264,9 @@ class TestPatchPatchTransformers(ExtTestCase):
             )
         )
         self.assertEqualArray(window_index1, window_index2)
-        print("----", torch.tensor(cu_window_seqlens1)[24:30], cu_window_seqlens2[24:30])
         self.assertEqualArray(torch.tensor(cu_window_seqlens1), cu_window_seqlens2)
 
+    @requires_transformers("4.55")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_patched_qwen2_5_vl_forward(self):
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
