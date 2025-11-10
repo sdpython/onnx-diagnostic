@@ -1999,7 +1999,7 @@ class CubeLogsPerformance(CubeLogs):
         """
         # This does not work.
         # used to be ["model_speedup_input_set", "model_test_with"]
-        fix_aggregation_change = []
+        fix_aggregation_change = []  # type: ignore[var-annotated]
         fs = ["suite", "model_suite", "task", "model_name", "model_task"]
         index_cols = self._filter_column(fs, self.keys_time)
         assert index_cols, (
