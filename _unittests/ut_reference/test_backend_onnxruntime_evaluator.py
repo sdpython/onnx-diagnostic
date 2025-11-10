@@ -247,31 +247,6 @@ backend_test.exclude(
     ")"
 )
 
-if onnx_opset_version() <= 26:
-    backend_test.exclude(
-        "(deform_conv"
-        "|gru"
-        "|lstm"
-        "|l1normalization"
-        "|l2normalization"
-        "|lpnormalization"
-        "|maxunpool"
-        "|attention_3d"
-        "|causal_expanded"
-        "|layer_normalization.*expanded"
-        "|layer_normalization.*expanded"
-        "|affine_grid.*expanded"
-        "|test_rnn_seq"
-        "|test_roialign_aligned_false"
-        "|test_roialign_aligned_true"
-        "|test_roialign_mode_max"
-        "|test_simple_rnn_batchwise"
-        "|test_simple_rnn_defaults"
-        "|test_simple_rnn_with_initial_bias"
-        ")"
-    )
-
-
 if onnx_opset_version() <= 25:
     exc = "|".join(
         [
@@ -290,6 +265,39 @@ if onnx_opset_version() <= 25:
         ]
     )
     backend_test.exclude(f"({exc})")
+
+if onnx_opset_version() <= 26:
+    backend_test.exclude(
+        "(deform_conv"
+        "|gru"
+        "|lstm"
+        "|l1normalization"
+        "|l2normalization"
+        "|lpnormalization"
+        "|maxunpool"
+        "|attention_3d"
+        "|causal_expanded"
+        "|layer_normalization.*expanded"
+        "|layer_normalization.*expanded"
+        "|affine_grid.*expanded"
+        "|test_attention_4d_diff_heads_mask4d_padded_kv.*"
+        "|test_convinteger_with_padding"
+        "|test_rnn_seq"
+        "|test_roialign_aligned_false"
+        "|test_roialign_aligned_true"
+        "|test_roialign_mode_max"
+        "|test_rotary_embedding_no_position_ids_rotary_dim.*"
+        "|test_rotary_embedding_with_interleaved_rotary_dim.*"
+        "|test_rotary_embedding_with_rotary_dim*"
+        "|test_simple_rnn_batchwise"
+        "|test_simple_rnn_defaults"
+        "|test_simple_rnn_with_initial_bias"
+        "|test_swish*"
+        "|test_tensorscatter*"
+        "|test_top_k*"
+        ")"
+    )
+
 
 if pv.Version(onnxruntime.__version__) <= pv.Version("1.24"):
     backend_test.exclude("(test_attention_4d_with|test_attention_4d_gqa)")

@@ -2343,30 +2343,32 @@ if patch_qwen2_5:
                 )
             elif _is_torchdynamo_exporting():
 
-                def _iteration(a, b, query_states, key_states, value_states):
+                def _iteration(start_end, query_states, key_states, value_states):
+                    a, b = start_end
                     q = query_states[:, :, a:b, :]
                     k = key_states[:, :, a:b, :]
                     v = value_states[:, :, a:b, :]
-                    return attention_interface(
-                        self,
-                        q,
-                        k,
-                        v,
-                        attention_mask=None,
-                        scaling=self.scaling,
-                        dropout=0.0 if not self.training else self.attention_dropout,
-                        is_causal=False,
-                        **kwargs,
-                    )[0]
+                    return (
+                        attention_interface(
+                            self,
+                            q,
+                            k,
+                            v,
+                            attention_mask=None,
+                            scaling=self.scaling,
+                            dropout=0.0 if not self.training else self.attention_dropout,
+                            is_causal=False,
+                            **kwargs,
+                        )[0],
+                    )
 
                 starts = cu_seqlens[:-1]
                 ends = cu_seqlens[1:]
+                starts_ends = torch.cat([starts.unsqueeze(1), ends.unsqueeze(1)], dim=1)
                 attn_outputs = [
-                    _iteration(a, b, query_states, key_states, value_states)
-                    for a, b in zip(starts, ends)
+                    _iteration(start_end, query_states, key_states, value_states)
+                    for start_end in starts_ends
                 ]
-                for att in attn_outputs:
-                    print("B", _is_torchdynamo_exporting(), att.shape)
                 attn_output = torch.cat(attn_outputs, dim=1)
             else:
                 # Other implementations: Process each chunk separately
@@ -2390,8 +2392,6 @@ if patch_qwen2_5:
                     )[0]
                     for q, k, v in zip(*splits)
                 ]
-                for att in attn_outputs:
-                    print("A", _is_torchdynamo_exporting(), att.shape)
                 attn_output = torch.cat(attn_outputs, dim=1)
 
             attn_output = attn_output.reshape(seq_length, -1).contiguous()
