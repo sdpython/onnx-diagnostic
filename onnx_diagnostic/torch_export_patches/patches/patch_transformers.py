@@ -2405,6 +2405,10 @@ if patch_qwen2_5:
 
                 starts = cu_seqlens[:-1]
                 ends = cu_seqlens[1:]
+                # cu_seqlens = [0, 10, 14, 27]
+                # starts: [0, 10, 14]
+                # ends: [10, 14, 17]
+                # starts_ends: [[0, 10], [10, 14], [14, 27]]
                 starts_ends = torch.cat([starts.unsqueeze(1), ends.unsqueeze(1)], dim=1)
                 attn_outputs = [
                     _iteration(start_end, query_states, key_states, value_states)
