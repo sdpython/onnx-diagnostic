@@ -402,6 +402,11 @@ class TestPatchPatchTransformers(ExtTestCase):
             patched_Qwen2_5_VLVisionAttentionOneIteration,
         )
 
+        try:
+            from onnxscript.function_libs.torch_lib.ops.core import aten_sym_storage_offset
+        except ImportError:
+            aten_sym_storage_offset = None
+
         model = patched_Qwen2_5_VLVisionAttentionOneIteration()
         inputs = (
             torch.tensor([736, 800], dtype=torch.int64),
@@ -416,18 +421,13 @@ class TestPatchPatchTransformers(ExtTestCase):
             {0: "batch", 1: "length", 2: "dim"},
         )
         for exporter in ("custom", "onnx-dynamo"):
+            if exporter == "onnx-dynamo" and aten_sym_storage_offset is None:
+                raise unittest.SkipTest("update onnxscript to make this test run")
             # onnx-dynamo needs OpOverload(op='aten.sym_storage_offset' (transformers>=5.0?)
             filename = self.get_dump_file(
                 f"test_qwen2_5_vl_vision_attention_iteration.{exporter}.onnx"
             )
-            to_onnx(
-                model,
-                inputs,
-                dynamic_shapes=ds,
-                exporter=exporter,
-                filename=filename,
-                exporter_kwargs={"report": True} if exporter == "onnx-dynamo" else {},
-            )
+            to_onnx(model, inputs, dynamic_shapes=ds, exporter=exporter, filename=filename)
             self.assert_onnx_disc(
                 f"test_qwen2_5_vl_vision_attention_iteration-{exporter}",
                 onnx.load(filename),
