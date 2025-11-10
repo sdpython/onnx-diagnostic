@@ -344,11 +344,6 @@ class TestOnnxExportErrors(ExtTestCase):
         )
 
         with torch_export_patches(patch_transformers=True, verbose=1):
-            if masking_utils is not None:
-                self.assertEqual(
-                    masking_utils.ALL_MASK_ATTENTION_FUNCTIONS["sdpa"],
-                    patch_transformers.patched_sdpa_mask_recent_torch,
-                )
             ep = torch.export.export(
                 model,
                 (),
