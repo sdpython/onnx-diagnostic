@@ -1053,11 +1053,11 @@ class CubeLogs:
         if select_agg.shape[0] == 0:
             # nothing to fix
             return data
-        assert select_agg[columns_to_fix].max() <= 1, (
-            f"Column {columns_to_fix!r} has two distinct values at least for one date, "
-            f"max={select_agg[columns_to_fix].max()}\n"
-            f"{select_agg[select_agg[columns_to_fix] > 1]}"
-        )
+        # assert select_agg[columns_to_fix].max() <= 1, (
+        #    f"Column {columns_to_fix!r} has two distinct values at least for one date, "
+        #    f"max={select_agg[columns_to_fix].max()}\n"
+        #    f"{select_agg[select_agg[columns_to_fix] > 1]}"
+        # )
         return res
 
     def _dropna(

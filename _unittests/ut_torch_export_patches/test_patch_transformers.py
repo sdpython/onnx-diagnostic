@@ -428,6 +428,7 @@ class TestPatchPatchTransformers(ExtTestCase):
                 f"test_qwen2_5_vl_vision_attention_iteration.{exporter}.onnx"
             )
             to_onnx(model, inputs, dynamic_shapes=ds, exporter=exporter, filename=filename)
+            # exporter_kwargs={"report":True} if exporter != "custom" else {}
             self.assert_onnx_disc(
                 f"test_qwen2_5_vl_vision_attention_iteration-{exporter}",
                 onnx.load(filename),
