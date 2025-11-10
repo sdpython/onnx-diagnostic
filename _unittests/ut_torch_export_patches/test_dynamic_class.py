@@ -21,7 +21,6 @@ from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
 )
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
-import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_transformers
 
 
 class TestOnnxExportErrors(ExtTestCase):
