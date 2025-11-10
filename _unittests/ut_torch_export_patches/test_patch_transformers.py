@@ -387,12 +387,13 @@ class TestPatchPatchTransformers(ExtTestCase):
         expected = instance.forward(**inputs)
         got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
         self.assertEqualArray(expected, got)
-        with fake_torchdynamo_exporting():
-            assert (
-                _is_torchdynamo_exporting()
-            ), f"exporting is not set to true? {torch.compiler.is_exporting_flag}"
-            got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
-            self.assertEqualArray(expected, got)
+        if 1:  # with torch_export_patches(patch_transformers=False, patch_torch=True):
+            with fake_torchdynamo_exporting():
+                assert (
+                    _is_torchdynamo_exporting()
+                ), f"exporting is not set to true? {torch.compiler.is_exporting_flag}"
+                got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
+                self.assertEqualArray(expected, got)
 
 
 if __name__ == "__main__":

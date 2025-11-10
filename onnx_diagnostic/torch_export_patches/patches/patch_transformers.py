@@ -1401,6 +1401,18 @@ def patched_sdpa_attention_forward(
         is_causal = attention_mask is None and is_causal
 
         if not is_causal:
+            torch._check(query.shape[0] > 0)
+            torch._check(query.shape[1] > 0)
+            torch._check(query.shape[2] > 0)
+            torch._check(query.shape[3] > 0)
+            torch._check(key.shape[0] > 0)
+            torch._check(key.shape[1] > 0)
+            torch._check(key.shape[2] > 0)
+            torch._check(key.shape[3] > 0)
+            torch._check(value.shape[0] > 0)
+            torch._check(value.shape[1] > 0)
+            torch._check(value.shape[2] > 0)
+            torch._check(value.shape[3] > 0)
             return (
                 torch.nn.functional.scaled_dot_product_attention(
                     query,
@@ -2342,25 +2354,29 @@ if patch_qwen2_5:
                     **kwargs,
                 )
             elif _is_torchdynamo_exporting():
+                if (
+                    attention_interface
+                    is transformers.integrations.sdpa_attention.sdpa_attention_forward
+                ):
+                    attention_interface = patched_sdpa_attention_forward
 
                 def _iteration(start_end, query_states, key_states, value_states):
-                    a, b = start_end
+                    a = start_end[0]
+                    b = start_end[1]
                     q = query_states[:, :, a:b, :]
                     k = key_states[:, :, a:b, :]
                     v = value_states[:, :, a:b, :]
-                    return (
-                        attention_interface(
-                            self,
-                            q,
-                            k,
-                            v,
-                            attention_mask=None,
-                            scaling=self.scaling,
-                            dropout=0.0 if not self.training else self.attention_dropout,
-                            is_causal=False,
-                            **kwargs,
-                        )[0],
-                    )
+                    return attention_interface(
+                        self,
+                        q,
+                        k,
+                        v,
+                        attention_mask=None,
+                        scaling=self.scaling,
+                        dropout=0.0 if not self.training else self.attention_dropout,
+                        is_causal=False,
+                        **kwargs,
+                    )[0]
 
                 starts = cu_seqlens[:-1]
                 ends = cu_seqlens[1:]
@@ -2369,6 +2385,13 @@ if patch_qwen2_5:
                     _iteration(start_end, query_states, key_states, value_states)
                     for start_end in starts_ends
                 ]
+                # attn_outputs = torch._higher_order_ops.while_loop(
+                # attn_outputs = torch.ops.higher_order.while_loop(
+                #    (lambda it, starts_ends, *_args: it < starts_ends.shape[0]),
+                #    _iteration,
+                #    (torch.tensor(0),
+                #       starts_ends, query_states, key_states, value_states), tuple(),
+                # )
                 attn_output = torch.cat(attn_outputs, dim=1)
             else:
                 # Other implementations: Process each chunk separately
