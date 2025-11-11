@@ -1,6 +1,6 @@
 import contextlib
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import onnx
 import onnx.helper as oh
 import torch
@@ -106,7 +106,7 @@ def _loop_for_fn(n_iter, body_fn, reduction_dim, args):
 def make_custom_loop_for(
     n_iter: torch.Tensor,
     body_fn: Callable,
-    reduction_dim: Optional[List[int]],
+    reduction_dim: Optional[Sequence[int]],
     args: List[torch.Tensor],
     body_gm: Optional[torch.fx.GraphModule] = None,
     body_mutated_inputs: Optional[List[Any]] = None,
@@ -129,6 +129,9 @@ def make_custom_loop_for(
         is used to cache the custom op
     """
     global _DISPATCHER
+    assert body_gm is not None, "body_gm cannot be None"
+    assert body_mutated_inputs is not None, "body_mutated_inputs cannot be None"
+    assert body_outputs is not None, "body_outputs cannot be None"
     srank = "_".join("x".join(map(str, s.shape)) for s in body_outputs)
     sred = "x".join(map(str, reduction_dim)) if reduction_dim else ""
     name = f"loop_for_{body_fn.__name__}_{id(body_fn)}_{srank}_{sred}"
@@ -171,9 +174,9 @@ def convert_custom_loop_into_onnx(
     outputs: List[str],
     *args: str,
     body: onnx.GraphProto,
-    reduction_dim: Optional[Tuple[int, ...]] = None,
+    reduction_dim: Optional[Sequence[int]] = None,
     name: str = "loop_for",
-) -> Union[str, Tuple[str, ...]]:
+) -> Union[str, List[str]]:
     """
     Converts a custom op ``higher_ops::loop_for...`` into e sequence of node.
 
@@ -278,7 +281,7 @@ def loop_for(
     n_iter: Union[torch.SymInt, torch.Tensor],
     body_fn: Callable[..., Tuple[torch.Tensor]],
     args: Tuple[torch.Tensor, ...],
-    reduction_dim: Optional[Tuple[int]] = None,
+    reduction_dim: Optional[Sequence[int]] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """
     High operators used to easily export a loop in ONNX.
