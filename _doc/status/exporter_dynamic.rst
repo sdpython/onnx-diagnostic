@@ -3,8 +3,7 @@ Exported ONNX with Dynamic Shapes
 =================================
 
 The following script shows the exported program for many short cases
-and various l-plot-export-with-dynamic-shape to retrieve an ONNX model equivalent
-to the original model.
+to retrieve an ONNX model equivalent to the original model.
 
 .. runpython::
     :showcode:
@@ -39,6 +38,8 @@ to the original model.
         print()
         print(name)
         print("=" * len(name))
+        print()
+        print(f"code: :class:`onnx_diagnostic.torch_export_patches.eval.model_cases.{name}`")
         print()
         print("forward")
         print("+++++++")

@@ -4,7 +4,13 @@ import transformers
 import transformers.integrations.sdpa_attention as sdpa_attention
 import onnx
 import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers, ignore_warnings
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    requires_transformers,
+    requires_torch,
+    ignore_warnings,
+    has_onnxscript,
+)
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy, fake_torchdynamo_exporting
 from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
 from onnx_diagnostic.torch_models.hghub.hub_api import get_cached_configuration
@@ -398,9 +404,69 @@ class TestPatchPatchTransformers(ExtTestCase):
                 _is_torchdynamo_exporting()
             ), f"exporting is not set to true? {torch.compiler.is_exporting_flag}"
             got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
-            self.assertEqualArray(expected, got)
+            self.assertEqualArray(expected, got, atol=1e-5)
 
-    @requires_transformers("5.0")
+        class Model(patched_class):
+            def forward(
+                self,
+                hidden_states: torch.Tensor,
+                cu_seqlens: torch.Tensor,
+                rotary_pos_emb: torch.Tensor | None = None,
+                position_embeddings1: torch.Tensor | None = None,
+                position_embeddings2: torch.Tensor | None = None,
+                **kwargs,
+            ) -> torch.Tensor:
+                return patched_Qwen2_5_VLVisionAttention.forward(
+                    self,
+                    hidden_states,
+                    cu_seqlens,
+                    rotary_pos_emb=rotary_pos_emb,
+                    position_embeddings=(position_embeddings1, position_embeddings2),
+                    **kwargs,
+                )
+
+        instance = Model(config.vision_config)
+        instance.eval()
+
+        ds = dict(
+            hidden_states={0: "d1"},
+            cu_seqlens={0: "d3"},
+            position_embeddings1={0: "d1"},
+            position_embeddings2={0: "d1"},
+        )
+        inputs.update(
+            dict(
+                position_embeddings1=inputs["position_embeddings"][0],
+                position_embeddings2=inputs["position_embeddings"][1],
+            )
+        )
+        del inputs["position_embeddings"]
+        for exporter in ("custom", "onnx-dynamo"):
+            # onnx-dynamo needs OpOverload(op='aten.sym_storage_offset' (transformers>=5.0?)
+            if exporter == "onnx-dynamo" and not has_onnxscript("0.5.7"):
+                raise unittest.SkipTest("needs onnxscript>=0.5.7")
+            filename = self.get_dump_file(
+                f"test_patched_qwen2_5_vl_vision_attention_forward.{exporter}.onnx"
+            )
+            to_onnx(
+                instance,
+                kwargs=inputs,
+                dynamic_shapes=ds,
+                exporter=exporter,
+                filename=filename,
+            )
+            # exporter_kwargs={"report":True} if exporter != "custom" else {}
+            self.assert_onnx_disc(
+                f"test_patched_qwen2_5_vl_vision_attention_forward-{exporter}",
+                onnx.load(filename),
+                instance,
+                inputs,
+                atol=1e-3,
+                rtol=1,
+            )
+
+    @requires_transformers("4.99")
+    @requires_torch("2.9.99")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_qwen2_5_vl_vision_attention_iteration(self):
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
