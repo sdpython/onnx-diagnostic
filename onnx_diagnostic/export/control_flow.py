@@ -107,7 +107,7 @@ def make_custom_loop_for(
     n_iter: torch.Tensor,
     body_fn: Callable,
     reduction_dim: Optional[Sequence[int]],
-    args: Tuple[torch.Tensor, ...],
+    args: Sequence[torch.Tensor],
     body_gm: Optional[torch.fx.GraphModule] = None,
     body_mutated_inputs: Optional[List[Any]] = None,
     body_outputs: Optional[List[Any]] = None,
@@ -261,7 +261,7 @@ def convert_custom_loop_into_onnx(
 
 
 def convert_into_onnx(
-    body_gm: torch.fx.GraphModule, args: List[torch.Tensor]
+    body_gm: torch.fx.GraphModule, args: Sequence[torch.Tensor]
 ) -> onnx.ModelProto:
     """
     Converts a torch.fx.GraphModule into ONNX.
@@ -280,7 +280,7 @@ def convert_into_onnx(
 def loop_for(
     n_iter: Union[torch.SymInt, torch.Tensor],
     body_fn: Callable[..., Tuple[torch.Tensor]],
-    args: Tuple[torch.Tensor, ...],
+    args: Sequence[torch.Tensor],
     reduction_dim: Optional[Sequence[int]] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """
