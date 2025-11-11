@@ -10,7 +10,7 @@ from ..helpers.onnx_helper import pretty_onnx
 from .api import to_onnx
 
 _TEST_EXPORT = False
-_REGISTERED_SCHEMA = {}
+_REGISTERED_SCHEMA = {}  # type: ignore[var-annotated]
 _DISPATCHER = None
 
 
@@ -141,14 +141,14 @@ def make_custom_loop_for(
 
 
 def convert_custom_loop_into_onnx(
-    g: "GraphBuilder",  # noqa: F821
+    g: Any,  # "GreaphBuilder"
     sts: Dict[str, Any],
     outputs: List[str],
     *args: str,
     body: onnx.GraphProto,
     reduction_dim: Optional[Tuple[int, ...]] = None,
     name: str = "loop_for",
-) -> Tuple[str, ...]:
+) -> Union[str, Tuple[str, ...]]:
     graph = body.graph if isinstance(body, onnx.ModelProto) else body
     assert isinstance(
         graph, onnx.GraphProto

@@ -29,7 +29,7 @@ class SimpleLoopForOp(HigherOrderOperator):
         from torch._higher_order_ops.schema import HopSchemaGenerator
         from torch._higher_order_ops.utils import materialize_as_graph
 
-        body_gm: torch.fx.GraphModule = materialize_as_graph(
+        body_gm: torch.fx.GraphModule = materialize_as_graph(  # type: ignore[annotation-unchecked]
             body_fn, (torch.tensor(0, dtype=torch.int64), *operands)
         )
         (
