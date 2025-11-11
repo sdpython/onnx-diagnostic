@@ -38,6 +38,8 @@ with different options. This steps happens before converting into ONNX.
         print(name)
         print("=" * len(name))
         print()
+        print(f"code: :class:`onnx_diagnostic.torch_export_patches.eval.model_cases.{name}`")
+        print()
         print("forward")
         print("+++++++")
         print()
