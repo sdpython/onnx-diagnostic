@@ -60,7 +60,7 @@ def _loop_for_fn(n_iter, body_fn, reduction_dim, args):
     Python implementation of the loop.
 
     :param n_iter: number of iteration
-    :param body_fn: function implementating the body
+    :param body_fn: function implementing the body
     :param reduction_dim: dimension used to reduce the list produced by the loop
     :param args: arguments to the loop body
     :return: results
@@ -107,7 +107,7 @@ def make_custom_loop_for(
     n_iter: torch.Tensor,
     body_fn: Callable,
     reduction_dim: Optional[Sequence[int]],
-    args: List[torch.Tensor],
+    args: Tuple[torch.Tensor, ...],
     body_gm: Optional[torch.fx.GraphModule] = None,
     body_mutated_inputs: Optional[List[Any]] = None,
     body_outputs: Optional[List[Any]] = None,
