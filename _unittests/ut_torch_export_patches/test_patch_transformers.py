@@ -7,6 +7,7 @@ import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     requires_transformers,
+    requires_torch,
     ignore_warnings,
     has_onnxscript,
 )
@@ -465,6 +466,7 @@ class TestPatchPatchTransformers(ExtTestCase):
             )
 
     @requires_transformers("4.99")
+    @requires_torch("2.9.99")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_qwen2_5_vl_vision_attention_iteration(self):
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (

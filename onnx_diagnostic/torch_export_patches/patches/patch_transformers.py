@@ -2435,8 +2435,8 @@ if patch_qwen2_5:
                         cu_seqlens.dtype
                     )
                     dot = dot.sum(dim=0)
-                    mask = dot.unsqueeze(1) @ dot.unsqueeze(0)
-                    bool_mask = mask == dot**2
+                    mask = dot.unsqueeze(1) - dot.unsqueeze(0)
+                    bool_mask = mask == 0
                     bool_mask = bool_mask.unsqueeze(0).unsqueeze(0)
 
                     torch._check(bool_mask.shape[2] == key_states.shape[2])
