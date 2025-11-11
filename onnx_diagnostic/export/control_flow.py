@@ -163,4 +163,10 @@ def loop_for(
     if not res:
         return torch.empty(tuple(), dtype=torch.float32, device=args[0].device)
     n_res = len(res[0])
-    return [torch.cat([r[i] for r in res]) for i in range(n_res)]
+    return [
+        torch.cat(
+            [r[i] for r in res],
+            dim=0 if reduction_dim is None or i >= len(reduction_dim) else reduction_dim[i],
+        )
+        for i in range(n_res)
+    ]
