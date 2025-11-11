@@ -570,6 +570,34 @@ class ControlFlowScanDecomposition_151564(torch.nn.Module):
     _dynamic = {"images": {0: DYN, 1: DYN}, "position": {0: DYN}}
 
 
+class ControlFlowWhileDec(torch.nn.Module):
+    def forward(self, ci, a, b):
+        def cond_fn(i, x, y):
+            return i > 0
+
+        def body_fn(i, x, y):
+            return i - 1, x + y, y - x
+
+        return torch._higher_order_ops.while_loop(cond_fn, body_fn, [ci, a, b])
+
+    _inputs = [(torch.tensor(1), torch.randn(2, 3), torch.randn(2, 3))]
+    _dynamic = {}, {0: DYN, 1: DYN}, {0: DYN}
+
+
+class ControlFlowWhileInc(torch.nn.Module):
+    def forward(self, ci, a, b):
+        def cond_fn(i, x, y):
+            return i < x.size(0)
+
+        def body_fn(i, x, y):
+            return i + 1, x + y, y - x
+
+        return torch._higher_order_ops.while_loop(cond_fn, body_fn, [ci, a, b])
+
+    _inputs = [(torch.tensor(1), torch.randn(2, 3), torch.randn(2, 3))]
+    _dynamic = {}, {0: DYN, 1: DYN}, {0: DYN}
+
+
 class SignatureInt1(torch.nn.Module):
     def __init__(self, n_dims: int = 3, n_targets: int = 1):
         super().__init__()
