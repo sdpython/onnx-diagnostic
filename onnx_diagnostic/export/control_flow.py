@@ -6,7 +6,6 @@ import onnx.helper as oh
 import torch
 from torch._higher_order_ops.utils import materialize_as_graph
 from torch._higher_order_ops.utils import check_input_alias_and_mutation_return_outputs
-from ..helpers.onnx_helper import pretty_onnx
 from .api import to_onnx
 
 _TEST_EXPORT = False
@@ -47,15 +46,25 @@ def enable_code_export_control_flow():
         _TEST_EXPORT = old
 
 
-def is_exporting():
+def is_exporting() -> bool:
     """
     Returns :func:`torch.compiler.is_exporting` or
-    :func:`torch.compiler.is_compiling`
+    :func:`torch.compiler.is_compiling`.
+    Changes ``_TEST_EXPORT`` to make it trigger.
     """
     return _TEST_EXPORT or torch.compiler.is_exporting() or torch.compiler.is_compiling()
 
 
 def _loop_for_fn(n_iter, body_fn, reduction_dim, args):
+    """
+    Python implementation of the loop.
+
+    :param n_iter: number of iteration
+    :param body_fn: function implementating the body
+    :param reduction_dim: dimension used to reduce the list produced by the loop
+    :param args: arguments to the loop body
+    :return: results
+    """
     res = []
     for i in torch.arange(n_iter, dtype=n_iter.dtype):
         r = body_fn(i, *args)
@@ -95,14 +104,30 @@ def _loop_for_fn(n_iter, body_fn, reduction_dim, args):
 
 
 def make_custom_loop_for(
-    n_iter,
-    body_fn,
-    reduction_dim,
-    args,
-    body_gm=None,
-    body_mutated_inputs=None,
-    body_outputs=None,
-):
+    n_iter: torch.Tensor,
+    body_fn: Callable,
+    reduction_dim: Optional[List[int]],
+    args: List[torch.Tensor],
+    body_gm: Optional[torch.fx.GraphModule] = None,
+    body_mutated_inputs: Optional[List[Any]] = None,
+    body_outputs: Optional[List[Any]] = None,
+) -> Tuple[str, torch.library.CustomOpDef]:
+    """
+    Defines a custom operator for a loop in order to avoid
+    :func:`torch.export.export` digging into it.
+    It registers the custom op and a custom conversion
+    to ONNX.
+
+    :param n_iter: number of iterations defined by a tensor of no dimension
+    :param body_fn: the loop body defined as a function
+    :param reduction_dim: dimension used to concatenated the results
+    :param args: list of tensors, input to the body
+    :param body_gm: torch.fx.GraphModule equivalent to *body_gm*
+    :param body_mutated_inputs: inputs to *body_gm*
+    :param body_outputs: outputs to *body_gm*
+    :return: a name and the custom op definition, the name
+        is used to cache the custom op
+    """
     global _DISPATCHER
     srank = "_".join("x".join(map(str, s.shape)) for s in body_outputs)
     sred = "x".join(map(str, reduction_dim)) if reduction_dim else ""
@@ -120,7 +145,7 @@ def make_custom_loop_for(
     custom_def._abstract_fn = lambda *_args, _o=body_outputs: (
         tuple([torch.empty_like(s) for s in _o]) if len(_o) > 1 else torch.empty_like(_o[0])
     )
-    onx = convert_into_onnx(body_gm, args, body_mutated_inputs, body_outputs)
+    onx = convert_into_onnx(body_gm, args)
     to_register = (
         custom_def,
         onx,
@@ -149,15 +174,26 @@ def convert_custom_loop_into_onnx(
     reduction_dim: Optional[Tuple[int, ...]] = None,
     name: str = "loop_for",
 ) -> Union[str, Tuple[str, ...]]:
+    """
+    Converts a custom op ``higher_ops::loop_for...`` into e sequence of node.
+
+    :param g: GreaphBuilder
+    :param sts: if not defined, torch does not know the output shapes
+    :param outputs: output names
+    :param args: input argument known at export time
+    :param body: GraphProto, the loop body
+    :param reduction_dim: the dimension to follow when aggregating the
+        list of tensors after the loop ran
+    :param name: to give the onnx nodes a name
+    :return: output names
+    """
     graph = body.graph if isinstance(body, onnx.ModelProto) else body
     assert isinstance(
         graph, onnx.GraphProto
     ), f"Unexpected type {type(body)} for body{g.get_debug_msg()}"
-    assert len(outputs) == len(graph.output), (
-        f"Length mismatch, expecting {len(outputs)} but got "
-        f"{len(graph.output)}, \n--\n{pretty_onnx(body)}"
-        f"{g.get_debug_msg()}"
-    )
+    assert len(outputs) == 1, f"Only one outputs is expected but outputs={outputs!r}"
+    if len(graph.output) != 1:
+        outputs = [f"{outputs[0]}#{i}" for i in range(len(graph.output))]
     input_names = [i.name for i in graph.input]
     inputs = [
         *graph.input[:1],
@@ -218,11 +254,20 @@ def convert_custom_loop_into_onnx(
         for i, o in enumerate(outputs):
             g.set_type(o, graph.output[i].type.tensor_type.elem_type)
             g.set_rank(o, len(graph.output[i].type.tensor_type.shape.dims))
-    return tuple(outputs) if len(outputs) > 1 else outputs[0]
+    return outputs if len(outputs) > 1 else outputs[0]
 
 
-def convert_into_onnx(body_gm, args, body_mutated_inputs, body_outputs):
-    """Converts into ONNX."""
+def convert_into_onnx(
+    body_gm: torch.fx.GraphModule, args: List[torch.Tensor]
+) -> onnx.ModelProto:
+    """
+    Converts a torch.fx.GraphModule into ONNX.
+    It returns a ModelProto.
+
+    :param body_gm: a torch.fx.GraphModule
+    :param args: arguments known at export time
+    :return: a ModelProto
+    """
     # This does not work with onnx-dynamo.
     # opset still needs to be defined
     container = to_onnx(body_gm, args, exporter="custom")
@@ -239,6 +284,20 @@ def loop_for(
     High operators used to easily export a loop in ONNX.
     Does not fully work with :func:`torch.export.export`,
     it does replaces a custom op with a loop operator afterwards.
+    Every iteration produces tensors, all of them are gathered
+    into lists, all these lists are concatenated into tensors.
+
+    :param n_iter: number of iterations, it can be fixed on
+        variable, in that case it should a tensor with no dimension
+    :param body_fn: function body, takes only tensors and returns
+        only tensors, the first argument is the iteration number
+        in a tensor with no dimension, all the others
+        are not changed during the loop
+    :param args: the available tensors at every loop
+    :param reduction_dim: the loop aggregated the results into list,
+        one of each output, each of them is concatenated into one
+        tensor along one dimension, by default, it is the first
+        dimension, but it can be defined otherwise
 
     .. runpython::
         :showcode:
@@ -271,6 +330,52 @@ def loop_for(
             use_control_flow_dispatcher=True,
         ).model_proto
 
+        sess = onnxruntime.InferenceSession(
+            onx.SerializeToString(), providers=["CPUExecutionProvider"]
+        )
+        got = sess.run(None, dict(zip(["n_iter", "x"], [n_iter.numpy(), x.numpy()])))
+        print("got:", got)
+
+
+        # The loop is exported as a custom ops.
+        ep = torch.export.export(
+            model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
+        )
+        print(ep)
+
+    Another example with two outputs:
+
+    .. runpython::
+        :showcode:
+
+        import torch
+        import onnxruntime
+        from onnx_diagnostic.export.api import to_onnx
+        from onnx_diagnostic.export.control_flow import loop_for
+
+
+        class Model(torch.nn.Module):
+            def forward(self, n_iter, x):
+                def body(i, x):
+                    return x[: i.item() + 1].unsqueeze(1), x[: i.item() + 1].unsqueeze(1) + 1
+
+                two = loop_for(n_iter, body, (x,))
+                return two[0] + two[1]
+
+
+        model = Model()
+        n_iter = torch.tensor(4, dtype=torch.int64)
+        x = torch.arange(10, dtype=torch.float32)
+        expected = model(n_iter, x)
+        print("expected:", expected)
+
+        onx = to_onnx(
+            model,
+            (n_iter, x),
+            dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC})),
+            exporter="custom",
+            use_control_flow_dispatcher=True,
+        ).model_proto
 
         sess = onnxruntime.InferenceSession(
             onx.SerializeToString(), providers=["CPUExecutionProvider"]
@@ -285,6 +390,52 @@ def loop_for(
         )
         print(ep)
 
+    A last example with ``reduction_dim``:
+
+    .. runpython::
+        :showcode:
+
+        import torch
+        import onnxruntime
+        from onnx_diagnostic.export.api import to_onnx
+        from onnx_diagnostic.export.control_flow import loop_for
+
+
+        class Model(torch.nn.Module):
+            def forward(self, n_iter, x):
+                def body(i, x):
+                    return x[: i.item() + 1].unsqueeze(1), x[: i.item() + 1].unsqueeze(0) + 1
+
+                two = loop_for(n_iter, body, (x,), reduction_dim=[0, 1])
+                return two[0] + two[1].T
+
+
+        model = Model()
+        n_iter = torch.tensor(4, dtype=torch.int64)
+        x = torch.arange(10, dtype=torch.float32)
+        expected = model(n_iter, x)
+        print("expected:", expected)
+
+        onx = to_onnx(
+            model,
+            (n_iter, x),
+            dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC})),
+            exporter="custom",
+            use_control_flow_dispatcher=True,
+        ).model_proto
+
+        sess = onnxruntime.InferenceSession(
+            onx.SerializeToString(), providers=["CPUExecutionProvider"]
+        )
+        got = sess.run(None, dict(zip(["n_iter", "x"], [n_iter.numpy(), x.numpy()])))
+        print("got:", got)
+
+
+        # The loop is exported as a custom ops.
+        ep = torch.export.export(
+            model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
+        )
+        print(ep)
     """
     assert args, "The function should have at least one arg."
     assert (
