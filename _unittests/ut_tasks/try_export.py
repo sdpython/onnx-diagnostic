@@ -46,20 +46,26 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
 
         from transformers import AutoModel, AutoProcessor
 
-        # model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
-        model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
+        model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
+        # model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
         if os.environ.get("PRETRAINED", ""):
-            model = AutoModel.from_pretrained(model_id, device_map="auto", dtype="auto").eval()
+            print("-- pretrained model")
+            model = AutoModel.from_pretrained(
+                model_id, device_map=device, dtype=torch_dtype, attn_implementation="sdpa"
+            ).eval()
         else:
+            print("-- random model")
 
             def _config_reduction(config, task):
                 return {
-                    "num_hidden_layers": 2,
+                    # "num_hidden_layers": 2,
                     "text_config": {
                         "num_hidden_layers": 2,
                         "layer_types": ["full_attention", "full_attention"],
                     },
                     # "_attn_implementation": "flash_attention_2",
+                    "_attn_implementation": "sdpa",
+                    "dtype": "float16",
                 }
 
             config_reduction = _config_reduction
@@ -70,6 +76,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
 
         model = model.to(device).to(getattr(torch, dtype))
 
+        print(f"-- config._attn_implementation={model.config._attn_implementation}")
         print(f"-- model.dtype={model.dtype}")
         print(f"-- model.device={model.device}")
         processor = AutoProcessor.from_pretrained(model_id, use_fast=True)

@@ -1011,15 +1011,20 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
                 return_dict:bool
             )
         """
-        import transformers
-        from transformers import AutoModel, AutoProcessor
+        from transformers import AutoProcessor
         from qwen_vl_utils import process_vision_info
 
-        # model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
-        model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
+        model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
+        # model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
         if os.environ.get("PRETRAINED", ""):
-            model = AutoModel.from_pretrained(model_id, device_map="auto", dtype="auto").eval()
+            print("-- use pretrained model")
+            from transformers import Qwen2_5_VLForConditionalGeneration
+
+            model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                model_id, device_map="auto", dtype="auto", trust_remote_code=True
+            ).eval()
         else:
+            print("-- use dummy model")
 
             def config_reduction(config, task):
                 return {
@@ -1035,6 +1040,7 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
             )
             model = data["model"]
 
+        print(f"-- model type={type(model)}")
         print(f"-- model.device={model.device}")
         processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
         print(f"-- processor={type(processor)}")
@@ -1063,25 +1069,13 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
             padding=True,
             return_tensors="pt",
         )
-        inputs = inputs.to("cuda")
-        model = model.to("cuda").to(torch.bfloat16)
+        # model = model.to("cuda").to(torch.bfloat16)
+        # inputs = inputs.to("cuda")
 
         print(f"-- processor {type(processor)}")
         print(f"-- inputs={self.string_type(inputs, with_shape=True, with_min_max=True)}")
-
-        f_ = transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_multimodal_rotary_pos_emb
-
-        def _apply_multimodal_rotary_pos_emb(*args, **kwargs):
-            print(
-                "-- apply_multimodal_rotary_pos_emb:",
-                self.string_type(args, with_shape=True),
-                self.string_type(kwargs, with_shape=True),
-            )
-            return f_(*args, **kwargs)
-
-        transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.apply_multimodal_rotary_pos_emb = (
-            _apply_multimodal_rotary_pos_emb
-        )
+        generated_ids = model.generate(**inputs, max_new_tokens=128)
+        print("-- second")
 
         print()
         with (

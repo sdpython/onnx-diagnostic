@@ -422,6 +422,27 @@ def create_onnx_model_from_input_tensors(
     :return: ModelProto
 
     The function raises an error if not supported.
+    An example:
+
+    .. code-block:: python
+
+        from onnx_diagnostic.helpers.mini_onnx_builder import (
+            create_onnx_model_from_input_tensors,
+        )
+        import onnx
+
+        proto = create_onnx_model_from_input_tensors(
+            dict(
+                query_states=query_states,
+                key_states=key_states,
+                value_states=value_states,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=(cu_seqlens[1:] - cu_seqlens[:-1]).max(),
+                scaling=self.scaling,
+                attn_output=attn_output,
+            )
+        )
+        onnx.save(proto, "attention_inputs.onnx")
     """
     if switch_low_high is None:
         switch_low_high = sys.byteorder != "big"
@@ -461,7 +482,17 @@ def _unflatten(
         if spl[-1] == "array":
             return pos + 1, outputs[pos]
         if spl[-1] == "tensor":
-            return pos + 1, torch.from_numpy(outputs[pos]).to(device)
+            try:
+                return pos + 1, torch.from_numpy(outputs[pos]).to(device)
+            except TypeError:
+                # it shuold be more robusts
+                import ml_dtypes
+
+                if outputs[pos].dtype == ml_dtypes.bfloat16:
+                    return pos + 1, torch.from_numpy(outputs[pos].astype(float)).to(device).to(
+                        torch.bfloat16
+                    )
+                raise
         raise AssertionError(f"Unexpected name {name!r} in {names}")
 
     res: List[Any] = []
@@ -557,6 +588,19 @@ def create_input_tensors_from_onnx_model(
     :return: restored data
 
     See example :ref:`l-plot-intermediate-results` for an example.
+
+    .. code-bloc:: python
+
+        import os
+        from onnx_diagnostic.helpers.mini_onnx_builder import (
+            create_input_tensors_from_onnx_model,
+        )
+        from onnx_diagnostic.helpers import string_type
+
+        restored = create_input_tensors_from_onnx_model("attention_inputs.onnx")
+        for k, v in restored.items():
+            print(f"{k}: {string_type(v, with_shape=True, with_min_max=True)}")
+
     """
     if engine == "ExtendedReferenceEvaluator":
         from ..reference import ExtendedReferenceEvaluator
