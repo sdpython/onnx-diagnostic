@@ -87,8 +87,7 @@ def to_onnx(
             large_model=True,
             output_dynamic_shapes=output_dynamic_shapes,
             export_options=ExportOptions(save_ep=save_ep),
-            -options=OptimizationOptions(patterns="default+onnxruntime" if optimize else None),
-            -options=options,
+            options=options,
             **(exporter_kwargs or {}),
             dispatcher=dispatcher if use_control_flow_dispatcher else None,
         )
