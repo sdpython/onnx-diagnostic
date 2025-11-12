@@ -148,14 +148,31 @@ def make_custom_loop_for(
     custom_def._abstract_fn = lambda *_args, _o=body_outputs: (
         tuple([torch.empty_like(s) for s in _o]) if len(_o) > 1 else torch.empty_like(_o[0])
     )
-    onx = convert_into_onnx(body_gm, args)
+
+    def _make_onx(
+        body_gm=body_gm, args=args, target_opset=None, verbose=0, exporter_kwargs=None
+    ):
+        return convert_into_onnx(
+            body_gm,
+            args,
+            exporter_kwargs=exporter_kwargs,
+            target_opset=target_opset,
+            verbose=verbose,
+        )
+
     to_register = (
         custom_def,
-        onx,
+        _make_onx,
         (
-            lambda g, sts, outputs, *args, body=onx, reduction_dim=reduction_dim, name=name: (
+            lambda g, sts, outputs, *args, bc=_make_onx, rd=reduction_dim, name=name: (
                 convert_custom_loop_into_onnx(
-                    g, sts, outputs, *args, body=body, reduction_dim=reduction_dim, name=name
+                    g,
+                    sts,
+                    outputs,
+                    *args,
+                    body_callable=bc,
+                    reduction_dim=rd,
+                    name=name,
                 )
             )
         ),
@@ -173,7 +190,7 @@ def convert_custom_loop_into_onnx(
     sts: Dict[str, Any],
     outputs: List[str],
     *args: str,
-    body: onnx.GraphProto,
+    body_callable: Callable[..., onnx.ModelProto],
     reduction_dim: Optional[Sequence[int]] = None,
     name: str = "loop_for",
 ) -> Union[str, List[str]]:
@@ -190,6 +207,14 @@ def convert_custom_loop_into_onnx(
     :param name: to give the onnx nodes a name
     :return: output names
     """
+    assert body_callable is not None, "body_callable cannot be None"
+    # This should be part of a public API.
+    body = body_callable(
+        target_opset=g.main_opset,
+        verbose=g.verbose,
+        exporter_kwargs={"options": g.optimization_options},
+    )
+
     graph = body.graph if isinstance(body, onnx.ModelProto) else body
     assert isinstance(
         graph, onnx.GraphProto
@@ -261,7 +286,11 @@ def convert_custom_loop_into_onnx(
 
 
 def convert_into_onnx(
-    body_gm: torch.fx.GraphModule, args: Sequence[torch.Tensor]
+    body_gm: torch.fx.GraphModule,
+    args: Sequence[torch.Tensor],
+    target_opset: Optional[int] = None,
+    verbose: int = 0,
+    exporter_kwargs: Optional[Dict[str, Any]] = None,
 ) -> onnx.ModelProto:
     """
     Converts a torch.fx.GraphModule into ONNX.
@@ -269,11 +298,21 @@ def convert_into_onnx(
 
     :param body_gm: a torch.fx.GraphModule
     :param args: arguments known at export time
+    :param target_opset: targetted opset
+    :param verbose: verbosity level
+    :param exporter_kwargs: additional exporter arguments
     :return: a ModelProto
     """
     # This does not work with onnx-dynamo.
     # opset still needs to be defined
-    container = to_onnx(body_gm, args, exporter="custom")
+    container = to_onnx(
+        body_gm,
+        args,
+        exporter="custom",
+        exporter_kwargs=exporter_kwargs,
+        target_opset=target_opset,
+        verbose=verbose,
+    )
     return container.model_proto
 
 

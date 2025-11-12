@@ -79,6 +79,40 @@ class TestControlFlow(ExtTestCase):
         self.assert_onnx_disc("test_loop_one_custom", onx, model, (n_iter, x))
 
     @requires_torch("2.9.99")
+    def test_loop_one_custom_different_opset(self):
+        class Model(torch.nn.Module):
+            def forward(self, n_iter, x):
+                def body(i, x):
+                    return x[: i.item() + 1].unsqueeze(1)
+
+                return loop_for(n_iter, body, (x,))
+
+        model = Model()
+        n_iter = torch.tensor(4, dtype=torch.int64)
+        x = torch.arange(10, dtype=torch.float32)
+        expected = torch.tensor([0, 0, 1, 0, 1, 2, 0, 1, 2, 3], dtype=x.dtype).unsqueeze(1)
+        got = model(n_iter, x)
+        self.assertEqualArray(expected, got)
+
+        ep = torch.export.export(
+            model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
+        )
+        self.assertIn("torch.ops.onnx_higher_ops.loop_for_body_", str(ep))
+
+        onx = to_onnx(
+            model,
+            (n_iter, x),
+            dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC})),
+            exporter="custom",
+            use_control_flow_dispatcher=True,
+            target_opset=22,
+        ).model_proto
+        opsets = {d.domain: d.version for d in onx.opset_import}
+        self.assertEqual(opsets[""], 22)
+        self.dump_onnx("test_loop_one_custom.onnx", onx)
+        self.assert_onnx_disc("test_loop_one_custom", onx, model, (n_iter, x))
+
+    @requires_torch("2.9.99")
     def test_loop_two_custom(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
