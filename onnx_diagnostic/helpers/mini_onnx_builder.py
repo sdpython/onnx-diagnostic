@@ -563,6 +563,12 @@ def _unflatten(
             return d
         return ty(res)
 
+    if end and len(res) == 1:
+        if res[0] is None:
+            return next_pos, ty()
+        if isinstance(res[0], tuple) and len(res[0]) == 2 and res[0] == ("dict.", None):
+            return next_pos, ty()
+        return next_pos, ty(res)
     return next_pos, (
         ty() if len(res) == 1 and res[0] in (("dict.", None), None) else _make(ty, res)
     )
@@ -639,6 +645,8 @@ def create_input_tensors_from_onnx_model(
             return float(output[0])
         if name == "tensor":
             return torch.from_numpy(output).to(device)
-        raise AssertionError(f"Unexpected name {name!r} in {names}")
+        assert name.startswith(
+            ("list_", "list.", "dict.", "tuple_", "tuple.")
+        ), f"Unexpected name {name!r} in {names}"
 
     return _unflatten(sep, names, got, device=device)[1]
