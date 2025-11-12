@@ -51,7 +51,7 @@ def select_when_exporting(f, f_scan):
     return f_scan if is_torchdynamo_exporting() else f
 
 
-class TestJit(ExtTestCase):
+class TestExperimentJit(ExtTestCase):
     def test_dummy_loop(self):
         x = torch.randn((5, 6))
         y = torch.arange(5, dtype=torch.int64) + 1
