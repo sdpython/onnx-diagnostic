@@ -485,7 +485,7 @@ def _unflatten(
             try:
                 return pos + 1, torch.from_numpy(outputs[pos]).to(device)
             except TypeError:
-                # it shuold be more robusts
+                # it should be more robust
                 import ml_dtypes
 
                 if outputs[pos].dtype == ml_dtypes.bfloat16:
@@ -589,7 +589,7 @@ def create_input_tensors_from_onnx_model(
 
     See example :ref:`l-plot-intermediate-results` for an example.
 
-    .. code-bloc:: python
+    .. code-block:: python
 
         import os
         from onnx_diagnostic.helpers.mini_onnx_builder import (
