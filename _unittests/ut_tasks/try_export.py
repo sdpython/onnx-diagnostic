@@ -115,7 +115,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 verbose=1,
                 save_ep=fileep,
                 target_opset=22,
-                optimize=False,
+                optimize=True,
             )
 
         self.assert_onnx_disc(
@@ -132,6 +132,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             use_ort=True,
             atol=0.02,
             rtol=10,
+            ort_optimized_graph=False,
         )
 
 
