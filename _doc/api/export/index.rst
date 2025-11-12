@@ -6,6 +6,7 @@ onnx_diagnostic.export
     :caption: modules
 
     api
+    control_flow
     dynamic_shapes
     shape_helper
     validate

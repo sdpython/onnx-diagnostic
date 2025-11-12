@@ -17,6 +17,7 @@ def to_onnx(
     exporter_kwargs: Optional[Dict[str, Any]] = None,
     save_ep: Optional[str] = None,
     optimize: bool = True,
+    use_control_flow_dispatcher: bool = False,
 ) -> Any:
     """
     Common API for exporters. By default, the models are optimized to use the
@@ -38,6 +39,8 @@ def to_onnx(
     :param exporter_kwargs: additional parameters sent to the exporter
     :param save_ep: saves the exported program
     :param optimize: optimizes the model
+    :param use_control_flow_dispatcher: use the dispatcher created to supported
+        custom loops (see :func:`onnx_diagnostic.export.control_flow.loop_for`)
     :return: the output of the selected exporter, usually a structure including
         an onnx model
 
@@ -60,6 +63,17 @@ def to_onnx(
         )
         from experimental_experiment.xbuilder import OptimizationOptions
 
+        if use_control_flow_dispatcher:
+            from .control_flow import create_global_dispatcher
+
+            dispatcher = create_global_dispatcher()
+
+        options = None
+        if exporter_kwargs is not None:
+            options = exporter_kwargs.pop("options", None)
+        if options is None:
+            options = OptimizationOptions(patterns="default+onnxruntime")
+
         return _to_onnx(
             mod,
             args=args,
@@ -73,8 +87,10 @@ def to_onnx(
             large_model=True,
             output_dynamic_shapes=output_dynamic_shapes,
             export_options=ExportOptions(save_ep=save_ep),
-            options=OptimizationOptions(patterns="default+onnxruntime" if optimize else None),
+            -options=OptimizationOptions(patterns="default+onnxruntime" if optimize else None),
+            -options=options,
             **(exporter_kwargs or {}),
+            dispatcher=dispatcher if use_control_flow_dispatcher else None,
         )
     if exporter in ("dynamo", "onnx-dynamo"):
         import onnxscript.rewriter.ort_fusions as ort_fusions
