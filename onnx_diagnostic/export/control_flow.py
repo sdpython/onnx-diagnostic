@@ -298,7 +298,7 @@ def convert_into_onnx(
 
     :param body_gm: a torch.fx.GraphModule
     :param args: arguments known at export time
-    :param target_opset: targetted opset
+    :param target_opset: targeted opset
     :param verbose: verbosity level
     :param exporter_kwargs: additional exporter arguments
     :return: a ModelProto
