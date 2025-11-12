@@ -589,7 +589,7 @@ def create_input_tensors_from_onnx_model(
 
     See example :ref:`l-plot-intermediate-results` for an example.
 
-    .. code-bloc:: python
+    .. code-block:: python
 
         import os
         from onnx_diagnostic.helpers.mini_onnx_builder import (
