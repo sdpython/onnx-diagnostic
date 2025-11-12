@@ -88,7 +88,6 @@ class TestSerialization(ExtTestCase):
             Model(), [(self._get_cache(),), (self._get_cache(bsize=3, nheads=5),)]
         )
         guessed = md.guess_dynamic_shapes()
-        print("****", guessed)
         DYN = torch.export.Dim.DYNAMIC
         self.assertEqual(
             (([{0: DYN, 1: DYN}, {0: DYN, 1: DYN}, {0: DYN, 1: DYN}, {0: DYN, 1: DYN}],), {}),

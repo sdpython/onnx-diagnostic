@@ -16,6 +16,7 @@ def to_onnx(
     exporter: str = "onnx-dynamo",
     exporter_kwargs: Optional[Dict[str, Any]] = None,
     save_ep: Optional[str] = None,
+    optimize: bool = True,
 ) -> Any:
     """
     Common API for exporters. By default, the models are optimized to use the
@@ -36,6 +37,7 @@ def to_onnx(
     :param exporter: exporter to use (``onnx-dynamo``, ``modelbuilder``, ``custom``)
     :param exporter_kwargs: additional parameters sent to the exporter
     :param save_ep: saves the exported program
+    :param optimize: optimizes the model
     :return: the output of the selected exporter, usually a structure including
         an onnx model
 
@@ -71,7 +73,7 @@ def to_onnx(
             large_model=True,
             output_dynamic_shapes=output_dynamic_shapes,
             export_options=ExportOptions(save_ep=save_ep),
-            options=OptimizationOptions(patterns="default+onnxruntime"),
+            options=OptimizationOptions(patterns="default+onnxruntime" if optimize else None),
             **(exporter_kwargs or {}),
         )
     if exporter in ("dynamo", "onnx-dynamo"):
@@ -91,7 +93,8 @@ def to_onnx(
             dynamo=True,
             **(exporter_kwargs or {}),
         )
-        ort_fusions.optimize_for_ort(epo.model)
+        if optimize:
+            ort_fusions.optimize_for_ort(epo.model)
         if filename:
             epo.save(filename, external_data=True)
         return epo
