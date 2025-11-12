@@ -485,7 +485,7 @@ def _unflatten(
             try:
                 return pos + 1, torch.from_numpy(outputs[pos]).to(device)
             except TypeError:
-                # it shuold be more robusts
+                # it should be more robust
                 import ml_dtypes
 
                 if outputs[pos].dtype == ml_dtypes.bfloat16:

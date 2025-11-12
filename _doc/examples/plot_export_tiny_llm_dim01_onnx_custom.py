@@ -146,7 +146,13 @@ def validation(onx, input_sets, expected, catch_exception=True):
         onx.SerializeToString(), providers=["CPUExecutionProvider"]
     )
     for k, v in input_sets.items():
-        feeds = make_feeds(sess, torch_deepcopy(v), use_numpy=True)
+        try:
+            feeds = make_feeds(sess, torch_deepcopy(v), use_numpy=True)
+        except Exception as e:
+            if not catch_exception:
+                raise
+            yield k, e
+            continue
         try:
             got = sess.run(None, feeds)
         except Exception as e:
