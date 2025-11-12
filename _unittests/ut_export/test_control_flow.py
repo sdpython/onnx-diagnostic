@@ -3,7 +3,7 @@ from typing import Tuple
 import torch
 from onnxscript import script, FLOAT, INT64
 from onnxscript import opset18 as op
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
 from onnx_diagnostic.export.control_flow import enable_code_export_control_flow, loop_for
 from onnx_diagnostic.export.control_flow_research import simple_loop_for as loop_for_r
 from onnx_diagnostic.export.api import to_onnx
@@ -47,6 +47,7 @@ class TestControlFlow(ExtTestCase):
         onx = concatenation.to_model_proto()
         self.dump_onnx("test_onnxscript_loop.onnx", onx)
 
+    @requires_torch("2.9.99")
     def test_loop_one_custom(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
@@ -77,6 +78,7 @@ class TestControlFlow(ExtTestCase):
         self.dump_onnx("test_loop_one_custom.onnx", onx)
         self.assert_onnx_disc("test_loop_one_custom", onx, model, (n_iter, x))
 
+    @requires_torch("2.9.99")
     def test_loop_two_custom(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
@@ -108,6 +110,7 @@ class TestControlFlow(ExtTestCase):
         self.dump_onnx("test_loop_one_custom.onnx", onx)
         self.assert_onnx_disc("test_loop_one_custom", onx, model, (n_iter, x))
 
+    @requires_torch("2.9.99")
     def test_loop_two_custom_reduction_dim(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
