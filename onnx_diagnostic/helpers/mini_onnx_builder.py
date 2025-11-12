@@ -461,7 +461,17 @@ def _unflatten(
         if spl[-1] == "array":
             return pos + 1, outputs[pos]
         if spl[-1] == "tensor":
-            return pos + 1, torch.from_numpy(outputs[pos]).to(device)
+            try:
+                return pos + 1, torch.from_numpy(outputs[pos]).to(device)
+            except TypeError:
+                # it shuold be more robusts
+                import ml_dtypes
+
+                if outputs[pos].dtype == ml_dtypes.bfloat16:
+                    return pos + 1, torch.from_numpy(outputs[pos].astype(float)).to(device).to(
+                        torch.bfloat16
+                    )
+                raise
         raise AssertionError(f"Unexpected name {name!r} in {names}")
 
     res: List[Any] = []
