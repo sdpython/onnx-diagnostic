@@ -1188,6 +1188,7 @@ class ExtTestCase(unittest.TestCase):
         copy_inputs: bool = True,
         expected: Optional[Any] = None,
         use_ort: bool = False,
+        ort_optimized_graph: bool = False,
         **kwargs,
     ):
         """
@@ -1206,6 +1207,7 @@ class ExtTestCase(unittest.TestCase):
         :param expected: expected values
         :param copy_inputs: to copy the inputs
         :param use_ort: use :class:`onnxruntime.InferenceSession`
+        :param ort_optimized_graph: dumps the optimized onnxruntime graph
         :param kwargs: arguments sent to
             :class:`onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch`
         """
@@ -1216,29 +1218,50 @@ class ExtTestCase(unittest.TestCase):
         kws = dict(with_shape=True, with_min_max=verbose > 1)
         vname = test_name or "assert_onnx_disc"
         if test_name:
+            import onnx
+
             name = f"{test_name}.onnx"
             if verbose:
                 print(f"[{vname}] save the onnx model into {name!r}")
-            name = self.dump_onnx(name, proto)
+            if isinstance(proto, str):
+                name = proto
+                proto = onnx.load(name)
+            else:
+                assert isinstance(
+                    proto, onnx.ModelProto
+                ), f"Unexpected type {type(proto)} for proto"
+                name = self.dump_onnx(name, proto)
             if verbose:
                 print(f"[{vname}] file size {os.stat(name).st_size // 2**10:1.3f} kb")
         if verbose:
             print(f"[{vname}] make feeds {string_type(inputs, **kws)}")
         if use_ort:
+            assert isinstance(
+                proto, onnx.ModelProto
+            ), f"Unexpected type {type(proto)} for proto"
             feeds = make_feeds(proto, inputs, use_numpy=True, copy=True)
-            if verbose:
-                print(f"[{vname}] feeds {string_type(feeds, **kws)}")
             import onnxruntime
 
+            if verbose:
+                print(f"[{vname}] create onnxruntime.InferenceSession")
+            options = onnxruntime.SessionOptions()
+            if ort_optimized_graph:
+                options.optimized_model_filepath = f"{name}.optort.onnx"
             sess = onnxruntime.InferenceSession(
-                proto.SerializeToString(), providers=["CPUExecutionProvider"]
+                proto.SerializeToString(),
+                options,
+                providers=kwargs.get("providers", ["CPUExecutionProvider"]),
             )
+            if verbose:
+                print(f"[{vname}] run ort feeds {string_type(feeds, **kws)}")
             got = sess.run(None, feeds)
         else:
             feeds = make_feeds(proto, inputs, copy=True)
             if verbose:
-                print(f"[{vname}] feeds {string_type(feeds, **kws)}")
+                print(f"[{vname}] create InferenceSessionForTorch")
             sess = InferenceSessionForTorch(proto, **kwargs)
+            if verbose:
+                print(f"[{vname}] run orttorch feeds {string_type(feeds, **kws)}")
             got = sess.run(None, feeds)
         if verbose:
             print(f"[{vname}] compute expected values")

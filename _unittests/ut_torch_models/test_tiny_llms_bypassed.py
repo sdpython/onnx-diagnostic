@@ -28,8 +28,8 @@ class TestTinyLlmBypassed(ExtTestCase):
             inputs = modificator(copy.deepcopy(inputs))
 
             def debug():
-                print("***", string_type(inputs, with_shape=True))
-                print("***", data["dynamic_shapes"])
+                print("--", string_type(inputs, with_shape=True))
+                print("--", data["dynamic_shapes"])
                 import torch.export._draft_export
 
                 _ep, report = torch.export._draft_export.draft_export(

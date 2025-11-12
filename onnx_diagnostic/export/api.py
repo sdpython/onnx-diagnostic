@@ -16,6 +16,7 @@ def to_onnx(
     exporter: str = "onnx-dynamo",
     exporter_kwargs: Optional[Dict[str, Any]] = None,
     save_ep: Optional[str] = None,
+    optimize: bool = True,
     use_control_flow_dispatcher: bool = False,
 ) -> Any:
     """
@@ -37,6 +38,7 @@ def to_onnx(
     :param exporter: exporter to use (``onnx-dynamo``, ``modelbuilder``, ``custom``)
     :param exporter_kwargs: additional parameters sent to the exporter
     :param save_ep: saves the exported program
+    :param optimize: optimizes the model
     :param use_control_flow_dispatcher: use the dispatcher created to supported
         custom loops (see :func:`onnx_diagnostic.export.control_flow.loop_for`)
     :return: the output of the selected exporter, usually a structure including
@@ -106,7 +108,8 @@ def to_onnx(
             dynamo=True,
             **(exporter_kwargs or {}),
         )
-        ort_fusions.optimize_for_ort(epo.model)
+        if optimize:
+            ort_fusions.optimize_for_ort(epo.model)
         if filename:
             epo.save(filename, external_data=True)
         return epo

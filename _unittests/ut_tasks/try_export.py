@@ -14,7 +14,9 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
     @ignore_warnings(UserWarning)
     def test_imagetext2text_qwen_2_5_vl_instruct_visual(self):
         """
-        clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k qwen_2_5
+        clear&&NEVERTEST=1 python _unittests/ut_tasks/try_export.py -k qwen_2_5
+
+        possible prefix: ``TEXTDEVICE=cuda TESTDTYPE=float16 EXPORTER=onnx-dynamo
 
         ::
 
@@ -33,6 +35,15 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 return_dict:bool
             )
         """
+        device = os.environ.get("TESTDEVICE", "cpu")
+        dtype = os.environ.get("TESTDTYPE", "float32")
+        torch_dtype = {
+            "float16": torch.float16,
+            "bfloat16": torch.bfloat16,
+            "float32": torch.float32,
+        }[dtype]
+        exporter = os.environ.get("EXPORTER", "custom")
+
         from transformers import AutoModel, AutoProcessor
 
         # model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
@@ -57,28 +68,28 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             )
             model = data["model"]
 
-        model = model.to("cpu").to(torch.float32)
+        model = model.to(device).to(getattr(torch, dtype))
 
+        print(f"-- model.dtype={model.dtype}")
         print(f"-- model.device={model.device}")
         processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
         print(f"-- processor={type(processor)}")
 
         inputs = dict(
-            hidden_states=torch.rand((1292, 1176), dtype=torch.float32),
-            grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64),
+            hidden_states=torch.rand((1292, 1176), dtype=torch_dtype).to(device),
+            grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
         )
 
         print(f"-- inputs: {self.string_type(inputs, with_shape=True)}")
         # this is too long
-        # expected = model.visual(**inputs)
-        # print(f"-- expected: {self.string_type(expected, with_shape=True)}")
+        expected = model.visual(**inputs)
+        print(f"-- expected: {self.string_type(expected, with_shape=True)}")
 
-        exporter = "custom"  # "onnx-dynamo"
         filename = self.get_dump_file(
-            f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{exporter}.onnx"
+            f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{device}.{dtype}.{exporter}.onnx"
         )
         fileep = self.get_dump_file(
-            f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{exporter}.graph"
+            f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{device}.{dtype}.{exporter}.graph"
         )
         dynamic_shapes = dict(
             hidden_states={0: "hidden_width", 1: "hidden_height"},
@@ -103,7 +114,26 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 exporter=exporter,
                 verbose=1,
                 save_ep=fileep,
+                target_opset=22,
+                optimize=True,
             )
+
+        self.assert_onnx_disc(
+            f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{device}.{dtype}.{exporter}",
+            filename,
+            model.visual,
+            export_inputs,
+            verbose=1,
+            providers=(
+                ["CUDAExecutionProvider", "CPUExecutionProvider"]
+                if device == "cuda"
+                else ["CPUExecutionProvider"]
+            ),
+            use_ort=True,
+            atol=0.02,
+            rtol=10,
+            ort_optimized_graph=False,
+        )
 
 
 if __name__ == "__main__":
