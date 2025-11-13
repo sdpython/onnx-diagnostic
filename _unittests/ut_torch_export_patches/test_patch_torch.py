@@ -341,7 +341,7 @@ class TestPatchPatchTorch(ExtTestCase):
                 self.assertIn("export 0/1 specialized due to hint of 1 for dimension", str(e))
 
         dynamic_shapes = use_dyn_not_str(dynamic_string, torch.export.Dim.AUTO)
-        if has_torch("2.9"):
+        if has_torch("2.9") and not has_torch("2.9.99"):
             with self.subTest(
                 name="expected shape should be broadcastable to (>= 2.9)",
                 dynamic_shapes=dynamic_shapes,
@@ -352,6 +352,9 @@ class TestPatchPatchTorch(ExtTestCase):
                     raise AssertionError("torch fixed that case")
                 except RuntimeError as e:
                     self.assertIn("expected shape should be broadcastable to", str(e))
+        elif has_torch("2.9.99"):
+            with torch.fx.experimental._config.patch(backed_size_oblivious=True):
+                torch.export.export(model, inputs, dynamic_shapes=dynamic_shapes)
 
         if not has_torch("2.9"):
             with self.subTest(
