@@ -671,21 +671,18 @@ def np_dtype_to_tensor_dtype(dt: np.dtype) -> int:  # noqa: F821
     try:
         return oh.np_dtype_to_tensor_dtype(dt)
     except ValueError:
-        try:
-            import ml_dtypes
-        except ImportError:
-            ml_dtypes = None  # type: ignore
-        if ml_dtypes is not None:
-            if dt == ml_dtypes.bfloat16:
-                return TensorProto.BFLOAT16
-            if dt == ml_dtypes.float8_e4m3fn:
-                return TensorProto.FLOAT8E4M3FN
-            if dt == ml_dtypes.float8_e4m3fnuz:
-                return TensorProto.FLOAT8E4M3FNUZ
-            if dt == ml_dtypes.float8_e5m2:
-                return TensorProto.FLOAT8E5M2
-            if dt == ml_dtypes.float8_e5m2fnuz:
-                return TensorProto.FLOAT8E5M2FNUZ
+        import ml_dtypes
+
+        if dt == ml_dtypes.bfloat16:
+            return TensorProto.BFLOAT16
+        if dt == ml_dtypes.float8_e4m3fn:
+            return TensorProto.FLOAT8E4M3FN
+        if dt == ml_dtypes.float8_e4m3fnuz:
+            return TensorProto.FLOAT8E4M3FNUZ
+        if dt == ml_dtypes.float8_e5m2:
+            return TensorProto.FLOAT8E5M2
+        if dt == ml_dtypes.float8_e5m2fnuz:
+            return TensorProto.FLOAT8E5M2FNUZ
     if dt == np.float32:
         return TensorProto.FLOAT
     if dt == np.float16:

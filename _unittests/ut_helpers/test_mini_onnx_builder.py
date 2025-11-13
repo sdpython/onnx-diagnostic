@@ -200,7 +200,15 @@ class TestMiniOnnxBuilder(ExtTestCase):
 
     def test_mini_onnx_builder_type2(self):
         data = [
-            np.array([1], dtype=dtype) for dtype in [ml_dtypes.bfloat16, ml_dtypes.float8_e3m4]
+            np.array([1], dtype=dtype)
+            for dtype in [
+                ml_dtypes.bfloat16,
+                ml_dtypes.float8_e4m3fn,
+                ml_dtypes.float8_e4m3fnuz,
+                ml_dtypes.float8_e5m2,
+                ml_dtypes.float8_e5m2fnuz,
+                ml_dtypes.int4,
+            ]
         ]
 
         for inputs in data:
