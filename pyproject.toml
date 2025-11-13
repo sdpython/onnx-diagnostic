@@ -80,7 +80,7 @@ disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.rt_helper"]
-disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr", "name-defined]
+disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr", "name-defined"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.reference.report_results_comparison"]
