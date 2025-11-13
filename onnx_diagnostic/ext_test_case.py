@@ -1242,15 +1242,17 @@ class ExtTestCase(unittest.TestCase):
             feeds = make_feeds(proto, inputs, use_numpy=True, copy=True)
             import onnxruntime
 
+            providers = kwargs.get("providers", ["CPUExecutionProvider"])
             if verbose:
-                print(f"[{vname}] create onnxruntime.InferenceSession")
+                print(
+                    f"[{vname}] create onnxruntime.InferenceSession with providers={providers}"
+                )
             options = onnxruntime.SessionOptions()
             if ort_optimized_graph:
                 options.optimized_model_filepath = f"{name}.optort.onnx"
+                options.log_severity_level = 1
             sess = onnxruntime.InferenceSession(
-                proto.SerializeToString(),
-                options,
-                providers=kwargs.get("providers", ["CPUExecutionProvider"]),
+                proto.SerializeToString(), options, providers=providers
             )
             if verbose:
                 print(f"[{vname}] run ort feeds {string_type(feeds, **kws)}")

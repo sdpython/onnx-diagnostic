@@ -16,7 +16,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         """
         clear&&NEVERTEST=1 python _unittests/ut_tasks/try_export.py -k qwen_2_5
 
-        possible prefix: ``TEXTDEVICE=cuda TESTDTYPE=float16 EXPORTER=onnx-dynamo
+        possible prefix: ``TESTDEVICE=cuda TESTDTYPE=float16 EXPORTER=onnx-dynamo``
 
         ::
 
@@ -43,12 +43,17 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             "float32": torch.float32,
         }[dtype]
         exporter = os.environ.get("EXPORTER", "custom")
+        verify = os.environ.get("VERIFY", "") in ("1", 1)
+        exporter_kwargs = {"dump_exported_program": True}
+        if verify and exporter == "onnx-dynamo":
+            exporter_kwargs["verify"] = True
+            exporter_kwargs["report"] = True
 
         from transformers import AutoModel, AutoProcessor
 
         model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
         # model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
-        if os.environ.get("PRETRAINED", ""):
+        if os.environ.get("PRETRAINED", "") in ("1", 1):
             print("-- pretrained model")
             model = AutoModel.from_pretrained(
                 model_id, device_map=device, dtype=torch_dtype, attn_implementation="sdpa"
@@ -74,7 +79,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             )
             model = data["model"]
 
-        model = model.to(device).to(getattr(torch, dtype))
+        model = model.to(device).to(torch_dtype)
 
         print(f"-- config._attn_implementation={model.config._attn_implementation}")
         print(f"-- model.dtype={model.dtype}")
@@ -123,6 +128,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 save_ep=fileep,
                 target_opset=22,
                 optimize=True,
+                exporter_kwargs=exporter_kwargs,
             )
 
         self.assert_onnx_disc(
@@ -136,7 +142,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 if device == "cuda"
                 else ["CPUExecutionProvider"]
             ),
-            use_ort=True,
+            use_ort=torch_dtype != torch.bfloat16,
             atol=0.02,
             rtol=10,
             ort_optimized_graph=False,
