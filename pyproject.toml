@@ -59,12 +59,12 @@ module = ["onnx_diagnostic.helpers.cache_helper"]
 disable_error_code = ["name-defined"]
 
 [[tool.mypy.overrides]]
-module = ["onnx_diagnostic.helpers.helper"]
-disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr"]
-
-[[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.fake_tensor_helper"]
 disable_error_code = ["name-defined"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.helpers.helper"]
+disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.model_builder_helper"]
@@ -77,6 +77,10 @@ disable_error_code = ["assignment", "arg-type", "name-defined", "union-attr"]
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.ort_session"]
 disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.helpers.rt_helper"]
+disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr", "name-defined"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.reference.report_results_comparison"]
