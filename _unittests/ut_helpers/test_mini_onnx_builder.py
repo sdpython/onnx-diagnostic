@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import ml_dtypes
 import onnx
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase
@@ -59,7 +60,7 @@ class TestMiniOnnxBuilder(ExtTestCase):
         self.assertEqual((2,), got[1].shape)
         self.assertEqual(np.float32, got[1].dtype)
 
-    def test_mini_onnx_builder(self):
+    def test_mini_onnx_builder1(self):
         data = [
             (
                 np.array([1, 2], dtype=np.int64),
@@ -153,6 +154,69 @@ class TestMiniOnnxBuilder(ExtTestCase):
                 restored = create_input_tensors_from_onnx_model(model)
                 self.assertEqualAny(inputs, restored)
 
+    def test_mini_onnx_builder2(self):
+        data = [
+            [],
+            {},
+            tuple(),
+            dict(one=np.array([1, 2], dtype=np.int64)),
+            [np.array([1, 2], dtype=np.int64)],
+            (np.array([1, 2], dtype=np.int64),),
+            [np.array([1, 2], dtype=np.int64), 1],
+            dict(one=np.array([1, 2], dtype=np.int64), two=1),
+            (np.array([1, 2], dtype=np.int64), 1),
+        ]
+
+        for inputs in data:
+            with self.subTest(types=string_type(inputs)):
+                model = create_onnx_model_from_input_tensors(inputs)
+                restored = create_input_tensors_from_onnx_model(model)
+                self.assertEqualAny(inputs, restored)
+
+    def test_mini_onnx_builder_type1(self):
+        data = [
+            np.array([1], dtype=dtype)
+            for dtype in [
+                np.float32,
+                np.double,
+                np.float16,
+                np.int32,
+                np.int64,
+                np.int16,
+                np.int8,
+                np.uint8,
+                np.uint16,
+                np.uint32,
+                np.uint64,
+                np.bool_,
+            ]
+        ]
+
+        for inputs in data:
+            with self.subTest(types=string_type(inputs)):
+                model = create_onnx_model_from_input_tensors(inputs)
+                restored = create_input_tensors_from_onnx_model(model)
+                self.assertEqualAny(inputs, restored)
+
+    def test_mini_onnx_builder_type2(self):
+        data = [
+            np.array([1], dtype=dtype)
+            for dtype in [
+                ml_dtypes.bfloat16,
+                ml_dtypes.float8_e4m3fn,
+                ml_dtypes.float8_e4m3fnuz,
+                ml_dtypes.float8_e5m2,
+                ml_dtypes.float8_e5m2fnuz,
+                ml_dtypes.int4,
+            ]
+        ]
+
+        for inputs in data:
+            with self.subTest(types=string_type(inputs)):
+                model = create_onnx_model_from_input_tensors(inputs)
+                restored = create_input_tensors_from_onnx_model(model)
+                self.assertEqualAny(inputs, restored)
+
     def test_mini_onnx_builder_transformers(self):
         cache = make_dynamic_cache([(torch.ones((3, 3)), torch.ones((3, 3)) * 2)])
         dc = CacheKeyValue(cache)
@@ -181,7 +245,7 @@ class TestMiniOnnxBuilder(ExtTestCase):
                 restored = create_input_tensors_from_onnx_model(model, sep="#")
                 self.assertEqualAny(inputs, restored)
 
-    def test_specific_data(self):
+    def test_mini_onnx_bulder_specific_data(self):
         data = {
             ("amain", 0, "I"): (
                 (
@@ -221,6 +285,8 @@ class TestMiniOnnxBuilder(ExtTestCase):
             names,
         )
         restored = create_input_tensors_from_onnx_model(model)
+        self.assertEqual(len(data), len(restored))
+        self.assertEqual(list(data), list(restored))
         self.assertEqualAny(data, restored)
 
 
