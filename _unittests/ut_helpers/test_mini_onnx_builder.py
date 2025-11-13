@@ -245,7 +245,7 @@ class TestMiniOnnxBuilder(ExtTestCase):
                 restored = create_input_tensors_from_onnx_model(model, sep="#")
                 self.assertEqualAny(inputs, restored)
 
-    def test_specific_data(self):
+    def test_mini_onnx_bulder_specific_data(self):
         data = {
             ("amain", 0, "I"): (
                 (
@@ -285,6 +285,8 @@ class TestMiniOnnxBuilder(ExtTestCase):
             names,
         )
         restored = create_input_tensors_from_onnx_model(model)
+        self.assertEqual(len(data), len(restored))
+        self.assertEqual(list(data), list(restored))
         self.assertEqualAny(data, restored)
 
 

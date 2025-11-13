@@ -568,7 +568,7 @@ def _unflatten(
             return next_pos, ty()
         if isinstance(res[0], tuple) and len(res[0]) == 2 and res[0] == ("dict.", None):
             return next_pos, ty()
-        return next_pos, ty(res)
+        return next_pos, _make(ty, res)
     return next_pos, (
         ty() if len(res) == 1 and res[0] in (("dict.", None), None) else _make(ty, res)
     )
