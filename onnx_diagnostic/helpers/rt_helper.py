@@ -698,7 +698,7 @@ def plot_ort_profile(
 
     :param df: dataframe
     :param ax0: first axis to draw time
-    :param ax1: second axis to draw occurences
+    :param ax1: second axis to draw occurrences
     :param title: graph title
     :return: the graph
 
@@ -833,7 +833,7 @@ def plot_ort_profile(
             ax0.set_title(title)
         if ax1 is not None:
             gr_n.plot.barh(ax=ax1)
-            ax1.set_title("n occurences")
+            ax1.set_title("n occurrences")
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 ax1.set_xticklabels(ax1.get_xticklabels(), fontsize=fontsize)
