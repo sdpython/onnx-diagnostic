@@ -4,6 +4,7 @@ Change Logs
 0.8.2
 +++++
 
+* :pr:`303`: fix inputs for summarization, feature extraction tasks
 * :pr:`302`: adds helpers to analyse onnxruntime profiling
 * :pr:`297`: experiment around a higher ops ``loop_for``
 * :pr:`292`, :pr:`293`, :pr:`294`, :pr:`295`: new patches for Qwen models

@@ -1,10 +1,6 @@
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.config_helper import (
-    update_config,
-    check_hasattr,
-    default_num_hidden_layers as nhl,
-)
+from ..helpers.config_helper import update_config, check_hasattr
 from ..helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 
 
@@ -13,8 +9,9 @@ __TASK__ = "feature-extraction"
 
 def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
-    check_hasattr(config, "num_hidden_layers")
-    kwargs = dict(num_hidden_layers=min(config.num_hidden_layers, nhl()))
+    check_hasattr(config, "vocab_size")
+    # Bart architecture does not like too much that the number of layers is changed.
+    kwargs = dict(vocab_size=2056)
     update_config(config, kwargs)
     return kwargs
 
@@ -25,7 +22,8 @@ def get_inputs(
     batch_size: int,
     sequence_length: int,
     dummy_max_token_id: int,
-    sequence_length2: int = 3,
+    past_length: int = 30,
+    past_length2: int = 4,
     decoder_attention_heads: Optional[int] = None,
     encoder_attention_heads: Optional[int] = None,
     encoder_ffn_dim: Optional[int] = None,
@@ -73,13 +71,13 @@ def get_inputs(
                         torch.randn(
                             batch_size,
                             encoder_attention_heads,
-                            sequence_length,
+                            past_length,
                             encoder_ffn_dim,
                         ),
                         torch.randn(
                             batch_size,
                             encoder_attention_heads,
-                            sequence_length,
+                            past_length,
                             encoder_ffn_dim,
                         ),
                     )
@@ -92,13 +90,13 @@ def get_inputs(
                         torch.randn(
                             batch_size,
                             decoder_attention_heads,
-                            sequence_length2,
+                            past_length2,
                             decoder_ffn_dim,
                         ),
                         torch.randn(
                             batch_size,
                             decoder_attention_heads,
-                            sequence_length2,
+                            past_length2,
                             decoder_ffn_dim,
                         ),
                     )
@@ -124,7 +122,8 @@ def get_inputs(
             batch_size=batch_size + 1,
             sequence_length=sequence_length + add_second_input,
             dummy_max_token_id=dummy_max_token_id,
-            sequence_length2=sequence_length2,
+            past_length=past_length,
+            past_length2=past_length2,
             decoder_attention_heads=decoder_attention_heads,
             encoder_attention_heads=encoder_attention_heads,
             encoder_ffn_dim=encoder_ffn_dim,
@@ -146,7 +145,9 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
         check_hasattr(config, "vocab_size")
     kwargs = dict(
         batch_size=2,
-        sequence_length=30,
+        sequence_length=12,
+        past_length=30,
+        past_length2=4,
         dummy_max_token_id=31999 if config is None else (config.vocab_size - 1),
     )
     for att in [

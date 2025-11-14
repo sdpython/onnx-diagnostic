@@ -530,7 +530,22 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
         print("-- outputs", string_type(output, with_shape=True, with_min_max=True))
 
     @never_test()
-    def test_feature_extraction(self):
+    def test_feature_extraction_generate(self):
+        # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k feature_ex
+        # https://huggingface.co/google-bert/bert-base-multilingual-cased
+
+        from transformers import BartTokenizer, BartModel
+
+        tokenizer = BartTokenizer.from_pretrained("facebook/bart-base")
+        model = BartModel.from_pretrained("facebook/bart-base")
+        text = "Replace me by any text you'd like."
+        encoded_input = tokenizer(text, return_tensors="pt")
+        print(f"-- {string_type(encoded_input, with_shape=True)}")
+        outputs = model(**encoded_input)
+        print(f"-- {string_type(outputs, with_shape=True)}")
+
+    @never_test()
+    def test_feature_extraction_check(self):
         # clear&&NEVERTEST=1 python _unittests/ut_tasks/try_tasks.py -k feature_ex
         # https://huggingface.co/google-bert/bert-base-multilingual-cased
 
@@ -541,10 +556,14 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
         text = "Replace me by any text you'd like."
         encoded_input = tokenizer(text, return_tensors="pt")
         sequence_length, sequence_length2 = 30, 4
-        sequence_length = 3
-        batch_size, encoder_attention_heads, encoder_ffn_dim = 1, 12, 64
-        batch_size, decoder_attention_heads, decoder_ffn_dim = 1, 12, 64
+        # sequence_length = 3
+        batch_size, encoder_attention_heads, encoder_ffn_dim = 2, 12, 64
+        __________, decoder_attention_heads, decoder_ffn_dim = 2, 12, 64
         num_hidden_layers = 6
+        encoded_input["input_ids"] = encoded_input["input_ids"].expand((batch_size, -1))
+        encoded_input["attention_mask"] = encoded_input["attention_mask"].expand(
+            (batch_size, -1)
+        )
         encoded_input["past_key_values"] = make_encoder_decoder_cache(
             make_dynamic_cache(
                 [
@@ -586,9 +605,9 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
             ),
         )
         print()
-        print("-- inputs", string_type(encoded_input, with_shape=True, with_min_max=True))
+        print("-- inputs", string_type(encoded_input, with_shape=True))
         output = model(**encoded_input)
-        print("-- outputs", string_type(output, with_shape=True, with_min_max=True))
+        print("-- outputs", string_type(output, with_shape=True))
 
     @never_test()
     def test_text_classification(self):

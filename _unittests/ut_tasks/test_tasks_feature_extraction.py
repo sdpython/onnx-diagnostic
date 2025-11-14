@@ -11,11 +11,24 @@ class TestTasksFeatureExtration(ExtTestCase):
     @hide_stdout()
     @requires_transformers("4.53.99")
     def test_feature_extraction_bart_base(self):
+        """
+        ata=dict(
+            input_ids:T7s2x12,
+            attention_mask:T7s2x12,
+            past_key_values:EncoderDecoderCache(
+                self_attention_cache=DynamicCache(
+                      key_cache=#6[T1s2x12x30x64,...
+                    value_cache=#6[T1s2x12x30x64,...
+                cross_attention_cache=DynamicCache(
+                      key_cache=#6[T1s2x12x4x64
+                    value_cache=#6[T1s2x12x4x64
+        """
         mid = "facebook/bart-base"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "feature-extraction")
-        self.assertIn((data["size"], data["n_weights"]), [(557681664, 139420416)])
+        self.assertIn((data["size"], data["n_weights"]), [(409583616, 102395904)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        print(f"-- {self.string_type(inputs, with_shape=True)}")
         model(**torch_deepcopy(inputs))
         model(**data["inputs2"])
         with torch_export_patches(patch_transformers=True, verbose=10):
