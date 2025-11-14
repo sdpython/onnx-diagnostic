@@ -392,7 +392,7 @@ def run_aligned(
     for init in onx.graph.initializer:  # type: ignore
         positions[init.name] = -1
         onnx_results[init.name] = _check_tensor_(
-            init.name, run_cls(_make_node_from_initializer(init)).run(None, {})[0]
+            init.name, run_cls(_make_node_from_initializer(init)).run(None, {})[0]  # type: ignore[attr-defined]
         )
         param_name = f"p_{init.name.replace('.', '_')}"
         if param_name == init.name:
@@ -527,7 +527,7 @@ def run_aligned(
                 )
             ref = run_cls(node)
             feeds = {k: onnx_results[k] for k in node.input}
-            res = ref.run(None, feeds)
+            res = ref.run(None, feeds)  # type: ignore[attr-defined]
             for o, r in zip(node.output, res):
                 tmp = _loop_cmp(
                     mapping_onnx_to_torch,
@@ -554,7 +554,7 @@ def run_aligned(
             )
         ref = run_cls(node)
         feeds = {k: onnx_results[k] for k in node.input}
-        res = ref.run(None, feeds)
+        res = ref.run(None, feeds)  # type: ignore[attr-defined]
         for o, r in zip(node.output, res):
             tmp = _loop_cmp(
                 mapping_onnx_to_torch, torch_results, onnx_results, o, r, verbose, atol, rtol
