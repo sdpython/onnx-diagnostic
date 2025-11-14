@@ -4,7 +4,7 @@ import onnx
 import onnx.helper as oh
 import torch
 import onnxruntime
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_warnings
 from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.reference import (
     OnnxruntimeEvaluator,
@@ -22,6 +22,7 @@ TFLOAT = onnx.TensorProto.FLOAT
 
 
 class TestOnnxruntimeEvaluator(ExtTestCase):
+    @ignore_warnings(FutureWarning)
     def test_ort_eval_scan_cdist_add(self):
 
         def dist(unused: torch.Tensor, x: torch.Tensor, samex: torch.Tensor):
@@ -69,6 +70,7 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         got = orte.run(None, {name: x.numpy()})[0]
         self.assertEqualArray(expected, got)
 
+    @ignore_warnings((UserWarning, FutureWarning))
     def test_ort_eval_cond(self):
         import torch
 
@@ -180,6 +182,7 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         self.assertEqual(got.dtype, torch.bool)
         self.assertEqual(got[0], True)
 
+    @hide_stdout()
     def test_ort_eval_loop(self):
         model = torch.nn.EmbeddingBag(num_embeddings=49157, embedding_dim=32, mode="sum")
         a = torch.tensor([[39906, 39906]]).long()

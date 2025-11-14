@@ -109,35 +109,51 @@ class TestBenchRun(ExtTestCase):
     def test_max_diff(self):
         self.assertEqual(
             max_diff(torch.Tensor([1, 2]), torch.Tensor([1, 2])),
-            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0, "argm": (0,)},
+            {
+                "abs": 0.0,
+                "rel": 0.0,
+                "sum": 0.0,
+                "n": 2.0,
+                "dnan": 0.0,
+                "argm": (0,),
+                "dev": 0,
+            },
         )
         self.assertEqual(
             max_diff(
                 (torch.Tensor([1, 2]),),
                 (torch.Tensor([1, 2])),
             ),
-            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0, "argm": (0,)},
+            {
+                "abs": 0.0,
+                "rel": 0.0,
+                "sum": 0.0,
+                "n": 2.0,
+                "dnan": 0.0,
+                "argm": (0,),
+                "dev": 0,
+            },
         )
         self.assertEqual(
             max_diff(
                 (torch.Tensor([1, 2]), (torch.Tensor([1, 2]),)),
                 (torch.Tensor([1, 2]), (torch.Tensor([1, 2]),)),
             ),
-            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 4.0, "dnan": 0.0},
+            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 4.0, "dnan": 0.0, "dev": 0},
         )
         self.assertEqual(
             max_diff(
                 {"a": torch.Tensor([1, 2])},
                 {"a": torch.Tensor([1, 2])},
             ),
-            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0},
+            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0, "dev": 0},
         )
         self.assertEqual(
             max_diff(
                 {"a": torch.Tensor([1, 2])},
                 [torch.Tensor([1, 2])],
             ),
-            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0},
+            {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 2.0, "dnan": 0.0, "dev": 0},
         )
         self.assertEqual(
             max_diff(
@@ -150,6 +166,7 @@ class TestBenchRun(ExtTestCase):
                 "n": 2.0,
                 "rel": 0.9999999997999001,
                 "sum": 9999999998.0,
+                "dev": 0,
             },
         )
 
@@ -164,7 +181,9 @@ class TestBenchRun(ExtTestCase):
             flatten=True,
             verbose=10,
         )
-        self.assertEqual(md, {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 10.0, "dnan": 0})
+        self.assertEqual(
+            md, {"abs": 0.0, "rel": 0.0, "sum": 0.0, "n": 10.0, "dnan": 0, "dev": 0}
+        )
 
 
 if __name__ == "__main__":
