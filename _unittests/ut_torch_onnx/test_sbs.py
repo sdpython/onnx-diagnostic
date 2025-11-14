@@ -5,7 +5,7 @@ from onnx_diagnostic.ext_test_case import (
     ignore_warnings,
     ignore_errors,
 )
-from onnx_diagnostic.reference import ExtendedReferenceEvaluator
+from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_onnx.sbs import run_aligned
 
@@ -71,7 +71,7 @@ class TestSideBySide(ExtTestCase):
             Model(), (x,), dynamic_shapes=({0: self.torch.export.Dim("batch")},)
         )
         epo = self.torch.onnx.export(
-            ep, (x,), dynamic_shapes=({0: self.torch.export.Dim("batch")},)
+            ep, (x,), dynamic_shapes=({0: self.torch.export.Dim("batch")},), dynamo=True
         )
         onx = epo.model_proto
         results = list(
@@ -104,7 +104,9 @@ class TestSideBySide(ExtTestCase):
         ep = self.torch.export.export(
             Model(), (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
         )
-        epo = self.torch.onnx.export(Model(), (), kwargs=inputs, dynamic_shapes=ds)
+        epo = self.torch.onnx.export(
+            Model(), (), kwargs=inputs, dynamic_shapes=ds, dynamo=True
+        )
         onx = epo.model_proto
         results = list(
             run_aligned(
@@ -118,6 +120,69 @@ class TestSideBySide(ExtTestCase):
             ),
         )
         self.assertEqual(len(results), 4)
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    def test_sbs_dict_onnxruntime(self):
+        class Model(self.torch.nn.Module):
+            def forward(self, x):
+                ry = x.abs()
+                rz = ry.exp()
+                rw = rz + 1
+                ru = rw.log() + rw
+                return ru
+
+        inputs = dict(x=self.torch.randn((5, 4)))
+        ds = dict(x={0: "batch"})
+        Model()(**inputs)
+        ep = self.torch.export.export(
+            Model(), (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        onx = to_onnx(ep)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                atol=1e-5,
+                rtol=1e-5,
+                verbose=11,
+            ),
+        )
+        self.assertEqual(len(results), 5)
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    def test_sbs_dict_tensor(self):
+        class Model(self.torch.nn.Module):
+            def forward(self, x):
+                ry = x.abs()
+                rz = ry.exp()
+                rw = rz + 1
+                ru = rw.log() + rw
+                return ru
+
+        inputs = dict(x=self.torch.randn((5, 4)))
+        ds = dict(x={0: "batch"})
+        Model()(**inputs)
+        ep = self.torch.export.export(
+            Model(), (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        onx = to_onnx(ep)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                atol=1e-5,
+                rtol=1e-5,
+                verbose=11,
+                use_tensor=True,
+            ),
+        )
+        self.assertEqual(len(results), 5)
 
 
 if __name__ == "__main__":

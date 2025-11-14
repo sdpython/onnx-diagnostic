@@ -1,3 +1,4 @@
+import inspect
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 import onnx
 import onnx.helper as oh
@@ -291,7 +292,7 @@ def run_aligned(
         import onnx
         import torch
         from onnx_diagnostic.torch_onnx.sbs import run_aligned
-        from onnx_diagnostic.helpers.ort_session import InferenceSessionForTorch
+        from onnx_diagnostic.reference import OnnxruntimeEvaluator
 
 
         ep = torch.export.load("test_doc_sbs_example.pt2")
@@ -310,7 +311,14 @@ def run_aligned(
             map(
                 post_process,
                 run_aligned(
-                    ep, onx, InferenceSessionForTorch, inputs, atol=1e-5, rtol=1e-5, verbose=1
+                    ep,
+                    onx,
+                    OnnxruntimeEvaluator,
+                    inputs,
+                    atol=1e-5,
+                    rtol=1e-5,
+                    verbose=1,
+                    use_tensor=True,
                 ),
             ),
         )
@@ -320,8 +328,29 @@ def run_aligned(
         print(df)
     """
     assert callable(run_cls), f"run_cls={run_cls} not a callable"
+    run_cls_kwargs = {
+        "ir_version": onx.ir_version,
+        "opsets": {d.domain: d.version for d in onx.opset_import},
+        "verbose": max(verbose - 1, 0),
+    }
+    run_cls_kwargs = {
+        k: v
+        for k, v in run_cls_kwargs.items()
+        if k in set(inspect.signature(run_cls).parameters)
+    }
+    if verbose:
+        print(f"[run_aligned] run_cls={run_cls}")
+        print(f"[run_aligned] run_cls_kwargs={run_cls_kwargs}")
 
-    def _check_tensor_(name, obj):
+    def _check_tensor_(name, obj, flip_type=False):
+        if flip_type:
+            if use_tensor:
+                if isinstance(obj, np.ndarray):
+                    obj = from_numpy(obj)
+            else:
+                if isinstance(obj, torch.Tensor):
+                    obj = to_numpy(obj)
+
         assert not use_tensor or isinstance(obj, torch.Tensor), (
             f"Unexpected type {type(obj)} for {name!r}. "
             f"use_tensor is True so torch.Tensor is expected."
@@ -392,7 +421,14 @@ def run_aligned(
     for init in onx.graph.initializer:  # type: ignore
         positions[init.name] = -1
         onnx_results[init.name] = _check_tensor_(
-            init.name, run_cls(_make_node_from_initializer(init)).run(None, {})[0]  # type: ignore[attr-defined]
+            init.name,
+            run_cls(
+                _make_node_from_initializer(init),
+                **run_cls_kwargs,
+            ).run(None, {})[
+                0
+            ],  # type: ignore[attr-defined]
+            flip_type=True,
         )
         param_name = f"p_{init.name.replace('.', '_')}"
         if param_name == init.name:
@@ -408,7 +444,9 @@ def run_aligned(
     # we should be careful, torch may modified inplace the weights,
     # it may be difficult to share weights
     torch_results: Dict[str, Any] = {
-        k: from_numpy(v) for k, v in onnx_results.items() if not k.startswith("init")
+        k: (v if use_tensor else from_numpy(v))
+        for k, v in onnx_results.items()
+        if not k.startswith("init")
     }
     if verbose:
         print(
@@ -525,7 +563,7 @@ def run_aligned(
                     f"[run_aligned] run onx.graph.node[{i_onnx}]: "
                     f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
                 )
-            ref = run_cls(node)
+            ref = run_cls(node, **run_cls_kwargs)
             feeds = {k: onnx_results[k] for k in node.input}
             res = ref.run(None, feeds)  # type: ignore[attr-defined]
             for o, r in zip(node.output, res):
@@ -552,7 +590,7 @@ def run_aligned(
                 f"[run_aligned] run onx.graph.node[{i_onnx}]: "
                 f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
             )
-        ref = run_cls(node)
+        ref = run_cls(node, **run_cls_kwargs)
         feeds = {k: onnx_results[k] for k in node.input}
         res = ref.run(None, feeds)  # type: ignore[attr-defined]
         for o, r in zip(node.output, res):
