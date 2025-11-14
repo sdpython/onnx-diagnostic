@@ -85,7 +85,7 @@ class TestCommandLines(ExtTestCase):
         with redirect_stdout(st):
             get_parser_sbs().print_help()
         text = st.getvalue()
-        self.assertIn("--model", text)
+        self.assertIn("--onnx", text)
 
 
 if __name__ == "__main__":
