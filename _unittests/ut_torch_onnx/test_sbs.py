@@ -4,6 +4,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     ignore_warnings,
     ignore_errors,
+    requires_cuda,
 )
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
@@ -160,7 +161,7 @@ class TestSideBySide(ExtTestCase):
                 ry = x.abs()
                 rz = ry.exp()
                 rw = rz + 1
-                ru = rw.log() + rw
+                ru = rw.log() + rw + ry
                 return ru
 
         inputs = dict(x=self.torch.randn((5, 4)))
@@ -182,7 +183,113 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
+        self.clean_dump()
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    @requires_cuda()
+    def test_sbs_dict_tensor_cuda(self):
+        class Model(self.torch.nn.Module):
+            def forward(self, x):
+                ry = x.abs()
+                rz = ry.exp()
+                rw = rz + 1
+                ru = rw.log() + rw + ry
+                return ru
+
+        inputs = dict(x=self.torch.randn((5, 4)).to("cuda"))
+        ds = dict(x={0: "batch"})
+        Model()(**inputs)
+        ep = self.torch.export.export(
+            Model(), (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        onx = to_onnx(ep)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                atol=1e-5,
+                rtol=1e-5,
+                verbose=11,
+                use_tensor=True,
+            ),
+        )
+        self.assertEqual(len(results), 6)
+        self.assertEqual([r[-1]["dev"] for r in results], [0, 0, 0, 0, 0, 0])
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    @requires_cuda()
+    def test_sbs_dict_tensor_cuda_reshape(self):
+        class Model(self.torch.nn.Module):
+            def forward(self, x):
+                ry = x.abs()
+                ry1 = ry.reshape((-1, 1))
+                ry2 = ry.reshape((1, -1))
+                prod = ry1 * ry2
+                shape = prod.shape
+                resh = prod.reshape((-1, shape[0] // 2, shape[1] // 2))
+                return resh.transpose(2, 1)
+
+        inputs = dict(x=self.torch.randn((16, 16)).to("cuda"))
+        ds = dict(x={0: "batch"})
+        Model()(**inputs)
+        ep = self.torch.export.export(
+            Model(), (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        onx = to_onnx(ep)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                atol=1e-5,
+                rtol=1e-5,
+                verbose=11,
+                use_tensor=True,
+            ),
+        )
+        self.assertEqual(len(results), 7)
+        self.assertEqual([r[-1].get("dev", 0) for r in results], [0, 0, 0, 0, 0, 0, 0])
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    def test_sbs_dict_tensor_cpu_reshape(self):
+        class Model(self.torch.nn.Module):
+            def forward(self, x):
+                ry = x.abs()
+                ry1 = ry.reshape((-1, 1))
+                ry2 = ry.reshape((1, -1))
+                prod = ry1 * ry2
+                shape = prod.shape
+                resh = prod.reshape((-1, shape[0] // 2, shape[1] // 2))
+                return resh.transpose(2, 1)
+
+        inputs = dict(x=self.torch.randn((16, 16)))
+        ds = dict(x={0: "batch"})
+        Model()(**inputs)
+        ep = self.torch.export.export(
+            Model(), (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        onx = to_onnx(ep)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                atol=1e-5,
+                rtol=1e-5,
+                verbose=11,
+                use_tensor=True,
+            ),
+        )
+        self.assertEqual(len(results), 7)
+        self.assertEqual([r[-1].get("dev", 0) for r in results], [0, 0, 0, 0, 0, 0, 0])
 
 
 if __name__ == "__main__":

@@ -43,6 +43,7 @@ class TestValidateModel(ExtTestCase):
         )
         self.assertLess(summary["disc_onnx_ort_run_abs"], 2e-2)
         self.assertIn("onnx_filename", data)
+        self.clean_dump()
 
     @unittest.skipIf(torch29_and_tr_main, "combination not working")
     @requires_transformers("4.53")
@@ -65,6 +66,7 @@ class TestValidateModel(ExtTestCase):
         )
         self.assertLess(summary["disc_onnx_ort_run_abs"], 2e-5)
         self.assertIn("onnx_filename", data)
+        self.clean_dump()
 
     @unittest.skipIf(torch29_and_tr_main, "combination not working")
     @requires_transformers("4.53")
@@ -87,6 +89,7 @@ class TestValidateModel(ExtTestCase):
         )
         self.assertLess(summary["disc_onnx_ort_run_abs"], 2e-5)
         self.assertIn("onnx_filename", data)
+        self.clean_dump()
 
 
 if __name__ == "__main__":

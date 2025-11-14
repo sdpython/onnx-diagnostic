@@ -189,6 +189,7 @@ class TestLogHelper(ExtTestCase):
             verbose=1,
         )
         self.assertExists(output)
+        self.clean_dump()
 
     @hide_stdout()
     def test_enumerate_csv_files(self):
@@ -210,6 +211,7 @@ class TestLogHelper(ExtTestCase):
         cube.load(verbose=1)
         self.assertEqual((3, 11), cube.shape)
         self.assertIn("RAWFILENAME", cube.data.columns)
+        self.clean_dump()
 
     def test_cube_logs_performance1(self):
         output = self.get_dump_file("test_cube_logs_performance1.xlsx")
@@ -235,6 +237,7 @@ class TestLogHelper(ExtTestCase):
             ],
         )
         self.assertExists(output)
+        self.clean_dump()
 
     def test_cube_logs_performance2(self):
         output = self.get_dump_file("test_cube_logs_performance2.xlsx")
@@ -470,6 +473,7 @@ class TestLogHelper(ExtTestCase):
         )
         cube = CubeLogs(df, keys=["^m_*", "exporter"], time="date").load()
         cube.to_excel(output, views=["time_p"], time_mask=True, verbose=1)
+        self.clean_dump()
 
     def test_cube_sbs_no_time(self):
         df = pandas.DataFrame(
@@ -532,6 +536,7 @@ class TestLogHelper(ExtTestCase):
             verbose=0,
             sbs=dict(CFA=dict(exporter="E1", opt="O"), CFB=dict(exporter="E2", opt="O")),
         )
+        self.clean_dump()
 
     def test_cube_sbs_with_time(self):
         df = pandas.DataFrame(

@@ -110,6 +110,8 @@ class TestValidate(ExtTestCase):
                 diff = max_diff(expected, got)
                 assert diff["abs"] <= 1e-5, f"diff={diff}"
 
+        self.clean_dump()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
