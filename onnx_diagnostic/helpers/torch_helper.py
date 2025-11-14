@@ -30,9 +30,7 @@ from .onnx_helper import (
 
 
 def proto_from_tensor(
-    arr: "torch.Tensor",  # noqa: F821
-    name: Optional[str] = None,
-    verbose: int = 0,
+    arr: torch.Tensor, name: Optional[str] = None, verbose: int = 0
 ) -> onnx.TensorProto:
     """
     Converts a torch Tensor into a TensorProto.
@@ -98,7 +96,7 @@ def proto_from_tensor(
     return tensor
 
 
-def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821
+def onnx_dtype_to_torch_dtype(itype: int) -> torch.dtype:
     """
     Converts an onnx type into a torch dtype.
 
@@ -140,7 +138,7 @@ def onnx_dtype_to_torch_dtype(itype: int) -> "torch.dtype":  # noqa: F821
     )
 
 
-def torch_dtype_to_onnx_dtype(to: "torch.dtype") -> int:  # noqa: F821
+def torch_dtype_to_onnx_dtype(to: torch.dtype) -> int:
     """
     Converts a torch dtype into a onnx element type.
 
@@ -483,7 +481,7 @@ def is_torchdynamo_exporting() -> bool:
             return False
 
 
-def to_numpy(tensor: "torch.Tensor") -> np.ndarray:  # noqa: F821
+def to_numpy(tensor: torch.Tensor) -> np.ndarray:
     """Converts a :class:`torch.Tensor` to :class:`numpy.ndarray`."""
     try:
         return tensor.detach().cpu().numpy()
@@ -496,6 +494,21 @@ def to_numpy(tensor: "torch.Tensor") -> np.ndarray:  # noqa: F821
     conv = {torch.bfloat16: ml_dtypes.bfloat16}
     assert tensor.dtype in conv, f"Unsupported type {tensor.dtype}, not in {conv}"
     return tensor.detach().to(torch.float32).cpu().numpy().astype(conv[tensor.dtype])
+
+
+def from_numpy(tensor: np.ndarray) -> torch.Tensor:
+    """Converts a :class:`numpy.ndarray` to :class:`torch.Tensor`."""
+    try:
+        return torch.from_numpy(tensor)
+    except TypeError:
+        # We try with ml_dtypes
+        pass
+
+    import ml_dtypes
+
+    conv = {ml_dtypes.bfloat16: torch.bfloat16}
+    assert tensor.dtype in conv, f"Unsupported type {tensor.dtype}, not in {conv}"
+    return torch.from_numpy(tensor.astype(torch.float32)).to(conv[tensor.dtype])
 
 
 def replace_string_by_dynamic(dynamic_shapes: Any) -> Any:
