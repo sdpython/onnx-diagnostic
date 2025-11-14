@@ -1,10 +1,14 @@
 Change Logs
 ===========
 
-0.8.2
+0.8.3
 +++++
 
 * :pr:`304`: improves side-by-side comparison
+
+0.8.2
++++++
+
 * :pr:`303`: fix inputs for summarization, feature extraction tasks
 * :pr:`302`: adds helpers to analyse onnxruntime profiling
 * :pr:`297`: experiment around a higher ops ``loop_for``

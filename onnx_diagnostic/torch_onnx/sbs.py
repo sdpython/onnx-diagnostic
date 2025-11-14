@@ -338,7 +338,7 @@ def run_aligned(
         print("final results")
         df = pandas.DataFrame(results)
         print(df)
-    
+
     A command line can also be run:
 
     .. code-block:: bash
