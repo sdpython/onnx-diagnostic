@@ -86,6 +86,8 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             hidden_states=torch.rand((1292, 1176), dtype=torch_dtype).to(device),
             grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
         )
+        print("-- save inputs")
+        torch.save(inputs, self.get_dump_file("qwen_2_5_vl_instruct_visual.inputs.pt"))
 
         print(f"-- inputs: {self.string_type(inputs, with_shape=True)}")
         # this is too long
@@ -120,7 +122,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 filename=filename,
                 exporter=exporter,
                 verbose=1,
-                save_ep=fileep,
+                save_ep=(fileep, 2**35),
                 target_opset=22,
                 optimize=True,
             )

@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import textwrap
+import time
 import onnx
 from typing import Any, Dict, List, Optional, Union
 from argparse import ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
@@ -1104,6 +1105,146 @@ def _cmd_agg(argv: List[Any]):
         print(f"Wrote {args.output!r}")
 
 
+def get_parser_sbs() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="side-by-side (sbs)",
+        description=textwrap.dedent(
+            """
+            Compares the intermediate outputs between the exported program and
+            the exported onnx model. It assumes some names are common.
+            The execution of the exported program and the onnx model
+            are done in parallel. The device is the one used to store the
+            model and the inputs.s
+            """
+        ),
+        epilog="Where do discrepancies start? This function tries to answer that question.",
+    )
+    parser.add_argument(
+        "-i",
+        "--inputs",
+        type=str,
+        required=True,
+        help="model inputs saved with torch.save",
+    )
+    parser.add_argument(
+        "--ep",
+        type=str,
+        required=True,
+        help="exported program saved with torch.export.save",
+    )
+    parser.add_argument(
+        "-m",
+        "--onnx",
+        type=str,
+        required=True,
+        help="exported model in onnx format",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        required=True,
+        help="output name to stored what the command line produces, "
+        "it should be an excel file",
+    )
+    parser.add_argument(
+        "--atol",
+        default=1e-5,
+        required=False,
+        help="absolute tolerance",
+    )
+    parser.add_argument(
+        "--rtol",
+        default=1e-5,
+        required=False,
+        help="relative tolerance",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        default=0,
+        required=False,
+        help="verbosity",
+    )
+    return parser
+
+
+def _cmd_sbs(argv: List[Any]):
+    import pandas
+    import torch
+    from .helpers import string_type
+    from .torch_onnx.sbs import run_aligned
+    from .reference import OnnxruntimeEvaluator
+
+    parser = get_parser_sbs()
+    args = parser.parse_args(argv[1:])
+
+    def _size(name):
+        s = os.stat(name).st_size
+        return f"{s / 2**20:1.3f} Mb"
+
+    print("-- side by side")
+    print(f"-- ep:     {_size(args.ep)}: {args.ep}")
+    print(f"-- inputs: {_size(args.inputs)}: {args.inputs}")
+    print(f"-- onnx:   {_size(args.onnx)}: {args.onnx}")
+    print(f"-- output: {args.output}")
+
+    print(f"-- load inputs {args.inputs!r}")
+    begin = time.perf_counter()
+    inputs = torch.load(args.inputs)
+    s = string_type(inputs, with_shape=True, with_device=True)
+    print(f"-- done in {time.perf_counter() - begin:1.1f}s - {s}")
+
+    if isinstance(inputs, dict) and len(inputs) == 2 and set(inputs) == {"args", "kwargs"}:
+        margs = inputs["args"]
+        mkwargs = inputs["kwargs"]
+    elif isinstance(inputs, tuple):
+        margs = inputs
+        mkwargs = {}
+    elif isinstance(inputs, dict):
+        margs = tuple()
+        mkwargs = inputs
+    else:
+        raise ValueError(
+            f"Unable to infer args, kwargs from inputs {string_type(inputs, with_shape=True)}"
+        )
+
+    print(f"-- load ep {args.ep!r}")
+    begin = time.perf_counter()
+    ep = torch.export.load(args.ep)
+    print(f"-- done in {time.perf_counter() - begin:1.1f}s")
+
+    print(f"-- load onnx {args.onnx!r}")
+    begin = time.perf_counter()
+    onx = onnx.load(args.onnx)
+    print(f"-- done in {time.perf_counter() - begin:1.1f}s")
+
+    def post_process(obs):
+        dobs = dict(zip(["ep_id_node", "onnx_id_node", "ep_name", "onnx_name"], obs))
+        dobs["err_abs"] = obs[-1]["abs"]
+        dobs["err_rel"] = obs[-1]["rel"]
+        return dobs
+
+    print("-- starts side-by-side")
+    data = []
+    for obs in run_aligned(
+        ep,
+        onx,
+        run_cls=OnnxruntimeEvaluator,
+        atol=float(args.atol),
+        rtol=float(args.rtol),
+        verbose=int(args.verbose),
+        args=margs,
+        kwargs=mkwargs,
+        use_tensor=True,
+        exc=False,
+    ):
+        data.append(post_process(obs))
+        df = pandas.DataFrame(data)
+        df.to_excel(args.output)
+    print("-- done")
+
+
 def get_main_parser() -> ArgumentParser:
     parser = ArgumentParser(
         prog="onnx_diagnostic",
@@ -1120,6 +1261,7 @@ def get_main_parser() -> ArgumentParser:
             find         - find node consuming or producing a result
             lighten      - makes an onnx model lighter by removing the weights,
             print        - prints the model on standard output
+            sbs          - compares an exported program and a onnx model
             stats        - produces statistics on a model
             unlighten    - restores an onnx model produces by the previous experiment
             validate     - validate a model
@@ -1135,6 +1277,7 @@ def get_main_parser() -> ArgumentParser:
             "find",
             "lighten",
             "print",
+            "sbs",
             "stats",
             "unlighten",
             "validate",
@@ -1146,15 +1289,16 @@ def get_main_parser() -> ArgumentParser:
 
 def main(argv: Optional[List[Any]] = None):
     fcts = dict(
-        lighten=_cmd_lighten,
-        unlighten=_cmd_unlighten,
-        print=_cmd_print,
-        find=_cmd_find,
-        config=_cmd_config,
-        validate=_cmd_validate,
-        stats=_cmd_stats,
         agg=_cmd_agg,
+        config=_cmd_config,
         exportsample=_cmd_export_sample,
+        find=_cmd_find,
+        lighten=_cmd_lighten,
+        print=_cmd_print,
+        sbs=_cmd_sbs,
+        stats=_cmd_stats,
+        unlighten=_cmd_unlighten,
+        validate=_cmd_validate,
     )
 
     if argv is None:
@@ -1169,15 +1313,16 @@ def main(argv: Optional[List[Any]] = None):
             parser.parse_args(argv)
         else:
             parsers = dict(
-                lighten=get_parser_lighten,
-                unlighten=get_parser_unlighten,
-                print=get_parser_print,
-                find=get_parser_find,
-                config=get_parser_config,
-                validate=get_parser_validate,
-                stats=get_parser_stats,
                 agg=get_parser_agg,
+                config=get_parser_config,
                 exportsample=lambda: get_parser_validate("exportsample"),  # type: ignore[operator]
+                find=get_parser_find,
+                lighten=get_parser_lighten,
+                print=get_parser_print,
+                sbs=get_parser_sbs,
+                stats=get_parser_stats,
+                unlighten=get_parser_unlighten,
+                validate=get_parser_validate,
             )
             cmd = argv[0]
             if cmd not in parsers:

@@ -9,6 +9,7 @@ from onnx_diagnostic._command_lines_parser import (
     get_parser_find,
     get_parser_lighten,
     get_parser_print,
+    get_parser_sbs,
     get_parser_stats,
     get_parser_unlighten,
     get_parser_validate,
@@ -78,6 +79,13 @@ class TestCommandLines(ExtTestCase):
             get_parser_agg().print_help()
         text = st.getvalue()
         self.assertIn("--recent", text)
+
+    def test_parser_sbs(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            get_parser_sbs().print_help()
+        text = st.getvalue()
+        self.assertIn("--model", text)
 
 
 if __name__ == "__main__":

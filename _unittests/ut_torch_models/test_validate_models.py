@@ -46,8 +46,8 @@ class TestValidateModel(ExtTestCase):
         self.clean_dump()
 
     @unittest.skipIf(torch29_and_tr_main, "combination not working")
-    @requires_transformers("4.53")
-    @requires_torch("2.8.99")
+    @requires_transformers("4.57")  # 4.53 works for some jobs fails due to no space left
+    @requires_torch("2.9.99")  # 2.9 works for some jobs fails due to no space left
     @requires_experimental()
     @hide_stdout()
     def test_validate_microsoft_phi4_reasoning(self):

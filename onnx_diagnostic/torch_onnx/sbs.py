@@ -108,7 +108,14 @@ def run_fx_node(
         return args
     if node.op == "call_function":
         assert callable(node.target), f"{node.target!r} not callable in node {node!r}"
-        outputs = node.target(*args, **(kwargs or {}))
+        try:
+            outputs = node.target(*args, **(kwargs or {}))
+        except RuntimeError as e:
+            raise RuntimeError(
+                f"Unable to run node {node!r}, target={node.target!r}, "
+                f"args={string_type(args, with_shape=True, with_device=True)}, "
+                f"kwargs={string_type(kwargs, with_shape=True, with_device=True)}"
+            ) from e
         validate_fx_outputs(node, outputs)
         return outputs
     raise NotImplementedError(
@@ -130,6 +137,8 @@ def _pick_result(torch_results: Dict[str, Any], ref: Any) -> Any:
         return ref
     if ref is None:
         return None
+    if isinstance(ref, torch.layout):
+        return ref
     raise NotImplementedError(f"Unable to process args type {type(ref)}")
 
 
@@ -168,6 +177,7 @@ def run_aligned(
     atol: Optional[float] = None,
     rtol: Optional[float] = None,
     verbose: int = 0,
+    exc: bool = True,
 ) -> Iterator[Tuple[Any, ...]]:
     """
     Runs in parallel both the exported program
@@ -185,6 +195,7 @@ def run_aligned(
     :param atol: absolute tolerance
     :param rtol: relative tolerance
     :param verbose: verbosity level
+    :param exc: stops if an exception
     :return: a list of tuples containing the results, they come in tuple
 
     Example:
@@ -382,7 +393,16 @@ def run_aligned(
         return oh.make_node("Constant", [], [proto.name], value=proto)
 
     def _loop_cmp(
-        mapping_onnx_to_torch, torch_results, onnx_results, o, r, verbose, atol, rtol
+        mapping_onnx_to_torch,
+        torch_results,
+        onnx_results,
+        o,
+        r,
+        verbose,
+        atol,
+        rtol,
+        i,
+        i_onnx,
     ):
         onnx_results[o] = _check_tensor_(o, r)
         if verbose:
@@ -399,13 +419,20 @@ def run_aligned(
                 if not (
                     atol is None or rtol is None or (d["abs"] <= atol and d["rel"] <= rtol)
                 ):
-                    raise ValueError(
-                        f"discrepancies detected for results [{to}/{o}]: "
-                        f"{string_diff(d)}"
-                        f"\n-- torch_results: {string_type(torch_results[to], **str_kws)}"
-                        f"\n-- onnx_results: {string_type(r, **str_kws)}"
-                        f"\n-- torch\n{torch_results[to]}\n-- onnx\n{r}"
-                    )
+                    if exc:
+                        raise ValueError(
+                            f"discrepancies detected for results [{to}/{o}]: "
+                            f"{string_diff(d)}"
+                            f"\n-- torch_results: {string_type(torch_results[to], **str_kws)}"
+                            f"\n-- onnx_results: {string_type(r, **str_kws)}"
+                            f"\n-- torch\n{torch_results[to]}\n-- onnx\n{r}"
+                        )
+                    else:
+                        print(
+                            f"[run_align-dx] discrepancies "
+                            f"{string_diff(d, with_shape=True, with_device=True)} - "
+                            f"[{to}/{o}]"
+                        )
             return (i, i_onnx, o, to, d)
         return None
 
@@ -445,7 +472,21 @@ def run_aligned(
             # Let's force its way to cuda (should check the device has well).
             t = t.to(default_device)
         onnx_results[init.name] = _check_tensor_(init.name, t, flip_type=True)
+        if init.name.startswith("init"):
+            # not a weight
+            continue
+
+        # quick fixes
         param_name = f"p_{init.name.replace('.', '_')}"
+        if param_name == init.name:
+            continue
+        assert param_name not in onnx_results, (
+            f"Some confusion may happen because {init.name!r} -> {param_name!r} "
+            f"and onnx_results has {sorted(onnx_results)}"
+        )
+        onnx_results[param_name] = onnx_results[init.name]
+
+        param_name = f"{init.name.replace('.', '_')}".split("::")[0]
         if param_name == init.name:
             continue
         assert param_name not in onnx_results, (
@@ -524,13 +565,19 @@ def run_aligned(
                     t = torch_results[node.name]
                     print(f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}")
                 continue
-            raise AssertionError(
-                f"unable to process node {node.op} -> {node.name!r} "
-                f"not in {sorted(onnx_results)}, "
-                f"args={string_type(args, **str_kws)}, "
-                f"kwargs={string_type(kwargs, **str_kws)}, "
-                f"onx.graph.input={[i.name for i in onx.graph.input]}"
-            )
+            if exc:
+                raise AssertionError(
+                    f"unable to process node {node.op} -> {node.name!r}, "
+                    f"possible candiate are "
+                    f"{sorted(p for p in onnx_results if node.name in p)}, "
+                    f"not in {sorted(onnx_results)}, "
+                    f"args={string_type(args, **str_kws)}, "
+                    f"kwargs={string_type(kwargs, **str_kws)}, "
+                    f"onx.graph.input={[i.name for i in onx.graph.input]}"
+                )
+            elif verbose:
+                print(f"[run_aligned] unable to {node.name!r} among onnx weights")
+            continue
 
         outputs = [node.name] if isinstance(node.name, str) else list(node.name)
         args, kwargs = prepare_args_kwargs(torch_results, node)
@@ -569,13 +616,20 @@ def run_aligned(
             assert (
                 not has_cuda
                 or not any(t is not None and t.is_cuda for t in feeds.values())
-                or any(
-                    t is not None
-                    and t.is_cuda
-                    and t.dtype in {torch.float32, torch.float16, torch.bfloat16}
-                    for t in res
-                )
+                or any(t is not None and t.is_cuda for t in res)
                 or node.op_type in {"Shape", "Size"}  # on CPU no matter what
+                or node.op_type
+                in {
+                    "Add",
+                    "Concat",
+                    "Div",
+                    "Gather",
+                    "Mul",
+                    "Range",
+                    "Squeeze",
+                    "Sub",
+                    "Unsqueeze",
+                }  # not sure, could be about shapes
             ), (
                 f"One input is on cuda but there is no float output on cuda, "
                 f"feeds={string_type(feeds, with_device=True, with_shape=True)}, "
@@ -592,6 +646,8 @@ def run_aligned(
                     verbose,
                     atol,
                     rtol,
+                    i,
+                    i_onnx,
                 )
                 if tmp is not None:
                     yield tmp
@@ -613,7 +669,16 @@ def run_aligned(
         res = ref.run(None, feeds)  # type: ignore[attr-defined]
         for o, r in zip(node.output, res):
             tmp = _loop_cmp(
-                mapping_onnx_to_torch, torch_results, onnx_results, o, r, verbose, atol, rtol
+                mapping_onnx_to_torch,
+                torch_results,
+                onnx_results,
+                o,
+                r,
+                verbose,
+                atol,
+                rtol,
+                i,
+                i_onnx,
             )
             if tmp is not None:
                 yield tmp
