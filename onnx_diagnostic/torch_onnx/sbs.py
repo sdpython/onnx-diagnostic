@@ -425,9 +425,9 @@ def run_aligned(
             run_cls(
                 _make_node_from_initializer(init),
                 **run_cls_kwargs,
-            ).run(None, {})[
-                0
-            ],  # type: ignore[attr-defined]
+            ).run(  # type: ignore[attr-defined]
+                None, {}
+            )[0],
             flip_type=True,
         )
         param_name = f"p_{init.name.replace('.', '_')}"
