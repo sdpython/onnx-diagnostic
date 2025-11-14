@@ -338,6 +338,16 @@ def run_aligned(
         print("final results")
         df = pandas.DataFrame(results)
         print(df)
+    
+    A command line can also be run:
+
+    .. code-block:: bash
+
+            python -m onnx_diagnostic sbs -i <tensors>.input.pt \\
+                                          --ep <exported_program>.pt2 \\
+                                          -m <model>.onnx  \\
+                                          -o results.xlsx \\
+                                          -v 1 --atol=0.1 --rtol=1
     """
     assert callable(run_cls), f"run_cls={run_cls} not a callable"
     str_kws = dict(with_shape=True, with_device=True, with_min_max=True)
