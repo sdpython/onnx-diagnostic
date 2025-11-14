@@ -268,7 +268,7 @@ def run_aligned(
 
         import onnx
         import torch
-        from onnx_diagnostic.torch_export_patches.patch_inputs.use_dyn_not_str
+        from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
 
         class Model(torch.nn.Module):
