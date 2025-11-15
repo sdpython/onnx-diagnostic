@@ -562,12 +562,12 @@ def run_aligned(
         if verbose:
             print(f"[run_aligned-nx] +inp: {inp.name}: {string_type(v, **str_kws)}")
 
-    alias_placeholder = {
-        **ep.state_dict,
-        **{f"p_{name.replace('.', '_')}": v for name, v in ep.state_dict.items()},
+    placeholders = {node.name for node in ep.graph.nodes if node.op == "placeholder"}
+    placeholders_to_state_dict = {
+        f"p_{name.replace('.', '_')}": name for name in ep.state_dict
     }
     for n in onnx_results:
-        if n not in alias_placeholder:
+        if n not in placeholders:
             yield (
                 None,
                 -1,
@@ -599,24 +599,30 @@ def run_aligned(
                 if verbose:
                     t = torch_results[node.name]
                     print(f"[run_aligned-ep] =plh: {node.name}={string_type(t, **str_kws)}")
-                if node.name in alias_placeholder:
-                    # Otherwise, it is an input.
-                    yield (
-                        -1,
-                        -1,
-                        node.name,
-                        node.name,
-                        "placeholder",
-                        "initializer",
-                        string_type(t, **str_kws),
-                        max_diff(alias_placeholder[node.name], onnx_results[node.name]),
-                    )
-                continue
+                # Otherwise, it is an input.
+                is_input = node.name in placeholders
+                yield (
+                    -1,
+                    -1,
+                    node.name,
+                    node.name,
+                    "input" if is_input else "placeholder",
+                    "input" if is_input else "initializer",
+                    string_type(t, **str_kws),
+                    (
+                        {}
+                        if is_input
+                        else max_diff(
+                            placeholders_to_state_dict[node.name], onnx_results[node.name]
+                        )
+                    ),
+                )
             else:
-                assert (
-                    node.name in alias_placeholder
-                ), f"Unable to find placeholder {node.name!r} in {sorted(alias_placeholder)}"
-                torch_results[node.name] = alias_placeholder[node.name]
+                assert node.name in placeholders_to_state_dict, (
+                    f"Unable to find placeholder {node.name!r} in "
+                    f"{sorted(placeholders_to_state_dict)}"
+                )
+                torch_results[node.name] = ep.state_dict[placeholders_to_state_dict[node.name]]
                 if verbose:
                     print(f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}")
                 yield (

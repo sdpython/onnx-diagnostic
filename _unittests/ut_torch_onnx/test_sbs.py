@@ -289,7 +289,7 @@ class TestSideBySide(ExtTestCase):
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
-    def test_sbs_model_with_weights(self):
+    def test_sbs_model_with_weights_custom(self):
         torch = self.torch
 
         class Model(self.torch.nn.Module):
@@ -310,7 +310,7 @@ class TestSideBySide(ExtTestCase):
         ep = self.torch.export.export(
             Model(), (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
         )
-        filename = self.get_dump_file("test_sbs_model_with_weights.onnx")
+        filename = self.get_dump_file("test_sbs_model_with_weights_custom.onnx")
         to_onnx(ep, exporter="custom", filename=filename)
         onx = onnx.load(filename)
         results = list(
@@ -324,7 +324,7 @@ class TestSideBySide(ExtTestCase):
             ),
         )
         df = pandas.DataFrame(list(map(post_process_run_aligned_obs, results)))
-        df.to_excel(self.get_dump_file("test_sbs_model_with_weights.xlsx"))
+        df.to_excel(self.get_dump_file("test_sbs_model_with_weights_custom.xlsx"))
         self.assertEqual(
             [
                 "ep_id_node",
@@ -340,10 +340,71 @@ class TestSideBySide(ExtTestCase):
             ],
             sorted(df.columns),
         )
-        self.assertEqual(len(results), 10)
-        self.assertEqual([r[-1].get("dev", 0) for r in results], [0] * 10)
+        self.assertEqual(len(results), 12)
+        self.assertEqual([r[-1].get("dev", 0) for r in results], [0] * 12)
         self.assertEqual(
-            [-1.0, -1.0, -1.0, -10, -10, -10, -10, 0.0, 1.0, 2.0],
+            [-1.0, -1.0, -1.0, -1.0, -10.0, -10.0, -10.0, -10.0, -1.0, 0.0, 1.0, 2.0],
+            df["onnx_id_node"].fillna(-10).tolist(),
+        )
+        self.clean_dump()
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    def test_sbs_model_with_weights_dynamo(self):
+        torch = self.torch
+
+        class Model(self.torch.nn.Module):
+            def __init__(self):
+                super(Model, self).__init__()
+                self.fc1 = torch.nn.Linear(10, 32)  # input size 10 → hidden size 32
+                self.relu = torch.nn.ReLU()
+                self.fc2 = torch.nn.Linear(32, 1)  # hidden → output
+
+            def forward(self, x):
+                x = self.relu(self.fc1(x))
+                x = self.fc2(x)
+                return x
+
+        inputs = dict(x=self.torch.randn((5, 10)))
+        ds = dict(x={0: "batch"})
+        Model()(**inputs)
+        ep = self.torch.export.export(
+            Model(), (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        filename = self.get_dump_file("test_sbs_model_with_weights_dynamo.onnx")
+        to_onnx(ep, exporter="onnx-dynamo", filename=filename)
+        onx = onnx.load(filename)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                verbose=11,
+                use_tensor=True,
+            ),
+        )
+        df = pandas.DataFrame(list(map(post_process_run_aligned_obs, results)))
+        df.to_excel(self.get_dump_file("test_sbs_model_with_weights_dynamo.xlsx"))
+        self.assertEqual(
+            [
+                "ep_id_node",
+                "ep_name",
+                "ep_target",
+                "err_abs",
+                "err_dev",
+                "err_rel",
+                "onnx_id_node",
+                "onnx_name",
+                "onnx_op_type",
+                "shape_type",
+            ],
+            sorted(df.columns),
+        )
+        self.assertEqual(len(results), 12)
+        self.assertEqual([r[-1].get("dev", 0) for r in results], [0] * 12)
+        self.assertEqual(
+            [-1.0, -1.0, -1.0, -1.0, -10.0, -10.0, -10.0, -10.0, -1.0, 0.0, 1.0, 2.0],
             df["onnx_id_node"].fillna(-10).tolist(),
         )
         self.clean_dump()
