@@ -1166,6 +1166,13 @@ def get_parser_sbs() -> ArgumentParser:
         required=False,
         help="verbosity",
     )
+    parser.add_argument(
+        "-r",
+        "--ratio",
+        default=5,
+        required=False,
+        help="Saves the result in an excel file every <ratio> node.",
+    )
     return parser
 
 
@@ -1220,6 +1227,7 @@ def _cmd_sbs(argv: List[Any]):
     print(f"-- done in {time.perf_counter() - begin:1.1f}s")
 
     print("-- starts side-by-side")
+    ratio = int(args.ratio)
     data = []
     for obs in run_aligned(
         ep,
@@ -1235,9 +1243,12 @@ def _cmd_sbs(argv: List[Any]):
     ):
         pobs = post_process_run_aligned_obs(obs)
         data.append(pobs)
-        if "initializer" not in pobs and "placeholder" not in pobs:
+        if "initializer" not in pobs and "placeholder" not in pobs and len(data) % ratio == 0:
             df = pandas.DataFrame(data)
             df.to_excel(args.output)
+    print(f"-- final saves into {args.output!r}")
+    df = pandas.DataFrame(data)
+    df.to_excel(args.output)
     print("-- done")
 
 

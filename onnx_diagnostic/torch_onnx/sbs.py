@@ -199,11 +199,11 @@ def post_process_run_aligned_obs(
             obs,
         )
     )
-    if "abs" in obs[-1]:
+    if "abs" in obs[-1] and obs[-1]["abs"] is not None:
         dobs["err_abs"] = obs[-1]["abs"]
-    if "rel" in obs[-1]:
+    if "rel" in obs[-1] and obs[-1]["rel"] is not None:
         dobs["err_rel"] = obs[-1]["rel"]
-    if "dev" in obs[-1]:
+    if "dev" in obs[-1] and obs[-1]["dev"] is not None:
         dobs["err_dev"] = obs[-1]["dev"]
     return dobs
 

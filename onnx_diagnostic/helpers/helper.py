@@ -994,7 +994,7 @@ def max_diff(
     _index: int = 0,
     allow_unique_tensor_with_list_of_one_element: bool = True,
     hist: Optional[Union[bool, List[float]]] = None,
-) -> Dict[str, Union[float, int, Tuple[int, ...]]]:
+) -> Dict[str, Union[float, int, Tuple[Any, ...]]]:
     """
     Returns the maximum discrepancy.
 
@@ -1208,7 +1208,7 @@ def max_diff(
                 if dd is None:
                     dd = d["dev"]
                 else:
-                    dd += d["dev"]
+                    dd += d["dev"]  # type: ignore[operator]
 
         res = dict(abs=am, rel=rm, sum=sm, n=n, dnan=dn)
         if dd is not None:
@@ -1264,8 +1264,8 @@ def max_diff(
             # out of boundary
             res = dict(abs=0.0, rel=0.0, sum=0.0, n=0.0, dnan=0)
             if dev is not None:
-                res["dev"] = dev
-            return res
+                res["dev"] = dev  # type: ignore[operator]
+            return res  # type: ignore[return-value]
         if isinstance(expected, (int, float)):
             if isinstance(got, np.ndarray) and len(got.shape) == 0:
                 got = float(got)
@@ -1281,7 +1281,7 @@ def max_diff(
                 )
                 if dev is not None:
                     res["dev"] = dev
-                return res
+                return res  # type: ignore[return-value]
             return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
         if expected.dtype in (np.complex64, np.complex128):
             if got.dtype == expected.dtype:

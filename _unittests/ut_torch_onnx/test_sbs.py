@@ -409,6 +409,31 @@ class TestSideBySide(ExtTestCase):
         )
         self.clean_dump()
 
+    @hide_stdout()
+    def test_sbs_unique_consecutive(self):
+        torch = self.torch
+
+        class Model(torch.nn.Module):
+            def forward(self, x):
+                return torch.unique_consecutive(x)
+
+        model = Model()
+        inputs = (torch.tensor([0, 1, 2, 2, 3, 3, 0, 0], dtype=torch.int64),)
+        ds = ({0: "length"},)
+        ep = torch.export.export(model, inputs, dynamic_shapes=use_dyn_not_str(ds))
+        onx = to_onnx(model, inputs, dynamic_shapes=ds, exporter="custom").model_proto
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                verbose=11,
+                use_tensor=True,
+            ),
+        )
+        self.assertEqual(len(results), 5)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
