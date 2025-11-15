@@ -111,13 +111,11 @@ def run_fx_node(
         for a, ea in zip(args, node.args):
             if isinstance(a, torch.Tensor) and hasattr(ea, "meta") and "val" in ea.meta:
                 ta = ea.meta["val"]
-                # if not isinstance(ta, torch.Tensor):
-                #    print("******", args)
-                #    print("******", node.args)
-                #    print("******", node.kwargs)
-                #    print("******", node.meta)
-                #    print(ta)
-                assert len(a.shape) == len(ta.shape) and a.dtype == ta.dtype, (
+                assert (
+                    isinstance(ta, torch.Tensor)
+                    and len(a.shape) == len(ta.shape)
+                    and a.dtype == ta.dtype
+                ), (
                     f"Unable to run node {node!r}, target={node.target!r}, "
                     f"node.args={node.args!r}, node.kwargs={node.kwargs!r}, "
                     f"args={string_type(args, with_shape=True, with_device=True)}, "
@@ -672,7 +670,7 @@ def run_aligned(
         outputs = [node.name] if isinstance(node.name, str) else list(node.name)
         args, kwargs = prepare_args_kwargs(torch_results, node)
         new_outputs = run_fx_node(node, args, kwargs)
-        if isinstance(new_outputs, (torch.Tensor, int, float, list)):
+        if isinstance(new_outputs, (torch.Tensor, int, float, list, tuple)):
             new_outputs = (new_outputs,)
 
         if new_outputs is None:
