@@ -11,6 +11,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     requires_onnx,
     requires_transformers,
+    requires_cuda,
 )
 from onnx_diagnostic.helpers.helper import (
     string_type,
@@ -198,6 +199,31 @@ class TestHelpers(ExtTestCase):
         self.assertEqual(diff["abs"], 0)
         d = string_diff(diff)
         self.assertIsInstance(d, str)
+
+    @hide_stdout()
+    def test_maxdiff_device(self):
+        inputs = (torch.arange(2), torch.cos(torch.arange(3)))
+        diff = max_diff(inputs, inputs, flatten=True, verbose=10)
+        self.assertEqual(diff["abs"], 0)
+        self.assertEqual(diff["dev"], 0)
+
+    @hide_stdout()
+    @requires_cuda()
+    def test_maxdiff_device_cuda(self):
+        diff = max_diff(torch.ones((2,)).cuda(), torch.ones((2,)), verbose=10)
+        self.assertEqual(diff["dev"], 1)
+        inputs = (torch.arange(2), torch.cos(torch.arange(3)))
+        inputs2 = (inputs[0].cuda(), inputs[1].cuda())
+        diff = max_diff(inputs, inputs2, verbose=10)
+        self.assertEqual(diff["abs"], 0)
+        self.assertEqual(diff["dev"], 2)
+        inputs2 = (inputs[0], inputs[1].cuda())
+        diff = max_diff(inputs, inputs2, verbose=10)
+        self.assertEqual(diff["abs"], 0)
+        self.assertEqual(diff["dev"], 1)
+        diff = max_diff(inputs2, inputs2, verbose=10)
+        self.assertEqual(diff["abs"], 0)
+        self.assertEqual(diff["dev"], 0)
 
     def test_flatten_cache(self):
         cache = make_dynamic_cache([(torch.ones((5, 6, 5, 6)), torch.ones((5, 6, 5, 6)) + 2)])

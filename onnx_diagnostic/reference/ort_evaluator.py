@@ -373,6 +373,12 @@ class OnnxruntimeEvaluator:
                 )
         else:
             onx.opset_import.append(oh.make_opsetid("", onnx_opset_version()))
+        opsets = {d.domain: d.version for d in onx.opset_import}
+        add = {}
+        for node in nodes:
+            if node.domain and node.domain not in opsets and node.domain not in add:
+                add[node.domain] = 1
+        onx.opset_import.extend([oh.make_opsetid(k, v) for k, v in add.items()])
 
         # That helps fixing bugs.
         onx = shi.infer_shapes(onx)
@@ -413,6 +419,7 @@ class OnnxruntimeEvaluator:
     def _get_sess(
         self, node: Union[ModelProto, NodeProto], inputs: List[Any]
     ) -> Tuple[ModelProto, _InferenceSession]:
+        on_cpu = None
         if isinstance(node, ModelProto):
             onx = node
         else:
@@ -443,6 +450,8 @@ class OnnxruntimeEvaluator:
                 voutputs = [oh.make_value_info(o, TypeProto()) for o in node.output]
 
             onx = self._make_model_proto([node], vinputs, voutputs)
+            if node.op_type in {"Shape", "Size"}:
+                on_cpu = True
 
         cls = (
             InferenceSessionForNumpy
@@ -450,8 +459,17 @@ class OnnxruntimeEvaluator:
             and (not isinstance(self.torch_or_numpy, bool) or not self.torch_or_numpy)
             else InferenceSessionForTorch
         )
+        if (
+            "providers" not in self.session_kwargs or not self.session_kwargs["providers"]
+        ) and any(hasattr(t, "is_cuda") and t.is_cuda for t in inputs):
+            sess_kwargs = self.session_kwargs.copy()
+            sess_kwargs["providers"] = ["CUDAExecutionProvider"]
+        else:
+            sess_kwargs = self.session_kwargs or {}
+        if on_cpu and "CUDAExecutionProvider" in (sess_kwargs.get("providers", []) or []):
+            sess_kwargs["cpu_outputs"] = True
         try:
-            sess = cls(onx, **self.session_kwargs)
+            sess = cls(onx, **sess_kwargs)
         except (
             onnxruntime.capi.onnxruntime_pybind11_state.Fail,
             onnxruntime.capi.onnxruntime_pybind11_state.InvalidGraph,
@@ -540,7 +558,15 @@ class OnnxruntimeEvaluator:
 
         feeds = dict(zip(node.input, inputs))
         if "" in feeds:
-            feeds[""] = np.array([0], dtype=np.float32)
+            cls = None
+            for k, v in feeds.items():
+                if k != "":
+                    cls = v.__class__
+                    break
+            assert (
+                cls is not None
+            ), f"Unable to get input class (array or tensor), feeds={string_type(feeds)}"
+            feeds[""] = cls([0])
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
         outputs = list(sess.run(None, feeds))

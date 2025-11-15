@@ -141,6 +141,7 @@ class TestCheckOrtFloat16(ExtTestCase):
                 short_list,
                 tuple([("CUDAExecutionProvider", o) for o in en] for en in expected_names),
             )
+        self.clean_dump()
 
     @unittest.skip("https://github.com/sdpython/onnx-diagnostic/issues/240")
     @requires_cuda()

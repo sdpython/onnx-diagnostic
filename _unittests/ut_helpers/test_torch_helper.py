@@ -151,6 +151,7 @@ class TestTorchTestHelper(ExtTestCase):
         self.assertEqualAny(restored["main", 1, "I"], (inputs, {}))
         self.assertEqualAny(restored["main", 0, "O"], res1)
         self.assertEqualAny(restored["main", 0, "O"], res2)
+        self.clean_dump()
 
     @hide_stdout()
     def test_steal_forward_dump_file_steal_append(self):
@@ -181,6 +182,7 @@ class TestTorchTestHelper(ExtTestCase):
             {("", 1, "I"), ("", 1, "O"), "sx", ("", 0, "O"), "sx_1", ("", 0, "I")},
             set(restored),
         )
+        self.clean_dump()
 
     @hide_stdout()
     def test_steal_forward_dump_file_steal_append_drop(self):
@@ -214,6 +216,7 @@ class TestTorchTestHelper(ExtTestCase):
         first = restored[("", 0, "I")]
         _a, kws = first
         self.assertNotIn("x", kws)
+        self.clean_dump()
 
     @hide_stdout()
     def test_steal_forward_submodules(self):
@@ -257,6 +260,7 @@ class TestTorchTestHelper(ExtTestCase):
             ),
             len(sorted(restored)),
         )
+        self.clean_dump()
 
     def test_replace_string_by_dynamic(self):
         example = {

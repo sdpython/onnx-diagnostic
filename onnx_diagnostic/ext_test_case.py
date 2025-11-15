@@ -9,6 +9,7 @@ import itertools
 import logging
 import os
 import re
+import shutil
 import sys
 import unittest
 import warnings
@@ -147,7 +148,7 @@ def hide_stdout(f: Optional[Callable] = None) -> Callable:
 
     def wrapper(fct):
         def call_f(self):
-            if os.environ.get("UNHIDE", ""):
+            if os.environ.get("UNHIDE", "") in (1, "1", "True", "true"):
                 fct(self)
                 return
             st = StringIO()
@@ -805,6 +806,15 @@ class ExtTestCase(unittest.TestCase):
         if not os.path.exists(folder):
             os.makedirs(folder)
         return folder
+
+    def clean_dump(self, folder: str = "dump_test"):
+        """Cleans this folder."""
+        for item in os.listdir(folder):
+            item_path = os.path.join(folder, item)
+            if os.path.isfile(item_path) or os.path.islink(item_path):
+                os.remove(item_path)
+            elif os.path.isdir(item_path):
+                shutil.rmtree(item_path)
 
     def dump_onnx(
         self,

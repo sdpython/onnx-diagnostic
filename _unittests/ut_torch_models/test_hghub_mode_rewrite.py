@@ -25,8 +25,8 @@ class TestHuggingFaceHubModelRewrite(ExtTestCase):
         data = get_untrained_model_with_inputs(mid, verbose=1)
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         dump_folder = self.get_dump_file("test_export_rewritin_bart")
-        print(self.string_type(inputs))
-        print(self.string_type(ds))
+        print("--", self.string_type(inputs))
+        print("--", self.string_type(ds))
         with torch_export_patches(
             patch_transformers=True, rewrite=model, dump_rewriting=dump_folder
         ):

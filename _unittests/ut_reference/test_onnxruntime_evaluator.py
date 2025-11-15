@@ -1,10 +1,11 @@
 import unittest
+from typing import Optional
 import numpy as np
 import onnx
 import onnx.helper as oh
 import torch
 import onnxruntime
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, ignore_warnings
 from onnx_diagnostic.helpers.onnx_helper import from_array_extended
 from onnx_diagnostic.reference import (
     OnnxruntimeEvaluator,
@@ -22,6 +23,14 @@ TFLOAT = onnx.TensorProto.FLOAT
 
 
 class TestOnnxruntimeEvaluator(ExtTestCase):
+    def _range(self, *shape, bias: Optional[float] = None):
+        n = np.prod(shape)
+        x = np.arange(n).astype(np.float32) / n
+        if bias:
+            x = x + bias
+        return x.reshape(tuple(shape)).astype(np.float32)
+
+    @ignore_warnings(FutureWarning)
     def test_ort_eval_scan_cdist_add(self):
 
         def dist(unused: torch.Tensor, x: torch.Tensor, samex: torch.Tensor):
@@ -69,6 +78,7 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         got = orte.run(None, {name: x.numpy()})[0]
         self.assertEqualArray(expected, got)
 
+    @ignore_warnings((UserWarning, FutureWarning))
     def test_ort_eval_cond(self):
         import torch
 
@@ -180,6 +190,7 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         self.assertEqual(got.dtype, torch.bool)
         self.assertEqual(got[0], True)
 
+    @hide_stdout()
     def test_ort_eval_loop(self):
         model = torch.nn.EmbeddingBag(num_embeddings=49157, embedding_dim=32, mode="sum")
         a = torch.tensor([[39906, 39906]]).long()
@@ -225,6 +236,28 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         d = {k: d["abs"] for k, d in cmp.value.items()}
         self.assertLess(d[(0, "nx"), "r_cos"], 1e-6)
         self.assertLess(d[(2, "u"), "r_exp"], 1e-6)
+
+    @hide_stdout()
+    def test_skip_layer_normalization(self):
+        node = oh.make_node(
+            "SkipLayerNormalization",
+            ["x", "skip", "beta", "gamma", "bias"],
+            ["Z"],
+            epsilon=1.0e-5,
+            domain="com.microsoft",
+        )
+        feeds = dict(
+            x=self._range(2, 3, 8),
+            skip=self._range(2, 3, 8, bias=3),
+            beta=self._range(8, bias=1),
+            gamma=self._range(8, bias=2),
+            bias=self._range(8, bias=0.1),
+        )
+        ref = ExtendedReferenceEvaluator(node)
+        expected = ref.run(None, feeds)
+        rt = OnnxruntimeEvaluator(node, verbose=10, opsets={"": 22})
+        got = rt.run(None, feeds)
+        self.assertEqualAny(expected, got, atol=1e-4)
 
 
 if __name__ == "__main__":

@@ -529,16 +529,20 @@ def string_type(
                 return "OV(NO-NUMPY:FIXIT)"
             if verbose:
                 print(f"[string_type] V4:{type(obj)}")
-            return f"OV({string_type(t, with_shape=with_shape, with_min_max=with_min_max)})"
+            dev = ("G" if obj.device_name() == "Cuda" else "C") if with_device else ""
+            return (
+                f"{dev}OV({string_type(t, with_shape=with_shape, with_min_max=with_min_max)})"
+            )
         dt = obj.element_type()
         shape = obj.shape()
+        dev = ("G" if obj.device_name() == "Cuda" else "C") if with_device else ""
         if with_shape:
             if verbose:
                 print(f"[string_type] V5:{type(obj)}")
-            return f"OV{dt}s{'x'.join(map(str, shape))}"
+            return f"{dev}OV{dt}s{'x'.join(map(str, shape))}"
         if verbose:
             print(f"[string_type] V6:{type(obj)}")
-        return f"OV{dt}r{len(shape)}"
+        return f"{dev}OV{dt}r{len(shape)}"
 
     # others classes
 
@@ -990,7 +994,7 @@ def max_diff(
     _index: int = 0,
     allow_unique_tensor_with_list_of_one_element: bool = True,
     hist: Optional[Union[bool, List[float]]] = None,
-) -> Dict[str, Union[float, int, Tuple[int, ...]]]:
+) -> Dict[str, Union[float, int, Tuple[Any, ...]]]:
     """
     Returns the maximum discrepancy.
 
@@ -1015,6 +1019,7 @@ def max_diff(
         output, this number will be the number of elements
         of this output
     * dnan: difference in the number of nan
+    * dev: tensor on the same device, if applicable
 
     You may use :func:`string_diff` to display the discrepancies in one string.
     """
@@ -1167,7 +1172,7 @@ def max_diff(
 
         if verbose >= 6:
             print(f"[max_diff] list,tuple,6: {string_type(expected)} ? {string_type(got)}")
-        am, rm, sm, n, dn, drep = 0, 0, 0.0, 0.0, 0, None
+        am, rm, sm, n, dn, drep, dd = 0, 0, 0.0, 0.0, 0, None, None
         for ip, (e, g) in enumerate(zip(expected, got)):
             d = max_diff(
                 e,
@@ -1199,7 +1204,15 @@ def max_diff(
                 else:
                     for k, v in d["rep"].items():
                         drep[k] += v
+            if "dev" in d and d["dev"] is not None:
+                if dd is None:
+                    dd = d["dev"]
+                else:
+                    dd += d["dev"]  # type: ignore[operator]
+
         res = dict(abs=am, rel=rm, sum=sm, n=n, dnan=dn)
+        if dd is not None:
+            res["dev"] = dd
         if drep:
             res["rep"] = drep
         return res  # type: ignore
@@ -1233,33 +1246,42 @@ def max_diff(
     import torch
 
     if isinstance(expected, np.ndarray) or isinstance(got, np.ndarray):
+        dev = None
         if isinstance(expected, torch.Tensor):
             from .torch_helper import to_numpy
 
+            dev = 0 if expected.device.type == "cpu" else 1
             expected = to_numpy(expected)
         if isinstance(got, torch.Tensor):
             from .torch_helper import to_numpy
 
+            dev = 0 if got.device.type == "cpu" else 1
             got = to_numpy(got)
         if verbose >= 6:
             print(f"[max_diff] tensor: {string_type(expected)} ? {string_type(got)}")
 
         if _index < begin or (end != -1 and _index >= end):
             # out of boundary
-            return dict(abs=0.0, rel=0.0, sum=0.0, n=0.0, dnan=0)
+            res = dict(abs=0.0, rel=0.0, sum=0.0, n=0.0, dnan=0)
+            if dev is not None:
+                res["dev"] = dev  # type: ignore[operator]
+            return res  # type: ignore[return-value]
         if isinstance(expected, (int, float)):
             if isinstance(got, np.ndarray) and len(got.shape) == 0:
                 got = float(got)
             if isinstance(got, (int, float)):
                 if expected == got:
                     return dict(abs=0.0, rel=0.0, sum=0.0, n=0.0, dnan=0)
-                return dict(
+                res = dict(
                     abs=abs(expected - got),
                     rel=abs(expected - got) / (abs(expected) + 1e-5),
                     sum=abs(expected - got),
                     n=1,
                     dnan=0,
                 )
+                if dev is not None:
+                    res["dev"] = dev
+                return res  # type: ignore[return-value]
             return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
         if expected.dtype in (np.complex64, np.complex128):
             if got.dtype == expected.dtype:
@@ -1339,6 +1361,8 @@ def max_diff(
         res: Dict[str, float] = dict(  # type: ignore
             abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
         )
+        if dev is not None:
+            res["dev"] = dev
         if hist:
             if isinstance(hist, bool):
                 hist = np.array([0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype)
@@ -1352,9 +1376,14 @@ def max_diff(
     if isinstance(expected, torch.Tensor) and isinstance(got, torch.Tensor):
         if verbose >= 6:
             print(f"[max_diff] tensor: {string_type(expected)} ? {string_type(got)}")
+        dev = 0 if expected.device == got.device else 1
         if _index < begin or (end != -1 and _index >= end):
             # out of boundary
-            return dict(abs=0.0, rel=0.0, sum=0.0, n=0.0, dnan=0)
+            if verbose >= 10:
+                if debug_info:
+                    print("\n".join(debug_info))
+                print("[max_diff] out of boundary")
+            return dict(abs=0.0, rel=0.0, sum=0.0, n=0.0, dnan=0, dev=dev)
         if expected.dtype in (torch.complex64, torch.complex128):
             if got.dtype == expected.dtype:
                 got = torch.view_as_real(got)
@@ -1448,7 +1477,13 @@ def max_diff(
                 )
 
         res: Dict[str, float] = dict(  # type: ignore
-            abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
+            abs=abs_diff,
+            rel=rel_diff,
+            sum=sum_diff,
+            n=n_diff,
+            dnan=nan_diff,
+            argm=argm,
+            dev=dev,
         )
         if hist:
             if isinstance(hist, bool):
@@ -1466,13 +1501,31 @@ def max_diff(
             )
         return res  # type: ignore
 
+    if isinstance(expected, int) and isinstance(got, torch.Tensor):
+        # a size
+        if verbose >= 6:
+            print(f"[max_diff] int: {string_type(expected)} ? {string_type(got)}")
+        if got.shape != tuple():
+            return dict(  # type: ignore
+                abs=np.inf,
+                rel=np.inf,
+                sum=np.inf,
+                n=np.inf,
+                dnan=np.inf,
+                argm=np.inf,
+            )
+        return dict(  # type: ignore
+            abs=abs(expected - got.item()),
+            rel=abs((expected - got.item()) / max(1, expected)),
+            sum=abs(expected - got.item()),
+            n=1,
+            dnan=0,
+        )
+
     if "SquashedNormal" in expected.__class__.__name__:
         if verbose >= 6:
             print(f"[max_diff] SquashedNormal: {string_type(expected)} ? {string_type(got)}")
-        values = (
-            expected.mean.detach().to("cpu"),
-            expected.scale.detach().to("cpu"),
-        )
+        values = (expected.mean, expected.scale)
         return max_diff(values, got, debug_info=_debug("SquashedNormal"), **_dkws)
 
     if expected.__class__ in torch.utils._pytree.SUPPORTED_NODES:
@@ -1677,7 +1730,7 @@ def max_diff(
 
     raise AssertionError(
         f"Not implemented with implemented with expected="
-        f"{string_type(expected)}, got={string_type(got)},\n"
+        f"{string_type(expected)} ({type(expected)}), got={string_type(got)},\n"
         f"level={level}"
     )
 
@@ -1685,6 +1738,9 @@ def max_diff(
 def string_diff(diff: Dict[str, Any]) -> str:
     """Renders discrepancies return by :func:`max_diff` into one string."""
     # dict(abs=, rel=, sum=, n=n_diff, dnan=)
+    if "dev" in diff:
+        ddiff = {k: v for k, v in diff.items() if k != "dev"}
+        return f"{string_diff(ddiff)}, dev={diff['dev']}"
     suffix = ""
     if "rep" in diff:
         rows = []
