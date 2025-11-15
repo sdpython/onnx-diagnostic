@@ -1173,7 +1173,7 @@ def _cmd_sbs(argv: List[Any]):
     import pandas
     import torch
     from .helpers import string_type
-    from .torch_onnx.sbs import run_aligned
+    from .torch_onnx.sbs import run_aligned, post_process_run_aligned_obs
     from .reference import OnnxruntimeEvaluator
 
     parser = get_parser_sbs()
@@ -1219,12 +1219,6 @@ def _cmd_sbs(argv: List[Any]):
     onx = onnx.load(args.onnx)
     print(f"-- done in {time.perf_counter() - begin:1.1f}s")
 
-    def post_process(obs):
-        dobs = dict(zip(["ep_id_node", "onnx_id_node", "ep_name", "onnx_name"], obs))
-        dobs["err_abs"] = obs[-1]["abs"]
-        dobs["err_rel"] = obs[-1]["rel"]
-        return dobs
-
     print("-- starts side-by-side")
     data = []
     for obs in run_aligned(
@@ -1239,7 +1233,7 @@ def _cmd_sbs(argv: List[Any]):
         use_tensor=True,
         exc=False,
     ):
-        data.append(post_process(obs))
+        data.append(post_process_run_aligned_obs(obs))
         df = pandas.DataFrame(data)
         df.to_excel(args.output)
     print("-- done")

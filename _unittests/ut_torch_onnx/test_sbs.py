@@ -1,4 +1,5 @@
 import unittest
+import pandas
 import onnx
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
@@ -9,7 +10,7 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
-from onnx_diagnostic.torch_onnx.sbs import run_aligned
+from onnx_diagnostic.torch_onnx.sbs import run_aligned, post_process_run_aligned_obs
 from onnx_diagnostic.export.api import to_onnx
 
 
@@ -324,8 +325,12 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
+        pandas.DataFrame(list(map(post_process_run_aligned_obs, results))).to_excel(
+            self.get_dump_file("test_sbs_model_with_weights.xlsx")
+        )
         self.assertEqual(len(results), 7)
         self.assertEqual([r[-1].get("dev", 0) for r in results], [0, 0, 0, 0, 0, 0, 0])
+        self.clean_dump()
 
 
 if __name__ == "__main__":

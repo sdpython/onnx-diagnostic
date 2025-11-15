@@ -157,6 +157,17 @@ def prepare_args_kwargs(
     return new_args, new_kwargs
 
 
+def post_process_run_aligned_obs(obs: Dict[str, Any]) -> Dict[str, Union[str, float, int]]:
+    """
+    Flattens an observations produced by function
+    :func:`onnx_diagnostic.torch_onnx.sbs.run_aligned`.
+    """
+    dobs = dict(zip(["ep_id_node", "onnx_id_node", "ep_name", "onnx_name"], obs))
+    dobs["err_abs"] = obs[-1]["abs"]
+    dobs["err_rel"] = obs[-1]["rel"]
+    return dobs
+
+
 def run_aligned(
     ep: torch.export.ExportedProgram,
     onx: Union[onnx.ModelProto, onnx.FunctionProto],
@@ -210,7 +221,10 @@ def run_aligned(
             # This can be replace by any runtime taking NodeProto as an input.
             ExtendedReferenceEvaluator as ReferenceEvaluator,
         )
-        from onnx_diagnostic.torch_onnx.sbs import run_aligned
+        from onnx_diagnostic.torch_onnx.sbs import (
+            run_aligned,
+            post_process_run_aligned_obs,
+        )
 
 
         class Model(torch.nn.Module):
@@ -220,13 +234,6 @@ def run_aligned(
                 rw = rz + 1
                 ru = rw.log() + rw
                 return ru
-
-
-        def post_process(obs):
-            dobs = dict(zip(["ep_id_node", "onnx_id_node", "ep_name", "onnx_name"], obs))
-            dobs["err_abs"] = obs[-1]["abs"]
-            dobs["err_rel"] = obs[-1]["rel"]
-            return dobs
 
 
         x = torch.randn((5, 4))
@@ -239,7 +246,7 @@ def run_aligned(
         ).model_proto
         results = list(
             map(
-                post_process,
+                post_process_run_aligned_obs,
                 run_aligned(
                     ep, onx, ReferenceEvaluator, (x,), atol=1e-5, rtol=1e-5, verbose=1
                 ),
@@ -303,7 +310,10 @@ def run_aligned(
         import pandas
         import onnx
         import torch
-        from onnx_diagnostic.torch_onnx.sbs import run_aligned
+        from onnx_diagnostic.torch_onnx.sbs import (
+            run_aligned,
+            post_process_run_aligned_obs,
+        )
         from onnx_diagnostic.reference import OnnxruntimeEvaluator
 
 
@@ -312,16 +322,9 @@ def run_aligned(
         inputs = torch.load("test_doc_sbs_example.pt")
 
 
-        def post_process(obs):
-            dobs = dict(zip(["ep_id_node", "onnx_id_node", "ep_name", "onnx_name"], obs))
-            dobs["err_abs"] = obs[-1]["abs"]
-            dobs["err_rel"] = obs[-1]["rel"]
-            return dobs
-
-
         results = list(
             map(
-                post_process,
+                post_process_run_aligned_obs,
                 run_aligned(
                     ep,
                     onx,
@@ -486,34 +489,11 @@ def run_aligned(
             # not a weight
             continue
 
-        # quick fixes
-        param_name = f"p_{init.name.replace('.', '_')}"
-        if param_name == init.name:
-            continue
-        assert param_name not in onnx_results, (
-            f"Some confusion may happen because {init.name!r} -> {param_name!r} "
-            f"and onnx_results has {sorted(onnx_results)}"
-        )
-        onnx_results[param_name] = onnx_results[init.name]
-
-        param_name = f"{init.name.replace('.', '_')}".split("::")[0]
-        if param_name == init.name:
-            continue
-        assert param_name not in onnx_results, (
-            f"Some confusion may happen because {init.name!r} -> {param_name!r} "
-            f"and onnx_results has {sorted(onnx_results)}"
-        )
-        onnx_results[param_name] = onnx_results[init.name]
-
     if verbose:
         print(f"[run_aligned] handles common {len(onnx_results)} initializer from torch")
     # we should be careful, torch may modified inplace the weights,
     # it may be difficult to share weights
-    torch_results: Dict[str, Any] = {
-        k: (v if use_tensor else from_numpy(v))
-        for k, v in onnx_results.items()
-        if not k.startswith("init")
-    }
+    torch_results: Dict[str, Any] = {}
     if verbose:
         print(
             f"[run_aligned] handles other constant from {len(ep.graph.nodes)} nodes from torch"
@@ -554,6 +534,10 @@ def run_aligned(
         if verbose:
             print(f"[run_aligned-nx] +inp: {inp.name}: {string_type(v, **str_kws)}")
 
+    alias_placeholder = {
+        **ep.state_dict,
+        **{f"p_{name.replace('.', '_')}": v for name, v in ep.state_dict.items()},
+    }
     for i, node in enumerate(ep.graph.nodes):
         if verbose:
             if node.op == "call_function":
@@ -573,20 +557,15 @@ def run_aligned(
                 )
                 if verbose:
                     t = torch_results[node.name]
-                    print(f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}")
+                    print(f"[run_aligned-ep] =plh: {node.name}={string_type(t, **str_kws)}")
                 continue
-            if exc:
-                raise AssertionError(
-                    f"unable to process node {node.op} -> {node.name!r}, "
-                    f"possible candidate are "
-                    f"{sorted(p for p in onnx_results if node.name in p)}, "
-                    f"not in {sorted(onnx_results)}, "
-                    f"args={string_type(args, **str_kws)}, "
-                    f"kwargs={string_type(kwargs, **str_kws)}, "
-                    f"onx.graph.input={[i.name for i in onx.graph.input]}"
-                )
-            elif verbose:
-                print(f"[run_aligned] unable to {node.name!r} among onnx weights")
+            else:
+                assert (
+                    node.name in alias_placeholder
+                ), f"Unable to find placeholder {node.name!r} in {sorted(alias_placeholder)}"
+                torch_results[node.name] = alias_placeholder[node.name]
+                if verbose:
+                    print(f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}")
             continue
 
         outputs = [node.name] if isinstance(node.name, str) else list(node.name)
