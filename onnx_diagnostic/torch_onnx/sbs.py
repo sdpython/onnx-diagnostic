@@ -178,9 +178,9 @@ def post_process_run_aligned_obs(
         Optional[str],
         Optional[str],
         Optional[str],
-        Dict[str, Union[int, float]],
+        Dict[str, Optional[Union[int, float]]],
     ],
-) -> Dict[str, Union[str, float, int]]:
+) -> Dict[str, Optional[Union[str, float, int]]]:
     """
     Flattens an observations produced by function
     :func:`onnx_diagnostic.torch_onnx.sbs.run_aligned`.

@@ -1,4 +1,5 @@
 import unittest
+from typing import Optional
 import numpy as np
 import onnx
 import onnx.helper as oh
@@ -22,6 +23,13 @@ TFLOAT = onnx.TensorProto.FLOAT
 
 
 class TestOnnxruntimeEvaluator(ExtTestCase):
+    def _range(self, *shape, bias: Optional[float] = None):
+        n = np.prod(shape)
+        x = np.arange(n).astype(np.float32) / n
+        if bias:
+            x = x + bias
+        return x.reshape(tuple(shape)).astype(np.float32)
+
     @ignore_warnings(FutureWarning)
     def test_ort_eval_scan_cdist_add(self):
 
@@ -228,6 +236,28 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         d = {k: d["abs"] for k, d in cmp.value.items()}
         self.assertLess(d[(0, "nx"), "r_cos"], 1e-6)
         self.assertLess(d[(2, "u"), "r_exp"], 1e-6)
+
+    @hide_stdout()
+    def test_skip_layer_normalization(self):
+        node = oh.make_node(
+            "SkipLayerNormalization",
+            ["x", "skip", "beta", "gamma", "bias"],
+            ["Z"],
+            epsilon=1.0e-5,
+            domain="com.microsoft",
+        )
+        feeds = dict(
+            x=self._range(2, 3, 8),
+            skip=self._range(2, 3, 8, bias=3),
+            beta=self._range(8, bias=1),
+            gamma=self._range(8, bias=2),
+            bias=self._range(8, bias=0.1),
+        )
+        ref = ExtendedReferenceEvaluator(node)
+        expected = ref.run(None, feeds)
+        rt = OnnxruntimeEvaluator(node, verbose=10, opsets={"": 22})
+        got = rt.run(None, feeds)
+        self.assertEqualAny(expected, got, atol=1e-4)
 
 
 if __name__ == "__main__":
