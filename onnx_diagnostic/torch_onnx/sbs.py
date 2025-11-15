@@ -162,9 +162,26 @@ def post_process_run_aligned_obs(obs: Dict[str, Any]) -> Dict[str, Union[str, fl
     Flattens an observations produced by function
     :func:`onnx_diagnostic.torch_onnx.sbs.run_aligned`.
     """
-    dobs = dict(zip(["ep_id_node", "onnx_id_node", "ep_name", "onnx_name"], obs))
-    dobs["err_abs"] = obs[-1]["abs"]
-    dobs["err_rel"] = obs[-1]["rel"]
+    dobs = dict(
+        zip(
+            [
+                "ep_id_node",
+                "onnx_id_node",
+                "ep_name",
+                "onnx_name",
+                "ep_target",
+                "onnx_op_type",
+                "shape_type",
+            ],
+            obs,
+        )
+    )
+    if "abs" in obs[-1]:
+        dobs["err_abs"] = obs[-1]["abs"]
+    if "rel" in obs[-1]:
+        dobs["err_rel"] = obs[-1]["rel"]
+    if "dev" in obs[-1]:
+        dobs["err_dev"] = obs[-1]["dev"]
     return dobs
 
 
@@ -208,6 +225,17 @@ def run_aligned(
     :param verbose: verbosity level
     :param exc: stops if an exception
     :return: a list of tuples containing the results, they come in tuple
+
+    Each tuple is:
+
+    - ep_id_node
+    - onnx_id_node
+    - ep_name
+    - onnx_name
+    - ep target name
+    - onnx op _type
+    - ep or onnx shape and type
+    - difference
 
     Example:
 
@@ -446,7 +474,7 @@ def run_aligned(
                             f"{string_diff(d, with_shape=True, with_device=True)} - "
                             f"[{to}/{o}]"
                         )
-            return (i, i_onnx, o, to, d)
+            return (i, i_onnx, o, to, string_type(torch_results[to], **str_kws), d)
         return None
 
     if verbose:
@@ -538,7 +566,20 @@ def run_aligned(
         **ep.state_dict,
         **{f"p_{name.replace('.', '_')}": v for name, v in ep.state_dict.items()},
     }
-    for i, node in enumerate(ep.graph.nodes):
+    for n in onnx_results:
+        if n not in alias_placeholder:
+            yield (
+                None,
+                -1,
+                None,
+                n,
+                None,
+                "initializer",
+                string_type(onnx_results[n], **str_kws),
+                {},
+            )
+    ep_graph_nodes = list(ep.graph.nodes)
+    for i, node in enumerate(ep_graph_nodes):
         if verbose:
             if node.op == "call_function":
                 print(
@@ -558,6 +599,18 @@ def run_aligned(
                 if verbose:
                     t = torch_results[node.name]
                     print(f"[run_aligned-ep] =plh: {node.name}={string_type(t, **str_kws)}")
+                if node.name in alias_placeholder:
+                    # Otherwise, it is an input.
+                    yield (
+                        -1,
+                        -1,
+                        node.name,
+                        node.name,
+                        "placeholder",
+                        "initializer",
+                        string_type(t, **str_kws),
+                        max_diff(alias_placeholder[node.name], onnx_results[node.name]),
+                    )
                 continue
             else:
                 assert (
@@ -566,6 +619,16 @@ def run_aligned(
                 torch_results[node.name] = alias_placeholder[node.name]
                 if verbose:
                     print(f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}")
+                yield (
+                    -1,
+                    None,
+                    node.name,
+                    None,
+                    "placeholder",
+                    None,
+                    string_type(torch_results[node.name], **str_kws),
+                    {},
+                )
             continue
 
         outputs = [node.name] if isinstance(node.name, str) else list(node.name)
@@ -639,7 +702,12 @@ def run_aligned(
                     i_onnx,
                 )
                 if tmp is not None:
-                    yield tmp
+                    yield (
+                        *tmp[:4],
+                        str(ep_graph_nodes[tmp[0]].target),
+                        onx.graph.node[tmp[1]].op_type,
+                        *tmp[-2:],
+                    )
 
         last_position = max_pos + 1
 
@@ -670,4 +738,9 @@ def run_aligned(
                 i_onnx,
             )
             if tmp is not None:
-                yield tmp
+                yield (
+                    *tmp[:4],
+                    str(ep_graph_nodes[tmp[0]].target),
+                    onx.graph.node[tmp[1]].op_type,
+                    *tmp[-2:],
+                )

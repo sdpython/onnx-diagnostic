@@ -51,7 +51,7 @@ class TestSideBySide(ExtTestCase):
                 verbose=1,
             ),
         )
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 7)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -86,7 +86,7 @@ class TestSideBySide(ExtTestCase):
                 verbose=1,
             ),
         )
-        self.assertEqual(len(results), 4)
+        self.assertEqual(len(results), 6)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -118,7 +118,7 @@ class TestSideBySide(ExtTestCase):
                 verbose=1,
             ),
         )
-        self.assertEqual(len(results), 4)
+        self.assertEqual(len(results), 6)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -149,7 +149,7 @@ class TestSideBySide(ExtTestCase):
                 verbose=11,
             ),
         )
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 7)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -181,7 +181,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 6)
+        self.assertEqual(len(results), 8)
         self.clean_dump()
 
     @hide_stdout()
@@ -215,8 +215,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 6)
-        self.assertEqual([r[-1]["dev"] for r in results], [0, 0, 0, 0, 0, 0])
+        self.assertEqual(len(results), 8)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -251,8 +250,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 7)
-        self.assertEqual([r[-1].get("dev", 0) for r in results], [0, 0, 0, 0, 0, 0, 0])
+        self.assertEqual(len(results), 14)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -286,8 +284,8 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 7)
-        self.assertEqual([r[-1].get("dev", 0) for r in results], [0, 0, 0, 0, 0, 0, 0])
+        self.assertEqual(len(results), 14)
+        self.assertEqual([r[-1].get("dev", 0) for r in results], [0] * 14)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -325,11 +323,29 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        pandas.DataFrame(list(map(post_process_run_aligned_obs, results))).to_excel(
-            self.get_dump_file("test_sbs_model_with_weights.xlsx")
+        df = pandas.DataFrame(list(map(post_process_run_aligned_obs, results)))
+        df.to_excel(self.get_dump_file("test_sbs_model_with_weights.xlsx"))
+        self.assertEqual(
+            [
+                "ep_id_node",
+                "ep_name",
+                "ep_target",
+                "err_abs",
+                "err_dev",
+                "err_rel",
+                "onnx_id_node",
+                "onnx_name",
+                "onnx_op_type",
+                "shape_type",
+            ],
+            sorted(df.columns),
         )
-        self.assertEqual(len(results), 7)
-        self.assertEqual([r[-1].get("dev", 0) for r in results], [0, 0, 0, 0, 0, 0, 0])
+        self.assertEqual(len(results), 10)
+        self.assertEqual([r[-1].get("dev", 0) for r in results], [0] * 10)
+        self.assertEqual(
+            [-1.0, -1.0, -1.0, -10, -10, -10, -10, 0.0, 1.0, 2.0],
+            df["onnx_id_node"].fillna(-10).tolist(),
+        )
         self.clean_dump()
 
 
