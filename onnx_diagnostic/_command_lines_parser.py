@@ -1233,9 +1233,11 @@ def _cmd_sbs(argv: List[Any]):
         use_tensor=True,
         exc=False,
     ):
-        data.append(post_process_run_aligned_obs(obs))
-        df = pandas.DataFrame(data)
-        df.to_excel(args.output)
+        pobs = post_process_run_aligned_obs(obs)
+        data.append(pobs)
+        if "initializer" not in pobs and "placeholder" not in pobs:
+            df = pandas.DataFrame(data)
+            df.to_excel(args.output)
     print("-- done")
 
 

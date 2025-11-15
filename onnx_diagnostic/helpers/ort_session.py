@@ -502,11 +502,8 @@ class InferenceSessionForTorch(_InferenceSession):
             if not v.is_contiguous():
                 v = v.contiguous()
             if v.dtype == torch.bool:
-                # It does not work with dlpack
-                # unless onnxruntime updates the version it is using.
-                v = ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
-                    v.detach().numpy(), onnx.TensorProto.BOOL
-                )
+                v = v.to(torch.uint8)
+                v = ORTC.OrtValue.from_dlpack(v.__dlpack__(), True)
             else:
                 v = ORTC.OrtValue.from_dlpack(v.__dlpack__(), False)
             input_names.append(k)

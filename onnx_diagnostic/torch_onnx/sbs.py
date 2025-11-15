@@ -563,8 +563,10 @@ def run_aligned(
             print(f"[run_aligned-nx] +inp: {inp.name}: {string_type(v, **str_kws)}")
 
     placeholders = {node.name for node in ep.graph.nodes if node.op == "placeholder"}
+    ep_state_dict = {**ep.state_dict, **dict(ep.named_buffers())}
     placeholders_to_state_dict = {
-        f"p_{name.replace('.', '_')}": name for name in ep.state_dict
+        **{f"p_{name.replace('.', '_')}": name for name in ep.state_dict},
+        **{f"b_{name.replace('.', '_')}": name for name, _ in ep.named_buffers()},
     }
     for n in onnx_results:
         if n not in placeholders:
@@ -622,7 +624,7 @@ def run_aligned(
                     f"Unable to find placeholder {node.name!r} in "
                     f"{sorted(placeholders_to_state_dict)}"
                 )
-                torch_results[node.name] = ep.state_dict[placeholders_to_state_dict[node.name]]
+                torch_results[node.name] = ep_state_dict[placeholders_to_state_dict[node.name]]
                 if verbose:
                     print(f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}")
                 yield (
