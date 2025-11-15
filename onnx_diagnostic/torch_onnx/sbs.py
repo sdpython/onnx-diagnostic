@@ -108,6 +108,21 @@ def run_fx_node(
         return args
     if node.op == "call_function":
         assert callable(node.target), f"{node.target!r} not callable in node {node!r}"
+        for a, ea in zip(args, node.args):
+            if isinstance(a, torch.Tensor) and hasattr(ea, "meta") and "val" in ea.meta:
+                ta = ea.meta["val"]
+                # if not isinstance(ta, torch.Tensor):
+                #    print("******", args)
+                #    print("******", node.args)
+                #    print("******", node.kwargs)
+                #    print("******", node.meta)
+                #    print(ta)
+                assert len(a.shape) == len(ta.shape) and a.dtype == ta.dtype, (
+                    f"Unable to run node {node!r}, target={node.target!r}, "
+                    f"node.args={node.args!r}, node.kwargs={node.kwargs!r}, "
+                    f"args={string_type(args, with_shape=True, with_device=True)}, "
+                    f"kwargs={string_type(kwargs, with_shape=True, with_device=True)}"
+                )
         try:
             outputs = node.target(*args, **(kwargs or {}))
         except RuntimeError as e:
@@ -381,7 +396,7 @@ def run_aligned(
                                           -v 1 --atol=0.1 --rtol=1
     """
     assert callable(run_cls), f"run_cls={run_cls} not a callable"
-    str_kws = dict(with_shape=True, with_device=True, with_min_max=True)
+    str_kws = dict(with_shape=True, with_device=True)
     has_cuda = any(
         (isinstance(t, torch.Tensor) and t.is_cuda)
         for t in flatten_object([args, kwargs], drop_keys=True)
@@ -592,7 +607,12 @@ def run_aligned(
                 print(f"[run_aligned] run ep.graph.nodes[{i}]: {node.op} -> {node.name!r}")
 
         if node.op == "placeholder":
-            if node.name in onnx_results:
+            is_input = node.name in placeholders
+            if node.name in onnx_results and (
+                is_input
+                or ep_state_dict[placeholders_to_state_dict[node.name]].shape
+                == onnx_results[node.name]
+            ):
                 torch_results[node.name] = (
                     onnx_results[node.name]
                     if use_tensor
@@ -602,7 +622,6 @@ def run_aligned(
                     t = torch_results[node.name]
                     print(f"[run_aligned-ep] =plh: {node.name}={string_type(t, **str_kws)}")
                 # Otherwise, it is an input.
-                is_input = node.name in placeholders
                 yield (
                     -1,
                     -1,
@@ -615,7 +634,8 @@ def run_aligned(
                         {}
                         if is_input
                         else max_diff(
-                            placeholders_to_state_dict[node.name], onnx_results[node.name]
+                            ep_state_dict[placeholders_to_state_dict[node.name]],
+                            onnx_results[node.name],
                         )
                     ),
                 )
