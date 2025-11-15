@@ -553,9 +553,13 @@ class OnnxruntimeEvaluator:
         feeds = dict(zip(node.input, inputs))
         if "" in feeds:
             cls = None
-            for k, v in feeds:
+            for k, v in feeds.items():
                 if k != "":
                     cls = v.__class__
+                    break
+            assert (
+                cls is not None
+            ), f"Unable to get input class (array or tensor), feeds={string_type(feeds)}"
             feeds[""] = cls([0])
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"

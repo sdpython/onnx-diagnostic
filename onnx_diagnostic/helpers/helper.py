@@ -1207,7 +1207,7 @@ def max_diff(
             if "dev" in d:
                 if dd is None:
                     dd = d["dev"]
-                else:
+                elif d["dev"] is not None:
                     dd += d["dev"]
 
         res = dict(abs=am, rel=rm, sum=sm, n=n, dnan=dn)
@@ -1264,7 +1264,7 @@ def max_diff(
             # out of boundary
             res = dict(abs=0.0, rel=0.0, sum=0.0, n=0.0, dnan=0)
             if dev:
-                res[dev] = dev
+                res["dev"] = dev
             return res
         if isinstance(expected, (int, float)):
             if isinstance(got, np.ndarray) and len(got.shape) == 0:
@@ -1280,7 +1280,7 @@ def max_diff(
                     dnan=0,
                 )
                 if dev:
-                    res[dev] = dev
+                    res["dev"] = dev
                 return res
             return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
         if expected.dtype in (np.complex64, np.complex128):
@@ -1362,7 +1362,7 @@ def max_diff(
             abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
         )
         if dev:
-            res[dev] = dev
+            res["dev"] = dev
         if hist:
             if isinstance(hist, bool):
                 hist = np.array([0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype)

@@ -1230,7 +1230,7 @@ def _cmd_sbs(argv: List[Any]):
     for obs in run_aligned(
         ep,
         onx,
-        run_cls=OnnxruntimeEvaluator,
+        run_cls=OnnxruntimeEvaluator,  # type: ignore[arg-type]
         atol=float(args.atol),
         rtol=float(args.rtol),
         verbose=int(args.verbose),

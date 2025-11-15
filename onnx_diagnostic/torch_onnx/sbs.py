@@ -537,9 +537,9 @@ def run_aligned(
         print(f"[run_aligned]   onnx {len(onnx_results)} constants")
         print(f"[run_aligned] common {len(mapping_onnx_to_torch)} constants")
         for k, v in torch_results.items():
-            print(f"[run_aligned-ep] +cst: {k}: {string_type(v, str_kws)}")
+            print(f"[run_aligned-ep] +cst: {k}: {string_type(v, **str_kws)}")
         for k, v in onnx_results.items():
-            print(f"[run_aligned-nx] +ini: {k}: {string_type(v, str_kws)}")
+            print(f"[run_aligned-nx] +ini: {k}: {string_type(v, **str_kws)}")
 
     onnx_args = list(args) if args else []
     if kwargs:
@@ -578,7 +578,7 @@ def run_aligned(
             if exc:
                 raise AssertionError(
                     f"unable to process node {node.op} -> {node.name!r}, "
-                    f"possible candiate are "
+                    f"possible candidate are "
                     f"{sorted(p for p in onnx_results if node.name in p)}, "
                     f"not in {sorted(onnx_results)}, "
                     f"args={string_type(args, **str_kws)}, "
