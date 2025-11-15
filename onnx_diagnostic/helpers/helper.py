@@ -1204,10 +1204,10 @@ def max_diff(
                 else:
                     for k, v in d["rep"].items():
                         drep[k] += v
-            if "dev" in d:
+            if "dev" in d and d["dev"] is not None:
                 if dd is None:
                     dd = d["dev"]
-                elif d["dev"] is not None:
+                else:
                     dd += d["dev"]
 
         res = dict(abs=am, rel=rm, sum=sm, n=n, dnan=dn)
@@ -1263,7 +1263,7 @@ def max_diff(
         if _index < begin or (end != -1 and _index >= end):
             # out of boundary
             res = dict(abs=0.0, rel=0.0, sum=0.0, n=0.0, dnan=0)
-            if dev:
+            if dev is not None:
                 res["dev"] = dev
             return res
         if isinstance(expected, (int, float)):
@@ -1279,7 +1279,7 @@ def max_diff(
                     n=1,
                     dnan=0,
                 )
-                if dev:
+                if dev is not None:
                     res["dev"] = dev
                 return res
             return dict(abs=np.inf, rel=np.inf, sum=np.inf, n=np.inf, dnan=np.inf)
@@ -1361,7 +1361,7 @@ def max_diff(
         res: Dict[str, float] = dict(  # type: ignore
             abs=abs_diff, rel=rel_diff, sum=sum_diff, n=n_diff, dnan=nan_diff, argm=argm
         )
-        if dev:
+        if dev is not None:
             res["dev"] = dev
         if hist:
             if isinstance(hist, bool):

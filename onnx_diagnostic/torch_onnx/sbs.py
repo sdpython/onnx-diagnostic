@@ -172,7 +172,17 @@ def prepare_args_kwargs(
     return new_args, new_kwargs
 
 
-def post_process_run_aligned_obs(obs: Dict[str, Any]) -> Dict[str, Union[str, float, int]]:
+def post_process_run_aligned_obs(
+    obs: Tuple[
+        Optional[int],
+        Optional[int],
+        Optional[str],
+        Optional[str],
+        Optional[str],
+        Optional[str],
+        Dict[str, Union[int, float]],
+    ],
+) -> Dict[str, Union[str, float, int]]:
     """
     Flattens an observations produced by function
     :func:`onnx_diagnostic.torch_onnx.sbs.run_aligned`.
