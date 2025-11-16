@@ -259,6 +259,31 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         got = rt.run(None, feeds)
         self.assertEqualAny(expected, got, atol=1e-4)
 
+    @hide_stdout()
+    def test_skip_simplified_layer_normalization(self):
+        node = oh.make_node(
+            "SkipSimplifiedLayerNormalization",
+            ["x", "skip", "beta", "gamma"],
+            ["Z", "", "", "bias"],
+            epsilon=1.0e-5,
+            domain="com.microsoft",
+        )
+        feeds = dict(
+            x=self._range(2, 3, 8),
+            skip=self._range(2, 3, 8, bias=3),
+            beta=self._range(8, bias=1),
+            gamma=self._range(8, bias=2),
+        )
+        rt = OnnxruntimeEvaluator(node, verbose=10, opsets={"": 22})
+        got = rt.run(None, feeds)
+        self.assertEqual(len(got), 2)
+        self.assertIsInstance(got[0], np.ndarray)
+        self.assertIsInstance(got[1], np.ndarray)
+        self.assertEqual(got[0].shape, feeds["x"].shape)
+        self.assertEqual(got[0].dtype, feeds["x"].dtype)
+        self.assertEqual(got[1].shape, feeds["x"].shape)
+        self.assertEqual(got[1].dtype, feeds["x"].dtype)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
