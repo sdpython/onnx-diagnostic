@@ -200,12 +200,12 @@ def post_process_run_aligned_obs(
         )
     )
     if "abs" in obs[-1] and obs[-1]["abs"] is not None:
-        dobs["err_abs"] = obs[-1]["abs"]
+        dobs["err_abs"] = obs[-1]["abs"]  # type: ignore[assignment]
     if "rel" in obs[-1] and obs[-1]["rel"] is not None:
-        dobs["err_rel"] = obs[-1]["rel"]
+        dobs["err_rel"] = obs[-1]["rel"]  # type: ignore[assignment]
     if "dev" in obs[-1] and obs[-1]["dev"] is not None:
-        dobs["err_dev"] = obs[-1]["dev"]
-    return dobs
+        dobs["err_dev"] = obs[-1]["dev"]  # type: ignore[assignment]
+    return dobs  # type: ignore[return-value]
 
 
 def run_aligned(
