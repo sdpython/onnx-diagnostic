@@ -431,7 +431,6 @@ class OnnxruntimeEvaluator:
             onx = node
         else:
             assert isinstance(node, NodeProto), f"Unexpected type {type(node)} for node"
-            prenodes = []
             if node.op_type == "Constant":
                 # We force the type to be a boolean.
                 ref = ExtendedReferenceEvaluator(node)
@@ -442,6 +441,7 @@ class OnnxruntimeEvaluator:
                         node.output[0], dtype_to_tensor_dtype(cst.dtype), cst.shape
                     )
                 ]
+                prenodes = []  # type: ignore[var-annotated]
             else:
                 unique_names = set()
                 vinputs = []

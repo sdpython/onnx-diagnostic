@@ -492,11 +492,7 @@ def run_aligned(
                             f"\n-- torch\n{torch_results[to]}\n-- onnx\n{r}"
                         )
                     else:
-                        print(
-                            f"[run_align-dx] discrepancies "
-                            f"{string_diff(d, with_shape=True, with_device=True)} - "
-                            f"[{to}/{o}]"
-                        )
+                        print(f"[run_align-dx] discrepancies {string_diff(d)} - [{to}/{o}]")
             return (i, i_onnx, o, to, string_type(torch_results[to], **str_kws), d)
         return None
 
