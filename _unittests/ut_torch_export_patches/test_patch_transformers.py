@@ -464,6 +464,7 @@ class TestPatchPatchTransformers(ExtTestCase):
                 atol=1e-3,
                 rtol=1,
             )
+        self.clean_dump()
 
     @requires_transformers("4.99")
     @requires_torch("2.9.99")
@@ -508,6 +509,7 @@ class TestPatchPatchTransformers(ExtTestCase):
                 atol=1e-3,
                 rtol=1,
             )
+        self.clean_dump()
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ class TestValidateWholeModels3(ExtTestCase):
         self.assertLess(summary["disc_onnx_ort_run_abs"], 3e-2)
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
+        self.clean_dump()
 
     @requires_torch("2.7")
     @hide_stdout()
@@ -59,6 +60,7 @@ class TestValidateWholeModels3(ExtTestCase):
         self.assertEqual("#1[A1s3x2]", summary["run_output_inputs2"])
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
+        self.clean_dump()
 
 
 if __name__ == "__main__":

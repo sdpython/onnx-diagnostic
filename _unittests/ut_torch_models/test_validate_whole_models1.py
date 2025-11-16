@@ -50,6 +50,7 @@ class TestValidateWholeModels1(ExtTestCase):
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
         validate_model(mid, do_run=True, verbose=2, quiet=True)
+        self.clean_dump()
 
     @hide_stdout()
     def test_d_validate_model_dtype(self):
@@ -60,6 +61,7 @@ class TestValidateWholeModels1(ExtTestCase):
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
         validate_model(mid, do_run=True, verbose=2, quiet=True)
+        self.clean_dump()
 
     @hide_stdout()
     def test_e_validate_model_export(self):
@@ -74,6 +76,7 @@ class TestValidateWholeModels1(ExtTestCase):
         )
         self.assertIsInstance(summary, dict)
         self.assertIsInstance(data, dict)
+        self.clean_dump()
 
     @requires_torch("2.10.99")
     @requires_transformers("4.54")
@@ -99,6 +102,7 @@ class TestValidateWholeModels1(ExtTestCase):
         run_ort_fusion(
             onnx_filename, output_path, num_attention_heads=2, hidden_size=192, verbose=10
         )
+        self.clean_dump()
 
     @requires_torch("2.7")
     @requires_onnxscript("0.7")
@@ -122,6 +126,7 @@ class TestValidateWholeModels1(ExtTestCase):
         self.assertLess(summary["disc_onnx_ort_run2_batch1_abs"], 1e-4)
         onnx_filename = data["onnx_filename"]
         self.assertExists(onnx_filename)
+        self.clean_dump()
 
     @requires_torch("2.7")
     @hide_stdout()
@@ -152,6 +157,7 @@ class TestValidateWholeModels1(ExtTestCase):
         run_ort_fusion(
             onnx_filename, output_path, num_attention_heads=2, hidden_size=192, verbose=10
         )
+        self.clean_dump()
 
     @requires_torch("2.7")
     @hide_stdout()
@@ -176,6 +182,7 @@ class TestValidateWholeModels1(ExtTestCase):
         self.assertIsInstance(data, dict)
         self.assertIn("disc_onnx_ort_run_abs", summary)
         self.assertLess(summary["disc_onnx_ort_run_abs"], 1e-4)
+        self.clean_dump()
 
     def test_k_filter_inputs(self):
         inputs, ds = {"a": 1, "b": 2}, {"a": 20, "b": 30}
@@ -222,6 +229,7 @@ class TestValidateWholeModels1(ExtTestCase):
         onx = onnx.load(onnx_filename)
         op_types = set(n.op_type for n in onx.graph.node)
         self.assertIn("If", op_types)
+        self.clean_dump()
 
 
 if __name__ == "__main__":

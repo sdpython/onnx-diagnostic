@@ -310,6 +310,7 @@ class TestOrtSession(ExtTestCase):
         got = wrap.run(None, feeds)
         self.assertIsInstance(got[0], torch.Tensor)
         self.assertEqualArray(expected[0], got[0])
+        self.clean_dump()
 
 
 if __name__ == "__main__":

@@ -338,6 +338,7 @@ class InferenceSessionForTorch(_InferenceSession):
     :param optimized_model_filepath:  see :class:`onnxruntime.SessionOptions`
     :param disable_aot_function_inlining:  see :class:`onnxruntime.SessionOptions`
     :param use_training_api: use onnxruntime-traning API
+    :param cpu_output: if True, force the outputs to be on CPU
     """
 
     def __init__(
@@ -353,6 +354,7 @@ class InferenceSessionForTorch(_InferenceSession):
         optimized_model_filepath: Optional[str] = None,
         disable_aot_function_inlining: Optional[bool] = None,
         use_training_api: Optional[bool] = None,
+        cpu_outputs: bool = False,
     ):
         super().__init__(
             sess,
@@ -367,6 +369,7 @@ class InferenceSessionForTorch(_InferenceSession):
             disable_aot_function_inlining=disable_aot_function_inlining,
             use_training_api=use_training_api,
         )
+        self.cpu_outputs = cpu_outputs
 
     def _get_ortvalues_from_torch_tensors(
         self, tensors: Tuple[torch.Tensor, ...], n_outputs: int
@@ -490,23 +493,36 @@ class InferenceSessionForTorch(_InferenceSession):
         feeds is a dictionary of :class:`torch.Tensor`.
         The output device is CPU even if the outputs are on CUDA.
         """
-        new_feeds = {}
+        input_names = []
+        values = ORTC.OrtValueVector()
+        device = -1
         for k, v in feeds.items():
+            device = max(device, v.get_device())
             assert hasattr(v, "__dlpack__"), f"class {type(v)} should be serialized"
             if not v.is_contiguous():
                 v = v.contiguous()
             if v.dtype == torch.bool:
-                # It does not work with dlpack
-                # unless onnxruntime updates the version it is using.
-                new_feeds[k] = ORTC.OrtValue.ortvalue_from_numpy_with_onnx_type(
-                    v.detach().numpy(), onnx.TensorProto.BOOL
-                )
+                v = v.to(torch.uint8)
+                v = ORTC.OrtValue.from_dlpack(v.__dlpack__(), True)
             else:
-                new_feeds[k] = ORTC.OrtValue.from_dlpack(v.__dlpack__(), False)
+                v = ORTC.OrtValue.from_dlpack(v.__dlpack__(), False)
+            input_names.append(k)
+            values.push_back(v)
         if self.nvtx:
-            self.torch.cuda.nvtx.range_push("run_with_ort_values")
-        ort_outputs = self.sess._sess.run_with_ort_values(
-            new_feeds, output_names or self.output_names, self.run_options
+            self.torch.cuda.nvtx.range_push("run_with_ortvaluevector")
+
+        # ort_outputs = self.sess._sess.run_with_ort_values(
+        #    new_feeds, output_names or self.output_names, self.run_options
+        # )
+        ort_outputs = ORTC.OrtValueVector()
+        out_names = output_names or self.output_names
+        self.sess._sess.run_with_ortvaluevector(
+            self.run_options,
+            input_names,
+            values,
+            out_names,
+            ort_outputs,
+            [DEVICES[-1 if self.cpu_outputs else device] for o in out_names],
         )
         if self.nvtx:
             self.torch.cuda.nvtx.range_pop()
