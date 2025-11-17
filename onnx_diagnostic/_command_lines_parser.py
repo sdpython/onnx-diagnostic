@@ -1114,10 +1114,20 @@ def get_parser_sbs() -> ArgumentParser:
             the exported onnx model. It assumes some names are common.
             The execution of the exported program and the onnx model
             are done in parallel. The device is the one used to store the
-            model and the inputs.s
+            model and the inputs.
+            Where do discrepancies start? This function tries to answer that question.
             """
         ),
-        epilog="Where do discrepancies start? This function tries to answer that question.",
+        epilog=textwrap.dedent(
+            """
+            The command line expects the following files to be saved with
+            the following function. inputs is a dictionary of the input of the model.
+
+            - torch.export.save(ep: torch.export.ExportedProgram)
+            - torch.save(**inputs)
+            - onnx.save(...)
+            """
+        ),
     )
     parser.add_argument(
         "-i",
@@ -1169,9 +1179,9 @@ def get_parser_sbs() -> ArgumentParser:
     parser.add_argument(
         "-r",
         "--ratio",
-        default=5,
+        default=100,
         required=False,
-        help="Saves the result in an excel file every <ratio> node.",
+        help="Saves the result in an excel file every <ratio> nodes.",
     )
     return parser
 
@@ -1180,7 +1190,7 @@ def _cmd_sbs(argv: List[Any]):
     import pandas
     import torch
     from .helpers import string_type
-    from .torch_onnx.sbs import run_aligned, post_process_run_aligned_obs
+    from .torch_onnx.sbs import run_aligned
     from .reference import OnnxruntimeEvaluator
 
     parser = get_parser_sbs()
@@ -1241,13 +1251,20 @@ def _cmd_sbs(argv: List[Any]):
         use_tensor=True,
         exc=False,
     ):
-        pobs = post_process_run_aligned_obs(obs)
-        data.append(pobs)
-        if "initializer" not in pobs and "placeholder" not in pobs and len(data) % ratio == 0:
-            df = pandas.DataFrame(data)
+        data.append(obs)
+        if (
+            obs.onnx_op_type != "initializer"
+            and obs.ep_target != "placeholder"
+            and len(data) % ratio == 0
+        ):
+            df = pandas.DataFrame(data).apply(
+                lambda col: col.fillna("") if col.dtype == "object" else col
+            )
             df.to_excel(args.output)
     print(f"-- final saves into {args.output!r}")
-    df = pandas.DataFrame(data)
+    df = pandas.DataFrame(data).apply(
+        lambda col: col.fillna("") if col.dtype == "object" else col
+    )
     df.to_excel(args.output)
     print("-- done")
 

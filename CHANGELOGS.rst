@@ -4,7 +4,7 @@ Change Logs
 0.8.3
 +++++
 
-* :pr:`304`: improves side-by-side comparison
+* :pr:`304`, :pr:`306`: improves side-by-side comparison
 
 0.8.2
 +++++
