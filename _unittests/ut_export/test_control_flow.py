@@ -3,14 +3,14 @@ from typing import Tuple
 import torch
 from onnxscript import script, FLOAT, INT64
 from onnxscript import opset18 as op
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch, never_test
 from onnx_diagnostic.export.control_flow import enable_code_export_control_flow, loop_for
 from onnx_diagnostic.export.control_flow_research import simple_loop_for as loop_for_r
 from onnx_diagnostic.export.api import to_onnx
 
 
 class TestControlFlow(ExtTestCase):
-    @unittest.skip("not working")
+    @never_test()
     def test_loop_one_research(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):

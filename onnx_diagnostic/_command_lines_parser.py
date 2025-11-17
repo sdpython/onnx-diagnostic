@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -625,6 +626,18 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         ),
         action=_ParseDict,
     )
+    parser.add_argument(
+        "--save-ep",
+        default="",
+        help=textwrap.dedent(
+            """
+            saves the exported program with torch.export.save
+            and the inputs sets with torch.save,
+            then command line sbs can be used to look for discrepancies.
+            """
+        ),
+    )
+
     return parser
 
 
@@ -691,6 +704,7 @@ def _cmd_validate(argv: List[Any]):
                 None if len(args.outnames.strip()) < 2 else args.outnames.strip().split(",")
             ),
             exporter_options=args.expop,
+            save_ep=args.save_ep,
         )
         print("")
         print("-- summary --")
@@ -1140,7 +1154,12 @@ def get_parser_sbs() -> ArgumentParser:
         "--ep",
         type=str,
         required=True,
-        help="exported program saved with torch.export.save",
+        help=textwrap.dedent(
+            """
+            exported program saved with torch.export.save,
+            input sets saved with torch.save,
+            """
+        ),
     )
     parser.add_argument(
         "-m",
@@ -1226,6 +1245,9 @@ def _cmd_sbs(argv: List[Any]):
             f"Unable to infer args, kwargs from inputs {string_type(inputs, with_shape=True)}"
         )
 
+    print("-- import transformers.modeling_outputs to register serialization functions")
+    with contextlib.suppress(ImportError):
+        import transformers.modeling_outputs  # noqa: F401
     print(f"-- load ep {args.ep!r}")
     begin = time.perf_counter()
     ep = torch.export.load(args.ep)

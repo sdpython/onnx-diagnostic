@@ -671,7 +671,16 @@ def _call_exporter(
     do_run,
     output_names,
     exporter_options,
+    save_ep,
 ):
+    if save_ep and dump_folder:
+        for name in data:
+            if name.startswith("inputs"):
+                if verbose:
+                    print(f"[validate_model] -- dump {name!r}")
+                filename = os.path.join(dump_folder, f"{save_ep}.{name}.pt")
+                torch.save(data[name], filename)
+
     if exporter:
         expop = exporter_options or {}
         if verbose:
@@ -711,6 +720,7 @@ def _call_exporter(
                     dump_folder=dump_folder,
                     output_names=output_names,
                     exporter_options=expop,
+                    save_ep=save_ep,
                 )
         else:
             data["inputs_export"] = data["inputs"]
@@ -831,6 +841,7 @@ def validate_model(
     output_names: Optional[List[str]] = None,
     ort_logs: bool = False,
     quiet_input_sets: Optional[Set[str]] = None,
+    save_ep: Optional[str] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -889,6 +900,8 @@ def validate_model(
     :param ort_logs: increases onnxruntime verbosity when creating the session
     :param quiet_input_sets: avoid raising an exception if the inputs belongs to that set
         even if quiet is False
+    :param save_ep: if not empty, this can be used to save the input sets and
+        the exported program
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -952,6 +965,7 @@ def validate_model(
         subfolder=subfolder,
         use_pretrained=use_pretrained,
         same_as_pretrained=same_as_pretrained,
+        save_ep=save_ep,
     )
     if dump_folder:
         with open(dump_stats, "w") as f:
@@ -1038,6 +1052,7 @@ def _validate_model_step1(
     subfolder,
     use_pretrained,
     same_as_pretrained,
+    save_ep,
 ):
     assert not do_same or do_run, (
         f"Discrepancies cannot be measured if the model is not run, "
@@ -1153,6 +1168,7 @@ def _validate_model_step1(
         do_run=do_run,
         output_names=output_names,
         exporter_options=exporter_options,
+        save_ep=save_ep,
     )
 
     cont, dump_stats = _dump_onnx_model(
@@ -1426,6 +1442,7 @@ def call_exporter(
     dump_folder: Optional[str] = None,
     output_names: Optional[List[str]] = None,
     exporter_options: Optional[Dict[str, Any]] = None,
+    save_ep: Optional[str] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Calls an exporter on a model;
@@ -1440,6 +1457,7 @@ def call_exporter(
     :param dump_folder: to dump additional information
     :param output_names: list of output names to use with the onnx exporter
     :param exporter_options: exporter options
+    :param save_ep: saves the exported program
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1456,6 +1474,8 @@ def call_exporter(
             optimization=optimization,
             do_run=do_run,
             exporter_options=exporter_options,
+            save_ep=save_ep,
+            dump_folder=dump_folder,
         )
         _restore_torch_export_export(summary)
         return summary, data
@@ -1469,6 +1489,8 @@ def call_exporter(
             optimization=optimization,
             output_names=output_names,
             exporter_options=exporter_options,
+            dump_folder=dump_folder,
+            save_ep=save_ep,
         )
         _restore_torch_export_export(summary)
         return summary, data
@@ -1483,6 +1505,7 @@ def call_exporter(
             dump_folder=dump_folder,
             output_names=output_names,
             exporter_options=exporter_options,
+            save_ep=save_ep,
         )
         _restore_torch_export_export(summary)
         return summary, data
@@ -1516,6 +1539,8 @@ def call_torch_export_export(
     optimization: Optional[str] = None,
     do_run: bool = False,
     exporter_options: Optional[Dict[str, Any]] = None,
+    dump_folder: Optional[str] = None,
+    save_ep: Optional[str] = None,
 ):
     """
     Exports a model with :func:`torch.export.export`.
@@ -1529,6 +1554,8 @@ def call_torch_export_export(
     :param optimization: optimization to do
     :param do_run: runs and compute discrepancies
     :param exporter_options: additional options given to the exporter
+    :param dump_folder: folder where to dump the exported program
+    :param save_ep: to save the exported program
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1603,6 +1630,12 @@ def call_torch_export_export(
         print("[call_torch_export_export] -- ExportedProgram")
         print(ep)
         print("[call_torch_export_export] -- End of ExportedProgram")
+
+    if dump_folder and save_ep:
+        fname = f"{save_ep}.pt2"
+        if verbose:
+            print(f"[call_torch_export_export] -- save the exported program in {fname!r}")
+        torch.export.save(ep, os.path.join(dump_folder, fname))
 
     if do_run:
         # We check for discrepancies.
@@ -1880,6 +1913,8 @@ def call_torch_export_onnx(
     optimization: Optional[str] = None,
     output_names: Optional[List[str]] = None,
     exporter_options: Optional[Dict[str, Any]] = None,
+    dump_folder: Optional[str] = None,
+    save_ep: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx.
@@ -1893,6 +1928,8 @@ def call_torch_export_onnx(
     :param optimization: optimization to do
     :param output_names: output names to use
     :param exporter_options: additional options to give the exporter
+    :param dump_folder: to know where to dump the exported program
+    :param save_ep: to save the exported program
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -1986,6 +2023,12 @@ def call_torch_export_onnx(
         return summary, data
 
     assert epo is not None, "no onnx export was found"
+    if dump_folder and save_ep:
+        fname = f"{save_ep}.pt2"
+        if verbose:
+            print(f"[call_torch_export_export] -- save the exported program in {fname!r}")
+        torch.export.save(epo.exported_program, os.path.join(dump_folder, fname))
+
     if verbose:
         print("[call_torch_export_onnx] done (export)")
     data["onnx_program"] = epo
@@ -2219,6 +2262,7 @@ def call_torch_export_custom(
     dump_folder: Optional[str] = None,
     output_names: Optional[List[str]] = None,
     exporter_options: Optional[Dict[str, Any]] = None,
+    save_ep: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Exports a model into onnx.
@@ -2233,6 +2277,7 @@ def call_torch_export_custom(
     :param dump_folder: to store additional information
     :param output_names: list of output names to use
     :param exporter_options: additional exporter options
+    :param save_ep: to save the exported program
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
     """
@@ -2345,7 +2390,11 @@ def call_torch_export_custom(
     export_options = ExportOptions(
         strict=strict,
         decomposition_table=decomposition_table,
-        save_ep=(os.path.join(dump_folder, f"{exporter}.ep") if dump_folder else None),
+        save_ep=(
+            (os.path.join(dump_folder, f"{exporter}.ep"), 2**35 if save_ep else 2**18)
+            if dump_folder
+            else None
+        ),
         **exporter_options,
     )
     options = OptimizationOptions(patterns=optimization) if optimization else None
