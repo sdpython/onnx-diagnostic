@@ -127,6 +127,11 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 optimize=True,
             )
 
+        pt2_file = f"{fileep}.ep.pt2"
+        # self.assertExists(pt2_file)
+        # ep = torch.export.load(pt2_file)
+        # diff = self.max_diff(ep.module()(**export_inputs), model.visual(**export_inputs))
+        # print("----------- diff", diff)
         self.assert_onnx_disc(
             f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{device}.{dtype}.{exporter}",
             filename,
@@ -142,6 +147,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             atol=0.02,
             rtol=10,
             ort_optimized_graph=False,
+            ep=pt2_file,
         )
 
 
