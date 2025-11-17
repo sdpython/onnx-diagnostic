@@ -115,6 +115,15 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             verbose=1,
             stop_if_static=2,
         ):
+            if exporter == "onnx-dynamo":
+                # The exported program in ONNXProgram cannot be restored.
+                ep2 = torch.export.export(
+                    model.visual,
+                    (),
+                    kwargs=export_inputs,
+                    dynamic_shapes=self.use_dyn_not_str(dynamic_shapes),
+                )
+                torch.export.save(ep2, f"{fileep}.backup.pt2")
             to_onnx(
                 model.visual,
                 kwargs=export_inputs,
@@ -127,7 +136,10 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 optimize=True,
             )
 
-        pt2_file = f"{fileep}.ep.pt2"
+        pt2_files = [f"{fileep}.backup.pt2", f"{fileep}.ep.pt2", f"{fileep}.pt2"]
+        pt2_file = [f for f in pt2_files if os.path.exists(f)]
+        assert pt2_file, f"Unable to find an existing file among {pt2_files}"
+        pt2_file = pt2_file[0]
         # self.assertExists(pt2_file)
         # ep = torch.export.load(pt2_file)
         # diff = self.max_diff(ep.module()(**export_inputs), model.visual(**export_inputs))

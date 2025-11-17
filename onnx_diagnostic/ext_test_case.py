@@ -1301,7 +1301,7 @@ class ExtTestCase(unittest.TestCase):
 
                 ep = torch.export.load(ep)
             ep_inputs = copy.deepcopy(inputs) if copy_inputs else inputs
-            ep_model = ep.module()
+            ep_model = ep.module()  # type: ignore[union-attr]
             ep_expected = (
                 ep_model(*copy.deepcopy(ep_inputs))
                 if isinstance(ep_inputs, tuple)
@@ -1355,6 +1355,11 @@ class ExtTestCase(unittest.TestCase):
         from .helpers import max_diff
 
         return max_diff(*args, **kwargs)
+
+    def use_dyn_not_str(self, *args, **kwargs):
+        from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
+
+        return use_dyn_not_str(*args, *kwargs)
 
     def subloop(self, *args, verbose: int = 0):
         "Loops over elements and calls :meth:`unittests.TestCase.subTest`."

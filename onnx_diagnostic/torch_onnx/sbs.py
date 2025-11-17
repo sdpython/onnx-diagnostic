@@ -567,10 +567,11 @@ def run_aligned(
             print(f"[run_aligned-nx] +inp: {inp.name}: {string_type(v, **str_kws)}")
 
     placeholders = {node.name for node in ep.graph.nodes if node.op == "placeholder"}
-    ep_state_dict = {**ep.state_dict, **dict(ep.named_buffers())}
+    ep_state_dict = {**ep.state_dict, **dict(ep.named_buffers(), **ep.tensor_constants)}
     placeholders_to_state_dict = {
         **{f"p_{name.replace('.', '_')}": name for name in ep.state_dict},
         **{f"b_{name.replace('.', '_')}": name for name, _ in ep.named_buffers()},
+        **{f"c_{name.replace('.', '_')}": name for name in ep.tensor_constants},
     }
     for n in onnx_results:
         if n not in placeholders:
@@ -588,6 +589,7 @@ def run_aligned(
     else:
         loop = list(enumerate(ep_graph_nodes))
 
+    already_run = set()
     ep_durations = {}
     yielded_nodes = 0
     max_abs = 0
@@ -641,8 +643,8 @@ def run_aligned(
                 yield record
             else:
                 assert node.name in placeholders_to_state_dict, (
-                    f"Unable to find placeholder {node.name!r} in "
-                    f"{sorted(placeholders_to_state_dict)}"
+                    f"Unable to find placeholder {node.name!r} (node.op={node.op!r}), "
+                    f"existing: {sorted(placeholders_to_state_dict)}"
                 )
                 torch_results[node.name] = ep_state_dict[placeholders_to_state_dict[node.name]]
                 if verbose > 1:
@@ -683,6 +685,8 @@ def run_aligned(
             continue
 
         for i_onnx in range(last_position, max_pos + 1):
+            if i_onnx in already_run:
+                continue
             node = onx.graph.node[i_onnx]
             if verbose > 1:
                 print(
@@ -695,9 +699,16 @@ def run_aligned(
                     f"mapped {yielded_nodes} maxabs {max_abs:1.5f}"
                 )
             ref = run_cls(node, **run_cls_kwargs)
-            feeds = {k: onnx_results[k] for k in node.input}
+            feeds = {k: onnx_results[k] for k in node.input if k}
+            assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
             begin = time.perf_counter()
-            res = ref.run(None, feeds)  # type: ignore[attr-defined]
+            try:
+                res = ref.run(None, feeds)  # type: ignore[attr-defined]
+            except Exception as e:
+                raise RuntimeError(
+                    f"Unable to run node {node.op_type}, domain={node.domain} "
+                    f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
+                ) from e
             duration = time.perf_counter() - begin
             assert (
                 not has_cuda
@@ -748,6 +759,7 @@ def run_aligned(
                     if tmp.err_abs is not None:
                         max_abs = max(max_abs, tmp.err_abs)
                     yield tmp
+            already_run.add(i_onnx)
 
         last_position = max_pos + 1
 
@@ -758,6 +770,8 @@ def run_aligned(
             f"to {len(onx.graph.node)}"
         )
     for i_onnx in range(last_position, len(onx.graph.node)):
+        if i_onnx in already_run:
+            continue
         node = onx.graph.node[i_onnx]
         if verbose > 1:
             print(
@@ -765,7 +779,8 @@ def run_aligned(
                 f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
             )
         ref = run_cls(node, **run_cls_kwargs)
-        feeds = {k: onnx_results[k] for k in node.input}
+        feeds = {k: onnx_results[k] for k in node.input if k}
+        assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
         begin = time.perf_counter()
         res = ref.run(None, feeds)  # type: ignore[attr-defined]
         duration = time.perf_counter() - begin
@@ -800,6 +815,8 @@ def run_aligned(
                 if tmp.err_abs is not None:
                     max_abs = max(max_abs, tmp.err_abs)
                 yield tmp
+        already_run.add(i_onnx)
+
     if verbose:
         print(f"[run_aligned] done with {yielded_nodes} mapped nodes")
         print(f"[run_aligned] max absolution error={max_abs}")
