@@ -278,9 +278,11 @@ class OnnxruntimeEvaluator:
                 outputs = self._run_local(node, inputs, results)
             else:
                 outputs = self._run(node, inputs, results)
-            for name, value in zip(node.output, outputs):
-                if name == "":
-                    continue
+            node_output = [o for o in node.output if o]
+            assert len(node_output) == len(
+                outputs
+            ), f"Length mismatch between node output={node.output} and outputs={outputs}"
+            for name, value in zip(node_output, outputs):
                 self._log(2, " + %s: %s", name, value)  # type: ignore[arg-type]
                 assert isinstance(name, str), f"unexpected type for name {type(name)}"
                 results[name] = value
@@ -384,6 +386,11 @@ class OnnxruntimeEvaluator:
         onx = shi.infer_shapes(onx)
         return onx
 
+    def _make_model_outputs(
+        self, node: NodeProto, inputs: List[ValueInfoProto]
+    ) -> Tuple[List[NodeProto], List[ValueInfoProto]]:
+        return [], [oh.make_value_info(o, TypeProto()) for o in node.output if o]
+
     @classmethod
     def _get_hidden_inputs(self, graph: GraphProto) -> Set[str]:
         """
@@ -434,6 +441,7 @@ class OnnxruntimeEvaluator:
                         node.output[0], dtype_to_tensor_dtype(cst.dtype), cst.shape
                     )
                 ]
+                prenodes = []  # type: ignore[var-annotated]
             else:
                 unique_names = set()
                 vinputs = []
@@ -447,9 +455,9 @@ class OnnxruntimeEvaluator:
                     vinputs.append(value)
 
                 # no need to run shape inference
-                voutputs = [oh.make_value_info(o, TypeProto()) for o in node.output]
+                prenodes, voutputs = self._make_model_outputs(node, vinputs)
 
-            onx = self._make_model_proto([node], vinputs, voutputs)
+            onx = self._make_model_proto([*prenodes, node], vinputs, voutputs)
             if node.op_type in {"Shape", "Size"}:
                 on_cpu = True
 
