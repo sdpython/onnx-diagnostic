@@ -1,4 +1,5 @@
 import inspect
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 import onnx
@@ -179,11 +180,14 @@ class RunAlignedRecord:
     onnx_name: Optional[str] = None
     ep_target: Optional[str] = None
     onnx_op_type: Optional[str] = None
+    onnx_id_output: Optional[int] = None
     shape_type: Optional[str] = None
     err_abs: Optional[float] = None
     err_rel: Optional[float] = None
     err_dev: Optional[float] = None
     err_nan: Optional[float] = None
+    ep_time_run: Optional[float] = None
+    onnx_time_run: Optional[float] = None
 
     def set_diff(self, diff: Dict[str, Any]):
         if diff is None:
@@ -514,12 +518,20 @@ def run_aligned(
         print(f"[run_aligned] onnx memory cuda {memory_cuda / 2**20:.3f} Mb")
     # we should be careful, torch may modified inplace the weights,
     # it may be difficult to share weights
+    ep_graph_nodes = list(ep.graph.nodes)
     torch_results: Dict[str, Any] = {}
     last_position = 0
     torch_output_names = None
-    for node in ep.graph.nodes:
+    name_to_ep_node = {}
+    for i, node in enumerate(ep_graph_nodes):
         if node.op == "output":
             torch_output_names = [n.name for n in node.args[0]]
+        assert isinstance(node.name, str), (
+            f"Unexpected type {type(node.name)} for node={node} (target={node.target}), "
+            f"args={node.args}"
+        )
+        name_to_ep_node[node.name] = i
+
     onnx_outputs_names = [o.name for o in onx.graph.output]
     assert torch_output_names is not None and len(torch_output_names) == len(
         onnx_outputs_names
@@ -568,7 +580,6 @@ def run_aligned(
                 onnx_op_type="initializer",
                 shape_type=string_type(onnx_results[n], **str_kws),
             )
-    ep_graph_nodes = list(ep.graph.nodes)
 
     if verbose == 1:
         import tqdm
@@ -577,6 +588,7 @@ def run_aligned(
     else:
         loop = list(enumerate(ep_graph_nodes))
 
+    ep_durations = {}
     yielded_nodes = 0
     max_abs = 0
     for i, node in loop:
@@ -645,7 +657,10 @@ def run_aligned(
 
         outputs = [node.name] if isinstance(node.name, str) else list(node.name)
         args, kwargs = prepare_args_kwargs(torch_results, node)
+        begin = time.perf_counter()
         new_outputs = run_fx_node(node, args, kwargs)
+        duration = time.perf_counter() - begin
+        ep_durations[i] = duration
         if isinstance(new_outputs, (torch.Tensor, int, float, list, tuple)):
             new_outputs = (new_outputs,)
 
@@ -676,12 +691,14 @@ def run_aligned(
                 )
             elif verbose == 1:
                 loop.set_description(
-                    f"ep {i}/{len(ep_graph_nodes)} nx {last_position}/{len(onx.graph.node)} "
+                    f"ep {i}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
                     f"mapped {yielded_nodes} maxabs {max_abs:1.5f}"
                 )
             ref = run_cls(node, **run_cls_kwargs)
             feeds = {k: onnx_results[k] for k in node.input}
+            begin = time.perf_counter()
             res = ref.run(None, feeds)  # type: ignore[attr-defined]
+            duration = time.perf_counter() - begin
             assert (
                 not has_cuda
                 or not any(t is not None and t.is_cuda for t in feeds.values())
@@ -705,7 +722,8 @@ def run_aligned(
                 f"res={string_type(res, with_device=True, with_shape=True)}, "
                 f"node is {pretty_onnx(node)}"
             )
-            node_output = [o for o in node.output if o]
+            list_node_output = list(node.output)
+            node_output = [o for o in list_node_output if o]
             for o, r in zip(node_output, res):
                 tmp = _loop_cmp(
                     mapping_onnx_to_torch,
@@ -720,8 +738,12 @@ def run_aligned(
                     i_onnx,
                 )
                 if tmp is not None:
+                    tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
                     tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
                     tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
+                    tmp.onnx_id_output = list_node_output.index(o)
+                    tmp.ep_time_run = ep_durations[tmp.ep_id_node]
+                    tmp.onnx_time_run = duration
                     yielded_nodes += 1
                     if tmp.err_abs is not None:
                         max_abs = max(max_abs, tmp.err_abs)
@@ -744,8 +766,11 @@ def run_aligned(
             )
         ref = run_cls(node, **run_cls_kwargs)
         feeds = {k: onnx_results[k] for k in node.input}
+        begin = time.perf_counter()
         res = ref.run(None, feeds)  # type: ignore[attr-defined]
-        node_output = [o for o in node.output if o]
+        duration = time.perf_counter() - begin
+        list_node_output = list(node.output)
+        node_output = [o for o in list_node_output if o]
         for o, r in zip(node_output, res):
             tmp = _loop_cmp(
                 mapping_onnx_to_torch,
@@ -760,8 +785,17 @@ def run_aligned(
                 i_onnx,
             )
             if tmp is not None:
-                tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
+                if tmp.ep_name in name_to_ep_node:
+                    tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
+                    tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
+                    tmp.ep_time_run = ep_durations[tmp.ep_id_node]
+                else:
+                    tmp.ep_id_node = None
+                    tmp.ep_target = None
+                    tmp.ep_name = None
                 tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
+                tmp.onnx_id_output = list_node_output.index(o)
+                tmp.onnx_time_run = duration
                 yielded_nodes += 1
                 if tmp.err_abs is not None:
                     max_abs = max(max_abs, tmp.err_abs)

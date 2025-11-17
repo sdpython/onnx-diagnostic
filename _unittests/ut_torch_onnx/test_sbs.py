@@ -200,7 +200,6 @@ class TestSideBySide(ExtTestCase):
             ),
         )
         self.assertEqual(len(results), 8)
-        self.clean_dump()
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -351,13 +350,16 @@ class TestSideBySide(ExtTestCase):
                 "ep_id_node",
                 "ep_name",
                 "ep_target",
+                "ep_time_run",
                 "err_abs",
                 "err_dev",
                 "err_nan",
                 "err_rel",
                 "onnx_id_node",
+                "onnx_id_output",
                 "onnx_name",
                 "onnx_op_type",
+                "onnx_time_run",
                 "shape_type",
             ],
             sorted(df.columns),
@@ -416,13 +418,16 @@ class TestSideBySide(ExtTestCase):
                 "ep_id_node",
                 "ep_name",
                 "ep_target",
+                "ep_time_run",
                 "err_abs",
                 "err_dev",
                 "err_nan",
                 "err_rel",
                 "onnx_id_node",
+                "onnx_id_output",
                 "onnx_name",
                 "onnx_op_type",
+                "onnx_time_run",
                 "shape_type",
             ],
             sorted(df.columns),
