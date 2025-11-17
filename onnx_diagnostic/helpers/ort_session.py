@@ -134,7 +134,13 @@ class _InferenceSession:
 
         self.sess = sess
         self.input_names = [i.name for i in sess.get_inputs()]
+        assert (
+            "" not in self.input_names
+        ), f"Input name cannot be empty but input_names={self.input_names}"
         self.output_names = [i.name for i in sess.get_outputs()]
+        assert (
+            "" not in self.input_names
+        ), f"Output name cannot be empty but output_names={self.output_names}"
         self.input_shapes = [i.shape for i in sess.get_inputs()]
         self.output_shapes = [i.shape for i in sess.get_outputs()]
         self.input_types = [i.type for i in sess.get_inputs()]
@@ -497,6 +503,7 @@ class InferenceSessionForTorch(_InferenceSession):
         values = ORTC.OrtValueVector()
         device = -1
         for k, v in feeds.items():
+            assert k != "", f"Input cannot be empty but feeds names={list(feeds)}"
             device = max(device, v.get_device())
             assert hasattr(v, "__dlpack__"), f"class {type(v)} should be serialized"
             if not v.is_contiguous():

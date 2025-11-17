@@ -1199,6 +1199,7 @@ class ExtTestCase(unittest.TestCase):
         expected: Optional[Any] = None,
         use_ort: bool = False,
         ort_optimized_graph: bool = False,
+        ep: Optional[Union["torch.export.ExportedProgram", str]] = None,  # noqa: F821
         **kwargs,
     ):
         """
@@ -1218,6 +1219,7 @@ class ExtTestCase(unittest.TestCase):
         :param copy_inputs: to copy the inputs
         :param use_ort: use :class:`onnxruntime.InferenceSession`
         :param ort_optimized_graph: dumps the optimized onnxruntime graph
+        :param ep: exported program (or saved exported program)
         :param kwargs: arguments sent to
             :class:`onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch`
         """
@@ -1245,6 +1247,7 @@ class ExtTestCase(unittest.TestCase):
                 print(f"[{vname}] file size {os.stat(name).st_size // 2**10:1.3f} kb")
         if verbose:
             print(f"[{vname}] make feeds {string_type(inputs, **kws)}")
+
         if use_ort:
             assert isinstance(
                 proto, onnx.ModelProto
@@ -1275,6 +1278,7 @@ class ExtTestCase(unittest.TestCase):
             got = sess.run(None, feeds)
         if verbose:
             print(f"[{vname}] compute expected values")
+
         if expected is None:
             if copy_inputs:
                 expected = (
@@ -1284,9 +1288,45 @@ class ExtTestCase(unittest.TestCase):
                 )
             else:
                 expected = model(*inputs) if isinstance(inputs, tuple) else model(**inputs)
+
         if verbose:
             print(f"[{vname}] expected {string_type(expected, **kws)}")
             print(f"[{vname}] obtained {string_type(got, **kws)}")
+
+        if ep:
+            if isinstance(ep, str):
+                if verbose:
+                    print(f"[{vname}] load exported program {ep!r}")
+                import torch
+
+                ep = torch.export.load(ep)
+            ep_inputs = copy.deepcopy(inputs) if copy_inputs else inputs
+            ep_model = ep.module()  # type: ignore[union-attr]
+            ep_expected = (
+                ep_model(*copy.deepcopy(ep_inputs))
+                if isinstance(ep_inputs, tuple)
+                else ep_model(**copy.deepcopy(ep_inputs))
+            )
+            if verbose:
+                print(f"[{vname}] ep_expected {string_type(ep_expected, **kws)}")
+            ep_diff = max_diff(expected, ep_expected)
+            if verbose:
+                print(f"[{vname}] ep_diff {string_diff(ep_diff)}")
+            assert (
+                isinstance(ep_diff["abs"], float)
+                and isinstance(ep_diff["rel"], float)
+                and not numpy.isnan(ep_diff["abs"])
+                and ep_diff["abs"] <= atol
+                and not numpy.isnan(ep_diff["rel"])
+                and ep_diff["rel"] <= rtol
+            ), (
+                f"discrepancies in {test_name!r} between the model "
+                f"and the exported model diff={string_diff(ep_diff)}"
+            )
+            ep_nx_diff = max_diff(ep_expected, got, flatten=True)
+            if verbose:
+                print(f"[{vname}] ep_nx_diff {string_diff(ep_nx_diff)}")
+
         diff = max_diff(expected, got, flatten=True)
         if verbose:
             print(f"[{vname}] diff {string_diff(diff)}")
@@ -1297,7 +1337,10 @@ class ExtTestCase(unittest.TestCase):
             and diff["abs"] <= atol
             and not numpy.isnan(diff["rel"])
             and diff["rel"] <= rtol
-        ), f"discrepancies in {test_name!r}, diff={string_diff(diff)}"
+        ), (
+            f"discrepancies in {test_name!r} between the model and "
+            f"the onnx model diff={string_diff(diff)}"
+        )
 
     def _debug(self):
         "Tells if DEBUG=1 is set up."
@@ -1307,6 +1350,16 @@ class ExtTestCase(unittest.TestCase):
         from .helpers import string_type
 
         return string_type(*args, **kwargs)
+
+    def max_diff(self, *args, **kwargs):
+        from .helpers import max_diff
+
+        return max_diff(*args, **kwargs)
+
+    def use_dyn_not_str(self, *args, **kwargs):
+        from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
+
+        return use_dyn_not_str(*args, *kwargs)
 
     def subloop(self, *args, verbose: int = 0):
         "Loops over elements and calls :meth:`unittests.TestCase.subTest`."

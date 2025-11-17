@@ -112,6 +112,10 @@ def to_onnx(
             ort_fusions.optimize_for_ort(epo.model)
         if filename:
             epo.save(filename, external_data=True)
+        if save_ep:
+            if isinstance(save_ep, tuple):
+                save_ep = save_ep[0]
+            torch.export.save(epo.exported_program, f"{save_ep}.pt2")
         return epo
 
     if exporter == "modelbuilder":

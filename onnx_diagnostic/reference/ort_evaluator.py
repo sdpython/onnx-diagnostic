@@ -564,18 +564,14 @@ class OnnxruntimeEvaluator:
             onx, sess = self._get_sess(node, inputs)
             self._cache[key] = onx, sess
 
-        feeds = dict(zip(node.input, inputs))
-        if "" in feeds:
-            cls = None
-            for k, v in feeds.items():
-                if k != "":
-                    cls = v.__class__
-                    break
-            assert (
-                cls is not None
-            ), f"Unable to get input class (array or tensor), feeds={string_type(feeds)}"
-            feeds[""] = cls([0])
-
+        feeds = {}
+        for i, val in zip(node.input, inputs):
+            if i == "":
+                assert (
+                    val is None
+                ), f"input name={i!r} but val={string_type(val, with_shape=True)}"
+                continue
+            feeds[i] = val
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
         outputs = list(sess.run(None, feeds))
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
