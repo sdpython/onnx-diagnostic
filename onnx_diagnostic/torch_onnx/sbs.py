@@ -674,6 +674,11 @@ def run_aligned(
                     f"[run_aligned] run onx.graph.node[{i_onnx}]: "
                     f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
                 )
+            elif verbose == 1:
+                loop.set_description(
+                    f"ep {i}/{len(ep_graph_nodes)} nx {last_position}/{len(onx.graph.node)} "
+                    f"mapped {yielded_nodes} maxabs {max_abs:1.5f}"
+                )
             ref = run_cls(node, **run_cls_kwargs)
             feeds = {k: onnx_results[k] for k in node.input}
             res = ref.run(None, feeds)  # type: ignore[attr-defined]
@@ -700,7 +705,8 @@ def run_aligned(
                 f"res={string_type(res, with_device=True, with_shape=True)}, "
                 f"node is {pretty_onnx(node)}"
             )
-            for o, r in zip(node.output, res):
+            node_output = [o for o in node.output if o]
+            for o, r in zip(node_output, res):
                 tmp = _loop_cmp(
                     mapping_onnx_to_torch,
                     torch_results,
@@ -739,7 +745,8 @@ def run_aligned(
         ref = run_cls(node, **run_cls_kwargs)
         feeds = {k: onnx_results[k] for k in node.input}
         res = ref.run(None, feeds)  # type: ignore[attr-defined]
-        for o, r in zip(node.output, res):
+        node_output = [o for o in node.output if o]
+        for o, r in zip(node_output, res):
             tmp = _loop_cmp(
                 mapping_onnx_to_torch,
                 torch_results,

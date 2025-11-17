@@ -1114,10 +1114,20 @@ def get_parser_sbs() -> ArgumentParser:
             the exported onnx model. It assumes some names are common.
             The execution of the exported program and the onnx model
             are done in parallel. The device is the one used to store the
-            model and the inputs.s
+            model and the inputs.
+            Where do discrepancies start? This function tries to answer that question.
             """
         ),
-        epilog="Where do discrepancies start? This function tries to answer that question.",
+        epilog=textwrap.dedent(
+            """
+            The command line expects the following files to be saved with
+            the following function. inputs is a dictionary of the input of the model.
+
+            - torch.export.save(ep: torch.export.ExportedProgram)
+            - torch.save(**inputs)
+            - onnx.save(...)
+            """
+        ),
     )
     parser.add_argument(
         "-i",
@@ -1244,7 +1254,7 @@ def _cmd_sbs(argv: List[Any]):
         data.append(obs)
         if (
             obs.onnx_op_type != "initializer"
-            and onnx.ep_target != "placeholder"
+            and obs.ep_target != "placeholder"
             and len(data) % ratio == 0
         ):
             df = pandas.DataFrame(data).apply(
