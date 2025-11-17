@@ -736,6 +736,8 @@ def run_aligned(
             list_node_output = list(node.output)
             node_output = [o for o in list_node_output if o]
             for o, r in zip(node_output, res):
+                if r is None or o is None:
+                    continue
                 tmp = _loop_cmp(
                     mapping_onnx_to_torch,
                     torch_results,
@@ -787,6 +789,8 @@ def run_aligned(
         list_node_output = list(node.output)
         node_output = [o for o in list_node_output if o]
         for o, r in zip(node_output, res):
+            if r is None or o is None:
+                continue
             tmp = _loop_cmp(
                 mapping_onnx_to_torch,
                 torch_results,
