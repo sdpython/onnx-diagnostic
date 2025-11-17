@@ -1180,7 +1180,7 @@ def _cmd_sbs(argv: List[Any]):
     import pandas
     import torch
     from .helpers import string_type
-    from .torch_onnx.sbs import run_aligned, post_process_run_aligned_obs
+    from .torch_onnx.sbs import run_aligned
     from .reference import OnnxruntimeEvaluator
 
     parser = get_parser_sbs()
@@ -1241,9 +1241,12 @@ def _cmd_sbs(argv: List[Any]):
         use_tensor=True,
         exc=False,
     ):
-        pobs = post_process_run_aligned_obs(obs)
-        data.append(pobs)
-        if "initializer" not in pobs and "placeholder" not in pobs and len(data) % ratio == 0:
+        data.append(obs)
+        if (
+            obs.onnx_op_type != "initializer"
+            and onnx.ep_target != "placeholder"
+            and len(data) % ratio == 0
+        ):
             df = pandas.DataFrame(data).apply(
                 lambda col: col.fillna("") if col.dtype == "object" else col
             )
