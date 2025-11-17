@@ -10,7 +10,7 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
-from onnx_diagnostic.torch_onnx.sbs import run_aligned, post_process_run_aligned_obs
+from onnx_diagnostic.torch_onnx.sbs import run_aligned, RunAlignedRecord
 from onnx_diagnostic.export.api import to_onnx
 
 
@@ -20,6 +20,24 @@ class TestSideBySide(ExtTestCase):
         import torch
 
         cls.torch = torch
+
+    def test_run_aligned_record(self):
+        r = RunAlignedRecord(
+            ep_id_node=-1,
+            onnx_id_node=-1,
+            ep_name="A",
+            onnx_name="B",
+            ep_target="C",
+            onnx_op_type="D",
+            shape_type="E",
+            err_abs=0.1,
+            err_rel=0.2,
+            err_dev=0.3,
+            err_nan=0.4,
+        )
+        sr = str(r)
+        self.assertIn("RunAlignedRecord(", sr)
+        self.assertIn("shape_type='E'", sr)
 
     @hide_stdout()
     @unittest.skipIf(to_onnx is None, "to_onnx not installed")
@@ -48,7 +66,7 @@ class TestSideBySide(ExtTestCase):
                 run_cls=ExtendedReferenceEvaluator,
                 atol=1e-5,
                 rtol=1e-5,
-                verbose=1,
+                verbose=10,
             ),
         )
         self.assertEqual(len(results), 7)
@@ -83,7 +101,7 @@ class TestSideBySide(ExtTestCase):
                 run_cls=ExtendedReferenceEvaluator,
                 atol=1e-5,
                 rtol=1e-5,
-                verbose=1,
+                verbose=10,
             ),
         )
         self.assertEqual(len(results), 6)
@@ -115,7 +133,7 @@ class TestSideBySide(ExtTestCase):
                 run_cls=ExtendedReferenceEvaluator,
                 atol=1e-5,
                 rtol=1e-5,
-                verbose=1,
+                verbose=10,
             ),
         )
         self.assertEqual(len(results), 6)
@@ -285,7 +303,10 @@ class TestSideBySide(ExtTestCase):
             ),
         )
         self.assertEqual(len(results), 14)
-        self.assertEqual([r[-1].get("dev", 0) for r in results], [0] * 14)
+        self.assertEqual(
+            [r.err_dev for r in results],
+            [None, None, None, None, None, None, None, None, 0, 0, 0, 0, 0, 0],
+        )
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -323,7 +344,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        df = pandas.DataFrame(list(map(post_process_run_aligned_obs, results)))
+        df = pandas.DataFrame(list(results))
         df.to_excel(self.get_dump_file("test_sbs_model_with_weights_custom.xlsx"))
         self.assertEqual(
             [
@@ -332,6 +353,7 @@ class TestSideBySide(ExtTestCase):
                 "ep_target",
                 "err_abs",
                 "err_dev",
+                "err_nan",
                 "err_rel",
                 "onnx_id_node",
                 "onnx_name",
@@ -341,7 +363,10 @@ class TestSideBySide(ExtTestCase):
             sorted(df.columns),
         )
         self.assertEqual(len(results), 12)
-        self.assertEqual([r[-1].get("dev", 0) for r in results], [0] * 12)
+        self.assertEqual(
+            [r.err_dev for r in results],
+            [None, None, None, None, None, None, None, None, None, 0, 0, 0],
+        )
         self.assertEqual(
             [-1.0, -1.0, -1.0, -1.0, -10.0, -10.0, -10.0, -10.0, -1.0, 0.0, 1.0, 2.0],
             df["onnx_id_node"].fillna(-10).tolist(),
@@ -384,7 +409,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        df = pandas.DataFrame(list(map(post_process_run_aligned_obs, results)))
+        df = pandas.DataFrame(list(results))
         df.to_excel(self.get_dump_file("test_sbs_model_with_weights_dynamo.xlsx"))
         self.assertEqual(
             [
@@ -393,6 +418,7 @@ class TestSideBySide(ExtTestCase):
                 "ep_target",
                 "err_abs",
                 "err_dev",
+                "err_nan",
                 "err_rel",
                 "onnx_id_node",
                 "onnx_name",
@@ -402,7 +428,10 @@ class TestSideBySide(ExtTestCase):
             sorted(df.columns),
         )
         self.assertEqual(len(results), 12)
-        self.assertEqual([r[-1].get("dev", 0) for r in results], [0] * 12)
+        self.assertEqual(
+            [r.err_dev for r in results],
+            [None, None, None, None, None, None, None, None, None, 0, 0, 0],
+        )
         self.assertEqual(
             [-1.0, -1.0, -1.0, -1.0, -10.0, -10.0, -10.0, -10.0, -1.0, 0.0, 1.0, 2.0],
             df["onnx_id_node"].fillna(-10).tolist(),

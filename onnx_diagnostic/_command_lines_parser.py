@@ -1169,9 +1169,9 @@ def get_parser_sbs() -> ArgumentParser:
     parser.add_argument(
         "-r",
         "--ratio",
-        default=5,
+        default=100,
         required=False,
-        help="Saves the result in an excel file every <ratio> node.",
+        help="Saves the result in an excel file every <ratio> nodes.",
     )
     return parser
 
@@ -1244,10 +1244,14 @@ def _cmd_sbs(argv: List[Any]):
         pobs = post_process_run_aligned_obs(obs)
         data.append(pobs)
         if "initializer" not in pobs and "placeholder" not in pobs and len(data) % ratio == 0:
-            df = pandas.DataFrame(data)
+            df = pandas.DataFrame(data).apply(
+                lambda col: col.fillna("") if col.dtype == "object" else col
+            )
             df.to_excel(args.output)
     print(f"-- final saves into {args.output!r}")
-    df = pandas.DataFrame(data)
+    df = pandas.DataFrame(data).apply(
+        lambda col: col.fillna("") if col.dtype == "object" else col
+    )
     df.to_excel(args.output)
     print("-- done")
 

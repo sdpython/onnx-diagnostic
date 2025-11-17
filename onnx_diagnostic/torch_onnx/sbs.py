@@ -1,4 +1,5 @@
 import inspect
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 import onnx
 import onnx.helper as oh
@@ -6,7 +7,7 @@ import numpy as np
 import torch
 from ..helpers import string_type, string_diff, max_diff, flatten_object
 from ..helpers.onnx_helper import pretty_onnx
-from ..helpers.torch_helper import to_numpy, from_numpy
+from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor
 
 
 def validate_fx_tensor(
@@ -170,42 +171,31 @@ def prepare_args_kwargs(
     return new_args, new_kwargs
 
 
-def post_process_run_aligned_obs(
-    obs: Tuple[
-        Optional[int],
-        Optional[int],
-        Optional[str],
-        Optional[str],
-        Optional[str],
-        Optional[str],
-        Dict[str, Optional[Union[int, float]]],
-    ],
-) -> Dict[str, Optional[Union[str, float, int]]]:
-    """
-    Flattens an observations produced by function
-    :func:`onnx_diagnostic.torch_onnx.sbs.run_aligned`.
-    """
-    dobs = dict(
-        zip(
-            [
-                "ep_id_node",
-                "onnx_id_node",
-                "ep_name",
-                "onnx_name",
-                "ep_target",
-                "onnx_op_type",
-                "shape_type",
-            ],
-            obs,
-        )
-    )
-    if "abs" in obs[-1] and obs[-1]["abs"] is not None:
-        dobs["err_abs"] = obs[-1]["abs"]  # type: ignore[assignment]
-    if "rel" in obs[-1] and obs[-1]["rel"] is not None:
-        dobs["err_rel"] = obs[-1]["rel"]  # type: ignore[assignment]
-    if "dev" in obs[-1] and obs[-1]["dev"] is not None:
-        dobs["err_dev"] = obs[-1]["dev"]  # type: ignore[assignment]
-    return dobs  # type: ignore[return-value]
+@dataclass
+class RunAlignedRecord:
+    ep_id_node: Optional[int] = None
+    onnx_id_node: Optional[int] = None
+    ep_name: Optional[str] = None
+    onnx_name: Optional[str] = None
+    ep_target: Optional[str] = None
+    onnx_op_type: Optional[str] = None
+    shape_type: Optional[str] = None
+    err_abs: Optional[float] = None
+    err_rel: Optional[float] = None
+    err_dev: Optional[float] = None
+    err_nan: Optional[float] = None
+
+    def set_diff(self, diff: Dict[str, Any]):
+        if diff is None:
+            return
+        if "abs" in diff:
+            self.err_abs = diff["abs"]
+        if "rel" in diff:
+            self.err_rel = diff["rel"]
+        if "dev" in diff:
+            self.err_dev = diff["dev"]
+        if "nan" in diff:
+            self.err_nan = diff["nan"]
 
 
 def run_aligned(
@@ -229,7 +219,7 @@ def run_aligned(
     rtol: Optional[float] = None,
     verbose: int = 0,
     exc: bool = True,
-) -> Iterator[Tuple[Any, ...]]:
+) -> Iterator[RunAlignedRecord]:
     """
     Runs in parallel both the exported program
     and the onnx proto and looks for discrepancies.
@@ -247,18 +237,7 @@ def run_aligned(
     :param rtol: relative tolerance
     :param verbose: verbosity level
     :param exc: stops if an exception
-    :return: a list of tuples containing the results, they come in tuple
-
-    Each tuple is:
-
-    - ep_id_node
-    - onnx_id_node
-    - ep_name
-    - onnx_name
-    - ep target name
-    - onnx op _type
-    - ep or onnx shape and type
-    - difference
+    :return: a list of :class:`RunAlignedRecord`
 
     Example:
 
@@ -269,13 +248,10 @@ def run_aligned(
         import pandas
         import torch
         from onnx_diagnostic.reference import (
-            # This can be replace by any runtime taking NodeProto as an input.
+            # This can be replaced by any runtime taking NodeProto as an input.
             ExtendedReferenceEvaluator as ReferenceEvaluator,
         )
-        from onnx_diagnostic.torch_onnx.sbs import (
-            run_aligned,
-            post_process_run_aligned_obs,
-        )
+        from onnx_diagnostic.torch_onnx.sbs import run_aligned
 
 
         class Model(torch.nn.Module):
@@ -296,16 +272,12 @@ def run_aligned(
             Model(), (x,), dynamic_shapes=({0: torch.export.Dim("batch")},)
         ).model_proto
         results = list(
-            map(
-                post_process_run_aligned_obs,
-                run_aligned(
-                    ep, onx, ReferenceEvaluator, (x,), atol=1e-5, rtol=1e-5, verbose=1
-                ),
-            ),
+            run_aligned(ep, onx, ReferenceEvaluator, (x,), atol=1e-5, rtol=1e-5, verbose=1)
         )
         print("------------")
         print("final results")
         df = pandas.DataFrame(results)
+        df = df.apply(lambda col: col.fillna("") if col.dtype == "object" else col)
         print(df)
 
 
@@ -361,10 +333,7 @@ def run_aligned(
         import pandas
         import onnx
         import torch
-        from onnx_diagnostic.torch_onnx.sbs import (
-            run_aligned,
-            post_process_run_aligned_obs,
-        )
+        from onnx_diagnostic.torch_onnx.sbs import run_aligned
         from onnx_diagnostic.reference import OnnxruntimeEvaluator
 
 
@@ -374,23 +343,21 @@ def run_aligned(
 
 
         results = list(
-            map(
-                post_process_run_aligned_obs,
-                run_aligned(
-                    ep,
-                    onx,
-                    OnnxruntimeEvaluator,
-                    inputs,
-                    atol=1e-5,
-                    rtol=1e-5,
-                    verbose=1,
-                    use_tensor=True,
-                ),
-            ),
+            run_aligned(
+                ep,
+                onx,
+                OnnxruntimeEvaluator,
+                inputs,
+                atol=1e-5,
+                rtol=1e-5,
+                verbose=1,
+                use_tensor=True,
+            )
         )
         print("------------")
         print("final results")
         df = pandas.DataFrame(results)
+        df = df.apply(lambda col: col.fillna("") if col.dtype == "object" else col)
         print(df)
 
     A command line can also be run:
@@ -469,13 +436,13 @@ def run_aligned(
         i_onnx,
     ):
         onnx_results[o] = _check_tensor_(o, r)
-        if verbose:
+        if verbose > 1:
             print(f"[run_aligned-nx] +res: {o}={string_type(r, **str_kws)}")
 
         to = mapping_onnx_to_torch.get(o, o)
         if to in torch_results:
             d = max_diff(torch_results[to], r)
-            if verbose:
+            if verbose > 1:
                 if o == to:
                     print(f"[run_aligned-==] cmp {to}: {string_diff(d)}")
                 else:
@@ -493,7 +460,15 @@ def run_aligned(
                         )
                     else:
                         print(f"[run_align-dx] discrepancies {string_diff(d)} - [{to}/{o}]")
-            return (i, i_onnx, o, to, string_type(torch_results[to], **str_kws), d)
+            r = RunAlignedRecord(
+                ep_id_node=i,
+                onnx_id_node=i_onnx,
+                ep_name=o,
+                onnx_name=to,
+                shape_type=string_type(torch_results[to], **str_kws),
+            )
+            r.set_diff(d)
+            return r
         return None
 
     if verbose:
@@ -517,34 +492,29 @@ def run_aligned(
 
     if verbose:
         print(f"[run_aligned] handles {len(onx.graph.initializer)} initializers from onnx")
+    memory_cpu = 0
+    memory_cuda = 0
     onnx_results: Dict[str, Any] = {}
     for init in onx.graph.initializer:  # type: ignore
         positions[init.name] = -1
-        t = run_cls(
-            _make_node_from_initializer(init),
-            **run_cls_kwargs,
-        ).run(  # type: ignore[attr-defined]
-            None, {}
-        )[
-            0
-        ]
+        t = to_tensor(init)
         if default_device and t.numel() >= 1024:
             # Let's force its way to cuda (should check the device has well).
             t = t.to(default_device)
+        size = t.element_size() * t.numel()
+        if t.is_cuda:
+            memory_cuda += size
+        else:
+            memory_cpu += size
         onnx_results[init.name] = _check_tensor_(init.name, t, flip_type=True)
-        if init.name.startswith("init"):
-            # not a weight
-            continue
 
     if verbose:
-        print(f"[run_aligned] handles common {len(onnx_results)} initializer from torch")
+        print(f"[run_aligned] handled {len(onnx_results)} initializers from onnx")
+        print(f"[run_aligned] onnx memory cpu {memory_cpu / 2**20:.3f} Mb")
+        print(f"[run_aligned] onnx memory cuda {memory_cuda / 2**20:.3f} Mb")
     # we should be careful, torch may modified inplace the weights,
     # it may be difficult to share weights
     torch_results: Dict[str, Any] = {}
-    if verbose:
-        print(
-            f"[run_aligned] handles other constant from {len(ep.graph.nodes)} nodes from torch"
-        )
     last_position = 0
     torch_output_names = None
     for node in ep.graph.nodes:
@@ -560,13 +530,16 @@ def run_aligned(
     mapping_onnx_to_torch = dict(zip(onnx_outputs_names, torch_output_names))
 
     if verbose:
-        print(f"[run_aligned]  torch {len(torch_results)} constants")
         print(f"[run_aligned]   onnx {len(onnx_results)} constants")
-        print(f"[run_aligned] common {len(mapping_onnx_to_torch)} constants")
-        for k, v in torch_results.items():
-            print(f"[run_aligned-ep] +cst: {k}: {string_type(v, **str_kws)}")
-        for k, v in onnx_results.items():
-            print(f"[run_aligned-nx] +ini: {k}: {string_type(v, **str_kws)}")
+        print(f"[run_aligned]   onnx {len(onx.graph.input)} inputs")
+        print(f"[run_aligned]   onnx {len(onx.graph.output)} outputs")
+        print(f"[run_aligned] common {len(mapping_onnx_to_torch)} outputs")
+        print(f"[run_aligned] run_cls_kwargs={run_cls_kwargs}")
+        if verbose > 1:
+            for k, v in torch_results.items():
+                print(f"[run_aligned-ep] +cst: {k}: {string_type(v, **str_kws)}")
+            for k, v in onnx_results.items():
+                print(f"[run_aligned-nx] +ini: {k}: {string_type(v, **str_kws)}")
 
     onnx_args = list(args) if args else []
     if kwargs:
@@ -589,19 +562,25 @@ def run_aligned(
     }
     for n in onnx_results:
         if n not in placeholders:
-            yield (
-                None,
-                -1,
-                None,
-                n,
-                None,
-                "initializer",
-                string_type(onnx_results[n], **str_kws),
-                {},
+            yield RunAlignedRecord(
+                onnx_id_node=-1,
+                onnx_name=n,
+                onnx_op_type="initializer",
+                shape_type=string_type(onnx_results[n], **str_kws),
             )
     ep_graph_nodes = list(ep.graph.nodes)
-    for i, node in enumerate(ep_graph_nodes):
-        if verbose:
+
+    if verbose == 1:
+        import tqdm
+
+        loop = tqdm.tqdm(list(enumerate(ep_graph_nodes)))
+    else:
+        loop = list(enumerate(ep_graph_nodes))
+
+    yielded_nodes = 0
+    max_abs = 0
+    for i, node in loop:
+        if verbose > 1:
             if node.op == "call_function":
                 print(
                     f"[run_aligned] run ep.graph.nodes[{i}]: "
@@ -609,6 +588,11 @@ def run_aligned(
                 )
             else:
                 print(f"[run_aligned] run ep.graph.nodes[{i}]: {node.op} -> {node.name!r}")
+        elif verbose == 1:
+            loop.set_description(
+                f"ep {i}/{len(ep_graph_nodes)} nx {last_position}/{len(onx.graph.node)} "
+                f"mapped {yielded_nodes} maxabs {max_abs:1.5f}"
+            )
 
         if node.op == "placeholder":
             is_input = node.name in placeholders
@@ -622,44 +606,40 @@ def run_aligned(
                     if use_tensor
                     else torch.from_numpy(onnx_results[node.name])
                 )
-                if verbose:
+                if verbose > 1:
                     t = torch_results[node.name]
                     print(f"[run_aligned-ep] =plh: {node.name}={string_type(t, **str_kws)}")
                 # Otherwise, it is an input.
-                yield (
-                    -1,
-                    -1,
-                    node.name,
-                    node.name,
-                    "input" if is_input else "placeholder",
-                    "input" if is_input else "initializer",
-                    string_type(t, **str_kws),
-                    (
-                        {}
-                        if is_input
-                        else max_diff(
+                record = RunAlignedRecord(
+                    ep_id_node=-1,
+                    onnx_id_node=-1,
+                    ep_name=node.name,
+                    onnx_name=node.name,
+                    ep_target=("input" if is_input else "placeholder"),
+                    onnx_op_type=("input" if is_input else "initializer"),
+                    shape_type=string_type(t, **str_kws),
+                )
+                if not is_input:
+                    record.set_diff(
+                        max_diff(
                             ep_state_dict[placeholders_to_state_dict[node.name]],
                             onnx_results[node.name],
                         )
-                    ),
-                )
+                    )
+                yield record
             else:
                 assert node.name in placeholders_to_state_dict, (
                     f"Unable to find placeholder {node.name!r} in "
                     f"{sorted(placeholders_to_state_dict)}"
                 )
                 torch_results[node.name] = ep_state_dict[placeholders_to_state_dict[node.name]]
-                if verbose:
+                if verbose > 1:
                     print(f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}")
-                yield (
-                    -1,
-                    None,
-                    node.name,
-                    None,
-                    "placeholder",
-                    None,
-                    string_type(torch_results[node.name], **str_kws),
-                    {},
+                yield RunAlignedRecord(
+                    ep_id_node=-1,
+                    ep_name=node.name,
+                    ep_target="placeholder",
+                    shape_type=string_type(torch_results[node.name], **str_kws),
                 )
             continue
 
@@ -675,7 +655,7 @@ def run_aligned(
 
         for k, v in zip(outputs, new_outputs):
             torch_results[k] = v
-        if verbose:
+        if verbose > 1:
             for k, v in zip(outputs, new_outputs):
                 print(f"[run_aligned-ep] +res: {k}={string_type(v, **str_kws)}")
 
@@ -689,7 +669,7 @@ def run_aligned(
 
         for i_onnx in range(last_position, max_pos + 1):
             node = onx.graph.node[i_onnx]
-            if verbose:
+            if verbose > 1:
                 print(
                     f"[run_aligned] run onx.graph.node[{i_onnx}]: "
                     f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
@@ -734,21 +714,24 @@ def run_aligned(
                     i_onnx,
                 )
                 if tmp is not None:
-                    yield (
-                        *tmp[:4],
-                        str(ep_graph_nodes[tmp[0]].target),
-                        onx.graph.node[tmp[1]].op_type,
-                        *tmp[-2:],
-                    )
+                    tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
+                    tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
+                    yielded_nodes += 1
+                    if tmp.err_abs is not None:
+                        max_abs = max(max_abs, tmp.err_abs)
+                    yield tmp
 
         last_position = max_pos + 1
 
     # complete the execution of the onnx graph
     if verbose:
-        print(f"[run_aligned] complete execution of onnx graph from pos={last_position}")
+        print(
+            f"[run_aligned] complete execution of onnx graph from pos={last_position} "
+            f"to {len(onx.graph.node)}"
+        )
     for i_onnx in range(last_position, len(onx.graph.node)):
         node = onx.graph.node[i_onnx]
-        if verbose:
+        if verbose > 1:
             print(
                 f"[run_aligned] run onx.graph.node[{i_onnx}]: "
                 f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
@@ -770,9 +753,12 @@ def run_aligned(
                 i_onnx,
             )
             if tmp is not None:
-                yield (
-                    *tmp[:4],
-                    str(ep_graph_nodes[tmp[0]].target),
-                    onx.graph.node[tmp[1]].op_type,
-                    *tmp[-2:],
-                )
+                tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
+                tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
+                yielded_nodes += 1
+                if tmp.err_abs is not None:
+                    max_abs = max(max_abs, tmp.err_abs)
+                yield tmp
+    if verbose:
+        print(f"[run_aligned] done with {yielded_nodes} mapped nodes")
+        print(f"[run_aligned] max absolution error={max_abs}")
