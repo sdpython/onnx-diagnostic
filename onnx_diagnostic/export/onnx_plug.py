@@ -28,7 +28,7 @@ class VerifyResult:
 
     eager_outputs: TUPLE_TENSORS
     onnx_output: TUPLE_TENSORS
-    diffs: Tuple[Dict[str, float]]
+    diffs: Tuple[Dict[str, float], ...]
 
 
 class EagerDirectReplacementWithOnnx:
@@ -247,8 +247,8 @@ class EagerDirectReplacementWithOnnx:
         sess = OnnxruntimeEvaluator(self.function_proto)
         feeds = dict(zip(sess.input_names, args))
         got = sess.run(None, feeds)
-        diffs = [max_diff(e, g) for e, g in zip(expected, got)]
-        return VerifyResult(eager_outputs=expected, onnx_output=tuple(got), diffs=diffs)
+        diffs = tuple(max_diff(e, g) for e, g in zip(expected, got))
+        return VerifyResult(eager_outputs=expected, onnx_output=tuple(got), diffs=diffs)  # type: ignore[arg-type]
 
     def custom_converter(
         self,
@@ -261,7 +261,7 @@ class EagerDirectReplacementWithOnnx:
         """
 
         def converter(
-            g: "GraphBuilder",  # noqa: F821
+            g: Any,  # GraphBuilder
             sts: Optional[Dict[str, Any]],
             outputs: List[str],
             *args,
