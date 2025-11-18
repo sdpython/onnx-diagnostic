@@ -379,9 +379,11 @@ class TestPatchPatchTransformers(ExtTestCase):
     @requires_transformers("4.55")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_patched_qwen2_5_vl_vision_attention_forward(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_helper import (
+            _is_torchdynamo_exporting,
+        )
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
             patched_Qwen2_5_VLVisionAttention,
-            _is_torchdynamo_exporting,
         )
 
         config = get_cached_configuration("Qwen/Qwen2.5-VL-7B-Instruct")
