@@ -8,6 +8,7 @@ onnx_diagnostic.export
     api
     control_flow
     dynamic_shapes
+    onnx_plug
     shape_helper
     validate
 

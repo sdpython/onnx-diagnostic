@@ -36,7 +36,7 @@ def create_global_dispatcher():
 
 @contextlib.contextmanager
 def enable_code_export_control_flow():
-    """Enables the code means to be exported."""
+    """Enables the code meant to be exported."""
     global _TEST_EXPORT
     old = _TEST_EXPORT
     _TEST_EXPORT = True
