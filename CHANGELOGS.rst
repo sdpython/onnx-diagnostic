@@ -4,6 +4,7 @@ Change Logs
 0.8.3
 +++++
 
+* :pr:`310`: split patches into multiple files 
 * :pr:`308`: add option --save_ep to dump the exported program as well as torch input
 * :pr:`304`, :pr:`306`: improves side-by-side comparison, creates command line sbs
 

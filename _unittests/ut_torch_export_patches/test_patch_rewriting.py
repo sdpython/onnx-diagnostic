@@ -1,6 +1,6 @@
 import unittest
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2 import (
     rewrite_loop_for_square_mask,
 )
 from onnx_diagnostic.torch_export_patches.patch_module_helper import code_needing_rewriting
