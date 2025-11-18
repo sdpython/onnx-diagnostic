@@ -1,6 +1,6 @@
 import inspect
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import onnx
 import torch
 from ..helpers import max_diff
@@ -49,6 +49,7 @@ class EagerDirectReplacementWithOnnx:
     :param n_outputs: same for the number of outputs,
         only tensors must be counted
     :param name: the name of the custom op, the function name if not specified
+    :param kwargs: constants
 
     Here is an example:
 
@@ -141,6 +142,7 @@ class EagerDirectReplacementWithOnnx:
         n_inputs: Optional[int] = None,
         n_outputs: Optional[int] = None,
         name: Optional[str] = None,
+        kwargs: Optional[Dict[str, Union[int, float]]] = None,
     ):
         assert isinstance(
             function_proto, onnx.FunctionProto
@@ -152,7 +154,14 @@ class EagerDirectReplacementWithOnnx:
         self.function_proto = function_proto
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
-        self.name = name or eager_fn.__name__
+        self.name = name or eager_fn.__qualname__.replace("<local>", "L").replace(
+            "<lambda>", "l"
+        ).replace(".", "_")
+        self.kwargs = kwargs
+        assert kwargs is None or all(isinstance(v, (int, float)) for v in kwargs.values()), (
+            f"Only int or floats are allowed for kwargs={kwargs}, one of them "
+            f"does not respect that constraint."
+        )
         sig = inspect.signature(self.eager_fn)
         params = list(sig.parameters)
         assert (
@@ -190,7 +199,7 @@ class EagerDirectReplacementWithOnnx:
     def __call__(self, *args):
         """Calls eager_fn or shape_fn if the model is being exported."""
         if is_exporting():
-            return self.shape_fn(*args)
+            return self.torch_op(*args)
         return self.eager_fn(*args)
 
     def _registers(self):
@@ -266,10 +275,16 @@ class EagerDirectReplacementWithOnnx:
             outputs: List[str],
             *args,
         ) -> Any:
-            if not g.has_local_function(self.name, self.domain):
+            if not g.has_local_function(
+                self.function_proto.name, domain=self.function_proto.domain
+            ):
                 g.add_function(self.function_proto)
             res = g.make_node(
-                self.name, args, outputs, domain=self.domain, name=self.target_name
+                self.function_proto.name,
+                args,
+                outputs,
+                domain=self.function_proto.domain,
+                name=self.target_name,
             )
             if not sts:
                 new_shapes = self.shape_fn(*args)
@@ -290,8 +305,8 @@ class EagerDirectReplacementWithOnnx:
         """
         import onnxscript
 
-        onnx_plug_op = onnxscript.values.Opset(domain=self.domain, version=1)
-        schema = onnx_plug_op[self.name]
+        onnx_plug_op = onnxscript.values.Opset(domain=self.function_proto.domain, version=1)
+        schema = onnx_plug_op[self.function_proto.name]
         if schema is None:
             all_types = [
                 "tensor(float)",
@@ -307,8 +322,8 @@ class EagerDirectReplacementWithOnnx:
             for i in range(self.n_outputs):
                 type_constraints.append((f"U{i}", all_types, ""))
             schema = onnx.defs.OpSchema(
-                self.name,
-                self.domain,
+                self.function_proto.name,
+                self.function_proto.domain,
                 1,
                 inputs=[
                     onnx.defs.OpSchema.FormalParameter(f"arg_{i}", f"T{i}")
@@ -321,7 +336,7 @@ class EagerDirectReplacementWithOnnx:
                 type_constraints=type_constraints,
             )
             onnx.defs.register_schema(schema)
-        op = onnxscript.values.Op(onnx_plug_op, self.name, schema)
+        op = onnxscript.values.Op(onnx_plug_op, self.function_proto.name, schema)
 
         def converter(*cargs):
             return op(*cargs, n_outputs=self.n_outputs)

@@ -45,6 +45,9 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         exporter = os.environ.get("EXPORTER", "custom")
 
         from transformers import AutoModel, AutoProcessor
+        from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
+            PLUGS,
+        )
 
         model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
         # model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
@@ -82,11 +85,17 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
         print(f"-- processor={type(processor)}")
 
+        big_inputs = dict(
+            hidden_states=torch.rand((14308, 1176), dtype=torch_dtype).to(device),
+            grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64).to(device),
+        )
+        print("-- save inputs")
         inputs = dict(
             hidden_states=torch.rand((1292, 1176), dtype=torch_dtype).to(device),
             grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
         )
         print("-- save inputs")
+        torch.save(big_inputs, self.get_dump_file("qwen_2_5_vl_instruct_visual.inputs.big.pt"))
         torch.save(inputs, self.get_dump_file("qwen_2_5_vl_instruct_visual.inputs.pt"))
 
         print(f"-- inputs: {self.string_type(inputs, with_shape=True)}")
@@ -115,15 +124,6 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             verbose=1,
             stop_if_static=2,
         ):
-            if exporter == "onnx-dynamo":
-                # The exported program in ONNXProgram cannot be restored.
-                ep2 = torch.export.export(
-                    model.visual,
-                    (),
-                    kwargs=export_inputs,
-                    dynamic_shapes=self.use_dyn_not_str(dynamic_shapes),
-                )
-                torch.export.save(ep2, f"{fileep}.backup.pt2")
             to_onnx(
                 model.visual,
                 kwargs=export_inputs,
@@ -134,6 +134,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 save_ep=(fileep, 2**35),
                 target_opset=22,
                 optimize=True,
+                onnx_plugs=PLUGS,
             )
 
         pt2_files = [f"{fileep}.backup.pt2", f"{fileep}.ep.pt2", f"{fileep}.pt2"]

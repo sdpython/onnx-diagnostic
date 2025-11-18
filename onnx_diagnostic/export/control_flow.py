@@ -134,7 +134,11 @@ def make_custom_loop_for(
     assert body_outputs is not None, "body_outputs cannot be None"
     srank = "_".join("x".join(map(str, s.shape)) for s in body_outputs)
     sred = "x".join(map(str, reduction_dim)) if reduction_dim else ""
-    full_name = body_fn.__qualname__.replace("<locals>", "L").replace(".", "_")
+    full_name = (
+        body_fn.__qualname__.replace("<locals>", "L")
+        .replace("<lambda>", "l")
+        .replace(".", "_")
+    )
     name = f"loop_for_{full_name}_{srank}_{sred}"
     if name in _REGISTERED_SCHEMA:
         return name, _REGISTERED_SCHEMA[name][0]
