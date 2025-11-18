@@ -66,7 +66,10 @@ class TestControlFlow(ExtTestCase):
         ep = torch.export.export(
             model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
         )
-        self.assertIn("torch.ops.onnx_higher_ops.loop_for_body_", str(ep))
+        self.assertIn(
+            "torch.ops.onnx_higher_ops.loop_for_TestControlFlow_test_loop_one_custom_L_Model_forward_L_body_",
+            str(ep),
+        )
 
         onx = to_onnx(
             model,
@@ -97,7 +100,10 @@ class TestControlFlow(ExtTestCase):
         ep = torch.export.export(
             model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
         )
-        self.assertIn("torch.ops.onnx_higher_ops.loop_for_body_", str(ep))
+        self.assertIn(
+            "torch.ops.onnx_higher_ops.loop_for_TestControlFlow_test_loop_one_custom_different_opset_L_Model_forward_L_body_",
+            str(ep),
+        )
 
         onx = to_onnx(
             model,
@@ -132,7 +138,10 @@ class TestControlFlow(ExtTestCase):
         ep = torch.export.export(
             model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
         )
-        self.assertIn("torch.ops.onnx_higher_ops.loop_for_body_", str(ep))
+        self.assertIn(
+            "torch.ops.onnx_higher_ops.loop_for_TestControlFlow_test_loop_two_custom_L_Model_forward_L_body_",
+            str(ep),
+        )
 
         onx = to_onnx(
             model,
@@ -164,7 +173,10 @@ class TestControlFlow(ExtTestCase):
         ep = torch.export.export(
             model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
         )
-        self.assertIn("torch.ops.onnx_higher_ops.loop_for_body_", str(ep))
+        self.assertIn(
+            "torch.ops.onnx_higher_ops.loop_for_TestControlFlow_test_loop_two_custom_reduction_dim_L_Model_forward_L_body_",
+            str(ep),
+        )
 
         onx = to_onnx(
             model,

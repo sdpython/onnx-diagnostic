@@ -1,7 +1,7 @@
 import unittest
 import onnx.helper as oh
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, has_torch
 from onnx_diagnostic.export.onnx_plug import EagerDirectReplacementWithOnnx
 from onnx_diagnostic.export.api import to_onnx
 
@@ -85,6 +85,8 @@ class TestOnnxPlus(ExtTestCase):
             )
             self.assert_onnx_disc("test_onnx_plug_export_custom", onx.model_proto, model, (x,))
 
+        if not has_torch("2.9"):
+            raise unittest.SkipTest("onnx-dynamo + custom op not fully working on 2.8")
         with self.subTest(exporter="onnx-dynamo"):
             onx = to_onnx(
                 model,

@@ -20,6 +20,7 @@ def to_onnx(
     optimize: bool = True,
     use_control_flow_dispatcher: bool = False,
     onnx_plugs: Optional[List[EagerDirectReplacementWithOnnx]] = None,
+    inline: bool = True,
 ) -> Any:
     """
     Common API for exporters. By default, the models are optimized to use the
@@ -44,6 +45,7 @@ def to_onnx(
     :param use_control_flow_dispatcher: use the dispatcher created to supported
         custom loops (see :func:`onnx_diagnostic.export.control_flow.loop_for`)
     :param onnx_plugs: the code was modified to replace some parts with onnx translation
+    :param inline: inline local functions
     :return: the output of the selected exporter, usually a structure including
         an onnx model
 
@@ -63,6 +65,11 @@ def to_onnx(
     :func:`onnx_diagnostic.export.control_flow.loop_for` or
     :class:`onnx_diagnostic.export.onnx_plug.EagerDirectReplacementWithOnnx`.
     """
+    if exporter_kwargs and "inline" in exporter_kwargs:
+        assert (
+            inline == exporter_kwargs["inline"]
+        ), f"Mismatch between inline={inline} and exporter_kwargs={exporter_kwargs}"
+        exporter_kwargs.pop("inline")
     if exporter == "custom":
         from experimental_experiment.torch_interpreter import (
             to_onnx as _to_onnx,
@@ -90,7 +97,7 @@ def to_onnx(
                     super().__init__({})
 
             main_dispatcher = MainDispatcher()
-            if control_flow_dispatcher:
+            if use_control_flow_dispatcher:
                 main_dispatcher.registered_functions.update(
                     control_flow_dispatcher.registered_functions
                 )
@@ -99,7 +106,6 @@ def to_onnx(
                     main_dispatcher.registered_functions[plug.target_name] = (
                         plug.custom_converter()
                     )
-
         else:
             main_dispatcher = None
 
@@ -117,8 +123,9 @@ def to_onnx(
             output_dynamic_shapes=output_dynamic_shapes,
             export_options=ExportOptions(save_ep=save_ep),
             options=options,
-            **(exporter_kwargs or {}),
+            inline=inline,
             dispatcher=main_dispatcher,
+            **(exporter_kwargs or {}),
         )
 
     if exporter in ("dynamo", "onnx-dynamo"):
@@ -147,7 +154,21 @@ def to_onnx(
             custom_translation_table=custom_translation_table,
             **(exporter_kwargs or {}),
         )
-        if optimize:
+        if not inline and optimize:
+            ort_fusions.optimize_for_ort(epo.model)
+
+        if onnx_plugs:
+            import onnx_ir as ir
+            import onnx_ir.passes.common as common_passes
+
+            irfunctions = [ir.from_proto(plug.function_proto) for plug in onnx_plugs]
+            for func in irfunctions:
+                epo.model.functions[func.identifier()] = func
+            if inline:
+                common_passes.InlinePass()(epo.model)
+                common_passes.RemoveUnusedOpsetsPass()(epo.model)
+
+        if inline and optimize:
             ort_fusions.optimize_for_ort(epo.model)
         if filename:
             epo.save(filename, external_data=True)
