@@ -91,7 +91,9 @@ def to_onnx(
             **(exporter_kwargs or {}),
             dispatcher=dispatcher if use_control_flow_dispatcher else None,
         )
+
     if exporter in ("dynamo", "onnx-dynamo"):
+        import os
         import onnxscript.rewriter.ort_fusions as ort_fusions
 
         assert (
@@ -106,6 +108,9 @@ def to_onnx(
             opset_version=target_opset,
             dynamic_shapes=dynamic_shapes,
             dynamo=True,
+            verbose=verbose,
+            dump_exported_program=bool(save_ep),
+            artifacts_dir=os.path.dirname(filename) if filename else ".",
             **(exporter_kwargs or {}),
         )
         if optimize:
