@@ -93,14 +93,33 @@ def to_onnx(
                 control_flow_dispatcher = None
 
             class MainDispatcher(Dispatcher):
-                def __init__(self):
+                def __init__(self, previous_dispatcher=None):
                     super().__init__({})
+                    self.previous_dispatcher = previous_dispatcher
 
-            main_dispatcher = MainDispatcher()
-            if use_control_flow_dispatcher:
-                main_dispatcher.registered_functions.update(
-                    control_flow_dispatcher.registered_functions
-                )
+                @property
+                def supported(self):
+                    if self.previous_dispatcher:
+                        return (
+                            set(self.registered_functions) | self.previous_dispatcher.supported
+                        )
+                    return set(self.registered_functions)
+
+                def find_function(self, name: Any):
+                    if self.previous_dispatcher:
+                        find = self.previous_dispatcher.find_function(name)
+                        if find:
+                            return find
+                    return Dispatcher.find_function(self, name)
+
+                def find_method(self, name: Any):
+                    if self.previous_dispatcher:
+                        find = self.previous_dispatcher.find_method(name)
+                        if find:
+                            return find
+                    return Dispatcher.find_method(self, name)
+
+            main_dispatcher = MainDispatcher(control_flow_dispatcher)
             if onnx_plugs:
                 for plug in onnx_plugs:
                     main_dispatcher.registered_functions[plug.target_name] = (
