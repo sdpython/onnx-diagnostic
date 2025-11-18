@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import torch
+from .onnx_plug import EagerDirectReplacementWithOnnx
 
 
 def to_onnx(
@@ -18,6 +19,8 @@ def to_onnx(
     save_ep: Optional[str] = None,
     optimize: bool = True,
     use_control_flow_dispatcher: bool = False,
+    onnx_plugs: Optional[List[EagerDirectReplacementWithOnnx]] = None,
+    inline: bool = True,
 ) -> Any:
     """
     Common API for exporters. By default, the models are optimized to use the
@@ -41,6 +44,8 @@ def to_onnx(
     :param optimize: optimizes the model
     :param use_control_flow_dispatcher: use the dispatcher created to supported
         custom loops (see :func:`onnx_diagnostic.export.control_flow.loop_for`)
+    :param onnx_plugs: the code was modified to replace some parts with onnx translation
+    :param inline: inline local functions
     :return: the output of the selected exporter, usually a structure including
         an onnx model
 
@@ -55,7 +60,16 @@ def to_onnx(
             exporter=exporter,
             filename=filename,
         )
+
+    Some examples using control flows are available in
+    :func:`onnx_diagnostic.export.control_flow.loop_for` or
+    :class:`onnx_diagnostic.export.onnx_plug.EagerDirectReplacementWithOnnx`.
     """
+    if exporter_kwargs and "inline" in exporter_kwargs:
+        assert (
+            inline == exporter_kwargs["inline"]
+        ), f"Mismatch between inline={inline} and exporter_kwargs={exporter_kwargs}"
+        exporter_kwargs.pop("inline")
     if exporter == "custom":
         from experimental_experiment.torch_interpreter import (
             to_onnx as _to_onnx,
@@ -63,16 +77,56 @@ def to_onnx(
         )
         from experimental_experiment.xbuilder import OptimizationOptions
 
-        if use_control_flow_dispatcher:
-            from .control_flow import create_global_dispatcher
-
-            dispatcher = create_global_dispatcher()
-
         options = None
         if exporter_kwargs is not None:
             options = exporter_kwargs.pop("options", None)
         if options is None:
             options = OptimizationOptions(patterns="default+onnxruntime")
+        if onnx_plugs or use_control_flow_dispatcher:
+            from experimental_experiment.torch_interpreter import Dispatcher
+
+            if use_control_flow_dispatcher:
+                from .control_flow import create_global_dispatcher
+
+                control_flow_dispatcher = create_global_dispatcher()
+            else:
+                control_flow_dispatcher = None
+
+            class MainDispatcher(Dispatcher):
+                def __init__(self, previous_dispatcher=None):
+                    super().__init__({})
+                    self.previous_dispatcher = previous_dispatcher
+
+                @property
+                def supported(self):
+                    if self.previous_dispatcher:
+                        return (
+                            set(self.registered_functions) | self.previous_dispatcher.supported
+                        )
+                    return set(self.registered_functions)
+
+                def find_function(self, name: Any):
+                    if self.previous_dispatcher:
+                        find = self.previous_dispatcher.find_function(name)
+                        if find:
+                            return find
+                    return Dispatcher.find_function(self, name)
+
+                def find_method(self, name: Any):
+                    if self.previous_dispatcher:
+                        find = self.previous_dispatcher.find_method(name)
+                        if find:
+                            return find
+                    return Dispatcher.find_method(self, name)
+
+            main_dispatcher = MainDispatcher(control_flow_dispatcher)
+            if onnx_plugs:
+                for plug in onnx_plugs:
+                    main_dispatcher.registered_functions[plug.target_name] = (
+                        plug.custom_converter()
+                    )
+        else:
+            main_dispatcher = None
 
         return _to_onnx(
             mod,
@@ -88,8 +142,9 @@ def to_onnx(
             output_dynamic_shapes=output_dynamic_shapes,
             export_options=ExportOptions(save_ep=save_ep),
             options=options,
+            inline=inline,
+            dispatcher=main_dispatcher,
             **(exporter_kwargs or {}),
-            dispatcher=dispatcher if use_control_flow_dispatcher else None,
         )
 
     if exporter in ("dynamo", "onnx-dynamo"):
@@ -99,6 +154,10 @@ def to_onnx(
         assert (
             not output_dynamic_shapes
         ), f"output_dynamic_shapes not supported for exporter={exporter!r}"
+        custom_translation_table = {}
+        if onnx_plugs:
+            for plug in onnx_plugs:
+                custom_translation_table[plug.torch_op] = plug.onnx_dynamo_converter()
         epo = torch.onnx.export(
             mod,
             args=args or tuple(),
@@ -111,9 +170,24 @@ def to_onnx(
             verbose=verbose,
             dump_exported_program=bool(save_ep),
             artifacts_dir=os.path.dirname(filename) if filename else ".",
+            custom_translation_table=custom_translation_table,
             **(exporter_kwargs or {}),
         )
-        if optimize:
+        if not inline and optimize:
+            ort_fusions.optimize_for_ort(epo.model)
+
+        if onnx_plugs:
+            import onnx_ir as ir
+            import onnx_ir.passes.common as common_passes
+
+            irfunctions = [ir.from_proto(plug.function_proto) for plug in onnx_plugs]
+            for func in irfunctions:
+                epo.model.functions[func.identifier()] = func
+            if inline:
+                common_passes.InlinePass()(epo.model)
+                common_passes.RemoveUnusedOpsetsPass()(epo.model)
+
+        if inline and optimize:
             ort_fusions.optimize_for_ort(epo.model)
         if filename:
             epo.save(filename, external_data=True)

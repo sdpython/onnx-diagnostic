@@ -1,5 +1,7 @@
+import os
 from typing import Callable, Optional
 import torch
+import torch.nn.functional as F
 from .patch_helper import _is_torchdynamo_exporting
 from ._patch_transformers_attention import patched_sdpa_attention_forward
 
@@ -11,10 +13,9 @@ try:
 except ImportError:
     patch_qwen2_5 = False
 
-if patch_qwen2_5:
-    import torch.nn.functional as F
+strategy_for_attention_in_qwen_2_5 = os.environ.get("QWEN25ATTENTION", "BIGMASK")
 
-    use_loop_for_attention_in_qwen_2_5 = False
+if patch_qwen2_5:
 
     class patched_Qwen2_5_VLForConditionalGeneration:
         _PATCHES_ = ["prepare_inputs_for_generation"]
@@ -345,58 +346,35 @@ if patch_qwen2_5:
                     self.config._attn_implementation
                 ]
 
-            if (
-                self.config._attn_implementation == "flash_attention_2"
-                and _is_torchdynamo_exporting()
-            ):
-                max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
-                attn_output = torch.onnx.ops.symbolic(
-                    "custom::qwen25_attention",
-                    (
-                        query_states,
-                        key_states,
-                        value_states,
-                        cu_seqlens,
-                        cu_seqlens,
-                        max_seqlen,
-                        max_seqlen,
-                        torch.tensor(self.scaling, dtype=torch.float32),
-                    ),
-                    dtype=query_states.dtype,
-                    shape=(
-                        key_states.shape[0],
-                        value_states.shape[1],
-                        max_seqlen,
-                        value_states.shape[-1],
-                    ),
-                    version=1,
-                )
-            elif self.config._attn_implementation == "flash_attention_2":
-                # Flash Attention 2: Use cu_seqlens for variable length attention
-                max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
-                attn_output, _ = attention_interface(
-                    self,
-                    query_states,
-                    key_states,
-                    value_states,
-                    attention_mask=None,
-                    scaling=self.scaling,
-                    dropout=0.0 if not self.training else self.attention_dropout,
-                    cu_seq_lens_q=cu_seqlens,
-                    cu_seq_lens_k=cu_seqlens,
-                    max_length_q=max_seqlen,
-                    max_length_k=max_seqlen,
-                    is_causal=False,
-                    **kwargs,
-                )
-            elif _is_torchdynamo_exporting():
-                if (
+            if _is_torchdynamo_exporting():
+                if self.config._attn_implementation == "flash_attention_2":
+                    max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
+                    attn_output = torch.onnx.ops.symbolic(
+                        "custom::qwen25_flash_attention",
+                        (
+                            query_states,
+                            key_states,
+                            value_states,
+                            cu_seqlens,
+                            cu_seqlens,
+                            max_seqlen,
+                            max_seqlen,
+                            torch.tensor(self.scaling, dtype=torch.float32),
+                        ),
+                        dtype=query_states.dtype,
+                        shape=(
+                            query_states.shape[0],  # batch_size
+                            query_states.shape[2],  # sequence_length (total patches)
+                            query_states.shape[1],  # num_heads
+                            query_states.shape[3],  # head_size
+                        ),
+                        version=1,
+                    )
+                elif (
                     attention_interface
                     is transformers.integrations.sdpa_attention.sdpa_attention_forward
+                    and strategy_for_attention_in_qwen_2_5 == "LOOPMHA"
                 ):
-                    attention_interface = patched_sdpa_attention_forward
-
-                if use_loop_for_attention_in_qwen_2_5:
 
                     def _iteration(start_end, query_states, key_states, value_states):
                         return patched_Qwen2_5_VLVisionAttentionOneIteration.forward(
@@ -428,7 +406,11 @@ if patch_qwen2_5:
                     #       starts_ends, query_states, key_states, value_states), tuple(),
                     # )
                     attn_output = torch.cat(attn_outputs, dim=1)
-                else:
+                elif (
+                    attention_interface
+                    is transformers.integrations.sdpa_attention.sdpa_attention_forward
+                    and strategy_for_attention_in_qwen_2_5 == "BIGMASK"
+                ):
                     # make square mask
                     indices = torch.arange(
                         cu_seqlens.max(), dtype=cu_seqlens.dtype, device=cu_seqlens.device
@@ -455,6 +437,58 @@ if patch_qwen2_5:
                         is_causal=False,
                         **kwargs,
                     )
+                elif (
+                    attention_interface
+                    is transformers.integrations.sdpa_attention.sdpa_attention_forward
+                    and strategy_for_attention_in_qwen_2_5 == "PACKED"
+                ):
+                    max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
+                    attn_output = torch.onnx.ops.symbolic(
+                        "custom::qwen25_packed_attention",
+                        (
+                            query_states,
+                            key_states,
+                            value_states,
+                            cu_seqlens,
+                            cu_seqlens,
+                            max_seqlen,
+                            max_seqlen,
+                            torch.tensor(self.scaling, dtype=torch.float32),
+                        ),
+                        dtype=query_states.dtype,
+                        shape=(
+                            query_states.shape[0],  # batch_size
+                            query_states.shape[2],  # sequence_length (total patches)
+                            query_states.shape[1],  # num_heads
+                            query_states.shape[3],  # head_size
+                        ),
+                        version=1,
+                    )
+                else:
+                    raise NotImplementedError(
+                        f"Not export strategy for strategy_for_attention_in_qwen_2_5="
+                        f"{strategy_for_attention_in_qwen_2_5!r}, "
+                        f"(use QWEN25ATTENTION to change it), and attention_interface="
+                        f"{attention_interface!r} (use sdpa)"
+                    )
+            elif self.config._attn_implementation == "flash_attention_2":
+                # Flash Attention 2: Use cu_seqlens for variable length attention
+                max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
+                attn_output, _ = attention_interface(
+                    self,
+                    query_states,
+                    key_states,
+                    value_states,
+                    attention_mask=None,
+                    scaling=self.scaling,
+                    dropout=0.0 if not self.training else self.attention_dropout,
+                    cu_seq_lens_q=cu_seqlens,
+                    cu_seq_lens_k=cu_seqlens,
+                    max_length_q=max_seqlen,
+                    max_length_k=max_seqlen,
+                    is_causal=False,
+                    **kwargs,
+                )
             else:
                 # Other implementations: Process each chunk separately
                 lengths = cu_seqlens[1:] - cu_seqlens[:-1]
