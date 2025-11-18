@@ -50,6 +50,7 @@ class EagerDirectReplacementWithOnnx:
         only tensors must be counted
     :param name: the name of the custom op, the function name if not specified
     :param kwargs: constants
+    :param verbose: verbose level
 
     Here is an example:
 
@@ -143,6 +144,7 @@ class EagerDirectReplacementWithOnnx:
         n_outputs: Optional[int] = None,
         name: Optional[str] = None,
         kwargs: Optional[Dict[str, Union[int, float]]] = None,
+        verbose: int = 0,
     ):
         assert isinstance(
             function_proto, onnx.FunctionProto
@@ -154,9 +156,13 @@ class EagerDirectReplacementWithOnnx:
         self.function_proto = function_proto
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
-        self.name = name or eager_fn.__qualname__.replace("<locals>", "L").replace(
-            "<lambda>", "l"
-        ).replace(".", "_")
+        self.name = name or (
+            eager_fn.__name__
+            if "<" not in eager_fn.__name__
+            else eager_fn.__qualname__.replace("<locals>", "L")
+            .replace("<lambda>", "l")
+            .replace(".", "_")
+        )
         self.kwargs = kwargs
         assert kwargs is None or all(isinstance(v, (int, float)) for v in kwargs.values()), (
             f"Only int or floats are allowed for kwargs={kwargs}, one of them "
@@ -179,7 +185,8 @@ class EagerDirectReplacementWithOnnx:
             function_proto.domain == self.domain
         ), f"Function domain must be {self.domain!r} but it is {function_proto.domain!r}"
         self.arg_names = params
-        self.custom_op = self._registers()
+        self.verbose = verbose
+        self.custom_op = self._register()
 
     @property
     def domain(self) -> str:
@@ -202,12 +209,18 @@ class EagerDirectReplacementWithOnnx:
             return self.torch_op(*args)
         return self.eager_fn(*args)
 
-    def _registers(self):
+    def _register(self):
         """Registers the custom op."""
         inputs = ", ".join([f"Tensor {p}" for p in self.arg_names])
         schema = f"({inputs}) -> Tensor"
         if self.n_outputs > 1:
             schema += "[]"
+        if self.verbose:
+            print(
+                f"[EagerDirectReplacementWithOnnx._register] "
+                f"'torch.ops.{self.domain}.{self.name}"
+            )
+            print(f"[EagerDirectReplacementWithOnnx._register] schema={schema}")
         custom_def = torch.library.CustomOpDef(self.domain, self.name, schema, self.eager_fn)
         custom_def.register_kernel(None)(self.eager_fn)
         custom_def._abstract_fn = self.shape_fn

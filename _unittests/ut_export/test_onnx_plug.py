@@ -1,7 +1,7 @@
 import unittest
 import onnx.helper as oh
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, has_torch
+from onnx_diagnostic.ext_test_case import ExtTestCase, has_torch, hide_stdout, ignore_warnings
 from onnx_diagnostic.export.onnx_plug import EagerDirectReplacementWithOnnx
 from onnx_diagnostic.export.api import to_onnx
 
@@ -36,6 +36,8 @@ class TestOnnxPlus(ExtTestCase):
         self.assertEqual(len(res.diffs), 1)
         self.assertEqual(res.diffs[0]["abs"], 0)
 
+    @hide_stdout()
+    @ignore_warnings(FutureWarning)
     def test_onnx_plug_export(self):
         def _test_customsub(x, y):
             return x - y
@@ -61,7 +63,7 @@ class TestOnnxPlus(ExtTestCase):
 
         replacements = [
             EagerDirectReplacementWithOnnx(
-                _test_customsub, _test_customsub_shape, make_function_proto(), 2, 1
+                _test_customsub, _test_customsub_shape, make_function_proto(), 2, 1, verbose=1
             )
         ]
 
