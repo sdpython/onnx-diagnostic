@@ -154,7 +154,7 @@ class EagerDirectReplacementWithOnnx:
         self.function_proto = function_proto
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
-        self.name = name or eager_fn.__qualname__.replace("<local>", "L").replace(
+        self.name = name or eager_fn.__qualname__.replace("<locals>", "L").replace(
             "<lambda>", "l"
         ).replace(".", "_")
         self.kwargs = kwargs
