@@ -173,4 +173,5 @@ select = [
 "onnx_diagnostic/torch_models/validate.py" = ["E731"]
 "onnx_diagnostic/torch_export_patches/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_export_patches/patches/__init__.py" = ["F401"]
+"onnx_diagnostic/torch_export_patches/patches/patch_transformers.py" = ["F401"]
 "onnx_diagnostic/torch_models/llms.py" = ["F401"]
