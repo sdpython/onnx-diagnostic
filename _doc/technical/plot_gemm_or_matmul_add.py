@@ -53,6 +53,14 @@ def make_model_gemm(itype: int) -> onnx.ModelProto:
                 oh.make_node("Add", ["mm", "B"], ["MatMulAdd"]),
                 oh.make_node("FusedMatMul", ["A", "X"], ["fmm"], domain="com.microsoft"),
                 oh.make_node("Add", ["fmm", "B"], ["FusedMatMulAdd"]),
+                oh.make_node("Cast", ["A"], ["Afloat"], to=onnx.TensorProto.FLOAT),
+                oh.make_node("Cast", ["B"], ["Bfloat"], to=onnx.TensorProto.FLOAT),
+                oh.make_node("Cast", ["X"], ["Xfloat"], to=onnx.TensorProto.FLOAT),
+                oh.make_node("Gemm", ["Afloat", "Xfloat"], ["gmmfloat"]),
+                oh.make_node("Add", ["gmmfloat", "Bfloat"], ["gemmaddfloat"]),
+                oh.make_node("Cast", ["gemmaddfloat"], ["CastGemmAddCast"], to=itype),
+                oh.make_node("Gemm", ["Afloat", "Xfloat", "Bfloat"], ["GemmOnlyfloat"]),
+                oh.make_node("Cast", ["GemmOnlyfloat"], ["CastGemmOnlyCast"], to=itype),
             ],
             "test",
             [
@@ -65,6 +73,8 @@ def make_model_gemm(itype: int) -> onnx.ModelProto:
                 oh.make_tensor_value_info("GemmAdd", itype, ["a", "c"]),
                 oh.make_tensor_value_info("FusedMatMulAdd", itype, ["a", "c"]),
                 oh.make_tensor_value_info("MatMulAdd", itype, ["a", "c"]),
+                oh.make_tensor_value_info("CastGemmAddCast", itype, ["a", "c"]),
+                oh.make_tensor_value_info("CastGemmOnlyCast", itype, ["a", "c"]),
             ],
         ),
         opset_imports=[oh.make_opsetid("", 22)],
@@ -85,7 +95,7 @@ itype = onnx.TensorProto.FLOAT16
 dtype = np.float16
 model = make_model_gemm(itype)
 
-A = np.random.randn(512, 256).astype(dtype)
+A = np.random.randn(1280, 256).astype(dtype)
 X = np.random.randn(256, 256).astype(dtype)
 B = np.random.randn(256).astype(dtype)
 feeds = dict(A=A, X=X, B=B)
@@ -112,9 +122,9 @@ print(pretty_onnx(onx))
 # %%
 # Let's try with CUDA and float32 if it is available.
 
-A = torch.randn((512, 512), dtype=torch.float32)
-X = torch.randn((512, 512), dtype=torch.float32)
-B = torch.randn((512), dtype=torch.float32)
+A = torch.randn((1280, 1280), dtype=torch.float32)
+X = torch.randn((1280, 1280), dtype=torch.float32)
+B = torch.randn((1280), dtype=torch.float32)
 
 for itype, dtype, device in [
     (onnx.TensorProto.FLOAT16, torch.float16, "cpu"),
@@ -144,7 +154,9 @@ for itype, dtype, device in [
 # are similar to the others coefficients. What if we make them
 # a lot higher.
 
-B = (torch.arange(512, dtype=torch.float32) + 1) / 512 * 16384
+A = A / A.max()
+X = X / X.max()
+B = (torch.arange(1280, dtype=torch.float32) + 1) / 1280 * 16
 labels = ["F.linear", *[o.name for o in model.graph.output], "a @ x + b"]
 all_results = {}
 
@@ -199,7 +211,7 @@ def make_figure_axis(all_results, i, j):
         print(f"labels={labs}, {device}/{dtype}: max(diff)={diff.max()}")
         expand = 0.5 if diff.max() >= 1 else diff.max().detach().cpu() / 2
         ax[pos, 0].plot(
-            B.tolist(), (diff.detach().cpu() + torch.rand(512) * expand).tolist(), "."
+            B.tolist(), (diff.detach().cpu() + torch.rand(1280) * expand).tolist(), "."
         )
         ax[pos, 0].set_title(f"{labs[0]}-{labs[1]} {device}/{dtype}", fontsize=10)
 
