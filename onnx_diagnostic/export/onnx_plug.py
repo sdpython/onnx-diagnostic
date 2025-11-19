@@ -204,11 +204,11 @@ class EagerDirectReplacementWithOnnx:
         "Returns ``torch.ops.onny_plug.<name>"
         return getattr(getattr(torch.ops, self.domain), self.name).default
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         """Calls eager_fn or shape_fn if the model is being exported."""
         if is_exporting():
             return self.torch_op(*args)
-        return self.eager_fn(*args)
+        return self.eager_fn(*args, **kwargs)
 
     def _register(self):
         """Registers the custom op."""
