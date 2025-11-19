@@ -384,6 +384,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         )
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
             patched_Qwen2_5_VLVisionAttention,
+            PLUGS_Qwen25,
         )
 
         config = get_cached_configuration("Qwen/Qwen2.5-VL-7B-Instruct")
@@ -456,6 +457,8 @@ class TestPatchPatchTransformers(ExtTestCase):
                 dynamic_shapes=ds,
                 exporter=exporter,
                 filename=filename,
+                onnx_plugs=PLUGS_Qwen25,
+                target_opset=22,
             )
             # exporter_kwargs={"report":True} if exporter != "custom" else {}
             self.assert_onnx_disc(

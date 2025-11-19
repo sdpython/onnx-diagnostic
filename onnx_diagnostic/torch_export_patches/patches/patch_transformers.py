@@ -76,6 +76,7 @@ if patch_qwen2_5:
         patched_Qwen2_5_VisionTransformerPretrainedModel,
         patched_Qwen2_5_VLVisionAttentionOneIteration,
         patched_Qwen2_5_VLVisionAttention,
+        PLUGS as PLUGS_Qwen25,
     )
 
 from ._patch_transformers_qwen3 import patch_qwen3
