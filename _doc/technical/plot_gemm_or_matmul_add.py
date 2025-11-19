@@ -141,7 +141,7 @@ for itype, dtype, device in [
 # ============
 #
 # In the previous example, the coefficients of the bias
-# are simular to the others coefficients. What if we make them
+# are similar to the others coefficients. What if we make them
 # a lot higher.
 
 B = (torch.arange(512, dtype=torch.float32) + 1) / 512 * 16384
