@@ -28,10 +28,37 @@ def download_model_builder_to_cache(
     if file_path.exists():
         return file_path
 
+    builders = cache_dir / "builders"
+    if not builders.exists():
+        builders.mkdir(parents=True, exist_ok=True)
+
+    for subfile in [
+        "__init__.py",
+        "base.py",
+        "chatglm.py",
+        "ernie.py",
+        "gemma.py",
+        "gptoss.py",
+        "granite.py",
+        "llama.py",
+        "mistral.py",
+        "nemotron.py",
+        "olmo.py",
+        "phi.py",
+        "qwen.py",
+        "smollm.py",
+    ]:
+        u = f"{'/'.join(url.split('/')[:-1])}/builders/{subfile}"
+        response = requests.get(u)
+        response.raise_for_status()
+        with open(builders / subfile, "wb") as f:
+            f.write(response.content)
+
     response = requests.get(url)
     response.raise_for_status()
     with open(file_path, "wb") as f:
         f.write(response.content)
+
     return file_path
 
 
