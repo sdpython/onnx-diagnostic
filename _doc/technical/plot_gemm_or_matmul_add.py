@@ -41,13 +41,13 @@ def make_model_gemm(itype: int) -> onnx.ModelProto:
     return oh.make_model(
         oh.make_graph(
             [
-                oh.make_node("Gemm", ["A", "X", "B"], ["Ygemmfused"]),
+                oh.make_node("Gemm", ["A", "X", "B"], ["GemmOnly"]),
                 oh.make_node("Gemm", ["A", "X"], ["gmm"]),
-                oh.make_node("Add", ["gmm", "B"], ["Ygemm"]),
+                oh.make_node("Add", ["gmm", "B"], ["GemmAdd"]),
                 oh.make_node("MatMul", ["A", "X"], ["mm"]),
-                oh.make_node("Add", ["mm", "B"], ["Ymm"]),
+                oh.make_node("Add", ["mm", "B"], ["MatMulAdd"]),
                 oh.make_node("FusedMatMul", ["A", "X"], ["fmm"], domain="com.microsoft"),
-                oh.make_node("Add", ["fmm", "B"], ["Yfused"]),
+                oh.make_node("Add", ["fmm", "B"], ["FusedMatMulAdd"]),
             ],
             "test",
             [
@@ -56,10 +56,10 @@ def make_model_gemm(itype: int) -> onnx.ModelProto:
                 oh.make_tensor_value_info("B", itype, ["c"]),
             ],
             [
-                oh.make_tensor_value_info("Ygemmfused", itype, ["a", "c"]),
-                oh.make_tensor_value_info("Yfused", itype, ["a", "c"]),
-                oh.make_tensor_value_info("Ygemm", itype, ["a", "c"]),
-                oh.make_tensor_value_info("Ymm", itype, ["a", "c"]),
+                oh.make_tensor_value_info("GemmOnly", itype, ["a", "c"]),
+                oh.make_tensor_value_info("GemmAdd", itype, ["a", "c"]),
+                oh.make_tensor_value_info("FusedMatMulAdd", itype, ["a", "c"]),
+                oh.make_tensor_value_info("MatMulAdd", itype, ["a", "c"]),
             ],
         ),
         opset_imports=[oh.make_opsetid("", 22)],
@@ -140,13 +140,17 @@ for itype, dtype, device in [
 # a lot higher.
 
 B = (torch.arange(512, dtype=torch.float32) + 1) / 512 * 16384
-labels = ["torch", *[o.name for o in model.graph.output]]
+labels = ["linear", *[o.name for o in model.graph.output], "a @ x + b"]
+all_results = {}
 
 for itype, dtype, device in [
     (onnx.TensorProto.FLOAT, torch.float32, "cpu"),
     (onnx.TensorProto.FLOAT16, torch.float16, "cpu"),
+    # missing implementation in onnxruntime
+    # (onnx.TensorProto.BFLOAT16, torch.bfloat16, "cpu"),
     (onnx.TensorProto.FLOAT, torch.float32, "cuda"),
     (onnx.TensorProto.FLOAT16, torch.float16, "cuda"),
+    (onnx.TensorProto.BFLOAT16, torch.bfloat16, "cuda"),
 ]:
     if device == "cuda" and not torch.cuda.is_available():
         continue
@@ -163,8 +167,9 @@ for itype, dtype, device in [
         graph_optimization_level=GraphOptimizationLevel.ORT_DISABLE_ALL,
         optimized_model_filepath=filename,
     )
+    results = [torch.nn.functional.linear(a, x.T, b), *sess.run(None, feeds), a @ x + b]
+    all_results[device, dtype] = results
     has_cast = "Cast" in [n.op_type for n in onnx.load(filename).graph.node]
-    results = [a @ x + b, *sess.run(None, feeds)]
     diffs = matrix_diff(results)
     df = pandas.DataFrame(diffs, columns=labels, index=labels)
     print(f"------ has_cast={has_cast}, dtype={dtype}, device={device!r}, max(b)={b.max()}")
@@ -176,18 +181,32 @@ for itype, dtype, device in [
 #
 # bias value vs discrepancies
 # ===========================
+#
+# Let's compare GemmOnly (so bias is included) and Gemm+Add.
 
+i, j = 1, -1
+labs = labels[i], labels[j]
 
-m1, m2 = results[0:2]
-diff = torch.abs(m1.to(torch.float32) - m2.to(torch.float32)).max(dim=0)[0]
-print(f"max(diff)={diff.max()}")
+fig, ax = plt.subplots(len(all_results), 2, figsize=(8, 2.5 * len(results)))
+for pos, ((device, dtype), results) in enumerate(all_results.items()):
+    m1, m2 = results[i], results[j]
+    diff = torch.abs(m1.to(torch.float32) - m2.to(torch.float32)).max(dim=0)[0]
+    print(f"labels={labs}, {device}/{dtype}: max(diff)={diff.max()}")
+    expand = 0.5 if diff.max() >= 1 else diff.max().detach().cpu() / 2
+    ax[pos, 0].plot(B.tolist(), (diff.detach().cpu() + torch.rand(512) * expand).tolist(), ".")
+    ax[pos, 0].set_title(f"{labs[0]}-{labs[1]} {device}/{dtype}")
 
-fig, ax = plt.subplots(1, 1, figsize=(5, 3))
-ax.plot(B.tolist(), (diff.detach().cpu() + torch.rand(512) * 0.5).tolist(), ".")
-ax.set_title("Discrepancies (y) VS Bias (x)")
+    corr = matrix_diff(results)
+    ax[pos, 1].imshow(corr, cmap="Blues", vmin=0, vmax=corr.max())
+    # ax[pos,1].colorbar(label=f'Discrepancies {device}/{dtype}')
+    ax[pos, 1].set_xticks(range(len(labels)), labels, rotation=45)
+    ax[pos, 1].set_yticks(range(len(labels)), labels)
+    ax[pos, 1].set_title(f"max={diff.max()}")
+fig.tight_layout()
 fig.savefig("plot_gemm_or_matmul_add.png")
 
 # %%
 # Discrepancies do not happen all the time but it is very likely to happen.
-# Fused Gemm should be avoided when the bias is very different from the multiplied
-# matrix and avoided in the generic case.
+# The use of Gemm with a bias not null should be used when torch is doing
+# the same and it seems to depend on the type as well.
+# The difference is even higher for bfloat16.
