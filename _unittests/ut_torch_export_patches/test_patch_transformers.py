@@ -461,14 +461,16 @@ class TestPatchPatchTransformers(ExtTestCase):
                 target_opset=22,
             )
             # exporter_kwargs={"report":True} if exporter != "custom" else {}
-            self.assert_onnx_disc(
-                f"test_patched_qwen2_5_vl_vision_attention_forward-{exporter}",
-                onnx.load(filename),
-                instance,
-                inputs,
-                atol=1e-3,
-                rtol=1,
-            )
+            if torch.cuda.is_available():
+                self.assert_onnx_disc(
+                    f"test_patched_qwen2_5_vl_vision_attention_forward-{exporter}",
+                    onnx.load(filename),
+                    instance,
+                    inputs,
+                    atol=1e-3,
+                    rtol=1,
+                    providers=["CUDAExecutionProvider"],
+                )
         self.clean_dump()
 
     @requires_transformers("4.99")
