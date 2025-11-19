@@ -49,7 +49,7 @@ class EagerDirectReplacementWithOnnx:
     :param n_outputs: same for the number of outputs,
         only tensors must be counted
     :param name: the name of the custom op, the function name if not specified
-    :param kwargs: constants
+    :param kwargs: constants parameters with their default values
     :param verbose: verbose level
 
     Here is an example:
@@ -163,8 +163,8 @@ class EagerDirectReplacementWithOnnx:
             .replace("<lambda>", "l")
             .replace(".", "_")
         )
-        self.kwargs = kwargs
-        assert kwargs is None or all(isinstance(v, (int, float)) for v in kwargs.values()), (
+        self.kwargs = kwargs or {}
+        assert all(isinstance(v, (int, float)) for v in self.kwargs.values()), (
             f"Only int or floats are allowed for kwargs={kwargs}, one of them "
             f"does not respect that constraint."
         )
@@ -184,7 +184,8 @@ class EagerDirectReplacementWithOnnx:
         assert (
             function_proto.domain == self.domain
         ), f"Function domain must be {self.domain!r} but it is {function_proto.domain!r}"
-        self.arg_names = params
+        self.args_name = [p for p in params if p not in self.kwargs]
+        self.kwargs_name = [p for p in params if p in self.kwargs]
         self.verbose = verbose
         self.custom_op = self._register()
 
@@ -211,7 +212,19 @@ class EagerDirectReplacementWithOnnx:
 
     def _register(self):
         """Registers the custom op."""
-        inputs = ", ".join([f"Tensor {p}" for p in self.arg_names])
+        input_args = [f"Tensor {p}" for p in self.args_name]
+        for p in self.kwargs_name:
+            val = self.kwargs[p]
+            if isinstance(val, int):
+                input_args.append(f"int {p}={val}")
+            elif isinstance(val, float):
+                input_args.append(f"float {p}={val}")
+            else:
+                raise NotImplementedError(
+                    f"kwargs {p!r} has a default value of unsupported type {type(val)}"
+                )
+
+        inputs = ", ".join(input_args)
         schema = f"({inputs}) -> Tensor"
         if self.n_outputs > 1:
             schema += "[]"
@@ -292,12 +305,15 @@ class EagerDirectReplacementWithOnnx:
                 self.function_proto.name, domain=self.function_proto.domain
             ):
                 g.add_function(self.function_proto)
+            ags = args[: len(self.args_name)]
+            kws = dict(zip(self.kwargs_name, args[len(self.args_name) :]))
             res = g.make_node(
                 self.function_proto.name,
-                args,
+                ags,
                 outputs,
                 domain=self.function_proto.domain,
                 name=self.target_name,
+                **kws,
             )
             if not sts:
                 new_shapes = self.shape_fn(*args)

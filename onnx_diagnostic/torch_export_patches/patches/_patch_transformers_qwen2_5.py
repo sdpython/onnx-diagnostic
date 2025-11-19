@@ -27,7 +27,12 @@ if patch_qwen2_5:
 
     @onnxscript.script(opset=onnx_plugs_op)
     def LoopMHAAttention(
-        query_states, key_states, value_states, cu_seqlens, scale: float, num_heads: int
+        query_states,
+        key_states,
+        value_states,
+        cu_seqlens,
+        scaling: float = 0.11180339887498948,
+        num_heads: int = 16,
     ):
         to_3d_shape = op.Constant(value_ints=[0, 0, -1])
         query_transposed = op.Transpose(query_states, perm=[0, 2, 1, 3])
@@ -52,7 +57,7 @@ if patch_qwen2_5:
                 key_i,
                 value_i,
                 num_heads=num_heads,
-                scale=scale,
+                scale=scaling,
             )
             attn_output = op.Concat(attn_output, mha_output, axis=1)
         attn_output_4d = op.Reshape(attn_output, output_shape)
@@ -64,7 +69,7 @@ if patch_qwen2_5:
         key,
         value,
         cu_seqlens,
-        scale: float = 0.11180339887498948,
+        scaling: float = 0.11180339887498948,
         num_heads: int = 16,
     ):
         num_patches = op.Cast(op.Size(cu_seqlens), to=onnx.TensorProto.INT32) - 1
@@ -102,7 +107,7 @@ if patch_qwen2_5:
             None,
             op.Cast(token_offset, to=onnx.TensorProto.INT32),
             op.Cast(cu_seqlens, to=onnx.TensorProto.INT32),
-            scale=scale,
+            scale=scaling,
             num_heads=num_heads,
         )
         packed_attn_output_3d = op.Reshape(packed_attn_output_2d, shape_3d)
@@ -139,10 +144,8 @@ if patch_qwen2_5:
 
     # not ideal
     qwen_sdpa_attention_versatile = EagerDirectReplacementWithOnnx(
-        lambda qs, ks, vs, cuseq: qwen_sdpa_attention(
-            qs, ks, vs, cuseq, scaling=0.11180339887498948
-        ),
-        lambda qs, *args: torch.empty(
+        qwen_sdpa_attention,
+        lambda qs, *args, **kwargs: torch.empty(
             (qs.shape[0], qs.shape[2], qs.shape[1], qs.shape[3]),
             dtype=qs.dtype,
             device=qs.device,
@@ -489,16 +492,13 @@ if patch_qwen2_5:
                 is transformers.integrations.sdpa_attention.sdpa_attention_forward
                 or attention_interface is patched_sdpa_attention_forward
             ) and strategy_for_attention_in_qwen_2_5 == "PACKED":
-                torch._check(
-                    qwen_sdpa_attention_versatile.kwargs["scaling"] == self.scaling,
-                    lambda: f"Not implemented for scaling={self.scaling}",
-                )
-                torch._check(
-                    qwen_sdpa_attention_versatile.kwargs["num_heads"] == self.num_heads,
-                    lambda: f"Not implemented for num_heads={self.num_heads}",
-                )
                 attn_output = qwen_sdpa_attention_versatile(
-                    query_states, key_states, value_states, cu_seqlens
+                    query_states,
+                    key_states,
+                    value_states,
+                    cu_seqlens,
+                    scaling=self.scaling,
+                    num_heads=self.num_heads,
                 )
             elif _is_torchdynamo_exporting():
                 if self.config._attn_implementation == "flash_attention_2":
