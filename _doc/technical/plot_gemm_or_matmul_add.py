@@ -14,6 +14,7 @@ A model with three choices
 ==========================
 """
 
+import cpuinfo
 import numpy as np
 import pandas
 import matplotlib.pyplot as plt
@@ -31,6 +32,10 @@ from onnxruntime import (
 )
 
 print(f"onnxruntime version = {version_onnxruntime}")
+print(f"cpu name = {cpuinfo.get_cpu_info()['brand_raw']}")
+if torch.cuda.is_available():
+    print(f"gpu name = {torch.cuda.get_device_name(0)}")
+    print(f"cuda version = {torch.version.cuda}")
 
 # %%
 # The version is important. Numerical differences are observed
