@@ -245,7 +245,7 @@ fig.tight_layout()
 fig.savefig("plot_gemm_or_matmul_add1.png")
 
 # %%
-# Let's compare with ``a @ x + b``.
+# Let's compare with ``A @ X + B``.
 
 fig, ax = make_figure_axis(all_results, -1, 1)
 fig.tight_layout()
