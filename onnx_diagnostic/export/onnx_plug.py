@@ -300,6 +300,7 @@ class EagerDirectReplacementWithOnnx:
             sts: Optional[Dict[str, Any]],
             outputs: List[str],
             *args,
+            **kwargs,
         ) -> Any:
             if not g.has_local_function(
                 self.function_proto.name, domain=self.function_proto.domain
@@ -307,6 +308,7 @@ class EagerDirectReplacementWithOnnx:
                 g.add_function(self.function_proto)
             ags = args[: len(self.args_name)]
             kws = dict(zip(self.kwargs_name, args[len(self.args_name) :]))
+            kws.update(kwargs)
             res = g.make_node(
                 self.function_proto.name,
                 ags,

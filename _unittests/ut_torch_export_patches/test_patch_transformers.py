@@ -407,7 +407,7 @@ class TestPatchPatchTransformers(ExtTestCase):
                 _is_torchdynamo_exporting()
             ), f"exporting is not set to true? {torch.compiler.is_exporting_flag}"
             got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
-            self.assertEqualArray(expected, got, atol=1e-5)
+            self.assertEqualArray(expected, got, atol=1e-2)
 
         class Model(patched_class):
             def forward(

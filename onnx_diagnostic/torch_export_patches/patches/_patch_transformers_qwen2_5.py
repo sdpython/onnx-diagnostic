@@ -119,6 +119,7 @@ if patch_qwen2_5:
         value_states: torch.Tensor,  # F10s1x16xs47x80
         cu_seqlens: torch.Tensor,  # F7su19
         scaling: float = 0,
+        num_heads: int = 16,
     ) -> torch.Tensor:
         lengths = cu_seqlens[1:] - cu_seqlens[:-1]
         splits = [
@@ -497,8 +498,8 @@ if patch_qwen2_5:
                     key_states,
                     value_states,
                     cu_seqlens,
-                    scaling=self.scaling,
-                    num_heads=self.num_heads,
+                    self.scaling,
+                    self.num_heads,
                 )
             elif _is_torchdynamo_exporting():
                 if self.config._attn_implementation == "flash_attention_2":
