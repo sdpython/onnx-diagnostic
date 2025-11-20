@@ -1,7 +1,9 @@
 import os
 from typing import Callable, Optional
+import onnx
 import torch
 import torch.nn.functional as F
+from ...export.onnx_plug import EagerDirectReplacementWithOnnx
 from .patch_helper import _is_torchdynamo_exporting
 from ._patch_transformers_attention import patched_sdpa_attention_forward
 
@@ -13,9 +15,149 @@ try:
 except ImportError:
     patch_qwen2_5 = False
 
-strategy_for_attention_in_qwen_2_5 = os.environ.get("QWEN25ATTENTION", "BIGMASK")
+PLUGS = []
+strategy_for_attention_in_qwen_2_5 = os.environ.get("QWEN25ATTENTION", "PACKED")
 
 if patch_qwen2_5:
+    import onnxscript
+
+    onnx_plugs_op = onnxscript.values.Opset("onnx_plug", 1)
+    op = onnxscript.opset22
+    msft_op = onnxscript.values.Opset("com.microsoft", 1)
+
+    @onnxscript.script(opset=onnx_plugs_op)
+    def LoopMHAAttention(
+        query_states,
+        key_states,
+        value_states,
+        cu_seqlens,
+        scaling: float = 0.11180339887498948,
+        num_heads: int = 16,
+    ):
+        to_3d_shape = op.Constant(value_ints=[0, 0, -1])
+        query_transposed = op.Transpose(query_states, perm=[0, 2, 1, 3])
+        output_shape = op.Shape(query_transposed)
+        query_3d = op.Reshape(query_transposed, to_3d_shape)
+        value_3d = op.Reshape(op.Transpose(value_states, perm=[0, 2, 1, 3]), to_3d_shape)
+        key_3d = op.Reshape(op.Transpose(key_states, perm=[0, 2, 1, 3]), to_3d_shape)
+        num_patches = op.Size(cu_seqlens) - 1
+        seq_axis = op.Constant(value_ints=[1])
+        seq_axis_int32 = op.Cast(seq_axis, to=onnx.TensorProto.INT32)
+        attn_output = op.Slice(value_3d, [0], [0], seq_axis)
+        for i in range(num_patches):
+            i_1d = op.Reshape(i, [1])
+            i_plus_1_1d = i_1d + 1
+            start = op.Gather(cu_seqlens, i_1d, axis=0)
+            end = op.Gather(cu_seqlens, i_plus_1_1d, axis=0)
+            query_i = op.Slice(query_3d, start, end, seq_axis_int32)
+            key_i = op.Slice(key_3d, start, end, seq_axis_int32)
+            value_i = op.Slice(value_3d, start, end, seq_axis_int32)
+            mha_output = msft_op.MultiHeadAttention(
+                query_i,
+                key_i,
+                value_i,
+                num_heads=num_heads,
+                scale=scaling,
+            )
+            attn_output = op.Concat(attn_output, mha_output, axis=1)
+        attn_output_4d = op.Reshape(attn_output, output_shape)
+        return attn_output_4d
+
+    @onnxscript.script(opset=onnx_plugs_op)
+    def PackedAttention(
+        query,
+        key,
+        value,
+        cu_seqlens,
+        scaling: float = 0.11180339887498948,
+        num_heads: int = 16,
+    ):
+        num_patches = op.Cast(op.Size(cu_seqlens), to=onnx.TensorProto.INT32) - 1
+        starts = op.Slice(cu_seqlens, [0], [-1], [0])
+        ends = op.Slice(cu_seqlens, [1], [9223372036854775807], [0])
+        lengths = ends - starts
+        max_length = op.ReduceMax(lengths, [0], keepdims=0)  # max_seqlen
+        rows = op.Range(0, num_patches, 1)
+        rows_2d = op.Unsqueeze(rows, [1])
+        cols = op.Range(0, max_length, 1)
+        cols_2d = op.Unsqueeze(cols, [0])
+
+        position_matrix = op.Cast(rows_2d, to=onnx.TensorProto.INT32) * op.Cast(
+            max_length, to=onnx.TensorProto.INT32
+        ) + op.Cast(cols_2d, to=onnx.TensorProto.INT32)
+        position_matrix_shape = op.Shape(position_matrix)
+        token_mask = cols_2d < op.Unsqueeze(lengths, [1])
+        token_mask_1d = op.Reshape(token_mask, [-1])
+        padded_mask_1d = op.Not(token_mask_1d)
+        valid_token_positions = op.Compress(position_matrix, token_mask)
+        padded_token_positions = op.Compress(position_matrix, padded_mask_1d)
+        token_offset_1d = op.Concat(valid_token_positions, padded_token_positions, axis=0)
+        token_offset = op.Reshape(token_offset_1d, position_matrix_shape)
+
+        query_3d = op.Transpose(op.Squeeze(query, [0]), perm=[1, 0, 2])
+        shape_3d = op.Shape(query_3d)
+        query_2d = op.Reshape(query_3d, [0, -1])
+        key_2d = op.Reshape(op.Transpose(op.Squeeze(key, [0]), perm=[1, 0, 2]), [0, -1])
+        value_2d = op.Reshape(op.Transpose(op.Squeeze(value, [0]), perm=[1, 0, 2]), [0, -1])
+
+        packed_attn_output_2d = msft_op.PackedMultiHeadAttention(
+            query_2d,
+            key_2d,
+            value_2d,
+            None,
+            op.Cast(token_offset, to=onnx.TensorProto.INT32),
+            op.Cast(cu_seqlens, to=onnx.TensorProto.INT32),
+            scale=scaling,
+            num_heads=num_heads,
+        )
+        packed_attn_output_3d = op.Reshape(packed_attn_output_2d, shape_3d)
+        return op.Unsqueeze(packed_attn_output_3d, [0])
+
+    def qwen_sdpa_attention(
+        query_states: torch.Tensor,  # F10s1x16xs47x80
+        key_states: torch.Tensor,  # F10s1x16xs47x80
+        value_states: torch.Tensor,  # F10s1x16xs47x80
+        cu_seqlens: torch.Tensor,  # F7su19
+        scaling: float = 0,
+        num_heads: int = 16,
+    ) -> torch.Tensor:
+        lengths = cu_seqlens[1:] - cu_seqlens[:-1]
+        splits = [
+            torch.split(tensor, lengths.tolist(), dim=2)
+            for tensor in (query_states, key_states, value_states)
+        ]
+
+        attn_outputs = [
+            patched_sdpa_attention_forward(
+                None,
+                q,
+                k,
+                v,
+                attention_mask=None,
+                scaling=scaling,
+                dropout=0.0,
+                is_causal=False,
+            )[0]
+            for q, k, v in zip(*splits)
+        ]
+        attn_output = torch.cat(attn_outputs, dim=1)
+        return attn_output
+
+    # not ideal
+    qwen_sdpa_attention_versatile = EagerDirectReplacementWithOnnx(
+        qwen_sdpa_attention,
+        lambda qs, *args, **kwargs: torch.empty(
+            (qs.shape[0], qs.shape[2], qs.shape[1], qs.shape[3]),
+            dtype=qs.dtype,
+            device=qs.device,
+        ),
+        PackedAttention.to_function_proto(),
+        n_inputs=4,
+        n_outputs=1,
+        kwargs=dict(scaling=0.11180339887498948, num_heads=16),
+        name="qwen_sdpa_attention",
+    )
+    PLUGS.append(qwen_sdpa_attention_versatile)
 
     class patched_Qwen2_5_VLForConditionalGeneration:
         _PATCHES_ = ["prepare_inputs_for_generation"]
@@ -39,7 +181,7 @@ if patch_qwen2_5:
             second_per_grid_ts=None,
             **kwargs,
         ):
-            # Overwritten -- in specific circumstances we don't want to f
+            # Overwritten -- in specific circumstances we don't want to
             # forward image inputs to the model
             from transformers.generation import GenerationMixin
 
@@ -346,7 +488,20 @@ if patch_qwen2_5:
                     self.config._attn_implementation
                 ]
 
-            if _is_torchdynamo_exporting():
+            if (
+                attention_interface
+                is transformers.integrations.sdpa_attention.sdpa_attention_forward
+                or attention_interface is patched_sdpa_attention_forward
+            ) and strategy_for_attention_in_qwen_2_5 == "PACKED":
+                attn_output = qwen_sdpa_attention_versatile(
+                    query_states,
+                    key_states,
+                    value_states,
+                    cu_seqlens,
+                    self.scaling,
+                    self.num_heads,
+                )
+            elif _is_torchdynamo_exporting():
                 if self.config._attn_implementation == "flash_attention_2":
                     max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
                     attn_output = torch.onnx.ops.symbolic(
@@ -373,8 +528,8 @@ if patch_qwen2_5:
                 elif (
                     attention_interface
                     is transformers.integrations.sdpa_attention.sdpa_attention_forward
-                    and strategy_for_attention_in_qwen_2_5 == "LOOPMHA"
-                ):
+                    or attention_interface is patched_sdpa_attention_forward
+                ) and strategy_for_attention_in_qwen_2_5 == "LOOPMHA":
 
                     def _iteration(start_end, query_states, key_states, value_states):
                         return patched_Qwen2_5_VLVisionAttentionOneIteration.forward(
@@ -409,8 +564,8 @@ if patch_qwen2_5:
                 elif (
                     attention_interface
                     is transformers.integrations.sdpa_attention.sdpa_attention_forward
-                    and strategy_for_attention_in_qwen_2_5 == "BIGMASK"
-                ):
+                    or attention_interface is patched_sdpa_attention_forward
+                ) and strategy_for_attention_in_qwen_2_5 == "BIGMASK":
                     # make square mask
                     indices = torch.arange(
                         cu_seqlens.max(), dtype=cu_seqlens.dtype, device=cu_seqlens.device
@@ -436,33 +591,6 @@ if patch_qwen2_5:
                         dropout=0.0 if not self.training else self.attention_dropout,
                         is_causal=False,
                         **kwargs,
-                    )
-                elif (
-                    attention_interface
-                    is transformers.integrations.sdpa_attention.sdpa_attention_forward
-                    and strategy_for_attention_in_qwen_2_5 == "PACKED"
-                ):
-                    max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max()
-                    attn_output = torch.onnx.ops.symbolic(
-                        "custom::qwen25_packed_attention",
-                        (
-                            query_states,
-                            key_states,
-                            value_states,
-                            cu_seqlens,
-                            cu_seqlens,
-                            max_seqlen,
-                            max_seqlen,
-                            torch.tensor(self.scaling, dtype=torch.float32),
-                        ),
-                        dtype=query_states.dtype,
-                        shape=(
-                            query_states.shape[0],  # batch_size
-                            query_states.shape[2],  # sequence_length (total patches)
-                            query_states.shape[1],  # num_heads
-                            query_states.shape[3],  # head_size
-                        ),
-                        version=1,
                     )
                 else:
                     raise NotImplementedError(

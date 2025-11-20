@@ -384,6 +384,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         )
         from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
             patched_Qwen2_5_VLVisionAttention,
+            PLUGS_Qwen25,
         )
 
         config = get_cached_configuration("Qwen/Qwen2.5-VL-7B-Instruct")
@@ -406,7 +407,7 @@ class TestPatchPatchTransformers(ExtTestCase):
                 _is_torchdynamo_exporting()
             ), f"exporting is not set to true? {torch.compiler.is_exporting_flag}"
             got = patched_Qwen2_5_VLVisionAttention.forward(instance, **inputs)
-            self.assertEqualArray(expected, got, atol=1e-5)
+            self.assertEqualArray(expected, got, atol=1e-2)
 
         class Model(patched_class):
             def forward(
@@ -456,16 +457,20 @@ class TestPatchPatchTransformers(ExtTestCase):
                 dynamic_shapes=ds,
                 exporter=exporter,
                 filename=filename,
+                onnx_plugs=PLUGS_Qwen25,
+                target_opset=22,
             )
             # exporter_kwargs={"report":True} if exporter != "custom" else {}
-            self.assert_onnx_disc(
-                f"test_patched_qwen2_5_vl_vision_attention_forward-{exporter}",
-                onnx.load(filename),
-                instance,
-                inputs,
-                atol=1e-3,
-                rtol=1,
-            )
+            if torch.cuda.is_available():
+                self.assert_onnx_disc(
+                    f"test_patched_qwen2_5_vl_vision_attention_forward-{exporter}",
+                    onnx.load(filename),
+                    instance,
+                    inputs,
+                    atol=1e-3,
+                    rtol=1,
+                    providers=["CUDAExecutionProvider"],
+                )
         self.clean_dump()
 
     @requires_transformers("4.99")

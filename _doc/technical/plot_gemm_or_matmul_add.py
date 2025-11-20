@@ -53,6 +53,14 @@ def make_model_gemm(itype: int) -> onnx.ModelProto:
                 oh.make_node("Add", ["mm", "B"], ["MatMulAdd"]),
                 oh.make_node("FusedMatMul", ["A", "X"], ["fmm"], domain="com.microsoft"),
                 oh.make_node("Add", ["fmm", "B"], ["FusedMatMulAdd"]),
+                oh.make_node("Cast", ["A"], ["Afloat"], to=onnx.TensorProto.FLOAT),
+                oh.make_node("Cast", ["B"], ["Bfloat"], to=onnx.TensorProto.FLOAT),
+                oh.make_node("Cast", ["X"], ["Xfloat"], to=onnx.TensorProto.FLOAT),
+                oh.make_node("Gemm", ["Afloat", "Xfloat"], ["gmmfloat"]),
+                oh.make_node("Add", ["gmmfloat", "Bfloat"], ["gemmaddfloat"]),
+                oh.make_node("Cast", ["gemmaddfloat"], ["CastGemmAddCast"], to=itype),
+                oh.make_node("Gemm", ["Afloat", "Xfloat", "Bfloat"], ["GemmOnlyfloat"]),
+                oh.make_node("Cast", ["GemmOnlyfloat"], ["CastGemmOnlyCast"], to=itype),
             ],
             "test",
             [
@@ -65,6 +73,8 @@ def make_model_gemm(itype: int) -> onnx.ModelProto:
                 oh.make_tensor_value_info("GemmAdd", itype, ["a", "c"]),
                 oh.make_tensor_value_info("FusedMatMulAdd", itype, ["a", "c"]),
                 oh.make_tensor_value_info("MatMulAdd", itype, ["a", "c"]),
+                oh.make_tensor_value_info("CastGemmAddCast", itype, ["a", "c"]),
+                oh.make_tensor_value_info("CastGemmOnlyCast", itype, ["a", "c"]),
             ],
         ),
         opset_imports=[oh.make_opsetid("", 22)],
@@ -85,7 +95,7 @@ itype = onnx.TensorProto.FLOAT16
 dtype = np.float16
 model = make_model_gemm(itype)
 
-A = np.random.randn(512, 256).astype(dtype)
+A = np.random.randn(1280, 256).astype(dtype)
 X = np.random.randn(256, 256).astype(dtype)
 B = np.random.randn(256).astype(dtype)
 feeds = dict(A=A, X=X, B=B)
@@ -112,9 +122,9 @@ print(pretty_onnx(onx))
 # %%
 # Let's try with CUDA and float32 if it is available.
 
-A = torch.randn((512, 512), dtype=torch.float32)
-X = torch.randn((512, 512), dtype=torch.float32)
-B = torch.randn((512), dtype=torch.float32)
+A = torch.randn((1280, 1280), dtype=torch.float32)
+X = torch.randn((1280, 1280), dtype=torch.float32)
+B = torch.randn((1280), dtype=torch.float32)
 
 for itype, dtype, device in [
     (onnx.TensorProto.FLOAT16, torch.float16, "cpu"),
@@ -144,8 +154,10 @@ for itype, dtype, device in [
 # are similar to the others coefficients. What if we make them
 # a lot higher.
 
-B = (torch.arange(512, dtype=torch.float32) + 1) / 512 * 16384
-labels = ["linear", *[o.name for o in model.graph.output], "a @ x + b"]
+A = A / A.max()
+X = X / X.max()
+B = (torch.arange(1280, dtype=torch.float32) + 1) / 1280 * 16
+labels = ["F.linear", *[o.name for o in model.graph.output], "a @ x + b"]
 all_results = {}
 
 for itype, dtype, device in [
@@ -187,28 +199,58 @@ for itype, dtype, device in [
 # bias value vs discrepancies
 # ===========================
 #
-# Let's compare GemmOnly (so bias is included) and Gemm+Add.
+# Let's compare torch linear with GemmOnly.
 
-i, j = 1, -1
-labs = labels[i], labels[j]
 
-fig, ax = plt.subplots(len(all_results), 2, figsize=(8, 2.5 * len(results)))
-for pos, ((device, dtype), results) in enumerate(all_results.items()):
-    m1, m2 = results[i], results[j]
-    diff = torch.abs(m1.to(torch.float32) - m2.to(torch.float32)).max(dim=0)[0]
-    print(f"labels={labs}, {device}/{dtype}: max(diff)={diff.max()}")
-    expand = 0.5 if diff.max() >= 1 else diff.max().detach().cpu() / 2
-    ax[pos, 0].plot(B.tolist(), (diff.detach().cpu() + torch.rand(512) * expand).tolist(), ".")
-    ax[pos, 0].set_title(f"{labs[0]}-{labs[1]} {device}/{dtype}")
+def make_figure_axis(all_results, i, j):
+    labs = labels[i], labels[j]
+    fig, ax = plt.subplots(len(all_results), 2, figsize=(12, 4 * len(all_results)))
+    for pos, ((device, dtype), results) in enumerate(all_results.items()):
+        m1, m2 = results[i], results[j]
+        diff = torch.abs(m1.to(torch.float32) - m2.to(torch.float32)).max(dim=0)[0]
+        print(f"labels={labs}, {device}/{dtype}: max(diff)={diff.max()}")
+        expand = 0.5 if diff.max() >= 1 else diff.max().detach().cpu() / 2
+        ax[pos, 0].plot(
+            B.tolist(), (diff.detach().cpu() + torch.rand(1280) * expand).tolist(), "."
+        )
+        ax[pos, 0].set_title(f"{labs[0]}-{labs[1]} {device}/{dtype}", fontsize=10)
 
-    corr = matrix_diff(results)
-    ax[pos, 1].imshow(corr, cmap="Blues", vmin=0, vmax=corr.max())
-    # ax[pos,1].colorbar(label=f'Discrepancies {device}/{dtype}')
-    ax[pos, 1].set_xticks(range(len(labels)), labels, rotation=45)
-    ax[pos, 1].set_yticks(range(len(labels)), labels)
-    ax[pos, 1].set_title(f"max={diff.max()}")
+        corr = matrix_diff(results)
+        ax[pos, 1].imshow(corr, cmap="Wistia", vmin=0, vmax=corr.max())
+        # ax[pos,1].colorbar(label=f'Discrepancies {device}/{dtype}')
+        ax[pos, 1].set_xticks(range(len(labels)), labels, rotation=45, ha="right", fontsize=10)
+        ax[pos, 1].set_yticks(range(len(labels)), labels, fontsize=10)
+        ax[pos, 1].set_title(f"max={diff.max():1.2g}", fontsize=10)
+        for _i in range(corr.shape[0]):
+            for _j in range(corr.shape[1]):
+                ax[pos, 1].text(
+                    _j,
+                    _i,
+                    f"{corr[_i, _j]:1.1g}",
+                    ha="center",
+                    va="center",
+                    color="black",
+                    fontsize=8,
+                )
+    fig.suptitle(
+        f"Left column: discrepancies {labs[0]} VS {labs[1]}\n"
+        f"Right column: max absolute error, across all configuration\n"
+        f"white is good, orange is not"
+    )
+    return fig, ax
+
+
+fig, ax = make_figure_axis(all_results, 0, 1)
 fig.tight_layout()
-fig.savefig("plot_gemm_or_matmul_add.png")
+fig.savefig("plot_gemm_or_matmul_add1.png")
+
+# %%
+# Let's compare with ``A @ X + B``.
+
+fig, ax = make_figure_axis(all_results, -1, 1)
+fig.tight_layout()
+fig.savefig("plot_gemm_or_matmul_add2.png")
+
 
 # %%
 # Discrepancies do not happen all the time but it is very likely to happen.

@@ -1,6 +1,6 @@
 import inspect
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import onnx
 import torch
 from ..helpers import max_diff
@@ -49,6 +49,8 @@ class EagerDirectReplacementWithOnnx:
     :param n_outputs: same for the number of outputs,
         only tensors must be counted
     :param name: the name of the custom op, the function name if not specified
+    :param kwargs: constants parameters with their default values
+    :param verbose: verbose level
 
     Here is an example:
 
@@ -141,6 +143,8 @@ class EagerDirectReplacementWithOnnx:
         n_inputs: Optional[int] = None,
         n_outputs: Optional[int] = None,
         name: Optional[str] = None,
+        kwargs: Optional[Dict[str, Union[int, float]]] = None,
+        verbose: int = 0,
     ):
         assert isinstance(
             function_proto, onnx.FunctionProto
@@ -152,7 +156,18 @@ class EagerDirectReplacementWithOnnx:
         self.function_proto = function_proto
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
-        self.name = name or eager_fn.__name__
+        self.name = name or (
+            eager_fn.__name__
+            if "<" not in eager_fn.__name__
+            else eager_fn.__qualname__.replace("<locals>", "L")
+            .replace("<lambda>", "l")
+            .replace(".", "_")
+        )
+        self.kwargs = kwargs or {}
+        assert all(isinstance(v, (int, float)) for v in self.kwargs.values()), (
+            f"Only int or floats are allowed for kwargs={kwargs}, one of them "
+            f"does not respect that constraint."
+        )
         sig = inspect.signature(self.eager_fn)
         params = list(sig.parameters)
         assert (
@@ -169,8 +184,10 @@ class EagerDirectReplacementWithOnnx:
         assert (
             function_proto.domain == self.domain
         ), f"Function domain must be {self.domain!r} but it is {function_proto.domain!r}"
-        self.arg_names = params
-        self.custom_op = self._registers()
+        self.args_name = [p for p in params if p not in self.kwargs]
+        self.kwargs_name = [p for p in params if p in self.kwargs]
+        self.verbose = verbose
+        self.custom_op = self._register()
 
     @property
     def domain(self) -> str:
@@ -184,21 +201,39 @@ class EagerDirectReplacementWithOnnx:
 
     @property
     def torch_op(self) -> Callable:
-        "Returns ``torch.ops.onny_plug.<name>"
+        "Returns ``torch.ops.onny_plug.<name>``."
         return getattr(getattr(torch.ops, self.domain), self.name).default
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         """Calls eager_fn or shape_fn if the model is being exported."""
         if is_exporting():
-            return self.shape_fn(*args)
-        return self.eager_fn(*args)
+            return self.torch_op(*args)
+        return self.eager_fn(*args, **kwargs)
 
-    def _registers(self):
+    def _register(self):
         """Registers the custom op."""
-        inputs = ", ".join([f"Tensor {p}" for p in self.arg_names])
+        input_args = [f"Tensor {p}" for p in self.args_name]
+        for p in self.kwargs_name:
+            val = self.kwargs[p]
+            if isinstance(val, int):
+                input_args.append(f"int {p}={val}")
+            elif isinstance(val, float):
+                input_args.append(f"float {p}={val}")
+            else:
+                raise NotImplementedError(
+                    f"kwargs {p!r} has a default value of unsupported type {type(val)}"
+                )
+
+        inputs = ", ".join(input_args)
         schema = f"({inputs}) -> Tensor"
         if self.n_outputs > 1:
             schema += "[]"
+        if self.verbose:
+            print(
+                f"[EagerDirectReplacementWithOnnx._register] "
+                f"'torch.ops.{self.domain}.{self.name}"
+            )
+            print(f"[EagerDirectReplacementWithOnnx._register] schema={schema}")
         custom_def = torch.library.CustomOpDef(self.domain, self.name, schema, self.eager_fn)
         custom_def.register_kernel(None)(self.eager_fn)
         custom_def._abstract_fn = self.shape_fn
@@ -265,11 +300,22 @@ class EagerDirectReplacementWithOnnx:
             sts: Optional[Dict[str, Any]],
             outputs: List[str],
             *args,
+            **kwargs,
         ) -> Any:
-            if not g.has_local_function(self.name, self.domain):
+            if not g.has_local_function(
+                self.function_proto.name, domain=self.function_proto.domain
+            ):
                 g.add_function(self.function_proto)
+            ags = args[: len(self.args_name)]
+            kws = dict(zip(self.kwargs_name, args[len(self.args_name) :]))
+            kws.update(kwargs)
             res = g.make_node(
-                self.name, args, outputs, domain=self.domain, name=self.target_name
+                self.function_proto.name,
+                ags,
+                outputs,
+                domain=self.function_proto.domain,
+                name=self.target_name,
+                **kws,
             )
             if not sts:
                 new_shapes = self.shape_fn(*args)
@@ -290,8 +336,8 @@ class EagerDirectReplacementWithOnnx:
         """
         import onnxscript
 
-        onnx_plug_op = onnxscript.values.Opset(domain=self.domain, version=1)
-        schema = onnx_plug_op[self.name]
+        onnx_plug_op = onnxscript.values.Opset(domain=self.function_proto.domain, version=1)
+        schema = onnx_plug_op[self.function_proto.name]
         if schema is None:
             all_types = [
                 "tensor(float)",
@@ -307,8 +353,8 @@ class EagerDirectReplacementWithOnnx:
             for i in range(self.n_outputs):
                 type_constraints.append((f"U{i}", all_types, ""))
             schema = onnx.defs.OpSchema(
-                self.name,
-                self.domain,
+                self.function_proto.name,
+                self.function_proto.domain,
                 1,
                 inputs=[
                     onnx.defs.OpSchema.FormalParameter(f"arg_{i}", f"T{i}")
@@ -321,7 +367,7 @@ class EagerDirectReplacementWithOnnx:
                 type_constraints=type_constraints,
             )
             onnx.defs.register_schema(schema)
-        op = onnxscript.values.Op(onnx_plug_op, self.name, schema)
+        op = onnxscript.values.Op(onnx_plug_op, self.function_proto.name, schema)
 
         def converter(*cargs):
             return op(*cargs, n_outputs=self.n_outputs)
