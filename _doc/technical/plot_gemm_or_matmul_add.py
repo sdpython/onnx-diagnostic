@@ -234,7 +234,7 @@ def make_figure_axis(all_results, i, j):
                 )
     fig.suptitle(
         f"Left column: discrepancies {labs[0]} VS {labs[1]}\n"
-        f"Right column: max absolute error, accross all configuration\n"
+        f"Right column: max absolute error, across all configuration\n"
         f"white is good, orange is not"
     )
     return fig, ax

@@ -201,7 +201,7 @@ class EagerDirectReplacementWithOnnx:
 
     @property
     def torch_op(self) -> Callable:
-        "Returns ``torch.ops.onny_plug.<name>"
+        "Returns ``torch.ops.onny_plug.<name>``."
         return getattr(getattr(torch.ops, self.domain), self.name).default
 
     def __call__(self, *args, **kwargs):
