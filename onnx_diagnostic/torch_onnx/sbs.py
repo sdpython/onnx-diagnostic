@@ -181,11 +181,13 @@ class RunAlignedRecord:
     ep_target: Optional[str] = None
     onnx_op_type: Optional[str] = None
     onnx_id_output: Optional[int] = None
-    shape_type: Optional[str] = None
+    ep_shape_type: Optional[str] = None
+    onnx_shape_type: Optional[str] = None
     err_abs: Optional[float] = None
     err_rel: Optional[float] = None
     err_dev: Optional[float] = None
     err_nan: Optional[float] = None
+    err_h01: Optional[float] = None
     ep_time_run: Optional[float] = None
     onnx_time_run: Optional[float] = None
 
@@ -200,6 +202,8 @@ class RunAlignedRecord:
             self.err_dev = diff["dev"]
         if "nan" in diff:
             self.err_nan = diff["nan"]
+        if "rep" in diff:
+            self.err_h01 = diff["rep"][">0.1"]
 
 
 def run_aligned(
@@ -221,6 +225,7 @@ def run_aligned(
     use_tensor: bool = False,
     atol: Optional[float] = None,
     rtol: Optional[float] = None,
+    gemmlinear: bool = False,
     verbose: int = 0,
     exc: bool = True,
 ) -> Iterator[RunAlignedRecord]:
@@ -240,6 +245,8 @@ def run_aligned(
         for the onnx runtime
     :param atol: absolute tolerance
     :param rtol: relative tolerance
+    :param gemmlinear: if True, replaces ``Gemm(A,X.T,B)`` by
+        ``torch.nn.functional.linear(A,X,B)`` on onnx side
     :param verbose: verbosity level
     :param exc: stops if an exception
     :return: a list of :class:`RunAlignedRecord`
@@ -446,7 +453,7 @@ def run_aligned(
 
         to = mapping_onnx_to_torch.get(o, o)
         if to in torch_results:
-            d = max_diff(torch_results[to], r)
+            d = max_diff(torch_results[to], r, hist=[0.1])
             if verbose > 1:
                 if o == to:
                     print(f"[run_aligned-==] cmp {to}: {string_diff(d)}")
@@ -470,11 +477,58 @@ def run_aligned(
                 onnx_id_node=i_onnx,
                 ep_name=o,
                 onnx_name=to,
-                shape_type=string_type(torch_results[to], **str_kws),
+                ep_shape_type=string_type(torch_results[to], **str_kws),
+                onnx_shape_type=string_type(r, **str_kws),
             )
             r.set_diff(d)
             return r
         return None
+
+    def _duplicated_values(d):
+        rev = {}
+        for k, v in d.items():
+            if v in rev:
+                rev[v].append(k)
+            else:
+                rev[v] = [k]
+        res = {k: v for k, v in rev.items() if len(v) > 1}
+        final = set()
+        for v in res.values():
+            final |= set(v)
+        return final
+
+    def _update(max_abs, n_inf, n_nan, err_abs):
+        if np.isinf(err_abs) or np.isnan(err_abs):
+            n_inf += 1
+        elif err_abs > 1e6:
+            n_nan += 1
+        else:
+            max_abs = max(max_abs, err_abs)
+        return max_abs, n_inf, n_nan
+
+    def _gemm_linear(node, feeds, sess):
+        if node.op_type != "Gemm" or node.domain != "":
+            return None
+        for att in node.attribute:
+            if att.name == "alpha":
+                if att.f != 1:
+                    return None
+            elif att.name == "beta":
+                if att.f != 1:
+                    return None
+            elif att.name == "transA":
+                if att.i != 0:
+                    return None
+            elif att.name == "transB":
+                if att.i != 1:
+                    return None
+        t = torch.nn.functional.linear(
+            feeds[node.input[0]], feeds[node.input[1]], feeds[node.input[2]]
+        )
+        got = sess.run(None, feeds)
+        print(f"-- GEMM {node.output[0]}: {string_diff(max_diff(t, got, hist=[0.1]))}")
+        assert t.shape == got[0].shape, f"shape mismatch {t.shape} != {got[0].shape}"
+        return [t]
 
     # preparation with ep.graph.nodes
     ep_state_dict = {**ep.state_dict, **dict(ep.named_buffers(), **ep.tensor_constants)}
@@ -483,11 +537,8 @@ def run_aligned(
         **{f"b_{name.replace('.', '_')}": name for name, _ in ep.named_buffers()},
         **{f"c_{name.replace('.', '_')}": name for name in ep.tensor_constants},
     }
+    skip_mapping_torch_onnx = _duplicated_values(placeholders_to_state_dict)
     placeholders = {}
-    assert len(placeholders_to_state_dict) == len(ep_state_dict), (
-        f"Some names are confusing between {sorted(ep_state_dict)} "
-        f"and {sorted(placeholders_to_state_dict)}"
-    )
     if verbose:
         print(f"[run_aligned] ep: model has {len(ep_state_dict)} torch constants or weights.")
 
@@ -522,6 +573,10 @@ def run_aligned(
                     f"torch_input_names={torch_input_names!r}, "
                     f"onnx_input_names={[n.name for n in onx.graph.input]}, "
                     f"node.name={node.name!r} cannot be an input"
+                )
+                assert node.name not in skip_mapping_torch_onnx, (
+                    f"{node.name!r} is ambiguous, cannot be mapped due to "
+                    f"{skip_mapping_torch_onnx}"
                 )
                 torch_names_to_onnx_names[node.name] = onx.graph.input[
                     len(torch_input_names)
@@ -578,27 +633,28 @@ def run_aligned(
     memory_cuda = 0
     for init in onx.graph.initializer:  # type: ignore
         positions[init.name] = -1
+        t = None
         if init.name in torch_results:
-            t = torch_results[init.name]
-            torch_names_to_onnx_names[init.name] = init.name
-            # We should check tensors and proto are the same.
+            if init.name not in skip_mapping_torch_onnx:
+                t = torch_results[init.name]
+                torch_names_to_onnx_names[init.name] = init.name
         else:
             new_name = f"p_{init.name.replace('.', '_')}"
-            if new_name in torch_results:
+            if new_name not in skip_mapping_torch_onnx and new_name in torch_results:
                 t = torch_results[new_name]
-                torch_names_to_onnx_names[init.name] = new_name
+                torch_names_to_onnx_names[new_name] = init.name
                 # We should check tensors and proto are the same.
-            else:
-                t = to_tensor(init)
-                if default_device and t.numel() >= 1024:
-                    # Let's force its way to cuda (should check the device has well).
-                    t = t.to(default_device)
-                    yield RunAlignedRecord(
-                        onnx_id_node=-1,
-                        onnx_name=n,
-                        onnx_op_type="initializer",
-                        shape_type=string_type(t, **str_kws),
-                    )
+        if t is None:
+            t = to_tensor(init)
+            if default_device and t.numel() >= 1024:
+                # Let's force its way to cuda (should check the device has well).
+                t = t.to(default_device)
+            yield RunAlignedRecord(
+                onnx_id_node=-1,
+                onnx_name=n,
+                onnx_op_type="initializer",
+                onnx_shape_type=string_type(t, **str_kws),
+            )
 
         size = t.element_size() * t.numel()
         if t.is_cuda:
@@ -637,7 +693,7 @@ def run_aligned(
     already_run = set()
     ep_durations = {}
     yielded_nodes = 0
-    max_abs = 0
+    max_abs, n_inf, n_nan = 0, 0, 0
     for i, node in loop:
         if verbose > 1:
             if node.op == "call_function":
@@ -650,7 +706,7 @@ def run_aligned(
         elif verbose == 1:
             loop.set_description(
                 f"ep {i}/{len(ep_graph_nodes)} nx {last_position}/{len(onx.graph.node)} "
-                f"mapped {yielded_nodes} maxabs {max_abs:1.5f}"
+                f"mapped {yielded_nodes} maxabs {max_abs:1.5f}, n_inf={n_inf}, n_nan={n_nan}"
             )
 
         if node.op == "placeholder":
@@ -665,8 +721,8 @@ def run_aligned(
                     f"torch_results[{node.name}] not a tensor but "
                     f"{type(torch_results[node.name])}, use_tensor={use_tensor}"
                 )
+                t = torch_results[node.name]
                 if verbose > 1:
-                    t = torch_results[node.name]
                     print(f"[run_aligned-ep] =ags: {node.name}={string_type(t, **str_kws)}")
                 # Otherwise, it is an input.
                 record = RunAlignedRecord(
@@ -676,7 +732,10 @@ def run_aligned(
                     onnx_name=torch_names_to_onnx_names[node.name],
                     ep_target="input",
                     onnx_op_type="input",
-                    shape_type=string_type(t, **str_kws),
+                    ep_shape_type=string_type(t, **str_kws),
+                    onnx_shape_type=string_type(
+                        onnx_results[torch_names_to_onnx_names[node.name]], **str_kws
+                    ),
                 )
                 yield record
             else:
@@ -689,7 +748,10 @@ def run_aligned(
                     f"should have been added to torch_results: {sorted(torch_results)}"
                 )
                 t = torch_results[node.name]
-                if node.name in torch_names_to_onnx_names:
+                if (
+                    node.name in torch_names_to_onnx_names
+                    and node.name not in skip_mapping_torch_onnx
+                ):
                     if verbose > 1:
                         print(
                             f"[run_aligned-ep] =plh: "
@@ -702,13 +764,16 @@ def run_aligned(
                         onnx_name=torch_names_to_onnx_names[node.name],
                         ep_target="placeholder",
                         onnx_op_type="initializer",
-                        shape_type=string_type(t, **str_kws),
+                        ep_shape_type=string_type(t, **str_kws),
+                        onnx_shape_type=string_type(
+                            onnx_results[torch_names_to_onnx_names[node.name]], **str_kws
+                        ),
                     )
                     if not is_input:
                         record.set_diff(
                             max_diff(
-                                ep_state_dict[placeholders_to_state_dict[node.name]],
-                                onnx_results[node.name],
+                                t,
+                                onnx_results[torch_names_to_onnx_names[node.name]],
                                 hist=[0.1],
                             )
                         )
@@ -722,7 +787,7 @@ def run_aligned(
                         ep_id_node=i,
                         ep_name=node.name,
                         ep_target="placeholder",
-                        shape_type=string_type(torch_results[node.name], **str_kws),
+                        ep_shape_type=string_type(t, **str_kws),
                     )
             continue
 
@@ -765,20 +830,36 @@ def run_aligned(
             elif verbose == 1:
                 loop.set_description(
                     f"ep {i}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
-                    f"mapped {yielded_nodes} maxabs {max_abs:1.5f}"
+                    f"mapped {yielded_nodes} maxabs {max_abs:1.5f}, "
+                    f"n_inf={n_inf}, n_nan={n_nan}"
                 )
+
             ref = run_cls(node, **run_cls_kwargs)
             # We need to clone because the runtime maybe using dlpack to create OrtValue
-            feeds = {k: onnx_results[k] for k in node.input if k}
+            feeds = (
+                {k: onnx_results[k].clone() for k in node.input if k}
+                if use_tensor
+                else {k: onnx_results[k].copy() for k in node.input if k}
+            )
             assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
             begin = time.perf_counter()
-            try:
-                res = ref.run(None, feeds)  # type: ignore[attr-defined]
-            except Exception as e:
-                raise RuntimeError(
-                    f"Unable to run node {node.op_type}, domain={node.domain} "
-                    f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
-                ) from e
+            res = None
+            if use_tensor and gemmlinear and node.op_type == "Gemm":
+                res = _gemm_linear(node, feeds, ref)
+                if node.output[0] in torch_results and node.output[0] in {
+                    "linear_84",
+                    "linear_89",
+                    "linear_159",
+                }:
+                    res = [torch_results[node.output[0]].clone()]
+            if res is None:
+                try:
+                    res = ref.run(None, feeds)  # type: ignore[attr-defined]
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Unable to run node {node.op_type}, domain={node.domain} "
+                        f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
+                    ) from e
             duration = time.perf_counter() - begin
             assert (
                 not has_cuda
@@ -829,7 +910,7 @@ def run_aligned(
                     tmp.onnx_time_run = duration
                     yielded_nodes += 1
                     if tmp.err_abs is not None:
-                        max_abs = max(max_abs, tmp.err_abs)
+                        max_abs, n_inf, n_nan = _update(max_abs, n_inf, n_nan, tmp.err_abs)
                     yield tmp
             already_run.add(i_onnx)
 
@@ -851,13 +932,22 @@ def run_aligned(
                 f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
             )
         ref = run_cls(node, **run_cls_kwargs)
-        feeds = {k: onnx_results[k] for k in node.input if k}
+        feeds = (
+            {k: onnx_results[k].clone() for k in node.input if k}
+            if use_tensor
+            else {k: onnx_results[k].copy() for k in node.input if k}
+        )
         assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
         begin = time.perf_counter()
-        res = ref.run(None, feeds)  # type: ignore[attr-defined]
+        res = None
+        if use_tensor and gemmlinear and node.op_type == "Gemm":
+            res = _gemm_linear(node, feeds, ref)
+        if res is None:
+            res = ref.run(None, feeds)  # type: ignore[attr-defined]
         duration = time.perf_counter() - begin
         list_node_output = list(node.output)
         node_output = [o for o in list_node_output if o]
+
         for o, r in zip(node_output, res):
             if r is None or o is None:
                 continue
@@ -887,7 +977,7 @@ def run_aligned(
                 tmp.onnx_time_run = duration
                 yielded_nodes += 1
                 if tmp.err_abs is not None:
-                    max_abs = max(max_abs, tmp.err_abs)
+                    max_abs, n_inf, n_nan = _update(max_abs, n_inf, n_nan, tmp.err_abs)
                 yield tmp
         already_run.add(i_onnx)
 

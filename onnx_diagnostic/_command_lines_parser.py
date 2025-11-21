@@ -1202,13 +1202,26 @@ def get_parser_sbs() -> ArgumentParser:
         required=False,
         help="Saves the result in an excel file every <ratio> nodes.",
     )
+    parser.add_argument(
+        "--first",
+        action=BooleanOptionalAction,
+        default=False,
+        help="First runs the whole model.",
+    )
+    parser.add_argument(
+        "--gemmlinear",
+        action=BooleanOptionalAction,
+        default=False,
+        help="Replaces Gemm(A,X.T,B) by torch...linear(A,X,B) on onnx side",
+    )
+
     return parser
 
 
 def _cmd_sbs(argv: List[Any]):
     import pandas
     import torch
-    from .helpers import string_type
+    from .helpers import flatten_object, max_diff, string_diff, string_type
     from .torch_onnx.sbs import run_aligned
     from .reference import OnnxruntimeEvaluator
 
@@ -1257,6 +1270,23 @@ def _cmd_sbs(argv: List[Any]):
     ep = torch.export.load(args.ep)
     print(f"-- done in {time.perf_counter() - begin:1.1f}s")
 
+    if args.first:
+        print("-- compare first, run ep")
+        print(f"-- args: {string_type(margs, with_shape=True, with_device=True)}")
+        print(f"-- mkwargs: {string_type(mkwargs, with_shape=True, with_device=True)}")
+        expected = ep.module()(*margs, **mkwargs)
+        print(f"-- expected: {string_type(expected, with_shape=True, with_device=True)}")
+        sess = OnnxruntimeEvaluator(args.onnx, whole=True)
+        onx_inputs = flatten_object([margs, mkwargs], drop_keys=True)
+        feeds = dict(zip(sess.input_names, onx_inputs))
+        print(f"-- feeds: {string_type(feeds, with_shape=True, with_device=True)}")
+        got = sess.run(None, feeds)
+        print(f"-- got: {string_type(got, with_shape=True, with_device=True)}")
+        diff = max_diff(expected, got, hist=[0.1])
+        print(f"-- diff: {string_diff(diff)}")
+        print("-- done")
+        del sess
+
     print(f"-- load onnx {args.onnx!r}")
     begin = time.perf_counter()
     onx = onnx.load(args.onnx)
@@ -1275,6 +1305,7 @@ def _cmd_sbs(argv: List[Any]):
         args=margs,
         kwargs=mkwargs,
         use_tensor=True,
+        gemmlinear=args.gemmlinear,
         exc=False,
     ):
         data.append(obs)
