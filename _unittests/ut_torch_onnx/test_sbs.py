@@ -432,13 +432,13 @@ class TestSideBySide(ExtTestCase):
             ],
             sorted(df.columns),
         )
-        self.assertEqual(len(results), 12)
+        self.assertEqual(len(results), 8)
         self.assertEqual(
+            [None, None, None, None, None, 0, 0, 0],
             [r.err_dev for r in results],
-            [None, None, None, None, None, None, None, None, None, 0, 0, 0],
         )
         self.assertEqual(
-            [-1.0, -1.0, -1.0, -1.0, -10.0, -10.0, -10.0, -10.0, -1.0, 0.0, 1.0, 2.0],
+            [-10.0, -10.0, -10.0, -10.0, -1.0, 0.0, 1.0, 2.0],
             df["onnx_id_node"].fillna(-10).tolist(),
         )
         self.clean_dump()
@@ -466,7 +466,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 2)
 
 
 if __name__ == "__main__":

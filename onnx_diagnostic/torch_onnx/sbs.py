@@ -498,7 +498,7 @@ def run_aligned(
     torch_results: Dict[str, Any] = {}
     last_position = 0
     torch_output_names = None
-    torch_input_names = []
+    torch_input_names: List[str] = []
     name_to_ep_node = {}
     torch_names_to_onnx_names = {}
     for i, node in enumerate(ep_graph_nodes):
