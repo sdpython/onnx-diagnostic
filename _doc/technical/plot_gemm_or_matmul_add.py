@@ -10,8 +10,8 @@ precision of the computation is taken into account.
 What an operator Gemm in :epkg:`onnxruntime`, the most simple
 way to represent a linear neural layer.
 
-A model with three choices
-==========================
+A model with many choices
+=========================
 """
 
 import cpuinfo

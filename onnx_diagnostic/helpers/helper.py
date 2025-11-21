@@ -1486,19 +1486,27 @@ def max_diff(
             dev=dev,
         )
         if hist:
-            if isinstance(hist, bool):
-                hist = torch.tensor(
-                    [0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype
+            if isinstance(hist, list) and len(hist) == 1:
+                res["rep"] = {f">{hist[0]}": (diff > hist[0]).sum().item()}
+            elif isinstance(hist, list) and len(hist) == 2:
+                res["rep"] = {
+                    f">{hist[0]}": (diff > hist[0]).sum().item(),
+                    f">{hist[1]}": (diff > hist[1]).sum().item(),
+                }
+            else:
+                if isinstance(hist, bool):
+                    hist = torch.tensor(
+                        [0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype
+                    )
+                hist = torch.tensor(hist).to(diff.device)
+                ind = torch.bucketize(diff.reshape((-1,)), hist, right=False)
+                cou = torch.bincount(ind, minlength=ind.shape[0] + 1)
+                res["rep"] = dict(
+                    zip(
+                        [f">{x}" for x in hist],
+                        [int(i) for i in (cou.sum() - torch.cumsum(cou, 0))],
+                    )
                 )
-            hist = hist.to(diff.device)
-            ind = torch.bucketize(diff.reshape((-1,)), hist, right=False)
-            cou = torch.bincount(ind, minlength=ind.shape[0] + 1)
-            res["rep"] = dict(
-                zip(
-                    [f">{x}" for x in hist],
-                    [int(i) for i in (cou.sum() - torch.cumsum(cou, 0))],
-                )
-            )
         return res  # type: ignore
 
     if isinstance(expected, int) and isinstance(got, torch.Tensor):
