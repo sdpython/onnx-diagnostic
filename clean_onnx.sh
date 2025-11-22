@@ -30,7 +30,8 @@ rm _plot_torch_sklearn_201_knnpy.py
 
 rm _doc/sg_execution_times.rst
 
-rm _doc/examples/plot*.onnx
+rm _doc/examples/_debug*
+rm _doc/examples/plot*.onnx*
 rm _doc/examples/plot*.txt
 rm _doc/examples/ort*.onnx
 rm _doc/examples/*.sarif
@@ -83,6 +84,7 @@ rm _doc/technical/*.dynamo.onnx
 rm _doc/technical/*.script.onnx
 rm _doc/technical/dump_models -rf
 rm _doc/technical/dump_onx_*
+rm _doc/technical/model_*.onnx* -rf
 
 rm _tools/bin -rf
 rm _tools/mambaroot -rf

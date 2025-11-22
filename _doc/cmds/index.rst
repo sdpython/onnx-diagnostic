@@ -9,4 +9,5 @@ Command Lines
     :maxdepth: 1
 
     config
+    sbs
     validate

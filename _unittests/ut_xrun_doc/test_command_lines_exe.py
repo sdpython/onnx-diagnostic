@@ -2,10 +2,12 @@ import os
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
+import pandas
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
 from onnx_diagnostic._command_lines_parser import main
 from onnx_diagnostic.helpers.log_helper import enumerate_csv_files
+from onnx_diagnostic.export.api import to_onnx
 
 
 class TestCommandLines(ExtTestCase):
@@ -87,6 +89,71 @@ class TestCommandLines(ExtTestCase):
         text = st.getvalue()
         self.assertIn("[CubeLogs.to_excel] plots 1 plots", text)
         self.assertExists(output)
+
+    @ignore_warnings(UserWarning)
+    def test_h_parser_sbs(self):
+        import torch
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super(Model, self).__init__()
+                self.fc1 = torch.nn.Linear(10, 32)  # input size 10 → hidden size 32
+                self.relu = torch.nn.ReLU()
+                self.fc2 = torch.nn.Linear(32, 1)  # hidden → output
+
+            def forward(self, x):
+                x = self.relu(self.fc1(x))
+                x = self.fc2(x)
+                return x
+
+        inputs = dict(x=torch.randn((5, 10)))
+        ds = dict(x={0: "batch"})
+        input_file = self.get_dump_file("test_h_parser_sbs.inputs.pt")
+        ep_file = self.get_dump_file("test_h_parser_sbs.ep")
+        onnx_file = self.get_dump_file("test_h_parser_sbs.model.onnx")
+        torch.save(inputs, input_file)
+        to_onnx(
+            Model(),
+            kwargs=inputs,
+            dynamic_shapes=ds,
+            exporter="custom",
+            save_ep=(ep_file, 2**30),
+            filename=onnx_file,
+        )
+
+        output = self.get_dump_file("test_h_parser_sbs.xlsx")
+        st = StringIO()
+        with redirect_stdout(st):
+            main(
+                [
+                    "sbs",
+                    "-v",
+                    "1",
+                    "--first",
+                    "-i",
+                    input_file,
+                    "-e",
+                    f"{ep_file}.ep.pt2",
+                    "-o",
+                    output,
+                    "-m",
+                    onnx_file,
+                ]
+            )
+        text = st.getvalue()
+        self.assertIn("[run_aligned", text)
+        self.assertExists(output)
+        df = pandas.read_excel(output).apply(
+            lambda col: col.fillna("") if col.dtype == "object" else col
+        )
+        self.assertLess(df["err_abs"].max(), 1e-5)
+        self.assertEqual(df["err_h01"].max(), 0)
+        self.assertIn("p_fc1_weight", set(df["ep_name"]))
+        self.assertIn("fc1.bias", set(df["onnx_name"]))
+        self.assertNotIn("NaN", set(df["ep_name"]))
+        print(df)
+        print(st.getvalue())
+        self.assertIn("[run_aligned] done", st.getvalue())
 
 
 if __name__ == "__main__":

@@ -206,6 +206,31 @@ class RunAlignedRecord:
             self.err_h01 = diff["rep"][">0.1"]
 
 
+@dataclass
+class StatusRunAligned:
+    "Information to display while running the side-by-side"
+
+    max_abs: float = 0.0
+    n_inf: int = 0
+    n_nan: int = 0
+    yielded_nodes: int = 0
+
+    def to_str(self) -> str:
+        "Nice display."
+        return (
+            f"yielded={self.yielded_nodes} maxabs={self.max_abs:1.3f} "
+            f"#inf={self.n_inf} #nan={self.n_nan}"
+        )
+
+    def update(self, err_abs: float):
+        if np.isinf(err_abs) or np.isnan(err_abs):
+            self.n_inf += 1
+        elif err_abs > 1e6:
+            self.n_nan += 1
+        else:
+            self.max_abs = max(self.max_abs, err_abs)
+
+
 def run_aligned(
     ep: torch.export.ExportedProgram,
     onx: Union[onnx.ModelProto, onnx.FunctionProto],
@@ -484,6 +509,117 @@ def run_aligned(
             return r
         return None
 
+    def _loop_onnx_node(
+        onx,
+        ep_graph_nodes,
+        onnx_results,
+        mapping_onnx_to_torch,
+        torch_results,
+        ep_durations,
+        use_tensor,
+        i,
+        i_onnx,
+        name_to_ep_node,
+        run_cls_kwargs,
+        str_kws,
+        status,
+        already_run,
+        verbose,
+    ):
+
+        if i_onnx in already_run:
+            yield None
+        node = onx.graph.node[i_onnx]
+        if verbose > 1:
+            print(
+                f"[run_aligned] run onx.graph.node[{i_onnx}]: "
+                f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
+            )
+        elif verbose == 1:
+            loop.set_description(
+                f"ep {i}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
+                f"{status.to_str()}"
+            )
+
+        ref = run_cls(node, **run_cls_kwargs)
+        # We need to clone because the runtime maybe using dlpack to create OrtValue
+        feeds = (
+            {k: onnx_results[k].clone() for k in node.input if k}
+            if use_tensor
+            else {k: onnx_results[k].copy() for k in node.input if k}
+        )
+        assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
+        begin = time.perf_counter()
+        res = None
+        if use_tensor and gemmlinear and node.op_type == "Gemm":
+            res = _gemm_linear(node, feeds, ref)
+        if res is None:
+            try:
+                res = ref.run(None, feeds)  # type: ignore[attr-defined]
+            except Exception as e:
+                raise RuntimeError(
+                    f"Unable to run node {node.op_type}, domain={node.domain} "
+                    f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
+                ) from e
+        duration = time.perf_counter() - begin
+        assert (
+            not has_cuda
+            or not any(t is not None and t.is_cuda for t in feeds.values())
+            or any(t is not None and t.is_cuda for t in res)
+            or node.op_type in {"Shape", "Size"}  # on CPU no matter what
+            or node.op_type
+            in {
+                "Add",
+                "Concat",
+                "Div",
+                "Gather",
+                "Mul",
+                "Range",
+                "Squeeze",
+                "Sub",
+                "Unsqueeze",
+            }  # not sure, could be about shapes
+        ), (
+            f"One input is on cuda but there is no float output on cuda, "
+            f"feeds={string_type(feeds, with_device=True, with_shape=True)}, "
+            f"res={string_type(res, with_device=True, with_shape=True)}, "
+            f"node is {pretty_onnx(node)}"
+        )
+        list_node_output = list(node.output)
+        node_output = [o for o in list_node_output if o]
+        for o, r in zip(node_output, res):
+            if r is None or o is None:
+                continue
+            tmp = _loop_cmp(
+                mapping_onnx_to_torch,
+                torch_results,
+                onnx_results,
+                o,
+                r,
+                verbose,
+                atol,
+                rtol,
+                i,
+                i_onnx,
+            )
+            if tmp is not None:
+                if tmp.ep_name in name_to_ep_node:
+                    tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
+                    tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
+                    tmp.ep_time_run = ep_durations[tmp.ep_id_node]
+                else:
+                    tmp.ep_id_node = None
+                    tmp.ep_target = None
+                    tmp.ep_name = None
+                tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
+                tmp.onnx_id_output = list_node_output.index(o)
+                tmp.onnx_time_run = duration
+                status.yielded_nodes += 1
+                if tmp.err_abs is not None:
+                    status.update(tmp.err_abs)
+                yield tmp
+        already_run.add(i_onnx)
+
     def _duplicated_values(d):
         rev = {}
         for k, v in d.items():
@@ -496,15 +632,6 @@ def run_aligned(
         for v in res.values():
             final |= set(v)
         return final
-
-    def _update(max_abs, n_inf, n_nan, err_abs):
-        if np.isinf(err_abs) or np.isnan(err_abs):
-            n_inf += 1
-        elif err_abs > 1e6:
-            n_nan += 1
-        else:
-            max_abs = max(max_abs, err_abs)
-        return max_abs, n_inf, n_nan
 
     def _gemm_linear(node, feeds, sess):
         if node.op_type != "Gemm" or node.domain != "":
@@ -651,7 +778,7 @@ def run_aligned(
                 t = t.to(default_device)
             yield RunAlignedRecord(
                 onnx_id_node=-1,
-                onnx_name=n,
+                onnx_name=init.name,
                 onnx_op_type="initializer",
                 onnx_shape_type=string_type(t, **str_kws),
             )
@@ -692,8 +819,7 @@ def run_aligned(
         print(f"[run_aligned] ep: starts side-by-side with {len(ep_graph_nodes)} nodes")
     already_run = set()
     ep_durations = {}
-    yielded_nodes = 0
-    max_abs, n_inf, n_nan = 0, 0, 0
+    status = StatusRunAligned()
     for i, node in loop:
         if verbose > 1:
             if node.op == "call_function":
@@ -706,7 +832,7 @@ def run_aligned(
         elif verbose == 1:
             loop.set_description(
                 f"ep {i}/{len(ep_graph_nodes)} nx {last_position}/{len(onx.graph.node)} "
-                f"mapped {yielded_nodes} maxabs {max_abs:1.5f}, n_inf={n_inf}, n_nan={n_nan}"
+                f"{status.to_str()}"
             )
 
         if node.op == "placeholder":
@@ -819,100 +945,25 @@ def run_aligned(
             continue
 
         for i_onnx in range(last_position, max_pos + 1):
-            if i_onnx in already_run:
-                continue
-            node = onx.graph.node[i_onnx]
-            if verbose > 1:
-                print(
-                    f"[run_aligned] run onx.graph.node[{i_onnx}]: "
-                    f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
-                )
-            elif verbose == 1:
-                loop.set_description(
-                    f"ep {i}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
-                    f"mapped {yielded_nodes} maxabs {max_abs:1.5f}, "
-                    f"n_inf={n_inf}, n_nan={n_nan}"
-                )
-
-            ref = run_cls(node, **run_cls_kwargs)
-            # We need to clone because the runtime maybe using dlpack to create OrtValue
-            feeds = (
-                {k: onnx_results[k].clone() for k in node.input if k}
-                if use_tensor
-                else {k: onnx_results[k].copy() for k in node.input if k}
-            )
-            assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
-            begin = time.perf_counter()
-            res = None
-            if use_tensor and gemmlinear and node.op_type == "Gemm":
-                res = _gemm_linear(node, feeds, ref)
-                if node.output[0] in torch_results and node.output[0] in {
-                    "linear_84",
-                    "linear_89",
-                    "linear_159",
-                }:
-                    res = [torch_results[node.output[0]].clone()]
-            if res is None:
-                try:
-                    res = ref.run(None, feeds)  # type: ignore[attr-defined]
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Unable to run node {node.op_type}, domain={node.domain} "
-                        f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
-                    ) from e
-            duration = time.perf_counter() - begin
-            assert (
-                not has_cuda
-                or not any(t is not None and t.is_cuda for t in feeds.values())
-                or any(t is not None and t.is_cuda for t in res)
-                or node.op_type in {"Shape", "Size"}  # on CPU no matter what
-                or node.op_type
-                in {
-                    "Add",
-                    "Concat",
-                    "Div",
-                    "Gather",
-                    "Mul",
-                    "Range",
-                    "Squeeze",
-                    "Sub",
-                    "Unsqueeze",
-                }  # not sure, could be about shapes
-            ), (
-                f"One input is on cuda but there is no float output on cuda, "
-                f"feeds={string_type(feeds, with_device=True, with_shape=True)}, "
-                f"res={string_type(res, with_device=True, with_shape=True)}, "
-                f"node is {pretty_onnx(node)}"
-            )
-            list_node_output = list(node.output)
-            node_output = [o for o in list_node_output if o]
-            for o, r in zip(node_output, res):
-                if r is None or o is None:
-                    continue
-                tmp = _loop_cmp(
-                    mapping_onnx_to_torch,
-                    torch_results,
-                    onnx_results,
-                    o,
-                    r,
-                    verbose,
-                    atol,
-                    rtol,
-                    i,
-                    i_onnx,
-                )
-                if tmp is not None:
-                    tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
-                    tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
-                    tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
-                    tmp.onnx_id_output = list_node_output.index(o)
-                    tmp.ep_time_run = ep_durations[tmp.ep_id_node]
-                    tmp.onnx_time_run = duration
-                    yielded_nodes += 1
-                    if tmp.err_abs is not None:
-                        max_abs, n_inf, n_nan = _update(max_abs, n_inf, n_nan, tmp.err_abs)
-                    yield tmp
-            already_run.add(i_onnx)
+            for r in _loop_onnx_node(
+                onx,
+                ep_graph_nodes,
+                onnx_results,
+                mapping_onnx_to_torch,
+                torch_results,
+                ep_durations,
+                use_tensor,
+                i,
+                i_onnx,
+                name_to_ep_node,
+                run_cls_kwargs,
+                str_kws,
+                status,
+                already_run,
+                verbose,
+            ):
+                if r:
+                    yield r
 
         last_position = max_pos + 1
 
@@ -923,64 +974,27 @@ def run_aligned(
             f"to {len(onx.graph.node)}"
         )
     for i_onnx in range(last_position, len(onx.graph.node)):
-        if i_onnx in already_run:
-            continue
-        node = onx.graph.node[i_onnx]
-        if verbose > 1:
-            print(
-                f"[run_aligned] run onx.graph.node[{i_onnx}]: "
-                f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
-            )
-        ref = run_cls(node, **run_cls_kwargs)
-        feeds = (
-            {k: onnx_results[k].clone() for k in node.input if k}
-            if use_tensor
-            else {k: onnx_results[k].copy() for k in node.input if k}
-        )
-        assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
-        begin = time.perf_counter()
-        res = None
-        if use_tensor and gemmlinear and node.op_type == "Gemm":
-            res = _gemm_linear(node, feeds, ref)
-        if res is None:
-            res = ref.run(None, feeds)  # type: ignore[attr-defined]
-        duration = time.perf_counter() - begin
-        list_node_output = list(node.output)
-        node_output = [o for o in list_node_output if o]
+        for r in _loop_onnx_node(
+            onx,
+            ep_graph_nodes,
+            onnx_results,
+            mapping_onnx_to_torch,
+            torch_results,
+            ep_durations,
+            use_tensor,
+            i,
+            i_onnx,
+            name_to_ep_node,
+            run_cls_kwargs,
+            str_kws,
+            status,
+            already_run,
+            verbose,
+        ):
+            if r:
+                yield r
 
-        for o, r in zip(node_output, res):
-            if r is None or o is None:
-                continue
-            tmp = _loop_cmp(
-                mapping_onnx_to_torch,
-                torch_results,
-                onnx_results,
-                o,
-                r,
-                verbose,
-                atol,
-                rtol,
-                i,
-                i_onnx,
-            )
-            if tmp is not None:
-                if tmp.ep_name in name_to_ep_node:
-                    tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
-                    tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
-                    tmp.ep_time_run = ep_durations[tmp.ep_id_node]
-                else:
-                    tmp.ep_id_node = None
-                    tmp.ep_target = None
-                    tmp.ep_name = None
-                tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
-                tmp.onnx_id_output = list_node_output.index(o)
-                tmp.onnx_time_run = duration
-                yielded_nodes += 1
-                if tmp.err_abs is not None:
-                    max_abs, n_inf, n_nan = _update(max_abs, n_inf, n_nan, tmp.err_abs)
-                yield tmp
         already_run.add(i_onnx)
 
     if verbose:
-        print(f"[run_aligned] done with {yielded_nodes} mapped nodes")
-        print(f"[run_aligned] max absolution error={max_abs}")
+        print(f"[run_aligned] done with status={status.to_str()}")

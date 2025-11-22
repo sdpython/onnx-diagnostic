@@ -1151,6 +1151,7 @@ def get_parser_sbs() -> ArgumentParser:
         help="model inputs saved with torch.save",
     )
     parser.add_argument(
+        "-e",
         "--ep",
         type=str,
         required=True,
@@ -1322,7 +1323,7 @@ def _cmd_sbs(argv: List[Any]):
     df = pandas.DataFrame(data).apply(
         lambda col: col.fillna("") if col.dtype == "object" else col
     )
-    df.to_excel(args.output)
+    df.to_excel(args.output, index=False)
     print("-- done")
 
 
