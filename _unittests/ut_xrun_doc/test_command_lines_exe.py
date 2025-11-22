@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 import pandas
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings
+from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, requires_transformers
 from onnx_diagnostic._command_lines_parser import main
 from onnx_diagnostic.helpers.log_helper import enumerate_csv_files
 from onnx_diagnostic.export.api import to_onnx
@@ -91,6 +91,7 @@ class TestCommandLines(ExtTestCase):
         self.assertExists(output)
 
     @ignore_warnings(UserWarning)
+    @requires_transformers("4.53")
     def test_h_parser_sbs(self):
         import torch
 
