@@ -1265,9 +1265,10 @@ def _cmd_sbs(argv: List[Any]):
     print(f"-- load ep {args.ep!r}")
     begin = time.perf_counter()
     # We need to load the plugs.
-    from .torch_export_patches.patches.patch_transformers import PLUGS_Qwen25
+    from .torch_export_patches.patches.patch_transformers import get_transformers_plugs
 
-    assert len(PLUGS_Qwen25) == 1, "Missing PLUGS for Qwen2.5"
+    plugs = get_transformers_plugs()
+    assert plugs, "Missing PLUGS for Qwen2.5"
     ep = torch.export.load(args.ep)
     print(f"-- done in {time.perf_counter() - begin:1.1f}s")
 

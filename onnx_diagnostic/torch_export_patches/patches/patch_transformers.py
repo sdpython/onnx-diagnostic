@@ -1,4 +1,5 @@
 # transformers
+from typing import List
 from .patch_helper import _has_transformers
 
 from ._patch_transformers_attention import (
@@ -86,3 +87,11 @@ if patch_qwen3:
 
 
 from ._patch_transformers_sam_mask_decoder import patched_SamMaskDecoder
+
+
+def get_transformers_plugs() -> List["EagerDirectReplacementWithOnnx"]:  # noqa: F821
+    """Returns the necessary plugs to rewrite models."""
+    plugs = []
+    if patch_qwen2_5:
+        plugs.extend(PLUGS_Qwen25)
+    return plugs
