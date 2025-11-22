@@ -128,7 +128,7 @@ class TestCommandLines(ExtTestCase):
                 [
                     "sbs",
                     "-v",
-                    "1",
+                    "2",
                     "--first",
                     "-i",
                     input_file,
@@ -151,9 +151,10 @@ class TestCommandLines(ExtTestCase):
         self.assertIn("p_fc1_weight", set(df["ep_name"]))
         self.assertIn("fc1.bias", set(df["onnx_name"]))
         self.assertNotIn("NaN", set(df["ep_name"]))
-        print(df)
-        print(st.getvalue())
+        # print(f"{df}\n{st.getvalue()}")
         self.assertIn("[run_aligned] done", st.getvalue())
+        sdf = df[(df.ep_target == "placeholder") & (df.onnx_op_type == "initializer")]
+        self.assertEqual(sdf.shape[0], 4)
 
 
 if __name__ == "__main__":

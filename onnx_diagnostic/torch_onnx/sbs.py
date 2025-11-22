@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from ..helpers import string_type, string_diff, max_diff, flatten_object
 from ..helpers.onnx_helper import pretty_onnx
-from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor
+from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor, torch_dtype_to_onnx_dtype
 
 
 def validate_fx_tensor(
@@ -753,6 +753,39 @@ def run_aligned(
         if verbose:
             print(f"[run_aligned-nx] +inp: {inp.name}: {string_type(v, **str_kws)}")
 
+    # alias for initializers
+    skip_onnx_name = set()
+    init_aliases = {}
+    for init in onx.graph.initializer:
+        new_names = {
+            n
+            for n in [
+                f"p_{init.name.replace('.', '_')}",
+                f"p_{init.name.split('::')[0].split('--')[-1].replace('.', '_')}",
+                f"{init.name.split('::')[0].split('--')[-1].replace('.', '_')}",
+            ]
+            if n != init.name
+        }
+        drop = False
+        for new_name in new_names:
+            if new_name in skip_onnx_name:
+                drop = True
+                break
+        if drop:
+            skip_onnx_name |= new_names | {init.name}
+            for new_name in new_names:
+                if new_names in init_aliases:
+                    del init_aliases[new_name]
+        else:
+            for new_name in new_names:
+                init_aliases[new_name] = init.name
+    rev_init_aliases = {}
+    for k, v in init_aliases.items():
+        if v in rev_init_aliases:
+            rev_init_aliases[v].add(k)
+        else:
+            rev_init_aliases[v] = {k}
+
     # initializers
     if verbose:
         print(f"[run_aligned] nx: handles {len(onx.graph.initializer)} initializers from onnx")
@@ -765,11 +798,21 @@ def run_aligned(
             if init.name not in skip_mapping_torch_onnx:
                 t = torch_results[init.name]
                 torch_names_to_onnx_names[init.name] = init.name
-        else:
-            new_name = f"p_{init.name.replace('.', '_')}"
-            if new_name not in skip_mapping_torch_onnx and new_name in torch_results:
+        elif init.name not in skip_onnx_name and init.name in rev_init_aliases:
+            new_names = [
+                k
+                for k in rev_init_aliases[init.name]
+                if k in torch_results and k not in skip_mapping_torch_onnx
+            ]
+            if new_names and len(new_names) == 1:
+                new_name = new_names[0]
                 t = torch_results[new_name]
-                torch_names_to_onnx_names[new_name] = init.name
+                if (
+                    t.shape == tuple(init.dims)
+                    and torch_dtype_to_onnx_dtype(t.dtype) == init.data_type
+                ):
+                    torch_names_to_onnx_names[new_name] = init.name
+
                 # We should check tensors and proto are the same.
         if t is None:
             t = to_tensor(init)

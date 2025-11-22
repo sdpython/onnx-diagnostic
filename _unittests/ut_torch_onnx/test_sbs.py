@@ -29,7 +29,7 @@ class TestSideBySide(ExtTestCase):
             onnx_name="B",
             ep_target="C",
             onnx_op_type="D",
-            shape_type="E",
+            ep_shape_type="E",
             err_abs=0.1,
             err_rel=0.2,
             err_dev=0.3,
@@ -37,7 +37,7 @@ class TestSideBySide(ExtTestCase):
         )
         sr = str(r)
         self.assertIn("RunAlignedRecord(", sr)
-        self.assertIn("shape_type='E'", sr)
+        self.assertIn("ep_shape_type='E'", sr)
 
     @hide_stdout()
     @unittest.skipIf(to_onnx is None, "to_onnx not installed")
@@ -69,7 +69,7 @@ class TestSideBySide(ExtTestCase):
                 verbose=10,
             ),
         )
-        self.assertEqual(len(results), 6)
+        self.assertEqual(len(results), 7)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -104,7 +104,7 @@ class TestSideBySide(ExtTestCase):
                 verbose=10,
             ),
         )
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -136,7 +136,7 @@ class TestSideBySide(ExtTestCase):
                 verbose=10,
             ),
         )
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -167,7 +167,7 @@ class TestSideBySide(ExtTestCase):
                 verbose=11,
             ),
         )
-        self.assertEqual(len(results), 6)
+        self.assertEqual(len(results), 7)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -199,7 +199,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 7)
+        self.assertEqual(len(results), 8)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -232,7 +232,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 7)
+        self.assertEqual(len(results), 8)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -267,7 +267,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 8)
+        self.assertEqual(len(results), 14)
 
     @hide_stdout()
     @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
@@ -301,9 +301,9 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 8)
+        self.assertEqual(len(results), 14)
         self.assertEqual(
-            [None, None, 0, 0, 0, 0, 0, 0],
+            [None, None, None, None, None, None, None, None, 0, 0, 0, 0, 0, 0],
             [r.err_dev for r in results],
         )
 
@@ -349,29 +349,27 @@ class TestSideBySide(ExtTestCase):
             [
                 "ep_id_node",
                 "ep_name",
+                "ep_shape_type",
                 "ep_target",
                 "ep_time_run",
                 "err_abs",
                 "err_dev",
+                "err_h01",
                 "err_nan",
                 "err_rel",
                 "onnx_id_node",
                 "onnx_id_output",
                 "onnx_name",
                 "onnx_op_type",
+                "onnx_shape_type",
                 "onnx_time_run",
-                "shape_type",
             ],
             sorted(df.columns),
         )
         self.assertEqual(len(results), 8)
+        self.assertEqual([0, 0, 0, 0, None, 0, 0, 0], [r.err_dev for r in results])
         self.assertEqual(
-            [None, None, None, None, None, 0, 0, 0],
-            [r.err_dev for r in results],
-        )
-        self.assertEqual(
-            [-10.0, -10.0, -10.0, -10.0, -1.0, 0.0, 1.0, 2.0],
-            df["onnx_id_node"].fillna(-10).tolist(),
+            [-1, -1, -1, -1, -1, 0, 1, 2], df["onnx_id_node"].fillna(-10).tolist()
         )
         self.clean_dump()
 
@@ -417,29 +415,27 @@ class TestSideBySide(ExtTestCase):
             [
                 "ep_id_node",
                 "ep_name",
+                "ep_shape_type",
                 "ep_target",
                 "ep_time_run",
                 "err_abs",
                 "err_dev",
+                "err_h01",
                 "err_nan",
                 "err_rel",
                 "onnx_id_node",
                 "onnx_id_output",
                 "onnx_name",
                 "onnx_op_type",
+                "onnx_shape_type",
                 "onnx_time_run",
-                "shape_type",
             ],
             sorted(df.columns),
         )
         self.assertEqual(len(results), 8)
+        self.assertEqual([0, 0, 0, 0, None, 0, 0, 0], [r.err_dev for r in results])
         self.assertEqual(
-            [None, None, None, None, None, 0, 0, 0],
-            [r.err_dev for r in results],
-        )
-        self.assertEqual(
-            [-10.0, -10.0, -10.0, -10.0, -1.0, 0.0, 1.0, 2.0],
-            df["onnx_id_node"].fillna(-10).tolist(),
+            [-1, -1, -1, -1, -1, 0, 1, 2], df["onnx_id_node"].fillna(-10).tolist()
         )
         self.clean_dump()
 
@@ -466,7 +462,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 5)
 
 
 if __name__ == "__main__":
