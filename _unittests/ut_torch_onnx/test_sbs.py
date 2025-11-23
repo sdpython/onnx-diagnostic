@@ -464,6 +464,54 @@ class TestSideBySide(ExtTestCase):
         )
         self.assertEqual(len(results), 5)
 
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    def test_sbs_model_with_weights_custom_reset(self):
+        torch = self.torch
+
+        class Model(self.torch.nn.Module):
+            def __init__(self):
+                super(Model, self).__init__()
+                self.fc1 = torch.nn.Linear(10, 3200)  # input size 10 → hidden size 32
+                self.relu = torch.nn.ReLU()
+                self.fc2 = torch.nn.Linear(3200, 1)  # hidden → output
+                with torch.no_grad():
+                    self.fc2.bias += 1999
+                    self.fc1.bias += 999
+
+            def forward(self, x):
+                x = self.relu(self.fc1(x))
+                x = self.fc2(x)
+                return x
+
+        inputs = dict(x=self.torch.randn((5, 10), dtype=torch.float16))
+        ds = dict(x={0: "batch"})
+        model = Model()
+        model = model.to(torch.float16)
+        model(**inputs)
+        ep = self.torch.export.export(
+            model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        filename = self.get_dump_file("test_sbs_model_with_weights_custom_reset.onnx")
+        to_onnx(ep, exporter="custom", filename=filename)
+        onx = onnx.load(filename)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                verbose=11,
+                use_tensor=True,
+                reset_names=["linear"],
+            ),
+        )
+        df = pandas.DataFrame(list(results))
+        df.to_excel(self.get_dump_file("test_sbs_model_with_weights_custom_reset.xlsx"))
+        onnx_op_type = df["onnx_op_type"].tolist()
+        self.assertEqual(onnx_op_type.count("reset"), 1)
+        self.clean_dump()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

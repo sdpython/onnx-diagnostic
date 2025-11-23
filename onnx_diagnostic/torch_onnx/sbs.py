@@ -174,6 +174,37 @@ def prepare_args_kwargs(
 
 @dataclass
 class RunAlignedRecord:
+    """
+    The side-by-side ran by function :func:`run_aligned
+    <onnx_diagnostic.torch_onnx.sbs.run_aligned>`
+    yields instances of this type. If both `ep_name`
+    and `onnx_name` are specified, then both results
+    appear in the exported program (torch) and the onnx model.
+
+    :param ep_id_node: node index in the exported program
+    :param onnx_id_node: node index in the onnx model, -1 for an initializer
+    :param ep_name: result name in the exported program
+    :param onnx_name: result name in the onnx model, usually same as `ep_name`
+        except for initializer
+    :param ep_target: target name in the exported program producing the result
+    :param onnx_op_type: operator type in the onnx model producing the result
+    :param onnx_id_output: usually 0 unless this node has multiple output,
+        in that case, it is the output index
+    :param ep_shape_type: shape and type of the results in the exported program
+    :param onnx_shape_type: shape and type of the results in the onnx mode,
+        it should be the same as `ep_shape_type`, anything different probably
+        means a bug
+    :param err_abs: maximum absolute error for the considered result
+        between the exported program and the onnx model
+    :param err_rel: maximum relative error
+    :param err_dev: 0 if the device is the same, 1 if not
+    :param err_nan: number of nan values disagreeing
+    :param err_h01: number of values for which the discrepancy is above 0.1
+    :param ep_time_run: execution time for the exported program
+    :param onnx_time_run: execution time for the onnx model, that includes
+        the creation of the onnx model so that's probably not very usable
+    """
+
     ep_id_node: Optional[int] = None
     onnx_id_node: Optional[int] = None
     ep_name: Optional[str] = None
@@ -208,7 +239,14 @@ class RunAlignedRecord:
 
 @dataclass
 class StatusRunAligned:
-    "Information to display while running the side-by-side"
+    """
+    Information to display while running the side-by-side
+
+    :param max_abs: maximum absolute seen so far
+    :param n_inf: number of infinite values seen so far
+    :param n_nan: number of nan values seen so for
+    :param yielded_nodes: number of yielded pair of nodes seen so far
+    """
 
     max_abs: float = 0.0
     n_inf: int = 0
@@ -223,6 +261,7 @@ class StatusRunAligned:
         )
 
     def update(self, err_abs: float):
+        "Updates all attributes with the latest measure."
         if np.isinf(err_abs) or np.isnan(err_abs):
             self.n_inf += 1
         elif err_abs > 1e6:
@@ -253,6 +292,7 @@ def run_aligned(
     gemmlinear: bool = False,
     verbose: int = 0,
     exc: bool = True,
+    reset_names: Optional[List[str]] = None,
 ) -> Iterator[RunAlignedRecord]:
     """
     Runs in parallel both the exported program
@@ -274,6 +314,8 @@ def run_aligned(
         ``torch.nn.functional.linear(A,X,B)`` on onnx side
     :param verbose: verbosity level
     :param exc: stops if an exception
+    :param reset_names: list of names, the onnx execution takes the torch outputs instead
+        of its own result if the names falls into that set
     :return: a list of :class:`RunAlignedRecord`
 
     Example:
@@ -408,6 +450,7 @@ def run_aligned(
                                           -v 1 --atol=0.1 --rtol=1
     """
     assert callable(run_cls), f"run_cls={run_cls} not a callable"
+    reset_names = set(reset_names) if reset_names else set()  # type: ignore[assignment]
     str_kws = dict(with_shape=True, with_device=True)
     has_cuda = any(
         (isinstance(t, torch.Tensor) and t.is_cuda)
@@ -618,6 +661,31 @@ def run_aligned(
                 if tmp.err_abs is not None:
                     status.update(tmp.err_abs)
                 yield tmp
+                if reset_names and tmp.ep_name in reset_names:
+                    assert (
+                        tmp.ep_name in torch_results
+                    ), f"name {tmp.ep_name!r} set to be reset is missing in torch_results."
+                    assert (
+                        tmp.onnx_name in onnx_results
+                    ), f"name {tmp.onnx_name!r} set to be reset is missing in onnx_results."
+                    onnx_results[tmp.onnx_name] = torch_results[tmp.ep_name]
+                    tmp = _loop_cmp(
+                        mapping_onnx_to_torch,
+                        torch_results,
+                        onnx_results,
+                        o,
+                        r,
+                        verbose,
+                        atol,
+                        rtol,
+                        i,
+                        i_onnx,
+                    )
+                    if tmp is not None:
+                        tmp.onnx_op_type = "reset"
+                        tmp.onnx_id_output = list_node_output.index(o)
+                        status.yielded_nodes += 1
+                        yield tmp
         already_run.add(i_onnx)
 
     def _duplicated_values(d):
@@ -799,13 +867,13 @@ def run_aligned(
                 t = torch_results[init.name]
                 torch_names_to_onnx_names[init.name] = init.name
         elif init.name not in skip_onnx_name and init.name in rev_init_aliases:
-            new_names = [
+            new_names = [  # type: ignore[assignment]
                 k
                 for k in rev_init_aliases[init.name]
                 if k in torch_results and k not in skip_mapping_torch_onnx
             ]
             if new_names and len(new_names) == 1:
-                new_name = new_names[0]
+                new_name = new_names[0]  # type: ignore[assignment, index]
                 t = torch_results[new_name]
                 if (
                     t.shape == tuple(init.dims)

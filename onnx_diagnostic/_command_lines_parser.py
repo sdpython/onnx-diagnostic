@@ -1210,6 +1210,18 @@ def get_parser_sbs() -> ArgumentParser:
         help="First runs the whole model.",
     )
     parser.add_argument(
+        "--reset",
+        required=False,
+        default="",
+        help=textwrap.dedent(
+            """
+            List of result names separated by a comma. For those results,
+            the side-by-side will take torch results instead of onnx results
+            to compute the rest of the onnx model.
+            """
+        ),
+    )
+    parser.add_argument(
         "--gemmlinear",
         action=BooleanOptionalAction,
         default=False,
@@ -1308,6 +1320,7 @@ def _cmd_sbs(argv: List[Any]):
         kwargs=mkwargs,
         use_tensor=True,
         gemmlinear=args.gemmlinear,
+        reset_names=args.reset.split(","),
         exc=False,
     ):
         data.append(obs)
