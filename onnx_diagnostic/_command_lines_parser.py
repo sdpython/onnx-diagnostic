@@ -1320,7 +1320,7 @@ def _cmd_sbs(argv: List[Any]):
         kwargs=mkwargs,
         use_tensor=True,
         gemmlinear=args.gemmlinear,
-        reset=args.reset.split(","),
+        reset_names=args.reset.split(","),
         exc=False,
     ):
         data.append(obs)
