@@ -512,7 +512,7 @@ class InferenceSessionForTorch(_InferenceSession):
                 v = v.to(torch.uint8)
                 v = ORTC.OrtValue.from_dlpack(v.__dlpack__(), True)
             else:
-                v = ORTC.OrtValue.from_dlpack(v.__dlpack__(), False)
+                v = ORTC.OrtValue.from_dlpack(v.detach().__dlpack__(), False)
             input_names.append(k)
             values.push_back(v)
         if self.nvtx:

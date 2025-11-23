@@ -8,7 +8,7 @@ Change Logs
 * :pr:`311`: use custom and local function to use PackedMultiHeadAttention from onnxruntime
 * :pr:`310`: splits patches into multiple files 
 * :pr:`308`: add option --save_ep to dump the exported program as well as torch input
-* :pr:`304`, :pr:`306`: improves side-by-side comparison, creates command line sbs
+* :pr:`304`, :pr:`306`, :pr:`316`: improves side-by-side comparison, creates command line sbs
 
 0.8.2
 +++++
@@ -112,8 +112,7 @@ Change Logs
 * :pr:`203`: Add option to disable patches for torch in command line validate
 * :pr:`202`: add models DeepseekV3ForCausalLM, Gemma3ForCausalLM, Glm4vMoeForConditionalGeneration
 * :pr:`201`: switch CI to 4.55.4
-* :pr:`200`: fixes patches for 4.55.1+, DynamicCache is no longer registered by default,
-  this code moved to executorch.py in transformers
+* :pr:`200`: fixes patches for 4.55.1+, DynamicCache is no longer registered by default, this code moved to executorch.py in transformers
 * :pr:`199`: delete hidden_size and num_attention_heads modification in a config
 * :pr:`198`: support gpt-oss
 * :pr:`197`: updates CI for torch 2.8
@@ -124,15 +123,13 @@ Change Logs
 
 * :pr:`193`: validates with 4.53.3 
 * :pr:`189`: support for task mask-generation
-* :pr:`192`: add support for Gemma-3, add serialization for HybridCache,
-  changes to support ``transformers>=4.54``
+* :pr:`192`: add support for Gemma-3, add serialization for HybridCache, changes to support ``transformers>=4.54``
 
 0.7.5
 +++++
 
 * :pr:`186`: add parameter --output_names to command line validate to change the output names of the onnx exported model
-* :pr:`185`: remove the use of _seen_tokens in DynamicCache (removed in transformers>4.53),
-  updates dummpy inputs for feature-extraction
+* :pr:`185`: remove the use of _seen_tokens in DynamicCache (removed in ``transformers>4.53``), updates dummpy inputs for feature-extraction
 * :pr:`184`: implements side-by-side
 
 0.7.4
@@ -172,12 +169,8 @@ Change Logs
 * :pr:`147`: simplified log processing
 * :pr:`146`: patch for IdeficsAttention, IdeficsEmbedding
 * :pr:`145`: patch for _compute_dynamic_ntk_parameters (Phi3RotaryEmbedding)
-* :pr:`144`: support for second inputs with different dimension,
-  rename test_helper into validate,
-  support ``interpolate_pos_encoding`` for ``VitModel``,
-  update model builder helpers for this PR
-  `Use ONNX IR for model builder
-  <https://github.com/microsoft/onnxruntime-genai/pull/1416>`_
+* :pr:`144`: support for second inputs with different dimension, rename test_helper into validate, support ``interpolate_pos_encoding`` for ``VitModel``, update model builder helpers for this PR
+  `Use ONNX IR for model builder <https://github.com/microsoft/onnxruntime-genai/pull/1416>`_
 * :pr:`143`: compares intermediate results,
 
 0.6.3
@@ -199,8 +192,7 @@ Change Logs
 * :pr:`123`: add subgraphs to TorchOnnxEvaluator
 * :pr:`122`: add local functions to TorchOnnxEvaluator
 * :pr:`120`: enables TorchOnnxEvaluator in command line ``python -m onnx_diagnostic validate ...``
-* :pr:`115`, :pr:`116`, :pr:`117`, :pr:`118`, :pr:`119`, :pr:`127`:
-  first steps for TorchOnnxEvaluator
+* :pr:`115`, :pr:`116`, :pr:`117`, :pr:`118`, :pr:`119`, :pr:`127`: first steps for TorchOnnxEvaluator
 * :pr:`114`: extends the list of known rewritings
 * :pr:`113`: fixes a couple of issues with ModelBuilder
 
@@ -257,10 +249,7 @@ Change Logs
 * :pr:`65`: support SlidingWindowCache
 * :pr:`63`: support option ``--trained``
 * :pr:`61`: improves dynamic shapes for EncoderDecoderCache
-* :pr:`58`: add function use_dyn_not_str to replace string by ``torch.export.Dim.DYNAMIC``,
-  use string instead of ``torch.export.Dim.DYNAMIC`` when returning the dynamic shapes
-  for a specific models, it is a valid definition for ``torch.onnx.export``
-  which can reuse the names
+* :pr:`58`: add function use_dyn_not_str to replace string by ``torch.export.Dim.DYNAMIC``, use string instead of ``torch.export.Dim.DYNAMIC`` when returning the dynamic shapes for a specific models, it is a valid definition for ``torch.onnx.export`` which can reuse the names
 * :pr:`55`: add support for text-classification
 * :pr:`54`: add support for fill-mask, refactoring
 * :pr:`52`: add support for zero-shot-image-classification
@@ -274,28 +263,18 @@ Change Logs
 * :pr:`43`: uses custom patches
 * :pr:`38`: uses the registered serialization functions when it is available
 * :pr:`30`, :pr:`31`: adds command to test a model id, validate the export
-* :pr:`29`: adds helpers to measure the memory peak and run benchmark
-  on different processes
-* :pr:`28`: adds command line to print out the configuration for a model id,
-  support image-text-to-text
-* :pr:`26`: creates a folder ``helpers`` to gather all the functions
-  used in many places
-* :pr:`25`: improve patches for DynamicCache
-  (issue with register_pytree_flatten_spec being deprecated)
-* :pr:`24`: dummy inputs for ``text2text-generation``, add new function
-  ``convert_dynamic_axes_into_dynamic_shapes`` to convert dynamic axes
-  into dynamic shapes, add support for ``T5ForConditionalGeneration``
+* :pr:`29`: adds helpers to measure the memory peak and run benchmark on different processes
+* :pr:`28`: adds command line to print out the configuration for a model id, support image-text-to-text
+* :pr:`26`: creates a folder ``helpers`` to gather all the functions used in many places
+* :pr:`25`: improve patches for DynamicCache (issue with register_pytree_flatten_spec being deprecated)
+* :pr:`24`: dummy inputs for ``text2text-generation``, add new function ``convert_dynamic_axes_into_dynamic_shapes`` to convert dynamic axes into dynamic shapes, add support for ``T5ForConditionalGeneration``
 * :pr:`23`: dummy inputs for ``image-classification``
-* :pr:`22`, :pr:`27`: api to create untrained model copying the architecture
-  of the trained models and dummy inputs for them,
-  support for ``text-generation``
+* :pr:`22`, :pr:`27`: api to create untrained model copying the architecture of the trained models and dummy inputs for them, support for ``text-generation``
 
 0.2.1
 +++++
 
-* :pr:`16`: refactors patches, add model Phi2, implements
-  a tweak to raise an exception with a dynamic dimension
-  becomes static when exporting a model
+* :pr:`16`: refactors patches, add model Phi2, implements a tweak to raise an exception with a dynamic dimension becomes static when exporting a model
 
 0.2.0
 +++++

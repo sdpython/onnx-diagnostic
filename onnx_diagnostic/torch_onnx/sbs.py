@@ -1,14 +1,14 @@
 import inspect
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 import onnx
 import onnx.helper as oh
 import numpy as np
 import torch
 from ..helpers import string_type, string_diff, max_diff, flatten_object
 from ..helpers.onnx_helper import pretty_onnx
-from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor
+from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor, torch_dtype_to_onnx_dtype
 
 
 def validate_fx_tensor(
@@ -181,11 +181,13 @@ class RunAlignedRecord:
     ep_target: Optional[str] = None
     onnx_op_type: Optional[str] = None
     onnx_id_output: Optional[int] = None
-    shape_type: Optional[str] = None
+    ep_shape_type: Optional[str] = None
+    onnx_shape_type: Optional[str] = None
     err_abs: Optional[float] = None
     err_rel: Optional[float] = None
     err_dev: Optional[float] = None
     err_nan: Optional[float] = None
+    err_h01: Optional[float] = None
     ep_time_run: Optional[float] = None
     onnx_time_run: Optional[float] = None
 
@@ -200,6 +202,33 @@ class RunAlignedRecord:
             self.err_dev = diff["dev"]
         if "nan" in diff:
             self.err_nan = diff["nan"]
+        if "rep" in diff:
+            self.err_h01 = diff["rep"][">0.1"]
+
+
+@dataclass
+class StatusRunAligned:
+    "Information to display while running the side-by-side"
+
+    max_abs: float = 0.0
+    n_inf: int = 0
+    n_nan: int = 0
+    yielded_nodes: int = 0
+
+    def to_str(self) -> str:
+        "Nice display."
+        return (
+            f"yielded={self.yielded_nodes} maxabs={self.max_abs:1.3f} "
+            f"#inf={self.n_inf} #nan={self.n_nan}"
+        )
+
+    def update(self, err_abs: float):
+        if np.isinf(err_abs) or np.isnan(err_abs):
+            self.n_inf += 1
+        elif err_abs > 1e6:
+            self.n_nan += 1
+        else:
+            self.max_abs = max(self.max_abs, err_abs)
 
 
 def run_aligned(
@@ -221,6 +250,7 @@ def run_aligned(
     use_tensor: bool = False,
     atol: Optional[float] = None,
     rtol: Optional[float] = None,
+    gemmlinear: bool = False,
     verbose: int = 0,
     exc: bool = True,
 ) -> Iterator[RunAlignedRecord]:
@@ -237,8 +267,11 @@ def run_aligned(
     :param args: input args
     :param kwargs: input kwargs
     :param use_tensor: use torch tensors instead of numpy arrays
+        for the onnx runtime
     :param atol: absolute tolerance
     :param rtol: relative tolerance
+    :param gemmlinear: if True, replaces ``Gemm(A,X.T,B)`` by
+        ``torch.nn.functional.linear(A,X,B)`` on onnx side
     :param verbose: verbosity level
     :param exc: stops if an exception
     :return: a list of :class:`RunAlignedRecord`
@@ -445,7 +478,7 @@ def run_aligned(
 
         to = mapping_onnx_to_torch.get(o, o)
         if to in torch_results:
-            d = max_diff(torch_results[to], r)
+            d = max_diff(torch_results[to], r, hist=[0.1])
             if verbose > 1:
                 if o == to:
                     print(f"[run_aligned-==] cmp {to}: {string_diff(d)}")
@@ -469,68 +502,233 @@ def run_aligned(
                 onnx_id_node=i_onnx,
                 ep_name=o,
                 onnx_name=to,
-                shape_type=string_type(torch_results[to], **str_kws),
+                ep_shape_type=string_type(torch_results[to], **str_kws),
+                onnx_shape_type=string_type(r, **str_kws),
             )
             r.set_diff(d)
             return r
         return None
 
+    def _loop_onnx_node(
+        onx,
+        ep_graph_nodes,
+        onnx_results,
+        mapping_onnx_to_torch,
+        torch_results,
+        ep_durations,
+        use_tensor,
+        i,
+        i_onnx,
+        name_to_ep_node,
+        run_cls_kwargs,
+        str_kws,
+        status,
+        already_run,
+        verbose,
+    ):
+
+        if i_onnx in already_run:
+            yield None
+        node = onx.graph.node[i_onnx]
+        if verbose > 1:
+            print(
+                f"[run_aligned] run onx.graph.node[{i_onnx}]: "
+                f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
+            )
+        elif verbose == 1:
+            loop.set_description(
+                f"ep {i}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
+                f"{status.to_str()}"
+            )
+
+        ref = run_cls(node, **run_cls_kwargs)
+        # We need to clone because the runtime maybe using dlpack to create OrtValue
+        feeds = (
+            {k: onnx_results[k].clone() for k in node.input if k}
+            if use_tensor
+            else {k: onnx_results[k].copy() for k in node.input if k}
+        )
+        assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
+        begin = time.perf_counter()
+        res = None
+        if use_tensor and gemmlinear and node.op_type == "Gemm":
+            res = _gemm_linear(node, feeds, ref)
+        if res is None:
+            try:
+                res = ref.run(None, feeds)  # type: ignore[attr-defined]
+            except Exception as e:
+                raise RuntimeError(
+                    f"Unable to run node {node.op_type}, domain={node.domain} "
+                    f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
+                ) from e
+        duration = time.perf_counter() - begin
+        assert (
+            not has_cuda
+            or not any(t is not None and t.is_cuda for t in feeds.values())
+            or any(t is not None and t.is_cuda for t in res)
+            or node.op_type in {"Shape", "Size"}  # on CPU no matter what
+            or node.op_type
+            in {
+                "Add",
+                "Concat",
+                "Div",
+                "Gather",
+                "Mul",
+                "Range",
+                "Squeeze",
+                "Sub",
+                "Unsqueeze",
+            }  # not sure, could be about shapes
+        ), (
+            f"One input is on cuda but there is no float output on cuda, "
+            f"feeds={string_type(feeds, with_device=True, with_shape=True)}, "
+            f"res={string_type(res, with_device=True, with_shape=True)}, "
+            f"node is {pretty_onnx(node)}"
+        )
+        list_node_output = list(node.output)
+        node_output = [o for o in list_node_output if o]
+        for o, r in zip(node_output, res):
+            if r is None or o is None:
+                continue
+            tmp = _loop_cmp(
+                mapping_onnx_to_torch,
+                torch_results,
+                onnx_results,
+                o,
+                r,
+                verbose,
+                atol,
+                rtol,
+                i,
+                i_onnx,
+            )
+            if tmp is not None:
+                if tmp.ep_name in name_to_ep_node:
+                    tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
+                    tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
+                    tmp.ep_time_run = ep_durations[tmp.ep_id_node]
+                else:
+                    tmp.ep_id_node = None
+                    tmp.ep_target = None
+                    tmp.ep_name = None
+                tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
+                tmp.onnx_id_output = list_node_output.index(o)
+                tmp.onnx_time_run = duration
+                status.yielded_nodes += 1
+                if tmp.err_abs is not None:
+                    status.update(tmp.err_abs)
+                yield tmp
+        already_run.add(i_onnx)
+
+    def _duplicated_values(d):
+        rev = {}
+        for k, v in d.items():
+            if v in rev:
+                rev[v].append(k)
+            else:
+                rev[v] = [k]
+        res = {k: v for k, v in rev.items() if len(v) > 1}
+        final = set()
+        for v in res.values():
+            final |= set(v)
+        return final
+
+    def _gemm_linear(node, feeds, sess):
+        if node.op_type != "Gemm" or node.domain != "":
+            return None
+        for att in node.attribute:
+            if att.name == "alpha":
+                if att.f != 1:
+                    return None
+            elif att.name == "beta":
+                if att.f != 1:
+                    return None
+            elif att.name == "transA":
+                if att.i != 0:
+                    return None
+            elif att.name == "transB":
+                if att.i != 1:
+                    return None
+        t = torch.nn.functional.linear(
+            feeds[node.input[0]], feeds[node.input[1]], feeds[node.input[2]]
+        )
+        got = sess.run(None, feeds)
+        print(f"-- GEMM {node.output[0]}: {string_diff(max_diff(t, got, hist=[0.1]))}")
+        assert t.shape == got[0].shape, f"shape mismatch {t.shape} != {got[0].shape}"
+        return [t]
+
+    # preparation with ep.graph.nodes
+    ep_state_dict = {**ep.state_dict, **dict(ep.named_buffers(), **ep.tensor_constants)}
+    placeholders_to_state_dict = {
+        **{f"p_{name.replace('.', '_')}": name for name in ep.state_dict},
+        **{f"b_{name.replace('.', '_')}": name for name, _ in ep.named_buffers()},
+        **{f"c_{name.replace('.', '_')}": name for name in ep.tensor_constants},
+    }
+    skip_mapping_torch_onnx = _duplicated_values(placeholders_to_state_dict)
+    placeholders = {}
     if verbose:
-        print(f"[run_aligned] walks through {len(ep.graph.nodes)} nodes from torch")
+        print(f"[run_aligned] ep: model has {len(ep_state_dict)} torch constants or weights.")
+
+    if verbose:
+        print(f"[run_aligned] ep: walks through {len(ep.graph.nodes)} nodes from torch")
     positions: Dict[str, Any] = {}
-    for i, node in enumerate(ep.graph.nodes):
+    ep_graph_nodes = list(ep.graph.nodes)
+    torch_results: Dict[str, Any] = {}
+    last_position = 0
+    torch_output_names = None
+    torch_input_names: List[str] = []
+    name_to_ep_node = {}
+    torch_names_to_onnx_names = {}
+    for i, node in enumerate(ep_graph_nodes):
         if isinstance(node.name, str):
             positions[node.name] = dict(fx=i)
         else:
             for n in node.name:
                 positions[n] = dict(fx=i)
-
-    if verbose:
-        print(f"[run_aligned] walks through {len(onx.graph.node)} nodes from onnx")
-    for i, node in enumerate(onx.graph.node):
-        for n in node.output:
-            if n in positions:
-                positions[n]["onnx"] = i
+        if node.op == "placeholder":
+            if node.name in placeholders_to_state_dict:
+                # This a weight.
+                placeholders[node.name] = ep_state_dict[placeholders_to_state_dict[node.name]]
+                torch_results[node.name] = placeholders[node.name]
+                assert isinstance(torch_results[node.name], torch.Tensor), (
+                    f"torch_results[{node.name}] not a tensor but "
+                    f"{type(torch_results[node.name])}"
+                )
             else:
-                positions[n] = dict(onnx=i)
-
-    if verbose:
-        print(f"[run_aligned] handles {len(onx.graph.initializer)} initializers from onnx")
-    memory_cpu = 0
-    memory_cuda = 0
-    onnx_results: Dict[str, Any] = {}
-    for init in onx.graph.initializer:  # type: ignore
-        positions[init.name] = -1
-        t = to_tensor(init)
-        if default_device and t.numel() >= 1024:
-            # Let's force its way to cuda (should check the device has well).
-            t = t.to(default_device)
-        size = t.element_size() * t.numel()
-        if t.is_cuda:
-            memory_cuda += size
-        else:
-            memory_cpu += size
-        onnx_results[init.name] = _check_tensor_(init.name, t, flip_type=True)
-
-    if verbose:
-        print(f"[run_aligned] handled {len(onnx_results)} initializers from onnx")
-        print(f"[run_aligned] onnx memory cpu {memory_cpu / 2**20:.3f} Mb")
-        print(f"[run_aligned] onnx memory cuda {memory_cuda / 2**20:.3f} Mb")
-    # we should be careful, torch may modified inplace the weights,
-    # it may be difficult to share weights
-    ep_graph_nodes = list(ep.graph.nodes)
-    torch_results: Dict[str, Any] = {}
-    last_position = 0
-    torch_output_names = None
-    name_to_ep_node = {}
-    for i, node in enumerate(ep_graph_nodes):
-        if node.op == "output":
+                # This is an input
+                assert len(torch_input_names) < len(onx.graph.input), (
+                    f"torch_input_names={torch_input_names!r}, "
+                    f"onnx_input_names={[n.name for n in onx.graph.input]}, "
+                    f"node.name={node.name!r} cannot be an input"
+                )
+                assert node.name not in skip_mapping_torch_onnx, (
+                    f"{node.name!r} is ambiguous, cannot be mapped due to "
+                    f"{skip_mapping_torch_onnx}"
+                )
+                torch_names_to_onnx_names[node.name] = onx.graph.input[
+                    len(torch_input_names)
+                ].name
+                torch_input_names.append(node.name)
+        elif node.op == "output":
             torch_output_names = [n.name for n in node.args[0]]
         assert isinstance(node.name, str), (
             f"Unexpected type {type(node.name)} for node={node} (target={node.target}), "
             f"args={node.args}"
         )
         name_to_ep_node[node.name] = i
+
+    # prepration for onnx
+    if verbose:
+        print(f"[run_aligned] ep: found {len(torch_results)} torch constants or weights.")
+        print(f"[run_aligned] ep: found inputs  {torch_input_names}")
+        print(f"[run_aligned] ep: found outputs {torch_output_names}")
+        print(f"[run_aligned] nx: walks through {len(onx.graph.node)} nodes from onnx")
+    for i, node in enumerate(onx.graph.node):
+        for n in node.output:
+            if n in positions:
+                positions[n]["onnx"] = i
+            else:
+                positions[n] = dict(onnx=i)
 
     onnx_outputs_names = [o.name for o in onx.graph.output]
     assert torch_output_names is not None and len(torch_output_names) == len(
@@ -541,18 +739,6 @@ def run_aligned(
     )
     mapping_onnx_to_torch = dict(zip(onnx_outputs_names, torch_output_names))
 
-    if verbose:
-        print(f"[run_aligned]   onnx {len(onnx_results)} constants")
-        print(f"[run_aligned]   onnx {len(onx.graph.input)} inputs")
-        print(f"[run_aligned]   onnx {len(onx.graph.output)} outputs")
-        print(f"[run_aligned] common {len(mapping_onnx_to_torch)} outputs")
-        print(f"[run_aligned] run_cls_kwargs={run_cls_kwargs}")
-        if verbose > 1:
-            for k, v in torch_results.items():
-                print(f"[run_aligned-ep] +cst: {k}: {string_type(v, **str_kws)}")
-            for k, v in onnx_results.items():
-                print(f"[run_aligned-nx] +ini: {k}: {string_type(v, **str_kws)}")
-
     onnx_args = list(args) if args else []
     if kwargs:
         onnx_args.extend(flatten_object(kwargs, drop_keys=True))
@@ -560,28 +746,111 @@ def run_aligned(
         print(f"[run_aligned]   args: {string_type(args, **str_kws)}")
         print(f"[run_aligned] kwargs: {string_type(kwargs, **str_kws)}")
         print(f"[run_aligned]   onnx: {string_type(onnx_args, **str_kws)}")
-        print(f"[run_aligned] walks through {len(onx.graph.input)} onnx inputs")
+        print(f"[run_aligned] nx: walks through {len(onx.graph.input)} onnx inputs")
+    onnx_results: Dict[str, Any] = {}
     for inp, v in zip(onx.graph.input, onnx_args):
         onnx_results[inp.name] = _check_tensor_(inp.name, v if use_tensor else to_numpy(v))
         if verbose:
             print(f"[run_aligned-nx] +inp: {inp.name}: {string_type(v, **str_kws)}")
 
-    placeholders = {node.name for node in ep.graph.nodes if node.op == "placeholder"}
-    ep_state_dict = {**ep.state_dict, **dict(ep.named_buffers(), **ep.tensor_constants)}
-    placeholders_to_state_dict = {
-        **{f"p_{name.replace('.', '_')}": name for name in ep.state_dict},
-        **{f"b_{name.replace('.', '_')}": name for name, _ in ep.named_buffers()},
-        **{f"c_{name.replace('.', '_')}": name for name in ep.tensor_constants},
-    }
-    for n in onnx_results:
-        if n not in placeholders:
+    # alias for initializers
+    skip_onnx_name = set()
+    init_aliases: Dict[str, str] = {}
+    for init in onx.graph.initializer:
+        new_names = {
+            n
+            for n in [
+                f"p_{init.name.replace('.', '_')}",
+                f"p_{init.name.split('::')[0].split('--')[-1].replace('.', '_')}",
+                f"{init.name.split('::')[0].split('--')[-1].replace('.', '_')}",
+            ]
+            if n != init.name
+        }
+        drop = False
+        for new_name in new_names:
+            if new_name in skip_onnx_name:
+                drop = True
+                break
+        if drop:
+            skip_onnx_name |= new_names | {init.name}
+            for new_name in new_names:
+                if new_names in init_aliases:
+                    del init_aliases[new_name]
+        else:
+            for new_name in new_names:
+                init_aliases[new_name] = init.name
+    rev_init_aliases: Dict[str, Set[str]] = {}
+    for k, v in init_aliases.items():
+        if v in rev_init_aliases:
+            rev_init_aliases[v].add(k)
+        else:
+            rev_init_aliases[v] = {k}
+
+    # initializers
+    if verbose:
+        print(f"[run_aligned] nx: handles {len(onx.graph.initializer)} initializers from onnx")
+    memory_cpu = 0
+    memory_cuda = 0
+    for init in onx.graph.initializer:  # type: ignore
+        positions[init.name] = -1
+        t = None
+        if init.name in torch_results:
+            if init.name not in skip_mapping_torch_onnx:
+                t = torch_results[init.name]
+                torch_names_to_onnx_names[init.name] = init.name
+        elif init.name not in skip_onnx_name and init.name in rev_init_aliases:
+            new_names = [
+                k
+                for k in rev_init_aliases[init.name]
+                if k in torch_results and k not in skip_mapping_torch_onnx
+            ]
+            if new_names and len(new_names) == 1:
+                new_name = new_names[0]
+                t = torch_results[new_name]
+                if (
+                    t.shape == tuple(init.dims)
+                    and torch_dtype_to_onnx_dtype(t.dtype) == init.data_type
+                ):
+                    torch_names_to_onnx_names[new_name] = init.name
+
+                # We should check tensors and proto are the same.
+        if t is None:
+            t = to_tensor(init)
+            if default_device and t.numel() >= 1024:
+                # Let's force its way to cuda (should check the device has well).
+                t = t.to(default_device)
             yield RunAlignedRecord(
                 onnx_id_node=-1,
-                onnx_name=n,
+                onnx_name=init.name,
                 onnx_op_type="initializer",
-                shape_type=string_type(onnx_results[n], **str_kws),
+                onnx_shape_type=string_type(t, **str_kws),
             )
 
+        size = t.element_size() * t.numel()
+        if t.is_cuda:
+            memory_cuda += size
+        else:
+            memory_cpu += size
+        if init.name not in onnx_results:
+            # otherwise, it is an input with a default value
+            onnx_results[init.name] = _check_tensor_(init.name, t, flip_type=True)
+
+    if verbose:
+        print(f"[run_aligned] nx: handled {len(onnx_results)} initializers from onnx")
+        print(f"[run_aligned] nx: memory cpu {memory_cpu / 2**20:.3f} Mb")
+        print(f"[run_aligned] nx: memory cuda {memory_cuda / 2**20:.3f} Mb")
+        print(f"[run_aligned] nx: {len(onnx_results)} constants")
+        print(f"[run_aligned] nx: {len(onx.graph.input)} inputs")
+        print(f"[run_aligned] nx: {len(onx.graph.output)} outputs")
+        print(f"[run_aligned] bo: {len(mapping_onnx_to_torch)} outputs")
+        print(f"[run_aligned] run_cls_kwargs={run_cls_kwargs}")
+        if verbose > 1:
+            for k, v in torch_results.items():
+                print(f"[run_aligned-ep] +cst: {k}: {string_type(v, **str_kws)}")
+            for k, v in onnx_results.items():
+                print(f"[run_aligned-nx] +ini: {k}: {string_type(v, **str_kws)}")
+
+    # starts the side-by-side
     if verbose == 1:
         import tqdm
 
@@ -589,10 +858,11 @@ def run_aligned(
     else:
         loop = list(enumerate(ep_graph_nodes))
 
-    already_run = set()
+    if verbose:
+        print(f"[run_aligned] ep: starts side-by-side with {len(ep_graph_nodes)} nodes")
+    already_run: Set[int] = set()
     ep_durations = {}
-    yielded_nodes = 0
-    max_abs = 0
+    status = StatusRunAligned()
     for i, node in loop:
         if verbose > 1:
             if node.op == "call_function":
@@ -605,56 +875,89 @@ def run_aligned(
         elif verbose == 1:
             loop.set_description(
                 f"ep {i}/{len(ep_graph_nodes)} nx {last_position}/{len(onx.graph.node)} "
-                f"mapped {yielded_nodes} maxabs {max_abs:1.5f}"
+                f"{status.to_str()}"
             )
 
         if node.op == "placeholder":
-            is_input = node.name in placeholders
-            if node.name in onnx_results and (
-                is_input
-                or ep_state_dict[placeholders_to_state_dict[node.name]].shape
-                == onnx_results[node.name]
-            ):
+            is_input = node.name not in placeholders
+            if is_input:
                 torch_results[node.name] = (
-                    onnx_results[node.name]
+                    onnx_results[torch_names_to_onnx_names[node.name]]
                     if use_tensor
-                    else torch.from_numpy(onnx_results[node.name])
+                    else from_numpy(onnx_results[torch_names_to_onnx_names[node.name]])
                 )
+                assert isinstance(torch_results[node.name], torch.Tensor), (
+                    f"torch_results[{node.name}] not a tensor but "
+                    f"{type(torch_results[node.name])}, use_tensor={use_tensor}"
+                )
+                t = torch_results[node.name]
                 if verbose > 1:
-                    t = torch_results[node.name]
-                    print(f"[run_aligned-ep] =plh: {node.name}={string_type(t, **str_kws)}")
+                    print(f"[run_aligned-ep] =ags: {node.name}={string_type(t, **str_kws)}")
                 # Otherwise, it is an input.
                 record = RunAlignedRecord(
-                    ep_id_node=-1,
+                    ep_id_node=i,
                     onnx_id_node=-1,
                     ep_name=node.name,
-                    onnx_name=node.name,
-                    ep_target=("input" if is_input else "placeholder"),
-                    onnx_op_type=("input" if is_input else "initializer"),
-                    shape_type=string_type(t, **str_kws),
+                    onnx_name=torch_names_to_onnx_names[node.name],
+                    ep_target="input",
+                    onnx_op_type="input",
+                    ep_shape_type=string_type(t, **str_kws),
+                    onnx_shape_type=string_type(
+                        onnx_results[torch_names_to_onnx_names[node.name]], **str_kws
+                    ),
                 )
-                if not is_input:
-                    record.set_diff(
-                        max_diff(
-                            ep_state_dict[placeholders_to_state_dict[node.name]],
-                            onnx_results[node.name],
-                        )
-                    )
                 yield record
             else:
                 assert node.name in placeholders_to_state_dict, (
                     f"Unable to find placeholder {node.name!r} (node.op={node.op!r}), "
                     f"existing: {sorted(placeholders_to_state_dict)}"
                 )
-                torch_results[node.name] = ep_state_dict[placeholders_to_state_dict[node.name]]
-                if verbose > 1:
-                    print(f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}")
-                yield RunAlignedRecord(
-                    ep_id_node=-1,
-                    ep_name=node.name,
-                    ep_target="placeholder",
-                    shape_type=string_type(torch_results[node.name], **str_kws),
+                assert node.name in torch_results, (
+                    f"placeholder {node.name!r} (node.op={node.op!r}), "
+                    f"should have been added to torch_results: {sorted(torch_results)}"
                 )
+                t = torch_results[node.name]
+                if (
+                    node.name in torch_names_to_onnx_names
+                    and node.name not in skip_mapping_torch_onnx
+                ):
+                    if verbose > 1:
+                        print(
+                            f"[run_aligned-ep] =plh: "
+                            f"{node.name}={string_type(t, **str_kws)}"
+                        )
+                    record = RunAlignedRecord(
+                        ep_id_node=i,
+                        onnx_id_node=-1,
+                        ep_name=node.name,
+                        onnx_name=torch_names_to_onnx_names[node.name],
+                        ep_target="placeholder",
+                        onnx_op_type="initializer",
+                        ep_shape_type=string_type(t, **str_kws),
+                        onnx_shape_type=string_type(
+                            onnx_results[torch_names_to_onnx_names[node.name]], **str_kws
+                        ),
+                    )
+                    if not is_input:
+                        record.set_diff(
+                            max_diff(
+                                t,
+                                onnx_results[torch_names_to_onnx_names[node.name]],
+                                hist=[0.1],
+                            )
+                        )
+                    yield record
+                else:
+                    if verbose > 1:
+                        print(
+                            f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}"
+                        )
+                    yield RunAlignedRecord(
+                        ep_id_node=i,
+                        ep_name=node.name,
+                        ep_target="placeholder",
+                        ep_shape_type=string_type(t, **str_kws),
+                    )
             continue
 
         outputs = [node.name] if isinstance(node.name, str) else list(node.name)
@@ -685,83 +988,25 @@ def run_aligned(
             continue
 
         for i_onnx in range(last_position, max_pos + 1):
-            if i_onnx in already_run:
-                continue
-            node = onx.graph.node[i_onnx]
-            if verbose > 1:
-                print(
-                    f"[run_aligned] run onx.graph.node[{i_onnx}]: "
-                    f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
-                )
-            elif verbose == 1:
-                loop.set_description(
-                    f"ep {i}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
-                    f"mapped {yielded_nodes} maxabs {max_abs:1.5f}"
-                )
-            ref = run_cls(node, **run_cls_kwargs)
-            feeds = {k: onnx_results[k] for k in node.input if k}
-            assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
-            begin = time.perf_counter()
-            try:
-                res = ref.run(None, feeds)  # type: ignore[attr-defined]
-            except Exception as e:
-                raise RuntimeError(
-                    f"Unable to run node {node.op_type}, domain={node.domain} "
-                    f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
-                ) from e
-            duration = time.perf_counter() - begin
-            assert (
-                not has_cuda
-                or not any(t is not None and t.is_cuda for t in feeds.values())
-                or any(t is not None and t.is_cuda for t in res)
-                or node.op_type in {"Shape", "Size"}  # on CPU no matter what
-                or node.op_type
-                in {
-                    "Add",
-                    "Concat",
-                    "Div",
-                    "Gather",
-                    "Mul",
-                    "Range",
-                    "Squeeze",
-                    "Sub",
-                    "Unsqueeze",
-                }  # not sure, could be about shapes
-            ), (
-                f"One input is on cuda but there is no float output on cuda, "
-                f"feeds={string_type(feeds, with_device=True, with_shape=True)}, "
-                f"res={string_type(res, with_device=True, with_shape=True)}, "
-                f"node is {pretty_onnx(node)}"
-            )
-            list_node_output = list(node.output)
-            node_output = [o for o in list_node_output if o]
-            for o, r in zip(node_output, res):
-                if r is None or o is None:
-                    continue
-                tmp = _loop_cmp(
-                    mapping_onnx_to_torch,
-                    torch_results,
-                    onnx_results,
-                    o,
-                    r,
-                    verbose,
-                    atol,
-                    rtol,
-                    i,
-                    i_onnx,
-                )
-                if tmp is not None:
-                    tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
-                    tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
-                    tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
-                    tmp.onnx_id_output = list_node_output.index(o)
-                    tmp.ep_time_run = ep_durations[tmp.ep_id_node]
-                    tmp.onnx_time_run = duration
-                    yielded_nodes += 1
-                    if tmp.err_abs is not None:
-                        max_abs = max(max_abs, tmp.err_abs)
-                    yield tmp
-            already_run.add(i_onnx)
+            for r in _loop_onnx_node(
+                onx,
+                ep_graph_nodes,
+                onnx_results,
+                mapping_onnx_to_torch,
+                torch_results,
+                ep_durations,
+                use_tensor,
+                i,
+                i_onnx,
+                name_to_ep_node,
+                run_cls_kwargs,
+                str_kws,
+                status,
+                already_run,
+                verbose,
+            ):
+                if r:
+                    yield r
 
         last_position = max_pos + 1
 
@@ -772,55 +1017,27 @@ def run_aligned(
             f"to {len(onx.graph.node)}"
         )
     for i_onnx in range(last_position, len(onx.graph.node)):
-        if i_onnx in already_run:
-            continue
-        node = onx.graph.node[i_onnx]
-        if verbose > 1:
-            print(
-                f"[run_aligned] run onx.graph.node[{i_onnx}]: "
-                f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
-            )
-        ref = run_cls(node, **run_cls_kwargs)
-        feeds = {k: onnx_results[k] for k in node.input if k}
-        assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
-        begin = time.perf_counter()
-        res = ref.run(None, feeds)  # type: ignore[attr-defined]
-        duration = time.perf_counter() - begin
-        list_node_output = list(node.output)
-        node_output = [o for o in list_node_output if o]
-        for o, r in zip(node_output, res):
-            if r is None or o is None:
-                continue
-            tmp = _loop_cmp(
-                mapping_onnx_to_torch,
-                torch_results,
-                onnx_results,
-                o,
-                r,
-                verbose,
-                atol,
-                rtol,
-                i,
-                i_onnx,
-            )
-            if tmp is not None:
-                if tmp.ep_name in name_to_ep_node:
-                    tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
-                    tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
-                    tmp.ep_time_run = ep_durations[tmp.ep_id_node]
-                else:
-                    tmp.ep_id_node = None
-                    tmp.ep_target = None
-                    tmp.ep_name = None
-                tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
-                tmp.onnx_id_output = list_node_output.index(o)
-                tmp.onnx_time_run = duration
-                yielded_nodes += 1
-                if tmp.err_abs is not None:
-                    max_abs = max(max_abs, tmp.err_abs)
-                yield tmp
+        for r in _loop_onnx_node(
+            onx,
+            ep_graph_nodes,
+            onnx_results,
+            mapping_onnx_to_torch,
+            torch_results,
+            ep_durations,
+            use_tensor,
+            i,
+            i_onnx,
+            name_to_ep_node,
+            run_cls_kwargs,
+            str_kws,
+            status,
+            already_run,
+            verbose,
+        ):
+            if r:
+                yield r
+
         already_run.add(i_onnx)
 
     if verbose:
-        print(f"[run_aligned] done with {yielded_nodes} mapped nodes")
-        print(f"[run_aligned] max absolution error={max_abs}")
+        print(f"[run_aligned] done with status={status.to_str()}")
