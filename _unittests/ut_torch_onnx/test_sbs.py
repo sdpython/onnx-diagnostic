@@ -23,7 +23,7 @@ class TestSideBySide(ExtTestCase):
 
     def test_run_aligned_record(self):
         r = RunAlignedRecord(
-            ep_id_node=-1,
+            ep_id_node=1,
             onnx_id_node=-1,
             ep_name="A",
             onnx_name="B",

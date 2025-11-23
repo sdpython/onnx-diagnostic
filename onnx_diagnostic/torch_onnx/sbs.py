@@ -184,13 +184,16 @@ class ReplayConfiguration:
         pieces to investigate
     :param selected_names: list of results names to dump
     :param selected_op_types: list of onnx operators to dump
-    :param threshold: only keep thoses whose discrepancies is greater than that threshold
+    :param threshold: only keep those whose discrepancies is greater than that threshold
     """
 
     dump_folder: str
     selected_names: Optional[Set[str]] = None
     selected_op_types: Optional[Set[str]] = None
     threshold: float = 0.1
+
+    def __post_init__(self):
+        assert self.dump_folder, "dump_folder is empty and this is not allowed for the replay"
 
     def select(
         self,
