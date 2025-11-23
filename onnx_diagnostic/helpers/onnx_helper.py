@@ -1281,7 +1281,7 @@ def make_submodel(
     def _mkv_(name, itype, irank):
         return oh.make_tensor_value_info(name, itype, [f"{name}_d{i}" for i in range(irank)])
 
-    not_known = set()
+    not_known: Set[str] = set()
     for node in nodes[::-1]:
         not_known -= set(node.output)
         not_known |= set(node.input)

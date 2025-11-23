@@ -1319,7 +1319,6 @@ def _cmd_sbs(argv: List[Any]):
         args=margs,
         kwargs=mkwargs,
         use_tensor=True,
-        gemmlinear=args.gemmlinear,
         reset_names=args.reset.split(","),
         exc=False,
     ):

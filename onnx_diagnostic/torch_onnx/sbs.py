@@ -182,9 +182,9 @@ class ReplayConfiguration:
 
     :param dump_folder: where to dump the onnx model corresponding to the
         pieces to investigate
-    :param selected_names: list of results names to dump, None for all
-    :param selected_op_types: list of onnx operators to dump, None for all
-    :param threshold: only keep thos whose discrepancies is greater than that theshold
+    :param selected_names: list of results names to dump
+    :param selected_op_types: list of onnx operators to dump
+    :param threshold: only keep thoses whose discrepancies is greater than that threshold
     """
 
     dump_folder: str
@@ -239,7 +239,7 @@ class ReplayConfiguration:
         :param model: onnx model
         :param onnx_results: all known onnx results
         :param torch_results: all known torch results
-        :param onnx_name_to_ep_name: correspondance between onnx_node name
+        :param onnx_name_to_ep_name: correspondence between onnx_node name
             and exported program name
         :param verbose: verbosity level
         :return: the folder created to dump everything
