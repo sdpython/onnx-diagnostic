@@ -1,7 +1,7 @@
 import inspect
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 import onnx
 import onnx.helper as oh
 import numpy as np
@@ -755,7 +755,7 @@ def run_aligned(
 
     # alias for initializers
     skip_onnx_name = set()
-    init_aliases = {}
+    init_aliases: Dict[str, str] = {}
     for init in onx.graph.initializer:
         new_names = {
             n
@@ -779,7 +779,7 @@ def run_aligned(
         else:
             for new_name in new_names:
                 init_aliases[new_name] = init.name
-    rev_init_aliases = {}
+    rev_init_aliases: Dict[str, Set[str]] = {}
     for k, v in init_aliases.items():
         if v in rev_init_aliases:
             rev_init_aliases[v].add(k)
@@ -860,7 +860,7 @@ def run_aligned(
 
     if verbose:
         print(f"[run_aligned] ep: starts side-by-side with {len(ep_graph_nodes)} nodes")
-    already_run = set()
+    already_run: Set[int] = set()
     ep_durations = {}
     status = StatusRunAligned()
     for i, node in loop:

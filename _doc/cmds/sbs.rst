@@ -4,7 +4,7 @@
 Description
 +++++++++++
 
-It compares the intermediate results between an exported programm saved with
+It compares the intermediate results between an exported program saved with
 :func:`torch.export.save` and an exported model on saved inputs
 with :func:`torch.save`. It assumes intermediate results share the same
 names.
