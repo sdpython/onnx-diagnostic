@@ -8,7 +8,7 @@ Change Logs
 * :pr:`311`: use custom and local function to use PackedMultiHeadAttention from onnxruntime
 * :pr:`310`: splits patches into multiple files 
 * :pr:`308`: add option --save_ep to dump the exported program as well as torch input
-* :pr:`304`, :pr:`306`, :pr:`316`: improves side-by-side comparison, creates command line sbs
+* :pr:`304`, :pr:`306`, :pr:`316`, :pr:`317`: improves side-by-side comparison, creates command line sbs
 
 0.8.2
 +++++
