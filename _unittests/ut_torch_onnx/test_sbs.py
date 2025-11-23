@@ -10,7 +10,7 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
-from onnx_diagnostic.torch_onnx.sbs import run_aligned, RunAlignedRecord
+from onnx_diagnostic.torch_onnx.sbs import run_aligned, RunAlignedRecord, ReplayConfiguration
 from onnx_diagnostic.export.api import to_onnx
 
 
@@ -511,6 +511,56 @@ class TestSideBySide(ExtTestCase):
         onnx_op_type = df["onnx_op_type"].tolist()
         self.assertEqual(onnx_op_type.count("reset"), 1)
         self.clean_dump()
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    def test_sbs_replay(self):
+        torch = self.torch
+
+        class Model(self.torch.nn.Module):
+            def __init__(self):
+                super(Model, self).__init__()
+                self.fc1 = torch.nn.Linear(10, 3200)  # input size 10 → hidden size 32
+                self.relu = torch.nn.ReLU()
+                self.fc2 = torch.nn.Linear(3200, 1)  # hidden → output
+                with torch.no_grad():
+                    self.fc2.bias += 1999
+                    self.fc1.bias += 999
+
+            def forward(self, x):
+                x = self.relu(self.fc1(x))
+                x = self.fc2(x)
+                return x
+
+        inputs = dict(x=self.torch.randn((5, 10), dtype=torch.float16))
+        ds = dict(x={0: "batch"})
+        model = Model()
+        model = model.to(torch.float16)
+        model(**inputs)
+        ep = self.torch.export.export(
+            model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        filename = self.get_dump_file("test_sbs_replay.onnx")
+        dump_folder = self.get_dump_folder("test_sbs_replay_linear")
+        to_onnx(ep, exporter="custom", filename=filename)
+        onx = onnx.load(filename)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                verbose=11,
+                use_tensor=True,
+                replay_configuration=ReplayConfiguration(
+                    dump_folder=dump_folder, selected_op_types={"Gemm"}
+                ),
+            ),
+        )
+        df = pandas.DataFrame(list(results))
+        df.to_excel(self.get_dump_file("test_sbs_replay.xlsx"))
+        print(df)
+        # self.clean_dump()
 
 
 if __name__ == "__main__":
