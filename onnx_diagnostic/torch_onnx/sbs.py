@@ -178,7 +178,7 @@ class RunAlignedRecord:
     The side-by-side ran by function :func:`run_aligned
     <onnx_diagnostic.torch_onnx.sbs.run_aligned>`
     yields instances of this type. If both `ep_name`
-    and `onnx_name` are speficied, then both results
+    and `onnx_name` are specified, then both results
     appear in the exported program (torch) and the onnx model.
 
     :param ep_id_node: node index in the exported program
@@ -261,7 +261,7 @@ class StatusRunAligned:
         )
 
     def update(self, err_abs: float):
-        "Udpates all attributes with the latest measure."
+        "Updates all attributes with the latest measure."
         if np.isinf(err_abs) or np.isnan(err_abs):
             self.n_inf += 1
         elif err_abs > 1e6:
@@ -450,7 +450,7 @@ def run_aligned(
                                           -v 1 --atol=0.1 --rtol=1
     """
     assert callable(run_cls), f"run_cls={run_cls} not a callable"
-    reset_names: Set[str] = set(reset_names) if reset_names else set()
+    reset_names = set(reset_names) if reset_names else set()  # type: ignore[assignment]
     str_kws = dict(with_shape=True, with_device=True)
     has_cuda = any(
         (isinstance(t, torch.Tensor) and t.is_cuda)
@@ -873,7 +873,7 @@ def run_aligned(
                 if k in torch_results and k not in skip_mapping_torch_onnx
             ]
             if new_names and len(new_names) == 1:
-                new_name = new_names[0]  # type: ignore[assignment]
+                new_name = new_names[0]  # type: ignore[assignment, index]
                 t = torch_results[new_name]
                 if (
                     t.shape == tuple(init.dims)
