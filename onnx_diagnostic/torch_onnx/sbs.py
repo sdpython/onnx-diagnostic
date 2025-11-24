@@ -1,4 +1,5 @@
 import inspect
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
@@ -7,7 +8,7 @@ import onnx.helper as oh
 import numpy as np
 import torch
 from ..helpers import string_type, string_diff, max_diff, flatten_object
-from ..helpers.onnx_helper import pretty_onnx
+from ..helpers.onnx_helper import pretty_onnx, extract_subset_of_nodes, make_submodel
 from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor, torch_dtype_to_onnx_dtype
 
 
@@ -173,6 +174,133 @@ def prepare_args_kwargs(
 
 
 @dataclass
+class ReplayConfiguration:
+    """
+    Configuration specifying how to replay or dump pieces of
+    onnx graph in order to replay them later and investigate
+    later possible sources of discrepancies.
+
+    :param dump_folder: where to dump the onnx model corresponding to the
+        pieces to investigate
+    :param selected_names: list of results names to dump
+    :param selected_op_types: list of onnx operators to dump
+    :param threshold: only keep those whose discrepancies is greater than that threshold
+    """
+
+    dump_folder: str
+    selected_names: Optional[Set[str]] = None
+    selected_op_types: Optional[Set[str]] = None
+    threshold: float = 0.1
+
+    def __post_init__(self):
+        assert self.dump_folder, "dump_folder is empty and this is not allowed for the replay"
+
+    def select(
+        self,
+        name: Optional[str] = None,
+        op_type: Optional[str] = None,
+        err_abs: Optional[float] = None,
+    ) -> bool:
+        """
+        Returns true or false whether or not a piece of the onnx model should be dumped,
+        around a particular node. The results is True if one of the condition is true:
+
+        * ``name in self.selected_names``
+        * ``op_type in self.selected_op_types``
+        * ``err_abs >= self.threshold``
+
+        :param name: result name
+        :param op_type: operator type
+        :param err_abs: measured discrepancy
+        :return: True if this should be dumped
+        """
+        if name and self.selected_names:
+            if name in self.selected_names:
+                return True
+        if op_type and self.selected_op_types:
+            if op_type in self.selected_op_types:
+                return True
+        if err_abs is not None and err_abs >= self.threshold:
+            return True
+        return False
+
+    def dump(
+        self,
+        name: str,
+        onnx_id_node: int,
+        model: onnx.ModelProto,
+        onnx_results: Dict[str, Any],
+        torch_results: Dict[str, torch.Tensor],
+        onnx_name_to_ep_name: Dict[str, str],
+        verbose: int = 0,
+    ) -> Optional[str]:
+        """
+        Dumps the minimal graph which can be replayed outside the model.
+
+        :param name: name of the result to look into
+        :param onnx_id_node: index of the node which produces it model `model`
+        :param model: onnx model
+        :param onnx_results: all known onnx results
+        :param torch_results: all known torch results
+        :param onnx_name_to_ep_name: correspondence between onnx_node name
+            and exported program name
+        :param verbose: verbosity level
+        :return: the folder created to dump everything
+        """
+        if verbose:
+            print(f"[ReplayConfiguration.dump] extract subset of node for {name!r}")
+        nodes = extract_subset_of_nodes(
+            model=model,
+            name=name,
+            node_index=onnx_id_node,
+            cut_points=set(onnx_name_to_ep_name),
+        )
+        if not nodes:
+            if verbose:
+                print(
+                    f"[ReplayConfiguration.dump] could not extract subset of node for {name!r}"
+                )
+            return None
+        if verbose:
+            print(f"[ReplayConfiguration.dump] make model with {len(nodes)} nodes")
+        submodel = make_submodel(
+            nodes,
+            ir_version=model.ir_version,
+            opset_imports=model.opset_import,
+            output_names=[name],
+            type_rank_fn=lambda name: (
+                torch_dtype_to_onnx_dtype(onnx_results[name].dtype),
+                len(onnx_results[name].shape),
+            ),
+        )
+        input_names = [n.name for n in submodel.graph.input]
+        if verbose:
+            print(f"[ReplayConfiguration.dump] model inputs {input_names}")
+        folder = os.path.join(self.dump_folder, name.replace(":", "_").replace("/", "_"))
+        os.makedirs(folder, exist_ok=True)
+        if verbose:
+            print(f"[ReplayConfiguration.dump] dumps into folder {folder!r}")
+        onnx.save(submodel, os.path.join(folder, "model.onnx"))
+        torch_inputs = {}
+        for n in input_names:
+            if n in onnx_name_to_ep_name:
+                torch_inputs[n] = torch_results[onnx_name_to_ep_name[n]]
+            else:
+                raise AssertionError(f"n={n!r}, onnx_name_to_ep_name={onnx_name_to_ep_name}")
+        onnx_inputs = {n: onnx_results[n] for n in input_names}
+        assert (
+            name in onnx_name_to_ep_name
+        ), f"Unable to find {name!r} in {onnx_name_to_ep_name}"
+        expected_outputs = (torch_results[onnx_name_to_ep_name[name]],)
+        torch.save(torch_inputs, os.path.join(folder, "torch_inputs.pt"))
+        torch.save(onnx_inputs, os.path.join(folder, "onnx_inputs.pt"))
+        torch.save(expected_outputs, os.path.join(folder, "torch_outputs.pt"))
+        if verbose:
+            print(f"[ReplayConfiguration.dump] done {folder!r}")
+        return folder
+
+
+@dataclass
 class RunAlignedRecord:
     """
     The side-by-side ran by function :func:`run_aligned
@@ -222,7 +350,15 @@ class RunAlignedRecord:
     ep_time_run: Optional[float] = None
     onnx_time_run: Optional[float] = None
 
+    def __post_init__(self):
+        "Validation."
+        assert self.ep_id_node is None or self.ep_id_node >= 0, (
+            f"Node id are always positive in the exported program but "
+            f"ep_id_node={self.ep_id_node}"
+        )
+
     def set_diff(self, diff: Dict[str, Any]):
+        """Sets error."""
         if diff is None:
             return
         if "abs" in diff:
@@ -246,19 +382,24 @@ class StatusRunAligned:
     :param n_inf: number of infinite values seen so far
     :param n_nan: number of nan values seen so for
     :param yielded_nodes: number of yielded pair of nodes seen so far
+    :param last_replay: last result dumped on disk for later replay
     """
 
     max_abs: float = 0.0
     n_inf: int = 0
     n_nan: int = 0
     yielded_nodes: int = 0
+    last_replay: str = ""
 
     def to_str(self) -> str:
         "Nice display."
-        return (
+        s = (
             f"yielded={self.yielded_nodes} maxabs={self.max_abs:1.3f} "
             f"#inf={self.n_inf} #nan={self.n_nan}"
         )
+        if self.last_replay:
+            return f"{s} -PLAY({self.last_replay})"
+        return s
 
     def update(self, err_abs: float):
         "Updates all attributes with the latest measure."
@@ -289,10 +430,10 @@ def run_aligned(
     use_tensor: bool = False,
     atol: Optional[float] = None,
     rtol: Optional[float] = None,
-    gemmlinear: bool = False,
     verbose: int = 0,
     exc: bool = True,
     reset_names: Optional[List[str]] = None,
+    replay_configuration: Optional[ReplayConfiguration] = None,
 ) -> Iterator[RunAlignedRecord]:
     """
     Runs in parallel both the exported program
@@ -316,6 +457,10 @@ def run_aligned(
     :param exc: stops if an exception
     :param reset_names: list of names, the onnx execution takes the torch outputs instead
         of its own result if the names falls into that set
+    :param replay_configuration: configuration to let the user dump any problematic
+        piece of the onnx graph he wants to replay in order to investigate later,
+        see :class: `ReplayConfiguration
+        <onnx_diagnostic.torch_onnx.sbs.ReplayConfiguration>`
     :return: a list of :class:`RunAlignedRecord`
 
     Example:
@@ -543,12 +688,13 @@ def run_aligned(
             r = RunAlignedRecord(
                 ep_id_node=i,
                 onnx_id_node=i_onnx,
-                ep_name=o,
-                onnx_name=to,
+                ep_name=to,
+                onnx_name=o,
                 ep_shape_type=string_type(torch_results[to], **str_kws),
                 onnx_shape_type=string_type(r, **str_kws),
             )
             r.set_diff(d)
+            mapping_onnx_to_torch[to] = o
             return r
         return None
 
@@ -567,6 +713,7 @@ def run_aligned(
         str_kws,
         status,
         already_run,
+        torch_names_to_onnx_names,
         verbose,
     ):
 
@@ -593,17 +740,13 @@ def run_aligned(
         )
         assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
         begin = time.perf_counter()
-        res = None
-        if use_tensor and gemmlinear and node.op_type == "Gemm":
-            res = _gemm_linear(node, feeds, ref)
-        if res is None:
-            try:
-                res = ref.run(None, feeds)  # type: ignore[attr-defined]
-            except Exception as e:
-                raise RuntimeError(
-                    f"Unable to run node {node.op_type}, domain={node.domain} "
-                    f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
-                ) from e
+        try:
+            res = ref.run(None, feeds)  # type: ignore[attr-defined]
+        except Exception as e:
+            raise RuntimeError(
+                f"Unable to run node {node.op_type}, domain={node.domain} "
+                f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
+            ) from e
         duration = time.perf_counter() - begin
         assert (
             not has_cuda
@@ -661,6 +804,28 @@ def run_aligned(
                 if tmp.err_abs is not None:
                     status.update(tmp.err_abs)
                 yield tmp
+
+                # do we need to dump pieces if graph the user can replay?
+                if replay_configuration:
+                    if replay_configuration.select(
+                        name=tmp.onnx_name, op_type=tmp.onnx_op_type, err_abs=tmp.err_abs
+                    ):
+                        replay_configuration.dump(
+                            name=tmp.onnx_name,
+                            onnx_id_node=tmp.onnx_id_node,
+                            model=onx,
+                            onnx_results=onnx_results,
+                            torch_results=torch_results,
+                            onnx_name_to_ep_name={
+                                **{v: k for k, v in torch_names_to_onnx_names.items()},
+                                **mapping_onnx_to_torch,
+                            },
+                            verbose=max(verbose - 1, 0),
+                        )
+                        status.last_replay = tmp.onnx_name
+
+                # reset_names: replaces onnx_results by torch_results to see
+                # if that fixes the discrepancies problem
                 if reset_names and tmp.ep_name in reset_names:
                     assert (
                         tmp.ep_name in torch_results
@@ -700,30 +865,6 @@ def run_aligned(
         for v in res.values():
             final |= set(v)
         return final
-
-    def _gemm_linear(node, feeds, sess):
-        if node.op_type != "Gemm" or node.domain != "":
-            return None
-        for att in node.attribute:
-            if att.name == "alpha":
-                if att.f != 1:
-                    return None
-            elif att.name == "beta":
-                if att.f != 1:
-                    return None
-            elif att.name == "transA":
-                if att.i != 0:
-                    return None
-            elif att.name == "transB":
-                if att.i != 1:
-                    return None
-        t = torch.nn.functional.linear(
-            feeds[node.input[0]], feeds[node.input[1]], feeds[node.input[2]]
-        )
-        got = sess.run(None, feeds)
-        print(f"-- GEMM {node.output[0]}: {string_diff(max_diff(t, got, hist=[0.1]))}")
-        assert t.shape == got[0].shape, f"shape mismatch {t.shape} != {got[0].shape}"
-        return [t]
 
     # preparation with ep.graph.nodes
     ep_state_dict = {**ep.state_dict, **dict(ep.named_buffers(), **ep.tensor_constants)}
@@ -1071,6 +1212,7 @@ def run_aligned(
                 str_kws,
                 status,
                 already_run,
+                torch_names_to_onnx_names,
                 verbose,
             ):
                 if r:
@@ -1100,6 +1242,7 @@ def run_aligned(
             str_kws,
             status,
             already_run,
+            torch_names_to_onnx_names,
             verbose,
         ):
             if r:

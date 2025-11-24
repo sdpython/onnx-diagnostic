@@ -3,7 +3,7 @@ import json
 import os
 import sys
 import warnings
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
 import numpy as np
 import numpy.typing as npt
 import onnx
@@ -15,6 +15,7 @@ from onnx import (
     GraphProto,
     ModelProto,
     NodeProto,
+    OperatorSetIdProto,
     TensorProto,
     ValueInfoProto,
     load as onnx_load,
@@ -1195,3 +1196,104 @@ def shadowing_names(
         existing |= not_empty
         created |= not_empty
     return shadow, post_shadow, created
+
+
+def extract_subset_of_nodes(
+    model: ModelProto,
+    name: str,
+    node_index: Optional[int] = None,
+    cut_points: Optional[Set[str]] = None,
+) -> List[NodeProto]:
+    """
+    Extracts the minimal subgraphs which can produce the output ``name``
+    knowing ``cut_points``.
+
+    :param model: original model
+    :param name: result name
+    :param node_index: if the node index is known, otherwise searches for it
+    :param cut_points: the known results or input name otherwise
+    :return: minimal list of nodes
+    """
+    if node_index is None:
+        for i, node in enumerate(model.graph.node):
+            if name in node.output:
+                node_index = i
+                break
+    assert (
+        node_index is not None
+        and node_index < len(model.graph.node)
+        and name in model.graph.node[node_index].output
+    ), f"node_index is still empty or wrong for result {name!r}"
+    if cut_points is None:
+        cut_points = {n.name for n in model.graph.input} | {
+            n.name for n in model.graph.initializer
+        }
+    elif model.graph.initializer:
+        cut_points = cut_points | {n.name for n in model.graph.initializer}
+
+    node = model.graph.node[node_index]
+    selected = {node_index}
+    current_node_index = node_index
+    current_input_index = 0
+    intermediate = {name}
+    inputs = set(k for k in node.input if k)
+    while not (inputs <= cut_points) and current_node_index >= 0:
+        node = model.graph.node[current_node_index]
+        if current_input_index == 0:
+            needs = [o for o in node.output if o in intermediate and o not in cut_points]
+            if needs:
+                selected.add(current_node_index)
+            else:
+                current_node_index -= 1
+                continue
+        res = node.input[current_input_index]
+        if res not in cut_points:
+            intermediate.add(res)
+        current_input_index += 1
+        if current_input_index >= len(node.input):
+            current_node_index -= 1
+            current_input_index = 0
+
+    return [model.graph.node[i] for i in sorted(selected)]
+
+
+def make_submodel(
+    nodes: List[NodeProto],
+    ir_version: int,
+    opset_imports: List[OperatorSetIdProto],
+    output_names: List[str],
+    type_rank_fn: Callable[[str], Tuple[int, int]],
+) -> ModelProto:
+    """
+    Creates a model with the given list of nodes.
+    It computes the minimum list of inputs needed for this model.
+    The function assumes the nodes are sorted.
+    It does not handle yet subgraphs.
+
+    :param nodes: list of nodes
+    :param ir_version: ir version
+    :param opset_imports: opset import
+    :param output_names: desired outputs
+    :param function: function returning the type and the rank of a result
+    :return: model proto
+    """
+
+    def _mkv_(name, itype, irank):
+        return oh.make_tensor_value_info(name, itype, [f"{name}_d{i}" for i in range(irank)])
+
+    not_known: Set[str] = set()
+    for node in nodes[::-1]:
+        not_known -= set(node.output)
+        not_known |= set(node.input)
+
+    model = oh.make_model(
+        oh.make_graph(
+            nodes,
+            "submodel",
+            [_mkv_(n, *type_rank_fn(n)) for n in sorted(not_known)],
+            [_mkv_(n, *type_rank_fn(n)) for n in sorted(output_names)],
+        ),
+        ir_version=ir_version,
+        opset_imports=opset_imports,
+    )
+    return model

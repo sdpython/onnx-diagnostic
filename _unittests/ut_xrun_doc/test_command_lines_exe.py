@@ -112,6 +112,7 @@ class TestCommandLines(ExtTestCase):
         input_file = self.get_dump_file("test_h_parser_sbs.inputs.pt")
         ep_file = self.get_dump_file("test_h_parser_sbs.ep")
         onnx_file = self.get_dump_file("test_h_parser_sbs.model.onnx")
+        replay_foler = self.get_dump_folder("test_h_parser_sbs.replay")
         torch.save(inputs, input_file)
         to_onnx(
             Model(),
@@ -139,6 +140,10 @@ class TestCommandLines(ExtTestCase):
                     output,
                     "-m",
                     onnx_file,
+                    "-t",
+                    "Gemm",
+                    "-f",
+                    replay_foler,
                 ]
             )
         text = st.getvalue()

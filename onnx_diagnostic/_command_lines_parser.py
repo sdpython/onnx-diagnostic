@@ -1140,6 +1140,14 @@ def get_parser_sbs() -> ArgumentParser:
             - torch.export.save(ep: torch.export.ExportedProgram)
             - torch.save(**inputs)
             - onnx.save(...)
+
+            The Replay functionality is just a way to investigates a part of a model.
+            It saves torch and onnx inputs, the torch outputs, and the minimal onnx model
+            which shares its inputs with the exported program.
+            This is used to investigate the discrepancies between the torch
+            model (through the exported program) and its onnx conversion.
+            This functionality dumps everything it can to disk
+            so that it be replayed in a separate process.
             """
         ),
     )
@@ -1222,10 +1230,33 @@ def get_parser_sbs() -> ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--gemmlinear",
-        action=BooleanOptionalAction,
-        default=False,
-        help="Replaces Gemm(A,X.T,B) by torch...linear(A,X,B) on onnx side",
+        "-s",
+        "--replay-threshold",
+        type=float,
+        required=False,
+        default=1e6,
+        help="Triggers the replay if the discrepancies are higher than this value.",
+    )
+    parser.add_argument(
+        "-n",
+        "--replay-names",
+        required=False,
+        default="",
+        help="Triggers the replay if a result name is in this set of values (comma separated)",
+    )
+    parser.add_argument(
+        "-t",
+        "--replay-op-types",
+        required=False,
+        default="",
+        help="Triggers the replay if an onnx type is in this set of values (comma separated)",
+    )
+    parser.add_argument(
+        "-f",
+        "--replay-folder",
+        required=False,
+        default="replay",
+        help="If the replay is triggered, this defines the folder where everything is dumped.",
     )
 
     return parser
@@ -1235,7 +1266,7 @@ def _cmd_sbs(argv: List[Any]):
     import pandas
     import torch
     from .helpers import flatten_object, max_diff, string_diff, string_type
-    from .torch_onnx.sbs import run_aligned
+    from .torch_onnx.sbs import run_aligned, ReplayConfiguration
     from .reference import OnnxruntimeEvaluator
 
     parser = get_parser_sbs()
@@ -1306,6 +1337,17 @@ def _cmd_sbs(argv: List[Any]):
     onx = onnx.load(args.onnx)
     print(f"-- done in {time.perf_counter() - begin:1.1f}s")
 
+    replay_configuration = None
+    if args.replay_threshold < 1e6 or args.replay_names or args.replay_op_types:
+        replay_configuration = ReplayConfiguration(
+            threshold=args.replay_threshold,
+            selected_names=set(args.replay_names.split(",")) if args.replay_names else None,
+            selected_op_types=(
+                set(args.replay_op_types.split(",")) if args.replay_op_types else None
+            ),
+            dump_folder=args.replay_folder,
+        )
+
     print("-- starts side-by-side")
     ratio = int(args.ratio)
     data = []
@@ -1319,9 +1361,9 @@ def _cmd_sbs(argv: List[Any]):
         args=margs,
         kwargs=mkwargs,
         use_tensor=True,
-        gemmlinear=args.gemmlinear,
         reset_names=args.reset.split(","),
         exc=False,
+        replay_configuration=replay_configuration,
     ):
         data.append(obs)
         if (

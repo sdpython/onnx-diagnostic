@@ -19,6 +19,8 @@ from onnx_diagnostic.helpers.onnx_helper import (
     enumerate_results,
     shadowing_names,
     onnx_dtype_name,
+    extract_subset_of_nodes,
+    make_submodel,
 )
 
 
@@ -475,6 +477,58 @@ class TestOnnxHelper(ExtTestCase):
                 self.assertEqual(k, onnx_dtype_name(getattr(TensorProto, k)))
         self.assertRaise(lambda: onnx_dtype_name(1000), ValueError)
         self.assertEqual(onnx_dtype_name(1000, exc=False), "UNEXPECTED")
+
+    def test_extract_subset_of_nodes(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+                    oh.make_node("Unsqueeze", ["xu1", "un"], ["xu2"]),
+                    oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+                    oh.make_node("Cast", ["xm2c"], ["xm2"], to=1),
+                    oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                    oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, [320, 1280])],
+                [oh.make_tensor_value_info("Z", TFLOAT, [3, 5, 320, 640])],
+                [
+                    onh.from_array(
+                        np.random.rand(3, 5, 1280, 640).astype(np.float32), name="Y"
+                    ),
+                    onh.from_array(np.array([0], dtype=np.int64), name="zero"),
+                    onh.from_array(np.array([1], dtype=np.int64), name="un"),
+                    onh.from_array(np.array([1, 320, 1280], dtype=np.int64), name="shape1"),
+                    onh.from_array(np.array([15, 1280, 640], dtype=np.int64), name="shape2"),
+                    onh.from_array(np.array([3, 5, 320, 640], dtype=np.int64), name="shape3"),
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        submodel = extract_subset_of_nodes(model, "xm", cut_points={"Y", "xu2", "xm1"})
+        op_types = [n.op_type for n in submodel]
+        self.assertEqual(["Reshape", "Cast", "MatMul"], op_types)
+
+        def _type_rank_fn(name):
+            if name in {"Y", "xu2"}:
+                return TensorProto.FLOAT, 4
+            if name in {"xm1", "xm"}:
+                return TensorProto.FLOAT, 3
+            if name == "shape2":
+                return TensorProto.INT64, 1
+            raise AssertionError(f"unexpected name={name!r}")
+
+        new_model = make_submodel(
+            submodel,
+            ir_version=model.ir_version,
+            opset_imports=model.opset_import,
+            type_rank_fn=_type_rank_fn,
+            output_names=["xm"],
+        )
+        check_model(new_model)
+        self.check_ort(new_model)
 
 
 if __name__ == "__main__":
