@@ -51,6 +51,7 @@ _cache/*
 .coverage
 dist/*
 build/*
+_sbs_*
 .eggs/*
 .olive-cache/*
 .hypothesis/*
