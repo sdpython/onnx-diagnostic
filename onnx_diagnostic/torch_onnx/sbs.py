@@ -274,7 +274,13 @@ class ReplayConfiguration:
             print(pretty_onnx(model))
             print("--")
 
-            print("-- discrepancies")
+            print("-- range of inputs")
+            for k, v in onnx_inputs.items():
+                print(f"--   {k}: {string_type(v, **skws, with_min_max=True)}")
+            print("-- done.")
+            print("--")
+
+            print("-- discrepancies of inputs")
             ep_feeds = {}
             for k, v in onnx_inputs.items():
                 tk = mapping.get(k, k)
@@ -285,21 +291,21 @@ class ReplayConfiguration:
                     f"--   {k} -> {tk} ep:{string_type(tkv, **skws)} "
                     f"nx:{string_type(v, **skws)} / diff {string_diff(diff)}"
                 )
-
             print("-- done.")
             print("--")
+
             print("-- run with onnx_inputs")
             sess = OnnxruntimeEvaluator(model, whole=True)
             feeds = onnx_inputs
             obtained = sess.run(None, feeds)
             print(f"-- obtained={string_type(obtained, **skws)}")
-            diff = max_diff(expected, tuple(obtained))
+            diff = max_diff(expected, tuple(obtained), hist=[0.1, 0.01])
             print(f"-- diff: {string_diff(diff)}")
             print("--")
             print("-- run with torch_inputs")
             obtained = sess.run(None, ep_feeds)
             print(f"-- obtained={string_type(obtained, **skws)}")
-            diff = max_diff(expected, tuple(obtained))
+            diff = max_diff(expected, tuple(obtained), hist=[0.1, 0.01])
             print(f"-- diff: {string_diff(diff)}")
 
             print("-- plots")
