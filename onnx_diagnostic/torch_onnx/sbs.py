@@ -2,7 +2,7 @@ import inspect
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Self, Set, Tuple, Union
 import onnx
 import onnx.helper as oh
 import numpy as np
@@ -371,6 +371,29 @@ class RunAlignedRecord:
             self.err_nan = diff["nan"]
         if "rep" in diff:
             self.err_h01 = diff["rep"][">0.1"]
+        return self
+
+    @property
+    def key(self) -> Tuple[int, int, int, str, str]:
+        "Creates a unique identifier."
+        return (
+            self.ep_id_node,
+            self.onnx_id_node,
+            self.onnx_id_output,
+            self.ep_name,
+            self.onnx_name,
+        )
+
+    def check(self, already_yielded: Dict[Tuple[int, int, int, str, str], int]) -> Self:
+        "Checks a record was not already yielded."
+        key = self.key
+        assert key not in already_yielded, (
+            f"Record with key={key} was already yielded, "
+            f"number of records={len(already_yielded)} and previous "
+            f"record at position {already_yielded[key]} (self={self})"
+        )
+        already_yielded[key] = len(already_yielded)
+        return self
 
 
 @dataclass
@@ -451,8 +474,6 @@ def run_aligned(
         for the onnx runtime
     :param atol: absolute tolerance
     :param rtol: relative tolerance
-    :param gemmlinear: if True, replaces ``Gemm(A,X.T,B)`` by
-        ``torch.nn.functional.linear(A,X,B)`` on onnx side
     :param verbose: verbosity level
     :param exc: stops if an exception
     :param reset_names: list of names, the onnx execution takes the torch outputs instead
@@ -595,6 +616,7 @@ def run_aligned(
                                           -v 1 --atol=0.1 --rtol=1
     """
     assert callable(run_cls), f"run_cls={run_cls} not a callable"
+    already_yielded = {}
     reset_names = set(reset_names) if reset_names else set()  # type: ignore[assignment]
     str_kws = dict(with_shape=True, with_device=True)
     has_cuda = any(
@@ -774,7 +796,7 @@ def run_aligned(
         list_node_output = list(node.output)
         node_output = [o for o in list_node_output if o]
         for o, r in zip(node_output, res):
-            if r is None or o is None:
+            if r is None or not o:
                 continue
             tmp = _loop_cmp(
                 mapping_onnx_to_torch,
@@ -1033,7 +1055,7 @@ def run_aligned(
                 onnx_name=init.name,
                 onnx_op_type="initializer",
                 onnx_shape_type=string_type(t, **str_kws),
-            )
+            ).check(already_yielded)
 
         size = t.element_size() * t.numel()
         if t.is_cuda:
@@ -1115,7 +1137,7 @@ def run_aligned(
                         onnx_results[torch_names_to_onnx_names[node.name]], **str_kws
                     ),
                 )
-                yield record
+                yield record.check(already_yielded)
             else:
                 assert node.name in placeholders_to_state_dict, (
                     f"Unable to find placeholder {node.name!r} (node.op={node.op!r}), "
@@ -1155,7 +1177,7 @@ def run_aligned(
                                 hist=[0.1],
                             )
                         )
-                    yield record
+                    yield record.check(already_yielded)
                 else:
                     if verbose > 1:
                         print(
@@ -1166,7 +1188,7 @@ def run_aligned(
                         ep_name=node.name,
                         ep_target="placeholder",
                         ep_shape_type=string_type(t, **str_kws),
-                    )
+                    ).check(already_yielded)
             continue
 
         outputs = [node.name] if isinstance(node.name, str) else list(node.name)
@@ -1197,6 +1219,8 @@ def run_aligned(
             continue
 
         for i_onnx in range(last_position, max_pos + 1):
+            if i_onnx in already_run:
+                continue
             for r in _loop_onnx_node(
                 onx,
                 ep_graph_nodes,
@@ -1216,7 +1240,7 @@ def run_aligned(
                 verbose,
             ):
                 if r:
-                    yield r
+                    yield r.check(already_yielded)
 
         last_position = max_pos + 1
 
@@ -1227,6 +1251,8 @@ def run_aligned(
             f"to {len(onx.graph.node)}"
         )
     for i_onnx in range(last_position, len(onx.graph.node)):
+        if i_onnx in already_run:
+            continue
         for r in _loop_onnx_node(
             onx,
             ep_graph_nodes,
@@ -1246,9 +1272,7 @@ def run_aligned(
             verbose,
         ):
             if r:
-                yield r
-
-        already_run.add(i_onnx)
+                yield r.check(already_yielded)
 
     if verbose:
         print(f"[run_aligned] done with status={status.to_str()}")
