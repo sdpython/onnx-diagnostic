@@ -3,7 +3,13 @@ import os
 import textwrap
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterator, List, Optional, Self, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
+
+try:
+    from typing import Self
+except ImportError:
+    # python <= 3.10
+    Self = "Self"
 import onnx
 import onnx.helper as oh
 import numpy as np
@@ -246,6 +252,7 @@ class ReplayConfiguration:
             import onnx
             import torch
             from onnx_diagnostic.helpers import max_diff, string_diff, string_type
+            from onnx_diagnostic.helpers.torch_helper import study_discrepancies
             from onnx_diagnostic.helpers.onnx_helper import pretty_onnx
             from onnx_diagnostic.reference import OnnxruntimeEvaluator
 
@@ -294,6 +301,16 @@ class ReplayConfiguration:
             print(f"-- obtained={string_type(obtained, **skws)}")
             diff = max_diff(expected, tuple(obtained))
             print(f"-- diff: {string_diff(diff)}")
+
+            print("-- plots")
+            for i in range(len(expected)):
+                study_discrepancies(
+                    expected[i],
+                    obtained[i],
+                    title=f"study output {i}",
+                    name=f"disc{i}.png",
+                    bins=50,
+                )
             """
         )
 
