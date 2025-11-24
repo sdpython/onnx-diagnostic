@@ -231,7 +231,7 @@ class ReplayConfiguration:
     def get_replay_code(self) -> str:
         """
         Returns a code letting the user replay the onnx model.
-        It looks like the following.
+        It looks like the following. It may have to be adapted.
 
         .. runpython::
             :showcode:
@@ -267,6 +267,20 @@ class ReplayConfiguration:
             print(pretty_onnx(model))
             print("--")
 
+            print("-- discrepancies")
+            ep_feeds = {}
+            for k, v in onnx_inputs.items():
+                tk = mapping.get(k, k)
+                tkv = torch_inputs[k] if k in torch_inputs else torch_inputs[tk]
+                ep_feeds[k] = tkv
+                diff = max_diff(v, tkv)
+                print(
+                    f"--   {k} -> {tk} ep:{string_type(tkv, **skws)} "
+                    f"nx:{string_type(v, **skws)} / diff {string_diff(diff)}"
+                )
+
+            print("-- done.")
+            print("--")
             print("-- run with onnx_inputs")
             sess = OnnxruntimeEvaluator(model, whole=True)
             feeds = onnx_inputs
@@ -274,10 +288,9 @@ class ReplayConfiguration:
             print(f"-- obtained={string_type(obtained, **skws)}")
             diff = max_diff(expected, tuple(obtained))
             print(f"-- diff: {string_diff(diff)}")
-
+            print("--")
             print("-- run with torch_inputs")
-            feeds = {k: torch_inputs[mapping[k]] for k in feeds}
-            obtained = sess.run(None, feeds)
+            obtained = sess.run(None, ep_feeds)
             print(f"-- obtained={string_type(obtained, **skws)}")
             diff = max_diff(expected, tuple(obtained))
             print(f"-- diff: {string_diff(diff)}")
