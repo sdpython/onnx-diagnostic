@@ -269,18 +269,24 @@ class ReplayConfiguration:
             print(f"-- expected={string_type(expected, **skws)}")
             print(f"-- mapping={mapping}")
 
-            model = onnx.load("model.onnx")
+            print()
             print("-- model.onnx")
-            print(pretty_onnx(model))
-            print("--")
+            print()
 
-            print("-- range of inputs")
+            model = onnx.load("model.onnx")
+            print(pretty_onnx(model))
+
+            print()
+            print("-- range of inputs --")
+            print()
+
             for k, v in onnx_inputs.items():
                 print(f"--   {k}: {string_type(v, **skws, with_min_max=True)}")
-            print("-- done.")
-            print("--")
 
-            print("-- discrepancies of inputs")
+            print()
+            print("-- discrepancies of inputs --")
+            print()
+
             ep_feeds = {}
             for k, v in onnx_inputs.items():
                 tk = mapping.get(k, k)
@@ -291,24 +297,29 @@ class ReplayConfiguration:
                     f"--   {k} -> {tk} ep:{string_type(tkv, **skws)} "
                     f"nx:{string_type(v, **skws)} / diff {string_diff(diff)}"
                 )
-            print("-- done.")
-            print("--")
 
-            print("-- run with onnx_inputs")
+            print()
+            print("-- SVD --")
+            print()
+
+            for k, v in onnx_inputs.items():
+                if len(v.shape) == 2:
+                    U, S, Vt = torch.linalg.svd(v.to(torch.float32))
+                    print(f" -- {k}: {S[:5]}")
+
+            print()
+            print("-- run with onnx_inputs --")
+            print()
+
             sess = OnnxruntimeEvaluator(model, whole=True)
             feeds = onnx_inputs
             obtained = sess.run(None, feeds)
             print(f"-- obtained={string_type(obtained, **skws)}")
             diff = max_diff(expected, tuple(obtained), hist=[0.1, 0.01])
             print(f"-- diff: {string_diff(diff)}")
-            print("--")
-            print("-- run with torch_inputs")
-            obtained = sess.run(None, ep_feeds)
-            print(f"-- obtained={string_type(obtained, **skws)}")
-            diff = max_diff(expected, tuple(obtained), hist=[0.1, 0.01])
-            print(f"-- diff: {string_diff(diff)}")
+            print()
+            print("-- plots --")
 
-            print("-- plots")
             for i in range(len(expected)):
                 study_discrepancies(
                     expected[i],
@@ -317,6 +328,19 @@ class ReplayConfiguration:
                     name=f"disc{i}.png",
                     bins=50,
                 )
+
+            print()
+            print("-- run with torch_inputs --")
+            print()
+
+            obtained = sess.run(None, ep_feeds)
+            print(f"-- obtained={string_type(obtained, **skws)}")
+            diff = max_diff(expected, tuple(obtained), hist=[0.1, 0.01])
+            print(f"-- diff: {string_diff(diff)}")
+
+            print()
+            print("-- end --")
+            print()
             """
         )
 

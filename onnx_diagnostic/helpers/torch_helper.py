@@ -1049,7 +1049,9 @@ def study_discrepancies(
     fig, ax = plt.subplots(3, 2, figsize=figsize)
     vmin, vmax = d1.min().item(), d1.max().item()
     ax[0, 0].imshow(d1.detach().cpu().numpy(), cmap="Greys", vmin=vmin, vmax=vmax)
-    ax[0, 0].set_title(f"Color plot of the first tensor in\n[{vmin}, {vmax}]")
+    ax[0, 0].set_title(
+        f"Color plot of the first tensor in\n[{vmin}, {vmax}]\n{t1.shape} -> {d1.shape}"
+    )
 
     diff = d2 - d1
     vmin, vmax = diff.min().item(), diff.max().item()
