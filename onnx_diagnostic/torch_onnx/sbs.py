@@ -1,14 +1,20 @@
 import inspect
 import os
+import textwrap
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterator, List, Optional, Self, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 import onnx
 import onnx.helper as oh
 import numpy as np
 import torch
 from ..helpers import string_type, string_diff, max_diff, flatten_object
-from ..helpers.onnx_helper import pretty_onnx, extract_subset_of_nodes, make_submodel
+from ..helpers.onnx_helper import (
+    pretty_onnx,
+    extract_subset_of_nodes,
+    make_submodel,
+    from_array_extended,
+)
 from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor, torch_dtype_to_onnx_dtype
 
 
@@ -222,6 +228,62 @@ class ReplayConfiguration:
             return True
         return False
 
+    def get_replay_code(self) -> str:
+        """
+        Returns a code letting the user replay the onnx model.
+        It looks like the following.
+
+        .. runpython::
+            :showcode:
+
+            from onnx_diagnostic.torch_onnx.sbs import ReplayConfiguration
+
+            rc = ReplayConfiguration(dump_folder="unsued")
+            print(rc.get_replay_code())
+        """
+        return textwrap.dedent(
+            """
+            import onnx
+            import torch
+            from onnx_diagnostic.helpers import max_diff, string_diff, string_type
+            from onnx_diagnostic.helpers.onnx_helper import pretty_onnx
+            from onnx_diagnostic.reference import OnnxruntimeEvaluator
+
+            skws = dict(with_shape=True, with_device=True)
+
+            torch_inputs = torch.load("torch_inputs.pt")
+            onnx_inputs = torch.load("onnx_inputs.pt")
+            expected_outputs_and_mapping = torch.load("torch_outputs_and_mapping.pt")
+            expected = expected_outputs_and_mapping["expected"]
+            mapping = expected_outputs_and_mapping["mapping"]
+
+            print(f"-- torch_inputs={string_type(torch_inputs, **skws)}")
+            print(f"-- onnx_inputs={string_type(onnx_inputs, **skws)}")
+            print(f"-- expected={string_type(expected, **skws)}")
+            print(f"-- mapping={mapping}")
+
+            model = onnx.load("model.onnx")
+            print("-- model.onnx")
+            print(pretty_onnx(model))
+            print("--")
+
+            print("-- run with onnx_inputs")
+            sess = OnnxruntimeEvaluator(model, whole=True)
+            feeds = onnx_inputs
+            obtained = sess.run(None, feeds)
+            print(f"-- obtained={string_type(obtained, **skws)}")
+            diff = max_diff(expected, tuple(obtained))
+            print(f"-- diff: {string_diff(diff)}")
+
+            print("-- run with torch_inputs")
+            feeds = {k: torch_inputs[mapping[k]] for k in feeds}
+            obtained = sess.run(None, feeds)
+            print(f"-- obtained={string_type(obtained, **skws)}")
+            diff = max_diff(expected, tuple(obtained))
+            print(f"-- diff: {string_diff(diff)}")
+            """
+        )
+
     def dump(
         self,
         name: str,
@@ -278,14 +340,27 @@ class ReplayConfiguration:
         os.makedirs(folder, exist_ok=True)
         if verbose:
             print(f"[ReplayConfiguration.dump] dumps into folder {folder!r}")
-        onnx.save(submodel, os.path.join(folder, "model.onnx"))
+
         torch_inputs = {}
+        removed_inputs = set()
         for n in input_names:
             if n in onnx_name_to_ep_name:
                 torch_inputs[n] = torch_results[onnx_name_to_ep_name[n]]
             else:
-                # It is possible that this result only exists in the onnx worlds.
-                pass
+                # We add that input as an initializer because it is probably a constant.
+                submodel.graph.initializer.append(from_array_extended(onnx_results[n], name=n))
+                removed_inputs.add(n)
+
+        if removed_inputs:
+            input_names = [i for i in input_names if i not in removed_inputs]
+            new_inputs = [i for i in submodel.graph.input if i.name not in removed_inputs]
+            del submodel.graph.input[:]
+            submodel.graph.input.extend(new_inputs)
+            if verbose:
+                print(f"[ReplayConfiguration.dump] removed input {removed_inputs}")
+                print(f"[ReplayConfiguration.dump] final model inputs {input_names}")
+
+        onnx.save(submodel, os.path.join(folder, "model.onnx"))
         onnx_inputs = {n: onnx_results[n] for n in input_names}
         assert (
             name in onnx_name_to_ep_name
@@ -301,6 +376,8 @@ class ReplayConfiguration:
         torch.save(
             expected_outputs_and_mapping, os.path.join(folder, "torch_outputs_and_mapping.pt")
         )
+        with open(os.path.join(folder, "replay.py"), "w") as f:
+            f.write(self.get_replay_code())
         if verbose:
             print(f"[ReplayConfiguration.dump] done {folder!r}")
         return folder
@@ -363,7 +440,7 @@ class RunAlignedRecord:
             f"ep_id_node={self.ep_id_node}"
         )
 
-    def set_diff(self, diff: Dict[str, Any]):
+    def set_diff(self, diff: Dict[str, Any]) -> "Self":  # noqa: F821
         """Sets error."""
         if diff is None:
             return
@@ -398,7 +475,7 @@ class RunAlignedRecord:
             Tuple[Optional[int], Optional[int], Optional[int], Optional[str], Optional[str]],
             int,
         ],
-    ) -> Self:
+    ) -> "Self":  # noqa: F821
         "Checks a record was not already yielded."
         if self.onnx_op_type == "reset":
             # no record for this one
