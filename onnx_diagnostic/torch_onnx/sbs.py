@@ -214,13 +214,11 @@ class ReplayConfiguration:
         :param err_abs: measured discrepancy
         :return: True if this should be dumped
         """
-        if name and self.selected_names:
-            if name in self.selected_names:
-                return True
-        if op_type and self.selected_op_types:
-            if op_type in self.selected_op_types:
-                return True
-        if err_abs is not None and err_abs >= self.threshold:
+        if name and self.selected_names and name in self.selected_names:
+            return True
+        if op_type and self.selected_op_types and op_type in self.selected_op_types:
+            return True
+        if err_abs is not None and self.threshold is not None and err_abs >= self.threshold:
             return True
         return False
 
@@ -286,15 +284,23 @@ class ReplayConfiguration:
             if n in onnx_name_to_ep_name:
                 torch_inputs[n] = torch_results[onnx_name_to_ep_name[n]]
             else:
-                raise AssertionError(f"n={n!r}, onnx_name_to_ep_name={onnx_name_to_ep_name}")
+                # It is possible that this result only exists in the onnx worlds.
+                pass
         onnx_inputs = {n: onnx_results[n] for n in input_names}
         assert (
             name in onnx_name_to_ep_name
         ), f"Unable to find {name!r} in {onnx_name_to_ep_name}"
-        expected_outputs = (torch_results[onnx_name_to_ep_name[name]],)
+        expected_outputs_and_mapping = dict(
+            expected=(torch_results[onnx_name_to_ep_name[name]],),
+            mapping={
+                k: onnx_name_to_ep_name[k] for k in input_names if k in onnx_name_to_ep_name
+            },
+        )
         torch.save(torch_inputs, os.path.join(folder, "torch_inputs.pt"))
         torch.save(onnx_inputs, os.path.join(folder, "onnx_inputs.pt"))
-        torch.save(expected_outputs, os.path.join(folder, "torch_outputs.pt"))
+        torch.save(
+            expected_outputs_and_mapping, os.path.join(folder, "torch_outputs_and_mapping.pt")
+        )
         if verbose:
             print(f"[ReplayConfiguration.dump] done {folder!r}")
         return folder
@@ -374,7 +380,9 @@ class RunAlignedRecord:
         return self
 
     @property
-    def key(self) -> Tuple[int, int, int, str, str]:
+    def key(
+        self,
+    ) -> Tuple[Optional[int], Optional[int], Optional[int], Optional[str], Optional[str]]:
         "Creates a unique identifier."
         return (
             self.ep_id_node,
@@ -384,8 +392,17 @@ class RunAlignedRecord:
             self.onnx_name,
         )
 
-    def check(self, already_yielded: Dict[Tuple[int, int, int, str, str], int]) -> Self:
+    def check(
+        self,
+        already_yielded: Dict[
+            Tuple[Optional[int], Optional[int], Optional[int], Optional[str], Optional[str]],
+            int,
+        ],
+    ) -> Self:
         "Checks a record was not already yielded."
+        if self.onnx_op_type == "reset":
+            # no record for this one
+            return self
         key = self.key
         assert key not in already_yielded, (
             f"Record with key={key} was already yielded, "
@@ -616,7 +633,7 @@ def run_aligned(
                                           -v 1 --atol=0.1 --rtol=1
     """
     assert callable(run_cls), f"run_cls={run_cls} not a callable"
-    already_yielded = {}
+    already_yielded = {}  # type: ignore[var-annotated]
     reset_names = set(reset_names) if reset_names else set()  # type: ignore[assignment]
     str_kws = dict(with_shape=True, with_device=True)
     has_cuda = any(
@@ -647,6 +664,8 @@ def run_aligned(
     if verbose:
         print(f"[run_aligned] run_cls={run_cls}")
         print(f"[run_aligned] run_cls_kwargs={run_cls_kwargs}")
+        if replay_configuration:
+            print(f"[run_aligned] replay={replay_configuration}")
 
     def _check_tensor_(name, obj, flip_type=False):
         if flip_type:
