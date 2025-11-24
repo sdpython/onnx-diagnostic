@@ -9,7 +9,7 @@ try:
     from typing import Self
 except ImportError:
     # python <= 3.10
-    Self = "Self"
+    Self = "Self"  # type: ignore[assignment]
 import onnx
 import onnx.helper as oh
 import numpy as np
@@ -848,7 +848,7 @@ def run_aligned(
                 onnx_shape_type=string_type(r, **str_kws),
             )
             r.set_diff(d)
-            mapping_onnx_to_torch[to] = o
+            mapping_onnx_to_torch[o] = to
             return r
         return None
 
@@ -1035,7 +1035,8 @@ def run_aligned(
 
     if verbose:
         print(f"[run_aligned] ep: walks through {len(ep.graph.nodes)} nodes from torch")
-    positions: Dict[str, Any] = {}
+    # dictionary mapping result names and their position in both graphs.
+    positions: Dict[str, Dict[str, int]] = {}
     ep_graph_nodes = list(ep.graph.nodes)
     torch_results: Dict[str, Any] = {}
     last_position = 0
@@ -1087,6 +1088,18 @@ def run_aligned(
         print(f"[run_aligned] ep: found inputs  {torch_input_names}")
         print(f"[run_aligned] ep: found outputs {torch_output_names}")
         print(f"[run_aligned] nx: walks through {len(onx.graph.node)} nodes from onnx")
+    for inp in onx.graph.input:
+        n = inp.name
+        if n in positions:
+            positions[n]["onnx"] = -1
+        else:
+            positions[n] = dict(onnx=-1)
+    for inp in onx.graph.initializer:
+        n = inp.name
+        if n in positions:
+            positions[n]["onnx"] = -1
+        else:
+            positions[n] = dict(onnx=-1)
     for i, node in enumerate(onx.graph.node):
         for n in node.output:
             if n in positions:
@@ -1156,7 +1169,6 @@ def run_aligned(
     memory_cpu = 0
     memory_cuda = 0
     for init in onx.graph.initializer:  # type: ignore
-        positions[init.name] = -1
         t = None
         if init.name in torch_results:
             if init.name not in skip_mapping_torch_onnx:
@@ -1215,6 +1227,8 @@ def run_aligned(
                 print(f"[run_aligned-nx] +ini: {k}: {string_type(v, **str_kws)}")
 
     # starts the side-by-side
+    if verbose:
+        print(f"[run_aligned] ep: starts side-by-side with {len(ep_graph_nodes)} nodes")
     if verbose == 1:
         import tqdm
 
@@ -1222,8 +1236,6 @@ def run_aligned(
     else:
         loop = list(enumerate(ep_graph_nodes))
 
-    if verbose:
-        print(f"[run_aligned] ep: starts side-by-side with {len(ep_graph_nodes)} nodes")
     already_run: Set[int] = set()
     ep_durations = {}
     status = StatusRunAligned()
@@ -1345,15 +1357,33 @@ def run_aligned(
 
         max_pos = -2
         for n in outputs:
-            if n in positions and "onnx" in positions[n]:
-                max_pos = max(max_pos, positions[n]["onnx"])
+            if n in positions:
+                if "onnx" in positions[n]:
+                    max_pos = max(max_pos, positions[n]["onnx"])
+                if "fx" in positions[n]:
+                    if positions[n]["fx"] > i:
+                        max_pos = -2
+                        break
         if max_pos == -2:
             # we skip.
             continue
 
+        next_to_visit = last_position
         for i_onnx in range(last_position, max_pos + 1):
             if i_onnx in already_run:
                 continue
+            # The onnx node may produce more than one output, in that
+            # case, we need to check the exported program is not behind.
+            node = onx.graph.node[i_onnx]
+            ep_behind = False
+            for iname in node.output:
+                if iname in positions and "fx" in positions[iname]:
+                    if positions[iname]["fx"] > i:
+                        ep_behind = True
+                        break
+            if ep_behind:
+                break
+
             for r in _loop_onnx_node(
                 onx,
                 ep_graph_nodes,
@@ -1374,8 +1404,9 @@ def run_aligned(
             ):
                 if r:
                     yield r.check(already_yielded)
+            next_to_visit = i_onnx + 1
 
-        last_position = max_pos + 1
+        last_position = next_to_visit
 
     # complete the execution of the onnx graph
     if verbose:
