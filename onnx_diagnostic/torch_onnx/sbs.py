@@ -3,7 +3,7 @@ import os
 import textwrap
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Self, Set, Tuple, Union
 import onnx
 import onnx.helper as oh
 import numpy as np
@@ -238,7 +238,7 @@ class ReplayConfiguration:
 
             from onnx_diagnostic.torch_onnx.sbs import ReplayConfiguration
 
-            rc = ReplayConfiguration(dump_folder="unsued")
+            rc = ReplayConfiguration(dump_folder="unused")
             print(rc.get_replay_code())
         """
         return textwrap.dedent(
@@ -453,7 +453,7 @@ class RunAlignedRecord:
             f"ep_id_node={self.ep_id_node}"
         )
 
-    def set_diff(self, diff: Dict[str, Any]) -> "Self":  # noqa: F821
+    def set_diff(self, diff: Dict[str, Any]) -> Self:
         """Sets error."""
         if diff is None:
             return
@@ -488,7 +488,7 @@ class RunAlignedRecord:
             Tuple[Optional[int], Optional[int], Optional[int], Optional[str], Optional[str]],
             int,
         ],
-    ) -> "Self":  # noqa: F821
+    ) -> Self:
         "Checks a record was not already yielded."
         if self.onnx_op_type == "reset":
             # no record for this one
@@ -970,13 +970,14 @@ def run_aligned(
                         torch_results,
                         onnx_results,
                         o,
-                        r,
+                        torch_results[tmp.ep_name],
                         verbose,
                         atol,
                         rtol,
                         i,
                         i_onnx,
                     )
+                    assert tmp.err_abs == 0, f"Reset did not happen, tmp={tmp}"
                     if tmp is not None:
                         tmp.onnx_op_type = "reset"
                         tmp.onnx_id_output = list_node_output.index(o)
