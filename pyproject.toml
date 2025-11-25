@@ -108,7 +108,11 @@ disable_error_code = ["arg-type", "assignment", "attr-defined", "index", "misc",
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.torch_models.*"]
-disable_error_code = ["attr-defined", "call-overload", "operator"]
+disable_error_code = ["assignment", "attr-defined", "call-overload", "operator"]
+
+[[tool.mypy.overrides]]
+module = ["onnx_diagnostic.torch_onnx.sbs"]
+disable_error_code = ["var-annotated"]
 
 [tool.ruff]
 

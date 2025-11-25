@@ -43,8 +43,8 @@ def _loop_cmp(
     onnx_name: str,
     torch_result: torch.Tensor,
     verbose: int,
-    atol: float,
-    rtol: float,
+    atol: Optional[float],
+    rtol: Optional[float],
     i_torch: int,
     i_onnx: int,
     str_kws: Dict[str, bool],
@@ -140,6 +140,7 @@ def _loop_onnx_node(
             f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
         )
     elif verbose == 1:
+        loop.update(i_torch + i_onnx)
         loop.set_description(
             f"ep {i_torch}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
             f"{status.to_str()}"
@@ -435,7 +436,7 @@ def _preparation_with_onnx_model(
                 t = torch_results[init.name]
                 torch_names_to_onnx_names[init.name] = init.name
         elif init.name not in skip_onnx_name and init.name in rev_init_aliases:
-            new_names = [  # type: ignore[assignment]
+            new_names = [
                 k
                 for k in rev_init_aliases[init.name]
                 if k in torch_results and k not in skip_mapping_torch_onnx
@@ -657,8 +658,8 @@ def run_aligned(
                                           -v 1 --atol=0.1 --rtol=1
     """
     assert callable(run_cls), f"run_cls={run_cls} not a callable"
-    already_yielded = {}  # type: ignore[var-annotated]
-    reset_names = set(reset_names) if reset_names else set()  # type: ignore[assignment]
+    already_yielded = {}
+    reset_names = set(reset_names) if reset_names else set()
     str_kws = dict(with_shape=True, with_device=True)
     has_cuda = any(
         (isinstance(t, torch.Tensor) and t.is_cuda)
@@ -777,25 +778,28 @@ def run_aligned(
     if verbose == 1:
         import tqdm
 
-        loop = tqdm.tqdm(list(enumerate(ep_graph_nodes)))
+        loop = tqdm.tqdm(total=len(ep_graph_nodes) + len(onx.graph.node))
     else:
-        loop = list(enumerate(ep_graph_nodes))
+        loop = None
 
     already_run: Set[int] = set()
     ep_durations = {}
     status = StatusRunAligned()
-    for i, node in loop:
+    for i_torch, node in enumerate(ep_graph_nodes):
         if verbose > 1:
             if node.op == "call_function":
                 print(
-                    f"[run_aligned] run ep.graph.nodes[{i}]: "
+                    f"[run_aligned] run ep.graph.nodes[{i_torch}]: "
                     f"{node.op}[{node.target}] -> {node.name!r}"
                 )
             else:
-                print(f"[run_aligned] run ep.graph.nodes[{i}]: {node.op} -> {node.name!r}")
+                print(
+                    f"[run_aligned] run ep.graph.nodes[{i_torch}]: {node.op} -> {node.name!r}"
+                )
         elif verbose == 1:
+            loop.update(i_torch + last_position)
             loop.set_description(
-                f"ep {i}/{len(ep_graph_nodes)} nx {last_position}/{len(onx.graph.node)} "
+                f"ep {i_torch}/{len(ep_graph_nodes)} nx {last_position}/{len(onx.graph.node)} "
                 f"{status.to_str()}"
             )
 
@@ -816,7 +820,7 @@ def run_aligned(
                     print(f"[run_aligned-ep] =ags: {node.name}={string_type(t, **str_kws)}")
                 # Otherwise, it is an input.
                 record = RunAlignedRecord(
-                    ep_id_node=i,
+                    ep_id_node=i_torch,
                     onnx_id_node=-1,
                     ep_name=node.name,
                     onnx_name=torch_names_to_onnx_names[node.name],
@@ -848,7 +852,7 @@ def run_aligned(
                             f"{node.name}={string_type(t, **str_kws)}"
                         )
                     record = RunAlignedRecord(
-                        ep_id_node=i,
+                        ep_id_node=i_torch,
                         onnx_id_node=-1,
                         ep_name=node.name,
                         onnx_name=torch_names_to_onnx_names[node.name],
@@ -874,7 +878,7 @@ def run_aligned(
                             f"[run_aligned-ep] +plh: {node.name}={string_type(t, **str_kws)}"
                         )
                     yield RunAlignedRecord(
-                        ep_id_node=i,
+                        ep_id_node=i_torch,
                         ep_name=node.name,
                         ep_target="placeholder",
                         ep_shape_type=string_type(t, **str_kws),
@@ -886,7 +890,7 @@ def run_aligned(
         begin = time.perf_counter()
         new_outputs = run_fx_node(node, args, kwargs)
         duration = time.perf_counter() - begin
-        ep_durations[i] = duration
+        ep_durations[i_torch] = duration
         if isinstance(new_outputs, (torch.Tensor, int, float, list, tuple)):
             new_outputs = (new_outputs,)
 
@@ -906,7 +910,7 @@ def run_aligned(
                 if "onnx" in positions[n]:
                     max_pos = max(max_pos, positions[n]["onnx"])
                 if "fx" in positions[n]:
-                    if positions[n]["fx"] > i:
+                    if positions[n]["fx"] > i_torch:
                         max_pos = -2
                         break
         if max_pos == -2:
@@ -923,7 +927,7 @@ def run_aligned(
             ep_behind = False
             for iname in node.output:
                 if iname in positions and "fx" in positions[iname]:
-                    if positions[iname]["fx"] > i:
+                    if positions[iname]["fx"] > i_torch:
                         ep_behind = True
                         break
             if ep_behind:
@@ -937,7 +941,7 @@ def run_aligned(
                 torch_results,
                 ep_durations,
                 use_tensor,
-                i,
+                i_torch,
                 i_onnx,
                 name_to_ep_node,
                 run_cls_kwargs,
@@ -978,7 +982,7 @@ def run_aligned(
             torch_results,
             ep_durations,
             use_tensor,
-            i,
+            i_torch,
             i_onnx,
             name_to_ep_node,
             run_cls_kwargs,
