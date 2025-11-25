@@ -1024,7 +1024,7 @@ def study_discrepancies(
     figsize: Optional[Tuple[int, int]] = (15, 15),
     title: Optional[str] = None,
     name: Optional[str] = None,
-) -> "Axes":  # noqa: F821
+) -> "matplotlib.axes.Axes":  # noqa: F821
     """
     Computes different metrics for the discrepancies.
     Returns graphs.

@@ -28,7 +28,7 @@ from onnx_diagnostic.helpers.cache_helper import (
 )
 from onnx_diagnostic.helpers.mini_onnx_builder import create_input_tensors_from_onnx_model
 from onnx_diagnostic.helpers.onnx_helper import from_array_extended, to_array_extended
-from onnx_diagnostic.helpers.torch_helper import to_tensor
+from onnx_diagnostic.helpers.torch_helper import to_tensor, study_discrepancies
 
 TFLOAT = onnx.TensorProto.FLOAT
 
@@ -424,6 +424,12 @@ class TestTorchTestHelper(ExtTestCase):
         model, _inputs = dummy_llm("LLM")
         dt = get_weight_type(model)
         self.assertEqual(torch.float32, dt)
+
+    def test_study_discrepancies(self):
+        t1 = torch.rand((3, 4))
+        t2 = torch.rand((3, 4))
+        ax = study_discrepancies(t1, t2)
+        self.assertEqual(ax.shape, ((3, 2)))
 
 
 if __name__ == "__main__":
