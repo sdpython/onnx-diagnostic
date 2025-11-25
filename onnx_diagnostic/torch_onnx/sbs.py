@@ -113,6 +113,23 @@ def _duplicated_values(d):
     return final
 
 
+def _validation_nn_functional(
+    node: onnx.NodeProto, new_feeds: Dict[str, torch.Tensor], expected: List[torch.Tensor]
+) -> Optional[str]:
+    if node.op_type == "Gemm" and len(node.input) == 3:
+        atts = {}
+        for att in node.attribute:
+            if att.name in ("alpha", "beta"):
+                atts[att.name] = att.f
+            elif att.name in ("transA", "transB"):
+                atts[att.name] = att.i
+        if atts == {"transB": 1}:
+            res = torch.nn.functional.linear(*[new_feeds[i] for i in node.input])
+            diff = max_diff(res, expected[0])
+            return f"function.linear:{string_diff(diff)}"
+    return None
+
+
 def _loop_onnx_node(
     onx: onnx.ModelProto,
     ep_graph_nodes: List[torch.fx.Node],
@@ -201,6 +218,7 @@ def _loop_onnx_node(
         f"node is {pretty_onnx(node)}"
     )
 
+    comment = None
     cross = None
     if run_onnx_with_torch_inputs:
         # Let's run the operator with torch results if they are available
@@ -223,8 +241,13 @@ def _loop_onnx_node(
             cross = ref.run(None, new_feeds)
             if verbose > 1:
                 print(f"[run_aligned] got for second run={string_type(cross, **str_kws)}")
+            # Gemm = torch.nn.function.linear, in that case, we just run it as well
+            to = mapping_onnx_to_torch.get(node.output[0], node.output[0])
+            if to in torch_results:
+                comment = _validation_nn_functional(node, new_feeds, [torch_results[to]])
         elif verbose > 1:
             print(f"[run_aligned] second run not possible because of missing {removed}")
+
     if cross is None:
         cross = [None for _ in res]
 
@@ -264,6 +287,7 @@ def _loop_onnx_node(
             status.yielded_nodes += 1
             if tmp.err_abs is not None:
                 status.update(tmp.err_abs)
+            tmp.comment = comment
             yield tmp
 
             # do we need to dump pieces if graph the user can replay?
@@ -1055,6 +1079,7 @@ def run_aligned(
             if r:
                 yield r.check(already_yielded)
 
-    loop.close()
+    if loop is not None:
+        loop.close()
     if verbose:
         print(f"[run_aligned] done with status={status.to_str()}")

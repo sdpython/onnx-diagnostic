@@ -332,6 +332,12 @@ class RunAlignedRecord:
     :param ep_time_run: execution time for the exported program
     :param onnx_time_run: execution time for the onnx model, that includes
         the creation of the onnx model so that's probably not very usable
+    :param err_abs2: same as `err_abs` if onnx kernel is run with torch results
+    :param err_rel2: same as `err_rel` if onnx kernel is run with torch results
+    :param err_dev2: same as `err_dev` if onnx kernel is run with torch results
+    :param err_nan2: same as `err_nan` if onnx kernel is run with torch results
+    :param err_h012: same as `err_h01` if onnx kernel is run with torch results
+    :param comment: any additional information
     """
 
     ep_id_node: Optional[int] = None
@@ -355,6 +361,7 @@ class RunAlignedRecord:
     err_dev2: Optional[float] = None
     err_nan2: Optional[float] = None
     err_h012: Optional[float] = None
+    comment: Optional[str] = None
 
     def __post_init__(self):
         "Validation."
