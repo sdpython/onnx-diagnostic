@@ -1234,7 +1234,7 @@ def get_parser_sbs() -> ArgumentParser:
         "--replay-threshold",
         type=float,
         required=False,
-        default=1e6,
+        default=1e9,
         help="Triggers the replay if the discrepancies are higher than this value.",
     )
     parser.add_argument(

@@ -1,6 +1,7 @@
 import contextlib
 import ctypes
 import inspect
+import math
 import os
 import sys
 import warnings
@@ -1003,3 +1004,76 @@ def get_weight_type(model: torch.nn.Module) -> torch.dtype:
             counts[dt] += 1
     final = max(list(counts.items()))
     return final[0]
+
+
+def closest_factor_pair(n: int):
+    """Tries to find ``a, b`` such as ``n == a * b``."""
+    assert n > 0, f"n={n} must be a positive integer"
+    start = math.isqrt(n)
+    for a in range(start, 0, -1):
+        if n % a == 0:
+            b = n // a
+            return a, b
+    return 1, n
+
+
+def study_discrepancies(
+    t1: torch.Tensor,
+    t2: torch.Tensor,
+    bins: int = 50,
+    figsize: Optional[Tuple[int, int]] = (15, 15),
+    title: Optional[str] = None,
+    name: Optional[str] = None,
+) -> "matplotlib.axes.Axes":  # noqa: F821
+    """
+    Computes different metrics for the discrepancies.
+    Returns graphs.
+    """
+    assert t1.dtype == t2.dtype, f"Type mismatch {t1.dtype} != {t2.dtype}"
+    assert t1.shape == t2.shape, f"Shape mismatch {t1.shape} != {t2.shape}"
+    d1, d2 = (
+        (t1, t2) if t1.dtype == torch.float64 else (t1.to(torch.float32), t2.to(torch.float32))
+    )
+
+    d1 = d1.squeeze()
+    d2 = d2.squeeze()
+    if len(d1.shape) == 1:
+        new_shape = closest_factor_pair(d1.shape[0])
+        d1, d2 = d1.reshape(new_shape), d2.reshape(new_shape)
+    elif len(d1.shape) > 2:
+        new_shape = (-1, max(d1.shape))
+        d1, d2 = d1.reshape(new_shape), d2.reshape(new_shape)
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(3, 2, figsize=figsize)
+    vmin, vmax = d1.min().item(), d1.max().item()
+    ax[0, 0].imshow(d1.detach().cpu().numpy(), cmap="Greys", vmin=vmin, vmax=vmax)
+    ax[0, 0].set_title(
+        f"Color plot of the first tensor in\n[{vmin}, {vmax}]\n{t1.shape} -> {d1.shape}"
+    )
+
+    diff = d2 - d1
+    vmin, vmax = diff.min().item(), diff.max().item()
+    ax[0, 1].imshow(diff.detach().cpu().numpy(), cmap="seismic", vmin=vmin, vmax=vmax)
+    ax[0, 1].set_title(f"Color plot of the differences in \n[{vmin}, {vmax}]")
+
+    ax[1, 0].hist(d1.detach().cpu().numpy().ravel(), bins=bins)
+    ax[1, 0].set_title("Distribution of the first tensor")
+
+    ax[1, 1].hist(diff.detach().cpu().numpy().ravel(), bins=bins)
+    ax[1, 1].set_title("Distribution of the differences")
+
+    tf1 = d1.ravel()
+    td1 = diff.ravel()
+    ax[2, 1].plot(tf1.detach().cpu().numpy(), td1.detach().cpu().numpy(), ".")
+    ax[2, 1].set_title("Graph XY")
+    ax[2, 1].set_xlabel("First tensor values")
+    ax[2, 1].set_ylabel("Difference values")
+
+    if title:
+        fig.suptitle(title)
+    fig.tight_layout()
+    if name:
+        fig.savefig(name)
+    return ax
