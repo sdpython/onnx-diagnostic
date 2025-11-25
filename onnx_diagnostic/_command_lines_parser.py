@@ -1266,7 +1266,8 @@ def _cmd_sbs(argv: List[Any]):
     import pandas
     import torch
     from .helpers import flatten_object, max_diff, string_diff, string_type
-    from .torch_onnx.sbs import run_aligned, ReplayConfiguration
+    from .torch_onnx.sbs import run_aligned
+    from .torch_onnx.sbs_dataclasses import ReplayConfiguration
     from .reference import OnnxruntimeEvaluator
 
     parser = get_parser_sbs()

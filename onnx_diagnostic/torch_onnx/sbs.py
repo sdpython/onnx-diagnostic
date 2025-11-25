@@ -1,6 +1,6 @@
 import inspect
 import time
-from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Sequence, Tuple, Union
 import onnx
 import onnx.helper as oh
 import numpy as np
@@ -10,6 +10,469 @@ from ..helpers.onnx_helper import pretty_onnx
 from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor, torch_dtype_to_onnx_dtype
 from ..helpers.torch_fx_graph_helper import prepare_args_kwargs, run_fx_node
 from .sbs_dataclasses import ReplayConfiguration, RunAlignedRecord, StatusRunAligned
+
+
+def _check_tensor_(use_tensor, name, obj, flip_type=False):
+    if flip_type:
+        if use_tensor:
+            if isinstance(obj, np.ndarray):
+                obj = from_numpy(obj)
+        else:
+            if isinstance(obj, torch.Tensor):
+                obj = to_numpy(obj)
+
+    assert not use_tensor or isinstance(obj, torch.Tensor), (
+        f"Unexpected type {type(obj)} for {name!r}. "
+        f"use_tensor is True so torch.Tensor is expected."
+    )
+    assert use_tensor or isinstance(obj, np.ndarray), (
+        f"Unexpected type {type(obj)} for {name!r}. "
+        f"use_tensor is False so np.array is expected."
+    )
+    return obj
+
+
+def _make_node_from_initializer(proto: onnx.TensorProto) -> onnx.NodeProto:
+    return oh.make_node("Constant", [], [proto.name], value=proto)
+
+
+def _loop_cmp(
+    mapping_onnx_to_torch: Dict[str, str],
+    torch_results: Dict[str, torch.Tensor],
+    onnx_results: Dict[str, Any],
+    onnx_name: str,
+    torch_result: torch.Tensor,
+    verbose: int,
+    atol: float,
+    rtol: float,
+    i_torch: int,
+    i_onnx: int,
+    str_kws: Dict[str, bool],
+    exc: bool,
+    use_tensor: bool,
+) -> Optional[RunAlignedRecord]:
+    onnx_results[onnx_name] = _check_tensor_(use_tensor, onnx_name, torch_result)
+    if verbose > 1:
+        print(f"[run_aligned-nx] +res: {onnx_name}={string_type(torch_result, **str_kws)}")
+
+    to = mapping_onnx_to_torch.get(onnx_name, onnx_name)
+    if to in torch_results:
+        d = max_diff(torch_results[to], torch_result, hist=[0.1])
+        if verbose > 1:
+            if onnx_name == to:
+                print(f"[run_aligned-==] cmp {to}: {string_diff(d)}")
+            else:
+                print(f"[run_aligned-~~] cmd {to}/{onnx_name}: {string_diff(d)}")
+            if not (atol is None or rtol is None or (d["abs"] <= atol and d["rel"] <= rtol)):
+                if exc:
+                    raise ValueError(
+                        f"discrepancies detected for results [{to}/{onnx_name}]: "
+                        f"{string_diff(d)}"
+                        f"\n-- torch_results: {string_type(torch_results[to], **str_kws)}"
+                        f"\n-- onnx_results: {string_type(torch_result, **str_kws)}"
+                        f"\n-- torch\n{torch_results[to]}"
+                    )
+                else:
+                    print(
+                        f"[run_align-dx] discrepancies {string_diff(d)} - [{to}/{onnx_name}]"
+                    )
+        r = RunAlignedRecord(
+            ep_id_node=i_torch,
+            onnx_id_node=i_onnx,
+            ep_name=to,
+            onnx_name=onnx_name,
+            ep_shape_type=string_type(torch_results[to], **str_kws),
+            onnx_shape_type=string_type(torch_result, **str_kws),
+        )
+        r.set_diff(d)
+        mapping_onnx_to_torch[onnx_name] = to
+        return r
+    return None
+
+
+def _duplicated_values(d):
+    rev = {}
+    for k, v in d.items():
+        if v in rev:
+            rev[v].append(k)
+        else:
+            rev[v] = [k]
+    res = {k: v for k, v in rev.items() if len(v) > 1}
+    final = set()
+    for v in res.values():
+        final |= set(v)
+    return final
+
+
+def _loop_onnx_node(
+    onx: onnx.ModelProto,
+    ep_graph_nodes: List[torch.fx.Node],
+    onnx_results: Dict[str, Any],
+    mapping_onnx_to_torch: Dict[str, str],
+    torch_results: Dict[str, torch.Tensor],
+    ep_durations,
+    use_tensor: bool,
+    i_torch: int,
+    i_onnx: int,
+    name_to_ep_node: Dict[str, int],
+    run_cls_kwargs: Dict[str, Any],
+    str_kws: Dict[str, bool],
+    status: StatusRunAligned,
+    already_run_onnx: Set[int],
+    torch_names_to_onnx_names: Dict[str, str],
+    verbose: int,
+    exc: bool,
+    atol: float,
+    rtol: float,
+    reset_names: Set[str],
+    replay_configuration: Optional[ReplayConfiguration],
+    has_cuda: bool,
+    run_cls: type,
+    loop: Any,
+) -> Iterator[Optional[RunAlignedRecord]]:
+
+    if i_onnx in already_run_onnx:
+        yield None
+    node = onx.graph.node[i_onnx]
+    if verbose > 1:
+        print(
+            f"[run_aligned] run onx.graph.node[{i_onnx}]: "
+            f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
+        )
+    elif verbose == 1:
+        loop.set_description(
+            f"ep {i_torch}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
+            f"{status.to_str()}"
+        )
+
+    ref = run_cls(node, **run_cls_kwargs)
+    # We need to clone because the runtime maybe using dlpack to create OrtValue
+    feeds = (
+        {k: onnx_results[k].clone() for k in node.input if k}
+        if use_tensor
+        else {k: onnx_results[k].copy() for k in node.input if k}
+    )
+    assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
+    begin = time.perf_counter()
+    try:
+        res = ref.run(None, feeds)  # type: ignore[attr-defined]
+    except Exception as e:
+        raise RuntimeError(
+            f"Unable to run node {node.op_type}, domain={node.domain} "
+            f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
+        ) from e
+    duration = time.perf_counter() - begin
+    assert (
+        not has_cuda
+        or not any(t is not None and t.is_cuda for t in feeds.values())
+        or any(t is not None and t.is_cuda for t in res)
+        or node.op_type in {"Shape", "Size"}  # on CPU no matter what
+        or node.op_type
+        in {
+            "Add",
+            "Concat",
+            "Div",
+            "Gather",
+            "Mul",
+            "Range",
+            "Squeeze",
+            "Sub",
+            "Unsqueeze",
+        }  # not sure, could be about shapes
+    ), (
+        f"One input is on cuda but there is no float output on cuda, "
+        f"feeds={string_type(feeds, with_device=True, with_shape=True)}, "
+        f"res={string_type(res, with_device=True, with_shape=True)}, "
+        f"node is {pretty_onnx(node)}"
+    )
+    list_node_output = list(node.output)
+    node_output = [o for o in list_node_output if o]
+    for o, r in zip(node_output, res):
+        if r is None or not o:
+            continue
+        tmp = _loop_cmp(
+            mapping_onnx_to_torch,
+            torch_results,
+            onnx_results,
+            o,
+            r,
+            verbose,
+            atol,
+            rtol,
+            i_torch,
+            i_onnx,
+            str_kws,
+            exc,
+            use_tensor,
+        )
+        if tmp is not None:
+            if tmp.ep_name in name_to_ep_node:
+                tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
+                tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
+                tmp.ep_time_run = ep_durations[tmp.ep_id_node]
+            else:
+                tmp.ep_id_node = None
+                tmp.ep_target = None
+                tmp.ep_name = None
+            tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
+            tmp.onnx_id_output = list_node_output.index(o)
+            tmp.onnx_time_run = duration
+            status.yielded_nodes += 1
+            if tmp.err_abs is not None:
+                status.update(tmp.err_abs)
+            yield tmp
+
+            # do we need to dump pieces if graph the user can replay?
+            if replay_configuration:
+                if replay_configuration.select(
+                    name=tmp.onnx_name, op_type=tmp.onnx_op_type, err_abs=tmp.err_abs
+                ):
+                    replay_configuration.dump(
+                        name=tmp.onnx_name,
+                        onnx_id_node=tmp.onnx_id_node,
+                        model=onx,
+                        onnx_results=onnx_results,
+                        torch_results=torch_results,
+                        onnx_name_to_ep_name={
+                            **{v: k for k, v in torch_names_to_onnx_names.items()},
+                            **mapping_onnx_to_torch,
+                        },
+                        verbose=max(verbose - 1, 0),
+                    )
+                    status.last_replay = tmp.onnx_name
+
+            # reset_names: replaces onnx_results by torch_results to see
+            # if that fixes the discrepancies problem
+            if reset_names and tmp.ep_name in reset_names:
+                assert (
+                    tmp.ep_name in torch_results
+                ), f"name {tmp.ep_name!r} set to be reset is missing in torch_results."
+                assert (
+                    tmp.onnx_name in onnx_results
+                ), f"name {tmp.onnx_name!r} set to be reset is missing in onnx_results."
+                onnx_results[tmp.onnx_name] = torch_results[tmp.ep_name]
+                tmp = _loop_cmp(
+                    mapping_onnx_to_torch,
+                    torch_results,
+                    onnx_results,
+                    o,
+                    torch_results[tmp.ep_name],
+                    verbose,
+                    atol,
+                    rtol,
+                    i_torch,
+                    i_onnx,
+                    str_kws,
+                    exc,
+                    use_tensor,
+                )
+                assert tmp.err_abs == 0, f"Reset did not happen, tmp={tmp}"
+                if tmp is not None:
+                    tmp.onnx_op_type = "reset"
+                    tmp.onnx_id_output = list_node_output.index(o)
+                    status.yielded_nodes += 1
+                    yield tmp
+    already_run_onnx.add(i_onnx)
+
+
+def _preparation_with_fx_graph(
+    ep_graph_nodes: List[torch.fx.Node],
+    name_to_ep_node: Dict[str, int],
+    torch_input_names: List[str],
+    onx: onnx.ModelProto,
+    torch_names_to_onnx_names: Dict[str, str],
+    skip_mapping_torch_onnx,
+    torch_results: Dict[str, torch.Tensor],
+    placeholders: Dict[str, torch.Tensor],
+    placeholders_to_state_dict: Dict[str, str],
+    ep_state_dict: Dict[str, torch.Tensor],
+    positions: Dict[str, Dict[str, int]],
+) -> List[str]:
+    torch_output_names = None
+    for i, node in enumerate(ep_graph_nodes):
+        if isinstance(node.name, str):
+            positions[node.name] = dict(fx=i)
+        else:
+            for n in node.name:
+                positions[n] = dict(fx=i)
+        if node.op == "placeholder":
+            if node.name in placeholders_to_state_dict:
+                # This a weight.
+                placeholders[node.name] = ep_state_dict[placeholders_to_state_dict[node.name]]
+                torch_results[node.name] = placeholders[node.name]
+                assert isinstance(torch_results[node.name], torch.Tensor), (
+                    f"torch_results[{node.name}] not a tensor but "
+                    f"{type(torch_results[node.name])}"
+                )
+            else:
+                # This is an input
+                assert len(torch_input_names) < len(onx.graph.input), (
+                    f"torch_input_names={torch_input_names!r}, "
+                    f"onnx_input_names={[n.name for n in onx.graph.input]}, "
+                    f"node.name={node.name!r} cannot be an input"
+                )
+                assert node.name not in skip_mapping_torch_onnx, (
+                    f"{node.name!r} is ambiguous, cannot be mapped due to "
+                    f"{skip_mapping_torch_onnx}"
+                )
+                torch_names_to_onnx_names[node.name] = onx.graph.input[
+                    len(torch_input_names)
+                ].name
+                torch_input_names.append(node.name)
+        elif node.op == "output":
+            torch_output_names = [n.name for n in node.args[0]]
+        assert isinstance(node.name, str), (
+            f"Unexpected type {type(node.name)} for node={node} (target={node.target}), "
+            f"args={node.args}"
+        )
+        name_to_ep_node[node.name] = i
+    assert torch_output_names is not None, "No output node ws found the graph."
+    return torch_output_names
+
+
+def _preparation_with_onnx_model(
+    default_device,
+    use_tensor: bool,
+    onx: onnx.ModelProto,
+    already_yielded: Dict[str, Any],
+    str_kws: Dict[str, bool],
+    positions: Dict[str, Dict[str, int]],
+    torch_names_to_onnx_names: Dict[str, str],
+    torch_output_names: List[str],
+    torch_results: Dict[str, torch.Tensor],
+    skip_mapping_torch_onnx: Set[str],
+    verbose: int,
+    args: Sequence[Any],
+    kwargs: Dict[str, Any],
+) -> Tuple[Dict[str, str], Dict[str, torch.Tensor], float, float, List[RunAlignedRecord]]:
+    for inp in onx.graph.input:
+        n = inp.name
+        if n in positions:
+            positions[n]["onnx"] = -1
+        else:
+            positions[n] = dict(onnx=-1)
+    for inp in onx.graph.initializer:
+        n = inp.name
+        if n in positions:
+            positions[n]["onnx"] = -1
+        else:
+            positions[n] = dict(onnx=-1)
+    for i, node in enumerate(onx.graph.node):
+        for n in node.output:
+            if n in positions:
+                positions[n]["onnx"] = i
+            else:
+                positions[n] = dict(onnx=i)
+
+    onnx_outputs_names = [o.name for o in onx.graph.output]
+    assert torch_output_names is not None and len(torch_output_names) == len(
+        onnx_outputs_names
+    ), (
+        f"Unexpected number of outputs, torch_output_names={torch_output_names}, "
+        f"onnx_outputs_names={onnx_outputs_names}"
+    )
+    mapping_onnx_to_torch = dict(zip(onnx_outputs_names, torch_output_names))
+
+    onnx_args = list(args) if args else []
+    if kwargs:
+        onnx_args.extend(flatten_object(kwargs, drop_keys=True))
+    if verbose:
+        print(f"[run_aligned]   args: {string_type(args, **str_kws)}")
+        print(f"[run_aligned] kwargs: {string_type(kwargs, **str_kws)}")
+        print(f"[run_aligned]   onnx: {string_type(onnx_args, **str_kws)}")
+        print(f"[run_aligned] nx: walks through {len(onx.graph.input)} onnx inputs")
+    onnx_results: Dict[str, Any] = {}
+    for inp, v in zip(onx.graph.input, onnx_args):
+        onnx_results[inp.name] = _check_tensor_(
+            use_tensor, inp.name, v if use_tensor else to_numpy(v)
+        )
+        if verbose:
+            print(f"[run_aligned-nx] +inp: {inp.name}: {string_type(v, **str_kws)}")
+
+    # alias for initializers
+    skip_onnx_name = set()
+    init_aliases: Dict[str, str] = {}
+    for init in onx.graph.initializer:
+        new_names = {
+            n
+            for n in [
+                f"p_{init.name.replace('.', '_')}",
+                f"p_{init.name.split('::')[0].split('--')[-1].replace('.', '_')}",
+                f"{init.name.split('::')[0].split('--')[-1].replace('.', '_')}",
+            ]
+            if n != init.name
+        }
+        drop = False
+        for new_name in new_names:
+            if new_name in skip_onnx_name:
+                drop = True
+                break
+        if drop:
+            skip_onnx_name |= new_names | {init.name}
+            for new_name in new_names:
+                if new_names in init_aliases:
+                    del init_aliases[new_name]
+        else:
+            for new_name in new_names:
+                init_aliases[new_name] = init.name
+    rev_init_aliases: Dict[str, Set[str]] = {}
+    for k, v in init_aliases.items():
+        if v in rev_init_aliases:
+            rev_init_aliases[v].add(k)
+        else:
+            rev_init_aliases[v] = {k}
+
+    # initializers
+    if verbose:
+        print(f"[run_aligned] nx: handles {len(onx.graph.initializer)} initializers from onnx")
+    memory_cpu = 0
+    memory_cuda = 0
+    records_to_yield = []
+    for init in onx.graph.initializer:  # type: ignore
+        t = None
+        if init.name in torch_results:
+            if init.name not in skip_mapping_torch_onnx:
+                t = torch_results[init.name]
+                torch_names_to_onnx_names[init.name] = init.name
+        elif init.name not in skip_onnx_name and init.name in rev_init_aliases:
+            new_names = [  # type: ignore[assignment]
+                k
+                for k in rev_init_aliases[init.name]
+                if k in torch_results and k not in skip_mapping_torch_onnx
+            ]
+            if new_names and len(new_names) == 1:
+                new_name = new_names[0]  # type: ignore[assignment, index]
+                t = torch_results[new_name]
+                if (
+                    t.shape == tuple(init.dims)
+                    and torch_dtype_to_onnx_dtype(t.dtype) == init.data_type
+                ):
+                    torch_names_to_onnx_names[new_name] = init.name
+
+                # We should check tensors and proto are the same.
+        if t is None:
+            t = to_tensor(init)
+            if default_device and t.numel() >= 1024:
+                # Let's force its way to cuda (should check the device has well).
+                t = t.to(default_device)
+            records_to_yield.append(
+                RunAlignedRecord(
+                    onnx_id_node=-1,
+                    onnx_name=init.name,
+                    onnx_op_type="initializer",
+                    onnx_shape_type=string_type(t, **str_kws),
+                ).check(already_yielded)
+            )
+
+        size = t.element_size() * t.numel()
+        if t.is_cuda:
+            memory_cuda += size
+        else:
+            memory_cpu += size
+        if init.name not in onnx_results:
+            # otherwise, it is an input with a default value
+            onnx_results[init.name] = _check_tensor_(use_tensor, init.name, t, flip_type=True)
+    return mapping_onnx_to_torch, onnx_results, memory_cpu, memory_cuda, records_to_yield
 
 
 def run_aligned(
@@ -228,247 +691,6 @@ def run_aligned(
         if replay_configuration:
             print(f"[run_aligned] replay={replay_configuration}")
 
-    def _check_tensor_(name, obj, flip_type=False):
-        if flip_type:
-            if use_tensor:
-                if isinstance(obj, np.ndarray):
-                    obj = from_numpy(obj)
-            else:
-                if isinstance(obj, torch.Tensor):
-                    obj = to_numpy(obj)
-
-        assert not use_tensor or isinstance(obj, torch.Tensor), (
-            f"Unexpected type {type(obj)} for {name!r}. "
-            f"use_tensor is True so torch.Tensor is expected."
-        )
-        assert use_tensor or isinstance(obj, np.ndarray), (
-            f"Unexpected type {type(obj)} for {name!r}. "
-            f"use_tensor is False so np.array is expected."
-        )
-        return obj
-
-    def _make_node_from_initializer(proto: onnx.TensorProto) -> onnx.NodeProto:
-        return oh.make_node("Constant", [], [proto.name], value=proto)
-
-    def _loop_cmp(
-        mapping_onnx_to_torch,
-        torch_results,
-        onnx_results,
-        o,
-        r,
-        verbose,
-        atol,
-        rtol,
-        i,
-        i_onnx,
-    ):
-        onnx_results[o] = _check_tensor_(o, r)
-        if verbose > 1:
-            print(f"[run_aligned-nx] +res: {o}={string_type(r, **str_kws)}")
-
-        to = mapping_onnx_to_torch.get(o, o)
-        if to in torch_results:
-            d = max_diff(torch_results[to], r, hist=[0.1])
-            if verbose > 1:
-                if o == to:
-                    print(f"[run_aligned-==] cmp {to}: {string_diff(d)}")
-                else:
-                    print(f"[run_aligned-~~] cmd {to}/{o}: {string_diff(d)}")
-                if not (
-                    atol is None or rtol is None or (d["abs"] <= atol and d["rel"] <= rtol)
-                ):
-                    if exc:
-                        raise ValueError(
-                            f"discrepancies detected for results [{to}/{o}]: "
-                            f"{string_diff(d)}"
-                            f"\n-- torch_results: {string_type(torch_results[to], **str_kws)}"
-                            f"\n-- onnx_results: {string_type(r, **str_kws)}"
-                            f"\n-- torch\n{torch_results[to]}\n-- onnx\n{r}"
-                        )
-                    else:
-                        print(f"[run_align-dx] discrepancies {string_diff(d)} - [{to}/{o}]")
-            r = RunAlignedRecord(
-                ep_id_node=i,
-                onnx_id_node=i_onnx,
-                ep_name=to,
-                onnx_name=o,
-                ep_shape_type=string_type(torch_results[to], **str_kws),
-                onnx_shape_type=string_type(r, **str_kws),
-            )
-            r.set_diff(d)
-            mapping_onnx_to_torch[o] = to
-            return r
-        return None
-
-    def _loop_onnx_node(
-        onx,
-        ep_graph_nodes,
-        onnx_results,
-        mapping_onnx_to_torch,
-        torch_results,
-        ep_durations,
-        use_tensor,
-        i,
-        i_onnx,
-        name_to_ep_node,
-        run_cls_kwargs,
-        str_kws,
-        status,
-        already_run,
-        torch_names_to_onnx_names,
-        verbose,
-    ):
-
-        if i_onnx in already_run:
-            yield None
-        node = onx.graph.node[i_onnx]
-        if verbose > 1:
-            print(
-                f"[run_aligned] run onx.graph.node[{i_onnx}]: "
-                f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
-            )
-        elif verbose == 1:
-            loop.set_description(
-                f"ep {i}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
-                f"{status.to_str()}"
-            )
-
-        ref = run_cls(node, **run_cls_kwargs)
-        # We need to clone because the runtime maybe using dlpack to create OrtValue
-        feeds = (
-            {k: onnx_results[k].clone() for k in node.input if k}
-            if use_tensor
-            else {k: onnx_results[k].copy() for k in node.input if k}
-        )
-        assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
-        begin = time.perf_counter()
-        try:
-            res = ref.run(None, feeds)  # type: ignore[attr-defined]
-        except Exception as e:
-            raise RuntimeError(
-                f"Unable to run node {node.op_type}, domain={node.domain} "
-                f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
-            ) from e
-        duration = time.perf_counter() - begin
-        assert (
-            not has_cuda
-            or not any(t is not None and t.is_cuda for t in feeds.values())
-            or any(t is not None and t.is_cuda for t in res)
-            or node.op_type in {"Shape", "Size"}  # on CPU no matter what
-            or node.op_type
-            in {
-                "Add",
-                "Concat",
-                "Div",
-                "Gather",
-                "Mul",
-                "Range",
-                "Squeeze",
-                "Sub",
-                "Unsqueeze",
-            }  # not sure, could be about shapes
-        ), (
-            f"One input is on cuda but there is no float output on cuda, "
-            f"feeds={string_type(feeds, with_device=True, with_shape=True)}, "
-            f"res={string_type(res, with_device=True, with_shape=True)}, "
-            f"node is {pretty_onnx(node)}"
-        )
-        list_node_output = list(node.output)
-        node_output = [o for o in list_node_output if o]
-        for o, r in zip(node_output, res):
-            if r is None or not o:
-                continue
-            tmp = _loop_cmp(
-                mapping_onnx_to_torch,
-                torch_results,
-                onnx_results,
-                o,
-                r,
-                verbose,
-                atol,
-                rtol,
-                i,
-                i_onnx,
-            )
-            if tmp is not None:
-                if tmp.ep_name in name_to_ep_node:
-                    tmp.ep_id_node = name_to_ep_node[tmp.ep_name]
-                    tmp.ep_target = str(ep_graph_nodes[tmp.ep_id_node].target)
-                    tmp.ep_time_run = ep_durations[tmp.ep_id_node]
-                else:
-                    tmp.ep_id_node = None
-                    tmp.ep_target = None
-                    tmp.ep_name = None
-                tmp.onnx_op_type = onx.graph.node[tmp.onnx_id_node].op_type
-                tmp.onnx_id_output = list_node_output.index(o)
-                tmp.onnx_time_run = duration
-                status.yielded_nodes += 1
-                if tmp.err_abs is not None:
-                    status.update(tmp.err_abs)
-                yield tmp
-
-                # do we need to dump pieces if graph the user can replay?
-                if replay_configuration:
-                    if replay_configuration.select(
-                        name=tmp.onnx_name, op_type=tmp.onnx_op_type, err_abs=tmp.err_abs
-                    ):
-                        replay_configuration.dump(
-                            name=tmp.onnx_name,
-                            onnx_id_node=tmp.onnx_id_node,
-                            model=onx,
-                            onnx_results=onnx_results,
-                            torch_results=torch_results,
-                            onnx_name_to_ep_name={
-                                **{v: k for k, v in torch_names_to_onnx_names.items()},
-                                **mapping_onnx_to_torch,
-                            },
-                            verbose=max(verbose - 1, 0),
-                        )
-                        status.last_replay = tmp.onnx_name
-
-                # reset_names: replaces onnx_results by torch_results to see
-                # if that fixes the discrepancies problem
-                if reset_names and tmp.ep_name in reset_names:
-                    assert (
-                        tmp.ep_name in torch_results
-                    ), f"name {tmp.ep_name!r} set to be reset is missing in torch_results."
-                    assert (
-                        tmp.onnx_name in onnx_results
-                    ), f"name {tmp.onnx_name!r} set to be reset is missing in onnx_results."
-                    onnx_results[tmp.onnx_name] = torch_results[tmp.ep_name]
-                    tmp = _loop_cmp(
-                        mapping_onnx_to_torch,
-                        torch_results,
-                        onnx_results,
-                        o,
-                        torch_results[tmp.ep_name],
-                        verbose,
-                        atol,
-                        rtol,
-                        i,
-                        i_onnx,
-                    )
-                    assert tmp.err_abs == 0, f"Reset did not happen, tmp={tmp}"
-                    if tmp is not None:
-                        tmp.onnx_op_type = "reset"
-                        tmp.onnx_id_output = list_node_output.index(o)
-                        status.yielded_nodes += 1
-                        yield tmp
-        already_run.add(i_onnx)
-
-    def _duplicated_values(d):
-        rev = {}
-        for k, v in d.items():
-            if v in rev:
-                rev[v].append(k)
-            else:
-                rev[v] = [k]
-        res = {k: v for k, v in rev.items() if len(v) > 1}
-        final = set()
-        for v in res.values():
-            final |= set(v)
-        return final
-
     # preparation with ep.graph.nodes
     ep_state_dict = {**ep.state_dict, **dict(ep.named_buffers(), **ep.tensor_constants)}
     placeholders_to_state_dict = {
@@ -483,6 +705,7 @@ def run_aligned(
 
     if verbose:
         print(f"[run_aligned] ep: walks through {len(ep.graph.nodes)} nodes from torch")
+
     # dictionary mapping result names and their position in both graphs.
     positions: Dict[str, Dict[str, int]] = {}
     ep_graph_nodes = list(ep.graph.nodes)
@@ -492,43 +715,19 @@ def run_aligned(
     torch_input_names: List[str] = []
     name_to_ep_node = {}
     torch_names_to_onnx_names = {}
-    for i, node in enumerate(ep_graph_nodes):
-        if isinstance(node.name, str):
-            positions[node.name] = dict(fx=i)
-        else:
-            for n in node.name:
-                positions[n] = dict(fx=i)
-        if node.op == "placeholder":
-            if node.name in placeholders_to_state_dict:
-                # This a weight.
-                placeholders[node.name] = ep_state_dict[placeholders_to_state_dict[node.name]]
-                torch_results[node.name] = placeholders[node.name]
-                assert isinstance(torch_results[node.name], torch.Tensor), (
-                    f"torch_results[{node.name}] not a tensor but "
-                    f"{type(torch_results[node.name])}"
-                )
-            else:
-                # This is an input
-                assert len(torch_input_names) < len(onx.graph.input), (
-                    f"torch_input_names={torch_input_names!r}, "
-                    f"onnx_input_names={[n.name for n in onx.graph.input]}, "
-                    f"node.name={node.name!r} cannot be an input"
-                )
-                assert node.name not in skip_mapping_torch_onnx, (
-                    f"{node.name!r} is ambiguous, cannot be mapped due to "
-                    f"{skip_mapping_torch_onnx}"
-                )
-                torch_names_to_onnx_names[node.name] = onx.graph.input[
-                    len(torch_input_names)
-                ].name
-                torch_input_names.append(node.name)
-        elif node.op == "output":
-            torch_output_names = [n.name for n in node.args[0]]
-        assert isinstance(node.name, str), (
-            f"Unexpected type {type(node.name)} for node={node} (target={node.target}), "
-            f"args={node.args}"
-        )
-        name_to_ep_node[node.name] = i
+    torch_output_names = _preparation_with_fx_graph(
+        ep_graph_nodes,
+        name_to_ep_node,
+        torch_input_names,
+        onx,
+        torch_names_to_onnx_names,
+        skip_mapping_torch_onnx,
+        torch_results,
+        placeholders,
+        placeholders_to_state_dict,
+        ep_state_dict,
+        positions,
+    )
 
     # prepration for onnx
     if verbose:
@@ -536,128 +735,26 @@ def run_aligned(
         print(f"[run_aligned] ep: found inputs  {torch_input_names}")
         print(f"[run_aligned] ep: found outputs {torch_output_names}")
         print(f"[run_aligned] nx: walks through {len(onx.graph.node)} nodes from onnx")
-    for inp in onx.graph.input:
-        n = inp.name
-        if n in positions:
-            positions[n]["onnx"] = -1
-        else:
-            positions[n] = dict(onnx=-1)
-    for inp in onx.graph.initializer:
-        n = inp.name
-        if n in positions:
-            positions[n]["onnx"] = -1
-        else:
-            positions[n] = dict(onnx=-1)
-    for i, node in enumerate(onx.graph.node):
-        for n in node.output:
-            if n in positions:
-                positions[n]["onnx"] = i
-            else:
-                positions[n] = dict(onnx=i)
 
-    onnx_outputs_names = [o.name for o in onx.graph.output]
-    assert torch_output_names is not None and len(torch_output_names) == len(
-        onnx_outputs_names
-    ), (
-        f"Unexpected number of outputs, torch_output_names={torch_output_names}, "
-        f"onnx_outputs_names={onnx_outputs_names}"
+    mapping_onnx_to_torch, onnx_results, memory_cpu, memory_cuda, records_to_yield = (
+        _preparation_with_onnx_model(
+            default_device,
+            use_tensor,
+            onx,
+            already_yielded,
+            str_kws,
+            positions,
+            torch_names_to_onnx_names,
+            torch_output_names,
+            torch_results,
+            skip_mapping_torch_onnx,
+            verbose,
+            args,
+            kwargs,
+        )
     )
-    mapping_onnx_to_torch = dict(zip(onnx_outputs_names, torch_output_names))
-
-    onnx_args = list(args) if args else []
-    if kwargs:
-        onnx_args.extend(flatten_object(kwargs, drop_keys=True))
-    if verbose:
-        print(f"[run_aligned]   args: {string_type(args, **str_kws)}")
-        print(f"[run_aligned] kwargs: {string_type(kwargs, **str_kws)}")
-        print(f"[run_aligned]   onnx: {string_type(onnx_args, **str_kws)}")
-        print(f"[run_aligned] nx: walks through {len(onx.graph.input)} onnx inputs")
-    onnx_results: Dict[str, Any] = {}
-    for inp, v in zip(onx.graph.input, onnx_args):
-        onnx_results[inp.name] = _check_tensor_(inp.name, v if use_tensor else to_numpy(v))
-        if verbose:
-            print(f"[run_aligned-nx] +inp: {inp.name}: {string_type(v, **str_kws)}")
-
-    # alias for initializers
-    skip_onnx_name = set()
-    init_aliases: Dict[str, str] = {}
-    for init in onx.graph.initializer:
-        new_names = {
-            n
-            for n in [
-                f"p_{init.name.replace('.', '_')}",
-                f"p_{init.name.split('::')[0].split('--')[-1].replace('.', '_')}",
-                f"{init.name.split('::')[0].split('--')[-1].replace('.', '_')}",
-            ]
-            if n != init.name
-        }
-        drop = False
-        for new_name in new_names:
-            if new_name in skip_onnx_name:
-                drop = True
-                break
-        if drop:
-            skip_onnx_name |= new_names | {init.name}
-            for new_name in new_names:
-                if new_names in init_aliases:
-                    del init_aliases[new_name]
-        else:
-            for new_name in new_names:
-                init_aliases[new_name] = init.name
-    rev_init_aliases: Dict[str, Set[str]] = {}
-    for k, v in init_aliases.items():
-        if v in rev_init_aliases:
-            rev_init_aliases[v].add(k)
-        else:
-            rev_init_aliases[v] = {k}
-
-    # initializers
-    if verbose:
-        print(f"[run_aligned] nx: handles {len(onx.graph.initializer)} initializers from onnx")
-    memory_cpu = 0
-    memory_cuda = 0
-    for init in onx.graph.initializer:  # type: ignore
-        t = None
-        if init.name in torch_results:
-            if init.name not in skip_mapping_torch_onnx:
-                t = torch_results[init.name]
-                torch_names_to_onnx_names[init.name] = init.name
-        elif init.name not in skip_onnx_name and init.name in rev_init_aliases:
-            new_names = [  # type: ignore[assignment]
-                k
-                for k in rev_init_aliases[init.name]
-                if k in torch_results and k not in skip_mapping_torch_onnx
-            ]
-            if new_names and len(new_names) == 1:
-                new_name = new_names[0]  # type: ignore[assignment, index]
-                t = torch_results[new_name]
-                if (
-                    t.shape == tuple(init.dims)
-                    and torch_dtype_to_onnx_dtype(t.dtype) == init.data_type
-                ):
-                    torch_names_to_onnx_names[new_name] = init.name
-
-                # We should check tensors and proto are the same.
-        if t is None:
-            t = to_tensor(init)
-            if default_device and t.numel() >= 1024:
-                # Let's force its way to cuda (should check the device has well).
-                t = t.to(default_device)
-            yield RunAlignedRecord(
-                onnx_id_node=-1,
-                onnx_name=init.name,
-                onnx_op_type="initializer",
-                onnx_shape_type=string_type(t, **str_kws),
-            ).check(already_yielded)
-
-        size = t.element_size() * t.numel()
-        if t.is_cuda:
-            memory_cuda += size
-        else:
-            memory_cpu += size
-        if init.name not in onnx_results:
-            # otherwise, it is an input with a default value
-            onnx_results[init.name] = _check_tensor_(init.name, t, flip_type=True)
+    for record in records_to_yield:
+        yield record
 
     if verbose:
         print(f"[run_aligned] nx: handled {len(onnx_results)} initializers from onnx")
@@ -849,6 +946,14 @@ def run_aligned(
                 already_run,
                 torch_names_to_onnx_names,
                 verbose,
+                exc,
+                atol,
+                rtol,
+                reset_names,
+                replay_configuration,
+                has_cuda,
+                run_cls,
+                loop,
             ):
                 if r:
                     yield r.check(already_yielded)
@@ -882,6 +987,14 @@ def run_aligned(
             already_run,
             torch_names_to_onnx_names,
             verbose,
+            exc,
+            atol,
+            rtol,
+            reset_names,
+            replay_configuration,
+            has_cuda,
+            run_cls,
+            loop,
         ):
             if r:
                 yield r.check(already_yielded)

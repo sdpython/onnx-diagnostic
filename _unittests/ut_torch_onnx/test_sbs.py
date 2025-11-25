@@ -10,7 +10,8 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
-from onnx_diagnostic.torch_onnx.sbs import run_aligned, RunAlignedRecord, ReplayConfiguration
+from onnx_diagnostic.torch_onnx.sbs import run_aligned
+from onnx_diagnostic.torch_onnx.sbs_dataclasses import RunAlignedRecord, ReplayConfiguration
 from onnx_diagnostic.export.api import to_onnx
 
 

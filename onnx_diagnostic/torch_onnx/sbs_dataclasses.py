@@ -72,7 +72,7 @@ class ReplayConfiguration:
         .. runpython::
             :showcode:
 
-            from onnx_diagnostic.torch_onnx.sbs import ReplayConfiguration
+            from onnx_diagnostic.torch_onnx.sbs_dataclasses import ReplayConfiguration
 
             rc = ReplayConfiguration(dump_folder="unused")
             print(rc.get_replay_code())
