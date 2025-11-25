@@ -9,7 +9,12 @@ from ..helpers import string_type, string_diff, max_diff, flatten_object
 from ..helpers.onnx_helper import pretty_onnx
 from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor, torch_dtype_to_onnx_dtype
 from ..helpers.torch_fx_graph_helper import prepare_args_kwargs, run_fx_node
-from .sbs_dataclasses import ReplayConfiguration, RunAlignedRecord, StatusRunAligned
+from .sbs_dataclasses import (
+    ReplayConfiguration,
+    RunAlignedRecord,
+    StatusRunAligned,
+    make_torch_inputs,
+)
 
 
 def _check_tensor_(use_tensor, name, obj, flip_type=False):
@@ -41,7 +46,8 @@ def _loop_cmp(
     torch_results: Dict[str, torch.Tensor],
     onnx_results: Dict[str, Any],
     onnx_name: str,
-    torch_result: torch.Tensor,
+    onnx_result: torch.Tensor,
+    second_onnx_result: torch.Tensor,
     verbose: int,
     atol: Optional[float],
     rtol: Optional[float],
@@ -51,13 +57,13 @@ def _loop_cmp(
     exc: bool,
     use_tensor: bool,
 ) -> Optional[RunAlignedRecord]:
-    onnx_results[onnx_name] = _check_tensor_(use_tensor, onnx_name, torch_result)
+    onnx_results[onnx_name] = _check_tensor_(use_tensor, onnx_name, onnx_result)
     if verbose > 1:
-        print(f"[run_aligned-nx] +res: {onnx_name}={string_type(torch_result, **str_kws)}")
+        print(f"[run_aligned-nx] +res: {onnx_name}={string_type(onnx_result, **str_kws)}")
 
     to = mapping_onnx_to_torch.get(onnx_name, onnx_name)
     if to in torch_results:
-        d = max_diff(torch_results[to], torch_result, hist=[0.1])
+        d = max_diff(torch_results[to], onnx_result, hist=[0.1, 0.01])
         if verbose > 1:
             if onnx_name == to:
                 print(f"[run_aligned-==] cmp {to}: {string_diff(d)}")
@@ -68,9 +74,9 @@ def _loop_cmp(
                     raise ValueError(
                         f"discrepancies detected for results [{to}/{onnx_name}]: "
                         f"{string_diff(d)}"
-                        f"\n-- torch_results: {string_type(torch_results[to], **str_kws)}"
-                        f"\n-- onnx_results: {string_type(torch_result, **str_kws)}"
-                        f"\n-- torch\n{torch_results[to]}"
+                        f"\n-- onnx_result: {string_type(onnx_result[to], **str_kws)}"
+                        f"\n-- onnx_results: {string_type(onnx_result, **str_kws)}"
+                        f"\n-- torch\n{onnx_result[to]}"
                     )
                 else:
                     print(
@@ -82,9 +88,12 @@ def _loop_cmp(
             ep_name=to,
             onnx_name=onnx_name,
             ep_shape_type=string_type(torch_results[to], **str_kws),
-            onnx_shape_type=string_type(torch_result, **str_kws),
+            onnx_shape_type=string_type(onnx_result, **str_kws),
         )
         r.set_diff(d)
+        if second_onnx_result is not None:
+            d2 = max_diff(torch_results[to], second_onnx_result, hist=[0.1, 0.01])
+            r.set_diff2(d2)
         mapping_onnx_to_torch[onnx_name] = to
         return r
     return None
@@ -102,6 +111,23 @@ def _duplicated_values(d):
     for v in res.values():
         final |= set(v)
     return final
+
+
+def _validation_nn_functional(
+    node: onnx.NodeProto, new_feeds: Dict[str, torch.Tensor], expected: List[torch.Tensor]
+) -> Optional[str]:
+    if node.op_type == "Gemm" and len(node.input) == 3:
+        atts = {}
+        for att in node.attribute:
+            if att.name in ("alpha", "beta"):
+                atts[att.name] = att.f
+            elif att.name in ("transA", "transB"):
+                atts[att.name] = att.i
+        if atts == {"transB": 1}:
+            res = torch.nn.functional.linear(*[new_feeds[i] for i in node.input])
+            diff = max_diff(res, expected[0])
+            return f"function.linear:{string_diff(diff)}"
+    return None
 
 
 def _loop_onnx_node(
@@ -129,6 +155,7 @@ def _loop_onnx_node(
     has_cuda: bool,
     run_cls: type,
     loop: Any,
+    run_onnx_with_torch_inputs: bool,
 ) -> Iterator[Optional[RunAlignedRecord]]:
 
     if i_onnx in already_run_onnx:
@@ -140,11 +167,11 @@ def _loop_onnx_node(
             f"{node.op_type}({', '.join(node.input)}) -> {', '.join(node.output)}"
         )
     elif verbose == 1:
-        loop.update(i_torch + i_onnx)
         loop.set_description(
             f"ep {i_torch}/{len(ep_graph_nodes)} nx {i_onnx}/{len(onx.graph.node)} "
             f"{status.to_str()}"
         )
+        loop.update(min(1, 1 + i_torch + i_onnx))
 
     ref = run_cls(node, **run_cls_kwargs)
     # We need to clone because the runtime maybe using dlpack to create OrtValue
@@ -154,6 +181,8 @@ def _loop_onnx_node(
         else {k: onnx_results[k].copy() for k in node.input if k}
     )
     assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
+    if verbose > 1:
+        print(f"[run_aligned] feeds={string_type(feeds, **str_kws)}")
     begin = time.perf_counter()
     try:
         res = ref.run(None, feeds)  # type: ignore[attr-defined]
@@ -163,6 +192,8 @@ def _loop_onnx_node(
             f"with inputs={node.input}, feeds={string_type(feeds, **str_kws)}"
         ) from e
     duration = time.perf_counter() - begin
+    if verbose > 1:
+        print(f"[run_aligned] res={string_type(res, **str_kws)}")
     assert (
         not has_cuda
         or not any(t is not None and t.is_cuda for t in feeds.values())
@@ -186,9 +217,43 @@ def _loop_onnx_node(
         f"res={string_type(res, with_device=True, with_shape=True)}, "
         f"node is {pretty_onnx(node)}"
     )
+
+    comment = None
+    cross = None
+    if run_onnx_with_torch_inputs:
+        # Let's run the operator with torch results if they are available
+        new_feeds, removed = make_torch_inputs(
+            node.input,
+            {
+                **{v: k for k, v in torch_names_to_onnx_names.items()},
+                **mapping_onnx_to_torch,
+            },
+            onnx_results,
+            torch_results,
+            submodel=None,
+        )
+        if not removed:
+            if verbose > 1:
+                print(
+                    f"[run_aligned] feeds for second run="
+                    f"{string_type(new_feeds, **str_kws)}"
+                )
+            cross = ref.run(None, new_feeds)
+            if verbose > 1:
+                print(f"[run_aligned] got for second run={string_type(cross, **str_kws)}")
+            # Gemm = torch.nn.function.linear, in that case, we just run it as well
+            to = mapping_onnx_to_torch.get(node.output[0], node.output[0])
+            if to in torch_results:
+                comment = _validation_nn_functional(node, new_feeds, [torch_results[to]])
+        elif verbose > 1:
+            print(f"[run_aligned] second run not possible because of missing {removed}")
+
+    if cross is None:
+        cross = [None for _ in res]
+
     list_node_output = list(node.output)
     node_output = [o for o in list_node_output if o]
-    for o, r in zip(node_output, res):
+    for o, r, r2 in zip(node_output, res, cross):
         if r is None or not o:
             continue
         tmp = _loop_cmp(
@@ -197,6 +262,7 @@ def _loop_onnx_node(
             onnx_results,
             o,
             r,
+            r2,
             verbose,
             atol,
             rtol,
@@ -221,6 +287,7 @@ def _loop_onnx_node(
             status.yielded_nodes += 1
             if tmp.err_abs is not None:
                 status.update(tmp.err_abs)
+            tmp.comment = comment
             yield tmp
 
             # do we need to dump pieces if graph the user can replay?
@@ -258,6 +325,7 @@ def _loop_onnx_node(
                     onnx_results,
                     o,
                     torch_results[tmp.ep_name],
+                    None,
                     verbose,
                     atol,
                     rtol,
@@ -499,6 +567,7 @@ def run_aligned(
     exc: bool = True,
     reset_names: Optional[List[str]] = None,
     replay_configuration: Optional[ReplayConfiguration] = None,
+    run_onnx_with_torch_inputs: bool = False,
 ) -> Iterator[RunAlignedRecord]:
     """
     Runs in parallel both the exported program
@@ -524,7 +593,10 @@ def run_aligned(
         piece of the onnx graph he wants to replay in order to investigate later,
         see :class: `ReplayConfiguration
         <onnx_diagnostic.torch_onnx.sbs.ReplayConfiguration>`
-    :return: a list of :class:`RunAlignedRecord`
+    :param run_onnx_with_torch_inputs: run an onnx operator with torch results
+        if they available
+    :return: a list of :class:`RunAlignedRecord
+        <onnx_diagnostic.torch_onnx.sbs_dataclasses.RunAlignedRecord>`
 
     Example:
 
@@ -566,7 +638,6 @@ def run_aligned(
         df = pandas.DataFrame(results)
         df = df.apply(lambda col: col.fillna("") if col.dtype == "object" else col)
         print(df)
-
 
     This example uses :class:`onnx.reference.ReferenceEvaluator` to run the onnx model
     but onnxruntime can also be used through
@@ -711,7 +782,6 @@ def run_aligned(
     positions: Dict[str, Dict[str, int]] = {}
     ep_graph_nodes = list(ep.graph.nodes)
     torch_results: Dict[str, Any] = {}
-    last_position = 0
     torch_output_names = None
     torch_input_names: List[str] = []
     name_to_ep_node = {}
@@ -774,7 +844,10 @@ def run_aligned(
 
     # starts the side-by-side
     if verbose:
-        print(f"[run_aligned] ep: starts side-by-side with {len(ep_graph_nodes)} nodes")
+        print(
+            f"[run_aligned] ep: starts side-by-side with {len(ep_graph_nodes)} "
+            f"fx nodes and {len(onx.graph.node)} onnx nodes"
+        )
     if verbose == 1:
         import tqdm
 
@@ -785,6 +858,7 @@ def run_aligned(
     already_run: Set[int] = set()
     ep_durations = {}
     status = StatusRunAligned()
+    last_position = 0
     for i_torch, node in enumerate(ep_graph_nodes):
         if verbose > 1:
             if node.op == "call_function":
@@ -797,11 +871,11 @@ def run_aligned(
                     f"[run_aligned] run ep.graph.nodes[{i_torch}]: {node.op} -> {node.name!r}"
                 )
         elif verbose == 1:
-            loop.update(i_torch + last_position)
             loop.set_description(
                 f"ep {i_torch}/{len(ep_graph_nodes)} nx {last_position}/{len(onx.graph.node)} "
                 f"{status.to_str()}"
             )
+            loop.update(min(1, 1 + i_torch + last_position))
 
         if node.op == "placeholder":
             is_input = node.name not in placeholders
@@ -868,7 +942,7 @@ def run_aligned(
                             max_diff(
                                 t,
                                 onnx_results[torch_names_to_onnx_names[node.name]],
-                                hist=[0.1],
+                                hist=[0.1, 0.01],
                             )
                         )
                     yield record.check(already_yielded)
@@ -958,6 +1032,7 @@ def run_aligned(
                 has_cuda,
                 run_cls,
                 loop,
+                run_onnx_with_torch_inputs,
             ):
                 if r:
                     yield r.check(already_yielded)
@@ -966,7 +1041,7 @@ def run_aligned(
         last_position = next_to_visit
 
     # complete the execution of the onnx graph
-    if verbose:
+    if verbose > 1:
         print(
             f"[run_aligned] complete execution of onnx graph from pos={last_position} "
             f"to {len(onx.graph.node)}"
@@ -999,9 +1074,12 @@ def run_aligned(
             has_cuda,
             run_cls,
             loop,
+            run_onnx_with_torch_inputs,
         ):
             if r:
                 yield r.check(already_yielded)
 
+    if loop is not None:
+        loop.close()
     if verbose:
         print(f"[run_aligned] done with status={status.to_str()}")

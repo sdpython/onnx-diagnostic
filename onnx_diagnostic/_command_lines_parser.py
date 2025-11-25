@@ -1218,6 +1218,19 @@ def get_parser_sbs() -> ArgumentParser:
         help="First runs the whole model.",
     )
     parser.add_argument(
+        "-2",
+        "--second-run",
+        action=BooleanOptionalAction,
+        default=False,
+        help=textwrap.dedent(
+            """
+            Tries to run all onnx nodes with torch results produced by the exported
+            program. It then measures the discrepancies again. It can be used
+            to identify kernel introduces discrepancies from other just propagating them.
+            """
+        ),
+    )
+    parser.add_argument(
         "--reset",
         required=False,
         default="",
@@ -1365,6 +1378,7 @@ def _cmd_sbs(argv: List[Any]):
         reset_names=args.reset.split(","),
         exc=False,
         replay_configuration=replay_configuration,
+        run_onnx_with_torch_inputs=args.second_run,
     ):
         data.append(obs)
         if (
@@ -1377,8 +1391,10 @@ def _cmd_sbs(argv: List[Any]):
             )
             df.to_excel(args.output)
     print(f"-- final saves into {args.output!r}")
-    df = pandas.DataFrame(data).apply(
-        lambda col: col.fillna("") if col.dtype == "object" else col
+    df = (
+        pandas.DataFrame(data)
+        .apply(lambda col: col.fillna("") if col.dtype == "object" else col)
+        .dropna(axis=1, how="all")
     )
     df.to_excel(args.output, index=False)
     print("-- done")

@@ -379,7 +379,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        df = pandas.DataFrame(list(results))
+        df = pandas.DataFrame(list(results)).dropna(axis=1, how="all")
         df.to_excel(self.get_dump_file("test_sbs_model_with_weights_custom.xlsx"))
         self.assertEqual(
             [
@@ -390,8 +390,8 @@ class TestSideBySide(ExtTestCase):
                 "ep_time_run",
                 "err_abs",
                 "err_dev",
+                "err_h001",
                 "err_h01",
-                "err_nan",
                 "err_rel",
                 "onnx_id_node",
                 "onnx_id_output",
@@ -445,7 +445,7 @@ class TestSideBySide(ExtTestCase):
                 use_tensor=True,
             ),
         )
-        df = pandas.DataFrame(list(results))
+        df = pandas.DataFrame(list(results)).dropna(axis=1, how="all")
         df.to_excel(self.get_dump_file("test_sbs_model_with_weights_dynamo.xlsx"))
         self.assertEqual(
             [
@@ -456,8 +456,8 @@ class TestSideBySide(ExtTestCase):
                 "ep_time_run",
                 "err_abs",
                 "err_dev",
+                "err_h001",
                 "err_h01",
-                "err_nan",
                 "err_rel",
                 "onnx_id_node",
                 "onnx_id_output",
@@ -542,7 +542,7 @@ class TestSideBySide(ExtTestCase):
                 reset_names=["linear"],
             ),
         )
-        df = pandas.DataFrame(list(results))
+        df = pandas.DataFrame(list(results)).dropna(axis=1, how="all")
         df.to_excel(self.get_dump_file("test_sbs_model_with_weights_custom_reset.xlsx"))
         onnx_op_type = df["onnx_op_type"].tolist()
         self.assertEqual(onnx_op_type.count("reset"), 1)
@@ -593,10 +593,83 @@ class TestSideBySide(ExtTestCase):
                 ),
             ),
         )
-        df = pandas.DataFrame(list(results))
+        df = pandas.DataFrame(list(results)).dropna(axis=1, how="all")
         df.to_excel(self.get_dump_file("test_sbs_replay.xlsx"))
-        print(df)
-        # self.clean_dump()
+        self.assertEqual(df.shape, (8, 16))
+        self.clean_dump()
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    def test_sbs_run_onnx_with_torch_inputs(self):
+        torch = self.torch
+
+        class Model(self.torch.nn.Module):
+            def __init__(self):
+                super(Model, self).__init__()
+                self.fc1 = torch.nn.Linear(10, 32)  # input size 10 → hidden size 32
+                self.relu = torch.nn.ReLU()
+                self.fc2 = torch.nn.Linear(32, 1)  # hidden → output
+
+            def forward(self, x):
+                x = self.relu(self.fc1(x))
+                x = self.fc2(x)
+                return x
+
+        inputs = dict(x=self.torch.randn((5, 10)))
+        ds = dict(x={0: "batch"})
+        Model()(**inputs)
+        ep = self.torch.export.export(
+            Model(), (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        filename = self.get_dump_file("test_sbs_run_onnx_with_torch_inputs.onnx")
+        to_onnx(ep, exporter="custom", filename=filename)
+        onx = onnx.load(filename)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                verbose=11,
+                use_tensor=True,
+                run_onnx_with_torch_inputs=True,
+            ),
+        )
+        df = pandas.DataFrame(list(results)).dropna(axis=1, how="all")
+        df.to_excel(self.get_dump_file("test_sbs_run_onnx_with_torch_inputs.xlsx"))
+        self.assertEqual(
+            [
+                "comment",
+                "ep_id_node",
+                "ep_name",
+                "ep_shape_type",
+                "ep_target",
+                "ep_time_run",
+                "err_abs",
+                "err_abs2",
+                "err_dev",
+                "err_dev2",
+                "err_h001",
+                "err_h0012",
+                "err_h01",
+                "err_h012",
+                "err_rel",
+                "err_rel2",
+                "onnx_id_node",
+                "onnx_id_output",
+                "onnx_name",
+                "onnx_op_type",
+                "onnx_shape_type",
+                "onnx_time_run",
+            ],
+            sorted(df.columns),
+        )
+        self.assertEqual(len(results), 8)
+        self.assertEqual([0, 0, 0, 0, None, 0, 0, 0], [r.err_dev for r in results])
+        self.assertEqual(
+            [-1, -1, -1, -1, -1, 0, 1, 2], df["onnx_id_node"].fillna(-10).tolist()
+        )
+        self.clean_dump()
 
 
 if __name__ == "__main__":

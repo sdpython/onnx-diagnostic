@@ -1,7 +1,7 @@
 import os
 import textwrap
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
     from typing import Self
@@ -13,6 +13,40 @@ import numpy as np
 import torch
 from ..helpers.onnx_helper import extract_subset_of_nodes, make_submodel, from_array_extended
 from ..helpers.torch_helper import torch_dtype_to_onnx_dtype
+
+
+def make_torch_inputs(
+    input_names: List[str],
+    onnx_name_to_ep_name: Dict[str, str],
+    onnx_results: Dict[str, torch.Tensor],
+    torch_results: Dict[str, torch.Tensor],
+    submodel: Optional[onnx.ModelProto],
+) -> Tuple[Dict[str, torch.Tensor], Set[str]]:
+    """
+    Gathers torch tensors instead of onnx tensors (tensors produced by the onnx model)
+
+    :param input_names: tensors to gather
+    :param onnx_name_to_ep_name: mapping between onnx name to names in the exported program
+    :param onnx_results: all onnx results (produced by the onnx model)
+    :param torch_results: all tensors produced by the exported program
+    :param submodel: onnx model, any tensor missing in `torch_results` is
+        add as an initializer to this model
+    :return: the list of tensors, the set of inputs for which there was no tensor coming
+        from the exported program
+    """
+    torch_inputs = {}
+    removed_inputs = set()
+    for n in input_names:
+        if n in onnx_name_to_ep_name:
+            torch_inputs[n] = torch_results[onnx_name_to_ep_name[n]]
+        else:
+            removed_inputs.add(n)
+            if submodel is not None:
+                # We add that input as an initializer because it is probably a constant.
+                submodel.graph.initializer.append(from_array_extended(onnx_results[n], name=n))
+            else:
+                torch_inputs[n] = onnx_results[n]
+    return torch_inputs, removed_inputs
 
 
 @dataclass
@@ -171,6 +205,17 @@ class ReplayConfiguration:
             print()
             print("-- end --")
             print()
+
+            if False:
+                # CUDA profiling
+                with torch.profiler.profile(
+                    activities=[torch.profiler.ProfilerActivity.CUDA],
+                    record_shapes=True,
+                    with_stack=True,
+                ) as prof:
+                    sess.run(None, ep_feeds)
+                obj = prof.key_averages()
+                print(obj.table())
             """
         )
 
@@ -231,15 +276,9 @@ class ReplayConfiguration:
         if verbose:
             print(f"[ReplayConfiguration.dump] dumps into folder {folder!r}")
 
-        torch_inputs = {}
-        removed_inputs = set()
-        for n in input_names:
-            if n in onnx_name_to_ep_name:
-                torch_inputs[n] = torch_results[onnx_name_to_ep_name[n]]
-            else:
-                # We add that input as an initializer because it is probably a constant.
-                submodel.graph.initializer.append(from_array_extended(onnx_results[n], name=n))
-                removed_inputs.add(n)
+        torch_inputs, removed_inputs = make_torch_inputs(
+            input_names, onnx_name_to_ep_name, onnx_results, torch_results, submodel
+        )
 
         if removed_inputs:
             input_names = [i for i in input_names if i not in removed_inputs]
@@ -301,9 +340,17 @@ class RunAlignedRecord:
     :param err_dev: 0 if the device is the same, 1 if not
     :param err_nan: number of nan values disagreeing
     :param err_h01: number of values for which the discrepancy is above 0.1
+    :param err_h001: number of values for which the discrepancy is above 0.01
     :param ep_time_run: execution time for the exported program
     :param onnx_time_run: execution time for the onnx model, that includes
         the creation of the onnx model so that's probably not very usable
+    :param err_abs2: same as `err_abs` if onnx kernel is run with torch results
+    :param err_rel2: same as `err_rel` if onnx kernel is run with torch results
+    :param err_dev2: same as `err_dev` if onnx kernel is run with torch results
+    :param err_nan2: same as `err_nan` if onnx kernel is run with torch results
+    :param err_h012: same as `err_h01` if onnx kernel is run with torch results
+    :param err_h0012: same as `err_h001` if onnx kernel is run with torch results
+    :param comment: any additional information
     """
 
     ep_id_node: Optional[int] = None
@@ -320,8 +367,16 @@ class RunAlignedRecord:
     err_dev: Optional[float] = None
     err_nan: Optional[float] = None
     err_h01: Optional[float] = None
+    err_h001: Optional[float] = None
     ep_time_run: Optional[float] = None
     onnx_time_run: Optional[float] = None
+    err_abs2: Optional[float] = None
+    err_rel2: Optional[float] = None
+    err_dev2: Optional[float] = None
+    err_nan2: Optional[float] = None
+    err_h012: Optional[float] = None
+    err_h0012: Optional[float] = None
+    comment: Optional[str] = None
 
     def __post_init__(self):
         "Validation."
@@ -344,6 +399,24 @@ class RunAlignedRecord:
             self.err_nan = diff["nan"]
         if "rep" in diff:
             self.err_h01 = diff["rep"][">0.1"]
+            self.err_h001 = diff["rep"][">0.01"]
+        return self
+
+    def set_diff2(self, diff: Dict[str, Any]) -> Self:
+        """Sets error."""
+        if diff is None:
+            return
+        if "abs" in diff:
+            self.err_abs2 = diff["abs"]
+        if "rel" in diff:
+            self.err_rel2 = diff["rel"]
+        if "dev" in diff:
+            self.err_dev2 = diff["dev"]
+        if "nan" in diff:
+            self.err_nan2 = diff["nan"]
+        if "rep" in diff:
+            self.err_h012 = diff["rep"][">0.1"]
+            self.err_h0012 = diff["rep"][">0.01"]
         return self
 
     @property
