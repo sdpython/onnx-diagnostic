@@ -22,6 +22,7 @@ onnx_diagnostic.helpers
     onnx_helper
     ort_session
     rt_helper
+    torch_fx_graph_helper
     torch_helper
 
 .. autofunction:: onnx_diagnostic.helpers.flatten_object

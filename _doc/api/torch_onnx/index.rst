@@ -7,6 +7,7 @@ onnx_diagnostic.torch_onnx
 
     runtime_info
     sbs
+    sbs_dataclasses
 
 .. automodule:: onnx_diagnostic.torch_onnx
     :members:

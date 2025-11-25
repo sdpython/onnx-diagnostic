@@ -10,7 +10,8 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
-from onnx_diagnostic.torch_onnx.sbs import run_aligned, RunAlignedRecord, ReplayConfiguration
+from onnx_diagnostic.torch_onnx.sbs import run_aligned
+from onnx_diagnostic.torch_onnx.sbs_dataclasses import RunAlignedRecord, ReplayConfiguration
 from onnx_diagnostic.export.api import to_onnx
 
 
@@ -102,6 +103,41 @@ class TestSideBySide(ExtTestCase):
                 atol=1e-5,
                 rtol=1e-5,
                 verbose=10,
+            ),
+        )
+        self.assertEqual(len(results), 6)
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    def test_ep_onnx_sync_a_verbose1(self):
+        class Model(self.torch.nn.Module):
+            def forward(self, x):
+                ry = x.abs()
+                rz = ry.exp()
+                rw = rz + 1
+                ru = rw.log() + rw
+                return ru
+
+        x = self.torch.randn((5, 4))
+        Model()(x)
+        ep = self.torch.export.export(
+            Model(), (x,), dynamic_shapes=({0: self.torch.export.Dim("batch")},)
+        )
+        onx = to_onnx(
+            ep,
+            (x,),
+            dynamic_shapes=({0: self.torch.export.Dim("batch")},),
+            exporter="onnx-dynamo",
+        ).model_proto
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                args=(x,),
+                run_cls=ExtendedReferenceEvaluator,
+                atol=1e-5,
+                rtol=1e-5,
+                verbose=1,
             ),
         )
         self.assertEqual(len(results), 6)
