@@ -390,6 +390,7 @@ class TestSideBySide(ExtTestCase):
                 "ep_time_run",
                 "err_abs",
                 "err_dev",
+                "err_h001",
                 "err_h01",
                 "err_rel",
                 "onnx_id_node",
@@ -455,6 +456,7 @@ class TestSideBySide(ExtTestCase):
                 "ep_time_run",
                 "err_abs",
                 "err_dev",
+                "err_h001",
                 "err_h01",
                 "err_rel",
                 "onnx_id_node",
@@ -593,7 +595,7 @@ class TestSideBySide(ExtTestCase):
         )
         df = pandas.DataFrame(list(results)).dropna(axis=1, how="all")
         df.to_excel(self.get_dump_file("test_sbs_replay.xlsx"))
-        self.assertEqual(df.shape, (8, 15))
+        self.assertEqual(df.shape, (8, 16))
         self.clean_dump()
 
     @hide_stdout()
@@ -637,6 +639,7 @@ class TestSideBySide(ExtTestCase):
         df.to_excel(self.get_dump_file("test_sbs_run_onnx_with_torch_inputs.xlsx"))
         self.assertEqual(
             [
+                "comment",
                 "ep_id_node",
                 "ep_name",
                 "ep_shape_type",
@@ -646,6 +649,8 @@ class TestSideBySide(ExtTestCase):
                 "err_abs2",
                 "err_dev",
                 "err_dev2",
+                "err_h001",
+                "err_h0012",
                 "err_h01",
                 "err_h012",
                 "err_rel",

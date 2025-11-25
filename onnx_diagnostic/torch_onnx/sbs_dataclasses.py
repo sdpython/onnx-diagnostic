@@ -205,6 +205,17 @@ class ReplayConfiguration:
             print()
             print("-- end --")
             print()
+
+            if False:
+                # CUDA profiling
+                with torch.profiler.profile(
+                    activities=[torch.profiler.ProfilerActivity.CUDA],
+                    record_shapes=True,
+                    with_stack=True,
+                ) as prof:
+                    sess.run(None, ep_feeds)
+                obj = prof.key_averages()
+                print(obj.table())
             """
         )
 
@@ -329,6 +340,7 @@ class RunAlignedRecord:
     :param err_dev: 0 if the device is the same, 1 if not
     :param err_nan: number of nan values disagreeing
     :param err_h01: number of values for which the discrepancy is above 0.1
+    :param err_h001: number of values for which the discrepancy is above 0.01
     :param ep_time_run: execution time for the exported program
     :param onnx_time_run: execution time for the onnx model, that includes
         the creation of the onnx model so that's probably not very usable
@@ -337,6 +349,7 @@ class RunAlignedRecord:
     :param err_dev2: same as `err_dev` if onnx kernel is run with torch results
     :param err_nan2: same as `err_nan` if onnx kernel is run with torch results
     :param err_h012: same as `err_h01` if onnx kernel is run with torch results
+    :param err_h0012: same as `err_h001` if onnx kernel is run with torch results
     :param comment: any additional information
     """
 
@@ -354,6 +367,7 @@ class RunAlignedRecord:
     err_dev: Optional[float] = None
     err_nan: Optional[float] = None
     err_h01: Optional[float] = None
+    err_h001: Optional[float] = None
     ep_time_run: Optional[float] = None
     onnx_time_run: Optional[float] = None
     err_abs2: Optional[float] = None
@@ -361,6 +375,7 @@ class RunAlignedRecord:
     err_dev2: Optional[float] = None
     err_nan2: Optional[float] = None
     err_h012: Optional[float] = None
+    err_h0012: Optional[float] = None
     comment: Optional[str] = None
 
     def __post_init__(self):
@@ -384,6 +399,7 @@ class RunAlignedRecord:
             self.err_nan = diff["nan"]
         if "rep" in diff:
             self.err_h01 = diff["rep"][">0.1"]
+            self.err_h001 = diff["rep"][">0.01"]
         return self
 
     def set_diff2(self, diff: Dict[str, Any]) -> Self:
@@ -400,6 +416,7 @@ class RunAlignedRecord:
             self.err_nan2 = diff["nan"]
         if "rep" in diff:
             self.err_h012 = diff["rep"][">0.1"]
+            self.err_h0012 = diff["rep"][">0.01"]
         return self
 
     @property

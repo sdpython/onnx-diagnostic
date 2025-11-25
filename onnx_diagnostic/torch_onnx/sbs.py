@@ -63,7 +63,7 @@ def _loop_cmp(
 
     to = mapping_onnx_to_torch.get(onnx_name, onnx_name)
     if to in torch_results:
-        d = max_diff(torch_results[to], onnx_result, hist=[0.1])
+        d = max_diff(torch_results[to], onnx_result, hist=[0.1, 0.01])
         if verbose > 1:
             if onnx_name == to:
                 print(f"[run_aligned-==] cmp {to}: {string_diff(d)}")
@@ -92,7 +92,7 @@ def _loop_cmp(
         )
         r.set_diff(d)
         if second_onnx_result is not None:
-            d2 = max_diff(torch_results[to], second_onnx_result, hist=[0.1])
+            d2 = max_diff(torch_results[to], second_onnx_result, hist=[0.1, 0.01])
             r.set_diff2(d2)
         mapping_onnx_to_torch[onnx_name] = to
         return r
@@ -942,7 +942,7 @@ def run_aligned(
                             max_diff(
                                 t,
                                 onnx_results[torch_names_to_onnx_names[node.name]],
-                                hist=[0.1],
+                                hist=[0.1, 0.01],
                             )
                         )
                     yield record.check(already_yielded)
