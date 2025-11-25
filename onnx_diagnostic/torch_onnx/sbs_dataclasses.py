@@ -21,7 +21,7 @@ def make_torch_inputs(
     onnx_results: Dict[str, torch.Tensor],
     torch_results: Dict[str, torch.Tensor],
     submodel: Optional[onnx.ModelProto],
-) -> Tuple[List[torch.Tensor], Set[str]]:
+) -> Tuple[Dict[str, torch.Tensor], Set[str]]:
     """
     Gathers torch tensors instead of onnx tensors (tensors produced by the onnx model)
 
