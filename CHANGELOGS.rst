@@ -4,6 +4,7 @@ Change Logs
 0.8.3
 +++++
 
+* :pr:`322`: support rerunning onnx kernels with torch intermediate results in side-by-side
 * :pr:`314`: fix modelbuilder download needed after this change https://github.com/microsoft/onnxruntime-genai/pull/1862
 * :pr:`311`: use custom and local function to use PackedMultiHeadAttention from onnxruntime
 * :pr:`310`: splits patches into multiple files 

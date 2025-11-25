@@ -595,7 +595,8 @@ def run_aligned(
         <onnx_diagnostic.torch_onnx.sbs.ReplayConfiguration>`
     :param run_onnx_with_torch_inputs: run an onnx operator with torch results
         if they available
-    :return: a list of :class:`RunAlignedRecord`
+    :return: a list of :class:`RunAlignedRecord
+        <onnx_diagnostic.torch_onnx.sbs_dataclasses.RunAlignedRecord>`
 
     Example:
 
@@ -637,7 +638,6 @@ def run_aligned(
         df = pandas.DataFrame(results)
         df = df.apply(lambda col: col.fillna("") if col.dtype == "object" else col)
         print(df)
-
 
     This example uses :class:`onnx.reference.ReferenceEvaluator` to run the onnx model
     but onnxruntime can also be used through
