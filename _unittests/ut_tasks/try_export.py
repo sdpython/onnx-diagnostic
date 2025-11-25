@@ -34,6 +34,17 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 use_cache:bool,
                 return_dict:bool
             )
+
+        .. code-block:: bash
+
+            QWEN25ATTENTION=BIGMASK \\
+            PRETRAINED=1 \\
+            TESTDEVICE=cuda \\
+            TESTDTYPE=float16 \\
+            EXPORTER=custom \\
+            NEVERTEST=1 \\
+            DROPPATTERN=SkipSimplifiedLayerNormalizationMulPattern,SkipSimplifiedLayerNormalizationPattern \\
+            python _unittests/ut_tasks/try_export.py -k qwen_2_5_vl_instruct_visual
         """
         device = os.environ.get("TESTDEVICE", "cpu")
         dtype = os.environ.get("TESTDTYPE", "float32")
