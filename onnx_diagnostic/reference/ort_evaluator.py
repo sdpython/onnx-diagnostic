@@ -388,7 +388,7 @@ class OnnxruntimeEvaluator:
             onx.opset_import.append(oh.make_opsetid("", onnx_opset_version()))
         opsets = {d.domain: d.version for d in onx.opset_import}
         add = {}
-        for node in self.enumerate_nodes(nodes):
+        for node in self.enumerate_nodes(onx.graph.node):
             if node.domain and node.domain not in opsets and node.domain not in add:
                 add[node.domain] = 1
         onx.opset_import.extend([oh.make_opsetid(k, v) for k, v in add.items()])
