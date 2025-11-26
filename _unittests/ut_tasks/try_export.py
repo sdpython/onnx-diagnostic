@@ -1,4 +1,5 @@
 import os
+import time
 import unittest
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, never_test, ignore_warnings
@@ -45,6 +46,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             EXPORTER=custom \\
             python _unittests/ut_tasks/try_export.py -k qwen_2_5_vl_instruct_visual
         """
+        begin = time.perf_counter()
         device = os.environ.get("TESTDEVICE", "cpu")
         dtype = os.environ.get("TESTDTYPE", "float32")
         torch_dtype = {
@@ -87,13 +89,18 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             )
             model = data["model"]
 
+        print(f"-- MODEL LOADED IN {time.perf_counter() - begin}")
+        begin = time.perf_counter()
         model = model.to(device).to(getattr(torch, dtype))
+        print(f"-- MODEL MOVED IN {time.perf_counter() - begin}")
 
         print(f"-- config._attn_implementation={model.config._attn_implementation}")
         print(f"-- model.dtype={model.dtype}")
         print(f"-- model.device={model.device}")
+        begin = time.perf_counter()
         processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
         print(f"-- processor={type(processor)}")
+        print(f"-- PROCESSOR LOADED IN {time.perf_counter() - begin}")
 
         big_inputs = dict(
             hidden_states=torch.rand((14308, 1176), dtype=torch_dtype).to(device),
@@ -104,14 +111,19 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             hidden_states=torch.rand((1292, 1176), dtype=torch_dtype).to(device),
             grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
         )
-        print("-- save inputs")
-        torch.save(big_inputs, self.get_dump_file("qwen_2_5_vl_instruct_visual.inputs.big.pt"))
-        torch.save(inputs, self.get_dump_file("qwen_2_5_vl_instruct_visual.inputs.pt"))
+        if not self.unit_test_going():
+            print("-- save inputs")
+            torch.save(
+                big_inputs, self.get_dump_file("qwen_2_5_vl_instruct_visual.inputs.big.pt")
+            )
+            torch.save(inputs, self.get_dump_file("qwen_2_5_vl_instruct_visual.inputs.pt"))
 
         print(f"-- inputs: {self.string_type(inputs, with_shape=True)}")
         # this is too long
         model_to_export = model.visual if hasattr(model, "visual") else model.model.visual
+        begin = time.perf_counter()
         expected = model_to_export(**inputs)
+        print(f"-- MODEL RUN IN {time.perf_counter() - begin}")
         print(f"-- expected: {self.string_type(expected, with_shape=True)}")
 
         filename = self.get_dump_file(
@@ -126,6 +138,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         )
 
         # fake_inputs = make_fake_with_dynamic_dimensions(inputs, dynamic_shapes)[0]
+        begin = time.perf_counter()
         export_inputs = inputs
         print()
         with torch_export_patches(
@@ -148,14 +161,21 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 onnx_plugs=PLUGS,
             )
 
+        print(f"-- MODEL CONVERTED IN {time.perf_counter() - begin}")
+
         pt2_files = [f"{fileep}.backup.pt2", f"{fileep}.ep.pt2", f"{fileep}.pt2"]
-        pt2_file = [f for f in pt2_files if os.path.exists(f)]
-        assert pt2_file, f"Unable to find an existing file among {pt2_files}"
-        pt2_file = pt2_file[0]
+        pt2_files = [f for f in pt2_files if os.path.exists(f)]
+        assert (
+            self.unit_test_going() or pt2_files
+        ), f"Unable to find an existing file among {pt2_files!r}"
+        pt2_file = (
+            (pt2_files[0] if pt2_files else None) if not self.unit_test_going() else None
+        )
         # self.assertExists(pt2_file)
         # ep = torch.export.load(pt2_file)
         # diff = self.max_diff(ep.module()(**export_inputs), model.visual(**export_inputs))
         # print("----------- diff", diff)
+        begin = time.perf_counter()
         self.assert_onnx_disc(
             f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{device}.{dtype}.{exporter}",
             filename,
@@ -171,9 +191,10 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             atol=0.02,
             rtol=10,
             ort_optimized_graph=False,
-            # ep=pt2_file,
+            ep=pt2_file,
             expected=expected,
         )
+        print(f"-- MODEL VERIFIED IN {time.perf_counter() - begin}")
         if self.unit_test_going():
             self.clean_dump()
 
