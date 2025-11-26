@@ -1,4 +1,4 @@
-name: MODEL
+name: MODELS
 
 on:
   push:
@@ -57,18 +57,9 @@ jobs:
       - name: Uninstall onnx-diagnostic
         run: python -m pip uninstall -y onnx-diagnostic
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
-
       - name: pip freeze
         run: python -m pip freeze
 
-      - name: qwen2.5
-        run: PYTHONPATH=. UNITTEST_GOING=1 NEVERTEST=1 TESTDTYPE=float16 TESTDEVICE=cpu python _unittests/ut_tasks/try_export.py -f -k test_imagetext2text_qwen_2_5_vl_instruct_visual
+      - name: qwen2.5_vl_instruct
+        run: PYTHONPATH=. UNITTEST_GOING=1 NEVERTEST=1 QWEN25ATTENTION=BIGMASK TESTDTYPE=float16 TESTDEVICE=cpu python _unittests/ut_tasks/try_export.py -f -k test_imagetext2text_qwen_2_5_vl_instruct_visual
         
