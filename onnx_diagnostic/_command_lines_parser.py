@@ -1209,7 +1209,7 @@ def get_parser_sbs() -> ArgumentParser:
         "--ratio",
         default=100,
         required=False,
-        help="Saves the result in an excel file every <ratio> nodes.",
+        help="Saves the result in an excel file every <ratio> nodes, default is 100.",
     )
     parser.add_argument(
         "--first",
@@ -1247,7 +1247,7 @@ def get_parser_sbs() -> ArgumentParser:
         "--replay-threshold",
         type=float,
         required=False,
-        default=1e9,
+        default=1e18,
         help="Triggers the replay if the discrepancies are higher than this value.",
     )
     parser.add_argument(

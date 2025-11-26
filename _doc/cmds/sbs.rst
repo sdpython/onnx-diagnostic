@@ -27,9 +27,9 @@ Example
 .. code-block::
 
     python -m onnx_diagnostic sbs \
-        -i qwen_2_5_vl_instruct_visual.inputs.pt \
-        --ep test_imagetext2text_qwen_2_5_vl_instruct_visual.cuda.float16.custom.graph.ep.pt2 \
-        -m test_imagetext2text_qwen_2_5_vl_instruct_visual.cuda.float16.custom.onnx \
+        -i qwen25_vli_visual.inputs.pt \
+        --ep test_qwen25_vli_visual.cuda.float16.custom.graph.ep.pt2 \
+        -m test_qwen25_vli_visual.cuda.float16.custom.onnx \
         -o results.dynamo.float16.xlsx \
         -v 1 --atol=0.1 --rtol=1 \
         --replay-names conv3d,rsqrt,to_4,mul_48,linear,linear_2,linear_84,linear_89,mul_172,linear_156,linear_159 \

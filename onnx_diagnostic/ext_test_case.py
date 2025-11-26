@@ -64,7 +64,7 @@ def skipif_ci_apple(msg) -> Callable:
     return lambda x: x
 
 
-def unit_test_going():
+def unit_test_going() -> bool:
     """
     Enables a flag telling the script is running while testing it.
     Avois unit tests to be very long.
@@ -743,8 +743,15 @@ class ExtTestCase(unittest.TestCase):
     _warns: List[Tuple[str, int, Warning]] = []
     _todos: List[Tuple[Callable, str]] = []
 
+    def unit_test_going(self) -> bool:
+        """
+        Enables a flag telling the script is running while testing it.
+        Avois unit tests to be very long.
+        """
+        return unit_test_going()
+
     @property
-    def verbose(self):
+    def verbose(self) -> int:
         "Returns the the value of environment variable ``VERBOSE``."
         return int(os.environ.get("VERBOSE", "0"))
 
@@ -769,13 +776,13 @@ class ExtTestCase(unittest.TestCase):
         cls._todos.append((f, msg))
 
     @classmethod
-    def ort(cls):
+    def ort(cls) -> unittest.__class__:
         import onnxruntime
 
         return onnxruntime
 
     @classmethod
-    def to_onnx(self, *args, **kwargs):
+    def to_onnx(self, *args, **kwargs) -> "ModelProto":  # noqa: F821
         from experimental_experiment.torch_interpreter import to_onnx
 
         return to_onnx(*args, **kwargs)
@@ -816,12 +823,7 @@ class ExtTestCase(unittest.TestCase):
             elif os.path.isdir(item_path):
                 shutil.rmtree(item_path)
 
-    def dump_onnx(
-        self,
-        name: str,
-        proto: Any,
-        folder: Optional[str] = None,
-    ) -> str:
+    def dump_onnx(self, name: str, proto: Any, folder: Optional[str] = None) -> str:
         """Dumps an onnx file."""
         fullname = self.get_dump_file(name, folder=folder)
         with open(fullname, "wb") as f:
@@ -1104,7 +1106,9 @@ class ExtTestCase(unittest.TestCase):
             value = numpy.array(value).astype(expected.dtype)
         self.assertEqualArray(expected, value, atol=atol, rtol=rtol)
 
-    def check_ort(self, onx: "onnx.ModelProto") -> bool:  # noqa: F821
+    def check_ort(
+        self, onx: "onnx.ModelProto"  # noqa: F821
+    ) -> "onnxruntime.InferenceSession":  # noqa: F821
         from onnxruntime import InferenceSession
 
         return InferenceSession(onx.SerializeToString(), providers=["CPUExecutionProvider"])
@@ -1147,7 +1151,7 @@ class ExtTestCase(unittest.TestCase):
         if not full.endswith(suffix):
             raise AssertionError(f"suffix={suffix!r} does not end string  {full!r}.")
 
-    def capture(self, fct: Callable):
+    def capture(self, fct: Callable) -> Tuple[Any, str, str]:
         """
         Runs a function and capture standard output and error.
 
@@ -1238,12 +1242,12 @@ class ExtTestCase(unittest.TestCase):
             if isinstance(proto, str):
                 name = proto
                 proto = onnx.load(name)
-            else:
+            elif not self.unit_test_going():
                 assert isinstance(
                     proto, onnx.ModelProto
                 ), f"Unexpected type {type(proto)} for proto"
                 name = self.dump_onnx(name, proto)
-            if verbose:
+            if verbose and not self.unit_test_going():
                 print(f"[{vname}] file size {os.stat(name).st_size // 2**10:1.3f} kb")
         if verbose:
             print(f"[{vname}] make feeds {string_type(inputs, **kws)}")
@@ -1255,15 +1259,14 @@ class ExtTestCase(unittest.TestCase):
             feeds = make_feeds(proto, inputs, use_numpy=True, copy=True)
             import onnxruntime
 
-            if verbose:
-                print(f"[{vname}] create onnxruntime.InferenceSession")
             options = onnxruntime.SessionOptions()
             if ort_optimized_graph:
                 options.optimized_model_filepath = f"{name}.optort.onnx"
+            providers = kwargs.get("providers", ["CPUExecutionProvider"])
+            if verbose:
+                print(f"[{vname}] create onnxruntime.InferenceSession with {providers}")
             sess = onnxruntime.InferenceSession(
-                proto.SerializeToString(),
-                options,
-                providers=kwargs.get("providers", ["CPUExecutionProvider"]),
+                proto.SerializeToString(), options, providers=providers
             )
             if verbose:
                 print(f"[{vname}] run ort feeds {string_type(feeds, **kws)}")
@@ -1309,7 +1312,7 @@ class ExtTestCase(unittest.TestCase):
             )
             if verbose:
                 print(f"[{vname}] ep_expected {string_type(ep_expected, **kws)}")
-            ep_diff = max_diff(expected, ep_expected)
+            ep_diff = max_diff(expected, ep_expected, hist=[0.1, 0.01])
             if verbose:
                 print(f"[{vname}] ep_diff {string_diff(ep_diff)}")
             assert (
@@ -1323,11 +1326,11 @@ class ExtTestCase(unittest.TestCase):
                 f"discrepancies in {test_name!r} between the model "
                 f"and the exported model diff={string_diff(ep_diff)}"
             )
-            ep_nx_diff = max_diff(ep_expected, got, flatten=True)
+            ep_nx_diff = max_diff(ep_expected, got, flatten=True, hist=[0.1, 0.01])
             if verbose:
                 print(f"[{vname}] ep_nx_diff {string_diff(ep_nx_diff)}")
 
-        diff = max_diff(expected, got, flatten=True)
+        diff = max_diff(expected, got, flatten=True, hist=[0.1, 0.01])
         if verbose:
             print(f"[{vname}] diff {string_diff(diff)}")
         assert (

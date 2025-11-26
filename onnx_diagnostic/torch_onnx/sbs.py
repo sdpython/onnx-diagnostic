@@ -513,10 +513,13 @@ def _preparation_with_onnx_model(
                 new_name = new_names[0]  # type: ignore[assignment, index]
                 t = torch_results[new_name]
                 if (
-                    t.shape == tuple(init.dims)
+                    len(set(t.shape)) == len(t.shape)  # not repeated dimension
+                    and t.shape == tuple(init.dims)
                     and torch_dtype_to_onnx_dtype(t.dtype) == init.data_type
                 ):
                     torch_names_to_onnx_names[new_name] = init.name
+                else:
+                    t = None
 
                 # We should check tensors and proto are the same.
         if t is None:
