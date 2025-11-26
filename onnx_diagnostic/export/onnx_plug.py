@@ -238,7 +238,7 @@ class EagerDirectReplacementWithOnnx:
         custom_def.register_kernel(None)(self.eager_fn)
         custom_def._abstract_fn = self.shape_fn
 
-    def verify(self, *args, engine: Optional[Callable] = None) -> VerifyResult:
+    def verify(self, *args, engine: Optional[Callable] = None, **kwargs) -> VerifyResult:
         """
         Verifies that the eager mode is equivalent to the onnx function given
         as a replacements. This function evaluates `eager_fn`, checks that the shapes
@@ -246,12 +246,13 @@ class EagerDirectReplacementWithOnnx:
         onnx translation if the previous did not fail.
 
         :param args: function inputs
+        :param kwargs: arguments for eager_fn
         :param engine: by default an instance of
             :class:`onnx_diagnostic.reference.OnnxruntimeEvaluator`.
         :return: outputs of :func:`onnx_diagnostic.helpers.max_diff`
         """
-        expected = self.eager_fn(*args)
-        shapes = self.shape_fn(*args)
+        expected = self.eager_fn(*args, **kwargs)
+        shapes = self.shape_fn(*args, **kwargs)
         if isinstance(expected, torch.Tensor):
             expected = (expected,)
             assert isinstance(shapes, torch.Tensor), (
@@ -279,7 +280,7 @@ class EagerDirectReplacementWithOnnx:
 
         # Now the ONNX execution.
         assert engine is None, f"Not implemented yet with engine={engine!r}"
-        sess = OnnxruntimeEvaluator(self.function_proto)
+        sess = OnnxruntimeEvaluator(self.function_proto, whole=True)
         feeds = dict(zip(sess.input_names, args))
         got = sess.run(None, feeds)
         diffs = tuple(max_diff(e, g) for e, g in zip(expected, got))
