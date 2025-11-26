@@ -44,8 +44,8 @@ if patch_qwen2_5:
         seq_axis = op.Constant(value_ints=[1])
         seq_axis_int32 = op.Cast(seq_axis, to=onnx.TensorProto.INT32)
         attn_output = op.Slice(value_3d, [0], [0], seq_axis)
-        for i in range(num_patches):
-            i_1d = op.Reshape(i, [1])
+        for i_patch in range(num_patches):
+            i_1d = op.Reshape(i_patch, [1])
             i_plus_1_1d = i_1d + 1
             start = op.Gather(cu_seqlens, i_1d, axis=0)
             end = op.Gather(cu_seqlens, i_plus_1_1d, axis=0)

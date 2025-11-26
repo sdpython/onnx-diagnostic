@@ -188,7 +188,6 @@ class EagerDirectReplacementWithOnnx:
         self.kwargs_name = [p for p in params if p in self.kwargs]
         self.verbose = verbose
         self.custom_op = self._register()
-        assert "com.microsoft" in {d.domain for d in function_proto.opset_import}
 
     @property
     def domain(self) -> str:
