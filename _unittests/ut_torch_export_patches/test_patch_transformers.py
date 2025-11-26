@@ -562,9 +562,27 @@ class TestPatchPatchTransformers(ExtTestCase):
                 dtype=torch.int64,
             ).to("cuda"),
         )
-        qwen_sdpa_attention_versatile.verify(
+
+        results = qwen_sdpa_attention_versatile.verify(
+            *inputs,
+            scaling=0.5,
+            num_heads=16,
+            dump_onnx_model=self.get_dump_file(
+                "test_plug_packed_multi_head_attention_qwen25.onnx"
+            ),
+        )
+        self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
+        self.assertEqual(len(results.eager_outputs), len(results.diffs))
+        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.01)
+        self.assertLess(results.diffs[0]["abs"], 0.01)
+
+        results = qwen_sdpa_attention_versatile.verify(
             *inputs, scaling=0.11180339887498948, num_heads=16
         )
+        self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
+        self.assertEqual(len(results.eager_outputs), len(results.diffs))
+        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.01)
+        self.assertLess(results.diffs[0]["abs"], 0.01)
 
 
 if __name__ == "__main__":
