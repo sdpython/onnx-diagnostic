@@ -6,6 +6,7 @@ import onnx
 import onnx_diagnostic.torch_export_patches.patches.patch_transformers as patch_transformers
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
+    requires_cuda,
     requires_transformers,
     requires_torch,
     ignore_warnings,
@@ -517,6 +518,71 @@ class TestPatchPatchTransformers(ExtTestCase):
                 rtol=1,
             )
         self.clean_dump()
+
+    @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
+    @requires_cuda()
+    def test_plug_packed_multi_head_attention_qwen25(self):
+        from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
+            qwen_sdpa_attention_versatile,
+        )
+
+        inputs = (
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16).to("cuda"),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16).to("cuda"),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16).to("cuda"),
+            torch.tensor(
+                [
+                    0,
+                    64,
+                    128,
+                    192,
+                    256,
+                    304,
+                    368,
+                    432,
+                    496,
+                    560,
+                    608,
+                    672,
+                    736,
+                    800,
+                    864,
+                    912,
+                    976,
+                    1040,
+                    1104,
+                    1168,
+                    1216,
+                    1232,
+                    1248,
+                    1264,
+                    1280,
+                    1292,
+                ],
+                dtype=torch.int64,
+            ).to("cuda"),
+        )
+
+        results = qwen_sdpa_attention_versatile.verify(
+            *inputs,
+            scaling=0.5,
+            num_heads=16,
+            dump_onnx_model=self.get_dump_file(
+                "test_plug_packed_multi_head_attention_qwen25.onnx"
+            ),
+        )
+        self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
+        self.assertEqual(len(results.eager_outputs), len(results.diffs))
+        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.01)
+        self.assertLess(results.diffs[0]["abs"], 0.01)
+
+        results = qwen_sdpa_attention_versatile.verify(
+            *inputs, scaling=0.11180339887498948, num_heads=16
+        )
+        self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
+        self.assertEqual(len(results.eager_outputs), len(results.diffs))
+        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.01)
+        self.assertLess(results.diffs[0]["abs"], 0.01)
 
 
 if __name__ == "__main__":

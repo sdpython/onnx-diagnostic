@@ -1323,7 +1323,7 @@ class ExtTestCase(unittest.TestCase):
                 and not numpy.isnan(ep_diff["rel"])
                 and ep_diff["rel"] <= rtol
             ), (
-                f"discrepancies in {test_name!r} between the model "
+                f"discrepancies in {test_name!r} between the exported program "
                 f"and the exported model diff={string_diff(ep_diff)}"
             )
             ep_nx_diff = max_diff(ep_expected, got, flatten=True, hist=[0.1, 0.01])

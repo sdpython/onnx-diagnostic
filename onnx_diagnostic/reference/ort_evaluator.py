@@ -54,6 +54,9 @@ class OnnxruntimeEvaluator:
     :param whole: if True, do not split node by node
     :param torch_or_numpy: force the use of one of them, True for torch,
         False for numpy, None to let the class choose
+    :param dump_onnx_model: dumps the temporary onnx model created if whole is True
+    :param function_kwargs: a FunctionProto may have parameters,
+        this contains the values of them
     """
 
     def __init__(
@@ -77,6 +80,8 @@ class OnnxruntimeEvaluator:
         opsets: Optional[Union[int, Dict[str, int]]] = None,
         whole: bool = False,
         torch_or_numpy: Optional[bool] = None,
+        function_kwargs: Optional[Dict[str, Any]] = None,
+        dump_onnx_model: Optional[str] = None,
     ):
         if isinstance(proto, str):
             self.proto: Proto = load(proto)
@@ -90,6 +95,9 @@ class OnnxruntimeEvaluator:
         assert isinstance(
             self.proto, PROTO
         ), f"Unexpected type for self.proto {type(self.proto)}"
+        assert (
+            whole or not dump_onnx_model
+        ), f"whole must be True for dump_onnx_model={dump_onnx_model!r}"
 
         self._cache: Dict[
             Any, Tuple[Proto, Union["OnnxruntimeEvaluator", _InferenceSession]]  # noqa: UP037
@@ -109,6 +117,8 @@ class OnnxruntimeEvaluator:
             use_training_api=use_training_api,
         )
         self.to_tensor_or_array = to_array_extended if not torch_or_numpy else to_tensor
+        self.function_kwargs = function_kwargs
+        self.dump_onnx_model = dump_onnx_model
 
         self.verbose = verbose
         self.torch_or_numpy = torch_or_numpy
@@ -357,11 +367,12 @@ class OnnxruntimeEvaluator:
         nodes: Sequence[NodeProto],
         vinputs: Sequence[ValueInfoProto],
         voutputs: Sequence[ValueInfoProto],
+        functions: Optional[Sequence[FunctionProto]] = None,
     ) -> ModelProto:
         onx = oh.make_model(
             oh.make_graph(nodes, "-", vinputs, voutputs),
             ir_version=getattr(self.proto, "ir_version", self.ir_version),
-            functions=getattr(self.proto, "functions", None),
+            functions=[*getattr(self.proto, "functions", []), *(functions or [])],
         )
         del onx.opset_import[:]
         if hasattr(self.proto, "opset_import"):
@@ -430,8 +441,18 @@ class OnnxruntimeEvaluator:
         if isinstance(node, ModelProto):
             onx = node
         else:
+            functions = []
+            if isinstance(node, FunctionProto):
+                functions.append(node)
+                node = oh.make_node(
+                    node.name,
+                    list(node.input),
+                    list(node.output),
+                    domain=node.domain,
+                    **(self.function_kwargs or {}),
+                )
             assert isinstance(node, NodeProto), f"Unexpected type {type(node)} for node"
-            if node.op_type == "Constant":
+            if node.op_type == "Constant" and node.domain == "":
                 # We force the type to be a boolean.
                 ref = ExtendedReferenceEvaluator(node)
                 cst = ref.run(None, {})[0]
@@ -457,10 +478,16 @@ class OnnxruntimeEvaluator:
                 # no need to run shape inference
                 prenodes, voutputs = self._make_model_outputs(node, vinputs)
 
-            onx = self._make_model_proto([*prenodes, node], vinputs, voutputs)
+            onx = self._make_model_proto(
+                [*prenodes, node], vinputs, voutputs, functions=functions
+            )
             if node.op_type in {"Shape", "Size"}:
                 on_cpu = True
 
+        if self.dump_onnx_model:
+            onnx_save(
+                onx, self.dump_onnx_model, save_as_external_data=len(onx.graph.node) > 100
+            )
         cls = (
             InferenceSessionForNumpy
             if any(isinstance(i, np.ndarray) for i in inputs)

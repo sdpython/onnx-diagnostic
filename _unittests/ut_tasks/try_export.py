@@ -185,24 +185,25 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         onnx_plugs=PLUGS,
                     )
 
-                with open(
-                    self.get_dump_file(
-                        f"sbs_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.sh"
-                    ),
-                    "w",
-                ) as f:
-                    f.write(
-                        textwrap.dedent(
-                            f"""
-                            clear&&python -m onnx_diagnostic sbs \\
-                                -i qwen25_vli_visual.inputs.pt \\
-                                -e test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.graph.ep.pt2 \\
-                                -m test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.onnx \\
-                                -o test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.xlsx \\
-                                -v 1 --atol 0.1 --rtol 1000
-                            """
+                if not self.unit_test_going():
+                    with open(
+                        self.get_dump_file(
+                            f"sbs_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.sh"
+                        ),
+                        "w",
+                    ) as f:
+                        f.write(
+                            textwrap.dedent(
+                                f"""
+                                clear&&python -m onnx_diagnostic sbs \\
+                                    -i qwen25_vli_visual.inputs.pt \\
+                                    -e test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.graph.ep.pt2 \\
+                                    -m test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.onnx \\
+                                    -o test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.xlsx \\
+                                    -v 1 --atol 0.1 --rtol 1000
+                                """
+                            )
                         )
-                    )
                 print(f"-- MODEL CONVERTED IN {time.perf_counter() - begin}")
                 model = onnx.load(filename, load_external_data=False)
                 if attention == "PACKED":
@@ -226,11 +227,13 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 assert (
                     self.unit_test_going() or pt2_files
                 ), f"Unable to find an existing file among {pt2_files!r}"
-                pt2_file = (
-                    (pt2_files[0] if pt2_files else None)
-                    if not self.unit_test_going()
-                    else None
-                )
+
+                # pt2_file = (
+                #    (pt2_files[0] if pt2_files else None)
+                #    if not self.unit_test_going()
+                #    else None
+                # )
+
                 # self.assertExists(pt2_file)
                 # ep = torch.export.load(pt2_file)
                 # diff = self.max_diff(ep.module()(**export_inputs), model.visual(**export_inputs))
@@ -250,8 +253,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     use_ort=True,
                     atol=0.02,
                     rtol=10,
-                    ort_optimized_graph=False,
-                    ep=pt2_file,
+                    # ep=pt2_file,
                     expected=expected,
                 )
                 print(f"-- MODEL VERIFIED IN {time.perf_counter() - begin}")

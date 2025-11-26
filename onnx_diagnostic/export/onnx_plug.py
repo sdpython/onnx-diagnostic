@@ -27,7 +27,7 @@ class VerifyResult:
     """
 
     eager_outputs: TUPLE_TENSORS
-    onnx_output: TUPLE_TENSORS
+    onnx_outputs: TUPLE_TENSORS
     diffs: Tuple[Dict[str, float], ...]
 
 
@@ -238,7 +238,13 @@ class EagerDirectReplacementWithOnnx:
         custom_def.register_kernel(None)(self.eager_fn)
         custom_def._abstract_fn = self.shape_fn
 
-    def verify(self, *args, engine: Optional[Callable] = None) -> VerifyResult:
+    def verify(
+        self,
+        *args,
+        engine: Optional[Callable] = None,
+        dump_onnx_model: Optional[str] = None,
+        **kwargs,
+    ) -> VerifyResult:
         """
         Verifies that the eager mode is equivalent to the onnx function given
         as a replacements. This function evaluates `eager_fn`, checks that the shapes
@@ -246,12 +252,16 @@ class EagerDirectReplacementWithOnnx:
         onnx translation if the previous did not fail.
 
         :param args: function inputs
+        :param kwargs: arguments for eager_fn
         :param engine: by default an instance of
             :class:`onnx_diagnostic.reference.OnnxruntimeEvaluator`.
+        :param dump_onnx_model: to dump the onnx model used to verify
+            eager and onnx produce the same results
+        :param kwargs: additional arguments to the function
         :return: outputs of :func:`onnx_diagnostic.helpers.max_diff`
         """
-        expected = self.eager_fn(*args)
-        shapes = self.shape_fn(*args)
+        expected = self.eager_fn(*args, **kwargs)
+        shapes = self.shape_fn(*args, **kwargs)
         if isinstance(expected, torch.Tensor):
             expected = (expected,)
             assert isinstance(shapes, torch.Tensor), (
@@ -279,11 +289,23 @@ class EagerDirectReplacementWithOnnx:
 
         # Now the ONNX execution.
         assert engine is None, f"Not implemented yet with engine={engine!r}"
-        sess = OnnxruntimeEvaluator(self.function_proto)
-        feeds = dict(zip(sess.input_names, args))
+        ags, kws = self._make_args_kwargs(*args, **kwargs)
+        sess = OnnxruntimeEvaluator(
+            self.function_proto,
+            whole=True,
+            dump_onnx_model=dump_onnx_model,
+            function_kwargs=kws,
+        )
+        feeds = dict(zip(sess.input_names, ags))
         got = sess.run(None, feeds)
-        diffs = tuple(max_diff(e, g) for e, g in zip(expected, got))
-        return VerifyResult(eager_outputs=expected, onnx_output=tuple(got), diffs=diffs)  # type: ignore[arg-type]
+        diffs = tuple(max_diff(e, g, hist=[0.1, 0.01]) for e, g in zip(expected, got))
+        return VerifyResult(eager_outputs=expected, onnx_outputs=tuple(got), diffs=diffs)  # type: ignore[arg-type]
+
+    def _make_args_kwargs(self, *args, **kwargs):
+        ags = args[: len(self.args_name)]
+        kws = dict(zip(self.kwargs_name, args[len(self.args_name) :]))
+        kws.update(kwargs)
+        return ags, kws
 
     def custom_converter(
         self,
@@ -306,9 +328,7 @@ class EagerDirectReplacementWithOnnx:
                 self.function_proto.name, domain=self.function_proto.domain
             ):
                 g.add_function(self.function_proto)
-            ags = args[: len(self.args_name)]
-            kws = dict(zip(self.kwargs_name, args[len(self.args_name) :]))
-            kws.update(kwargs)
+            ags, kws = self._make_args_kwargs(*args, **kwargs)
             res = g.make_node(
                 self.function_proto.name,
                 ags,
@@ -369,7 +389,8 @@ class EagerDirectReplacementWithOnnx:
             onnx.defs.register_schema(schema)
         op = onnxscript.values.Op(onnx_plug_op, self.function_proto.name, schema)
 
-        def converter(*cargs):
-            return op(*cargs, n_outputs=self.n_outputs)
+        def converter(*cargs, **ckwargs):
+            ags, kws = self._make_args_kwargs(*cargs, **ckwargs)
+            return op(*ags, n_outputs=self.n_outputs, **kws)
 
         return onnxscript.values.TracedOnnxFunction(onnx_plug_op, converter)

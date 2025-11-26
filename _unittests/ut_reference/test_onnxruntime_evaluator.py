@@ -284,6 +284,41 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         self.assertEqual(got[1].shape, feeds["x"].shape)
         self.assertEqual(got[1].dtype, feeds["x"].dtype)
 
+    def test_function_proto_with_kwargs(self):
+        linear_function = oh.make_function(
+            "test_domain",
+            "LinearRegression",
+            ["x", "a", "b"],
+            ["y"],
+            [
+                oh.make_node("Constant", [], ["eps"]),
+                oh.make_node("Constant", [], ["zero"], value_ints=[0]),
+                oh.make_node("Unsqueeze", ["eps", "zero"], ["eps1d"]),
+                oh.make_node("MatMul", ["x", "a"], ["xa"]),
+                oh.make_node("Add", ["b", "eps1d"], ["beps"]),
+                oh.make_node("Add", ["xa", "beps"], ["y"]),
+            ],
+            [oh.make_opsetid("", 14)],
+            ["epsilon"],
+        )
+        att = onnx.AttributeProto()
+        att.name = "value_float"
+        att.ref_attr_name = "epsilon"
+        att.type = onnx.AttributeProto.FLOAT
+        linear_function.node[0].attribute.append(att)
+        feeds = dict(
+            x=np.random.rand(4, 4).astype(np.float32),
+            a=np.random.rand(4, 2).astype(np.float32),
+            b=np.random.rand(1, 2).astype(np.float32),
+        )
+        epsilon = 15.6
+        expected = feeds["x"] @ feeds["a"] + feeds["b"] + epsilon
+        sess = OnnxruntimeEvaluator(
+            linear_function, whole=True, function_kwargs=dict(epsilon=epsilon)
+        )
+        got = sess.run(None, feeds)
+        self.assertEqualArray(expected, got[0], atol=1e-5)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
