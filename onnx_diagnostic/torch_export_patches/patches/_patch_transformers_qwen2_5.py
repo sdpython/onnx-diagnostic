@@ -16,7 +16,6 @@ except ImportError:
     patch_qwen2_5 = False
 
 PLUGS = []
-strategy_for_attention_in_qwen_2_5 = os.environ.get("QWEN25ATTENTION", "PACKED")
 
 if patch_qwen2_5:
     import onnxscript
@@ -445,6 +444,9 @@ if patch_qwen2_5:
         _PATCHED_CLASS_ = (
             transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLVisionAttention
         )
+        STRATEGY_FOR_ATTENTION = lambda: os.environ.get(  # noqa: E731
+            "QWEN25ATTENTION", "PACKED"
+        )
 
         def forward(
             self,
@@ -488,11 +490,13 @@ if patch_qwen2_5:
                     self.config._attn_implementation
                 ]
 
-            if (
+            is_sdpa = (
                 attention_interface
                 is transformers.integrations.sdpa_attention.sdpa_attention_forward
                 or attention_interface is patched_sdpa_attention_forward
-            ) and strategy_for_attention_in_qwen_2_5 == "PACKED":
+            )
+            attention_strategy = patched_Qwen2_5_VLVisionAttention.STRATEGY_FOR_ATTENTION()
+            if is_sdpa and attention_strategy == "PACKED":
                 attn_output = qwen_sdpa_attention_versatile(
                     query_states,
                     key_states,
@@ -525,11 +529,7 @@ if patch_qwen2_5:
                         ),
                         version=1,
                     )
-                elif (
-                    attention_interface
-                    is transformers.integrations.sdpa_attention.sdpa_attention_forward
-                    or attention_interface is patched_sdpa_attention_forward
-                ) and strategy_for_attention_in_qwen_2_5 == "LOOPMHA":
+                elif is_sdpa and attention_strategy == "LOOPMHA":
 
                     def _iteration(start_end, query_states, key_states, value_states):
                         return patched_Qwen2_5_VLVisionAttentionOneIteration.forward(
@@ -561,11 +561,7 @@ if patch_qwen2_5:
                     #       starts_ends, query_states, key_states, value_states), tuple(),
                     # )
                     attn_output = torch.cat(attn_outputs, dim=1)
-                elif (
-                    attention_interface
-                    is transformers.integrations.sdpa_attention.sdpa_attention_forward
-                    or attention_interface is patched_sdpa_attention_forward
-                ) and strategy_for_attention_in_qwen_2_5 == "BIGMASK":
+                elif is_sdpa and attention_strategy == "BIGMASK":
                     # make square mask
                     indices = torch.arange(
                         cu_seqlens.max(), dtype=cu_seqlens.dtype, device=cu_seqlens.device
@@ -594,8 +590,8 @@ if patch_qwen2_5:
                     )
                 else:
                     raise NotImplementedError(
-                        f"Not export strategy for strategy_for_attention_in_qwen_2_5="
-                        f"{strategy_for_attention_in_qwen_2_5!r}, "
+                        f"No corresponding export strategy for "
+                        f"{attention_strategy!r}, "
                         f"(use QWEN25ATTENTION to change it), and attention_interface="
                         f"{attention_interface!r} (use sdpa)"
                     )

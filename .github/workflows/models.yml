@@ -61,5 +61,5 @@ jobs:
         run: python -m pip freeze
 
       - name: qwen2.5_vl_instruct
-        run: PYTHONPATH=. UNITTEST_GOING=1 NEVERTEST=1 QWEN25ATTENTION=BIGMASK TESTDTYPE=float16 TESTDEVICE=cpu python _unittests/ut_tasks/try_export.py -f -k test_imagetext2text_qwen_2_5_vl_instruct_visual
+        run: PYTHONPATH=. UNITTEST_GOING=1 NEVERTEST=1 QWEN25ATTENTION=BIGMASK TESTDTYPE=float16 TESTDEVICE=cpu python _unittests/ut_tasks/try_export.py -f -k test_qwen_2_5_vli_visual
         
