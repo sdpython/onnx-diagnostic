@@ -39,6 +39,7 @@ if patch_qwen2_5:
         query_3d = op.Reshape(query_transposed, to_3d_shape)
         value_3d = op.Reshape(op.Transpose(value_states, perm=[0, 2, 1, 3]), to_3d_shape)
         key_3d = op.Reshape(op.Transpose(key_states, perm=[0, 2, 1, 3]), to_3d_shape)
+        cu_seqlens = op.Cast(cu_seqlens, to=onnx.TensorProto.INT32)
         num_patches = op.Size(cu_seqlens) - 1
         seq_axis = op.Constant(value_ints=[1])
         seq_axis_int32 = op.Cast(seq_axis, to=onnx.TensorProto.INT32)
@@ -61,6 +62,14 @@ if patch_qwen2_5:
             attn_output = op.Concat(attn_output, mha_output, axis=1)
         attn_output_4d = op.Reshape(attn_output, output_shape)
         return attn_output_4d
+
+    def _add_com_microsoft_opset(function_proto):
+        opsets = {d.domain: d.version for d in function_proto.opset_import}
+        if "com.microsoft" not in opsets:
+            d = function_proto.opset_import.add()
+            d.domain = "com.microsoft"
+            d.version = 1
+        return function_proto
 
     @onnxscript.script(opset=onnx_plugs_op)
     def PackedAttention(
@@ -143,20 +152,35 @@ if patch_qwen2_5:
         return attn_output
 
     # not ideal
-    qwen_sdpa_attention_versatile = EagerDirectReplacementWithOnnx(
+    qwen_sdpa_attention_packed_versatile = EagerDirectReplacementWithOnnx(
         qwen_sdpa_attention,
         lambda qs, *args, **kwargs: torch.empty(
             (qs.shape[0], qs.shape[2], qs.shape[1], qs.shape[3]),
             dtype=qs.dtype,
             device=qs.device,
         ),
-        PackedAttention.to_function_proto(),
+        _add_com_microsoft_opset(PackedAttention.to_function_proto()),
         n_inputs=4,
         n_outputs=1,
         kwargs=dict(scaling=0.11180339887498948, num_heads=16),
-        name="qwen_sdpa_attention",
+        name="qwen_sdpa_attention_packed",
     )
-    PLUGS.append(qwen_sdpa_attention_versatile)
+    PLUGS.append(qwen_sdpa_attention_packed_versatile)
+
+    qwen_sdpa_attention_loopmha_versatile = EagerDirectReplacementWithOnnx(
+        qwen_sdpa_attention,
+        lambda qs, *args, **kwargs: torch.empty(
+            (qs.shape[0], qs.shape[2], qs.shape[1], qs.shape[3]),
+            dtype=qs.dtype,
+            device=qs.device,
+        ),
+        _add_com_microsoft_opset(LoopMHAAttention.to_function_proto()),
+        n_inputs=4,
+        n_outputs=1,
+        kwargs=dict(scaling=0.11180339887498948, num_heads=16),
+        name="qwen_sdpa_attention_loopmha",
+    )
+    PLUGS.append(qwen_sdpa_attention_loopmha_versatile)
 
     class patched_Qwen2_5_VLForConditionalGeneration:
         _PATCHES_ = ["prepare_inputs_for_generation"]
@@ -496,8 +520,8 @@ if patch_qwen2_5:
                 or attention_interface is patched_sdpa_attention_forward
             )
             attention_strategy = patched_Qwen2_5_VLVisionAttention.STRATEGY_FOR_ATTENTION()
-            if is_sdpa and attention_strategy == "PACKED":
-                attn_output = qwen_sdpa_attention_versatile(
+            if is_sdpa and attention_strategy in "PACKED":
+                attn_output = qwen_sdpa_attention_packed_versatile(
                     query_states,
                     key_states,
                     value_states,
@@ -530,37 +554,37 @@ if patch_qwen2_5:
                         version=1,
                     )
                 elif is_sdpa and attention_strategy == "LOOPMHA":
+                    attn_output = qwen_sdpa_attention_loopmha_versatile(
+                        query_states,
+                        key_states,
+                        value_states,
+                        cu_seqlens,
+                        self.scaling,
+                        self.num_heads,
+                    )
 
-                    def _iteration(start_end, query_states, key_states, value_states):
-                        return patched_Qwen2_5_VLVisionAttentionOneIteration.forward(
-                            self,
-                            start_end,
-                            query_states,
-                            key_states,
-                            value_states,
-                            scaling=self.scaling,
-                            dropout=0.0 if not self.training else self.attention_dropout,
-                        )
+                    # to rewrite later with a for loop
+                    # def _iteration(start_end, query_states, key_states, value_states):
+                    #     return patched_Qwen2_5_VLVisionAttentionOneIteration.forward(
+                    #         self,
+                    #         start_end,
+                    #         query_states,
+                    #         key_states,
+                    #         value_states,
+                    #         scaling=self.scaling,
+                    #         dropout=0.0 if not self.training else self.attention_dropout,
+                    #    )
 
-                    starts = cu_seqlens[:-1]
-                    ends = cu_seqlens[1:]
-                    # cu_seqlens = [0, 10, 14, 27]
-                    # starts: [0, 10, 14]
-                    # ends: [10, 14, 17]
-                    # starts_ends: [[0, 10], [10, 14], [14, 27]]
-                    starts_ends = torch.cat([starts.unsqueeze(1), ends.unsqueeze(1)], dim=1)
-                    attn_outputs = [
-                        _iteration(start_end, query_states, key_states, value_states)
-                        for start_end in starts_ends
-                    ]
-                    # attn_outputs = torch._higher_order_ops.while_loop(
-                    # attn_outputs = torch.ops.higher_order.while_loop(
-                    #    (lambda it, starts_ends, *_args: it < starts_ends.shape[0]),
-                    #    _iteration,
-                    #    (torch.tensor(0),
-                    #       starts_ends, query_states, key_states, value_states), tuple(),
-                    # )
-                    attn_output = torch.cat(attn_outputs, dim=1)
+                    # starts = cu_seqlens[:-1]
+                    # ends = cu_seqlens[1:]
+                    # torch._check(starts.shape[0] > 0)
+                    # torch._check(ends.shape[0] > 0)
+                    # starts_ends = torch.cat([starts.unsqueeze(1), ends.unsqueeze(1)], dim=1)
+                    # attn_outputs = [
+                    #    _iteration(start_end, query_states, key_states, value_states)
+                    #    for start_end in starts_ends
+                    # ]
+                    # attn_output = torch.cat(attn_outputs, dim=1)
                 elif is_sdpa and attention_strategy == "BIGMASK":
                     # make square mask
                     indices = torch.arange(

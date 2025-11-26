@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
 import numpy as np
 from onnx import (
     AttributeProto,
@@ -388,7 +388,7 @@ class OnnxruntimeEvaluator:
             onx.opset_import.append(oh.make_opsetid("", onnx_opset_version()))
         opsets = {d.domain: d.version for d in onx.opset_import}
         add = {}
-        for node in nodes:
+        for node in self.enumerate_nodes(nodes):
             if node.domain and node.domain not in opsets and node.domain not in add:
                 add[node.domain] = 1
         onx.opset_import.extend([oh.make_opsetid(k, v) for k, v in add.items()])
@@ -401,6 +401,15 @@ class OnnxruntimeEvaluator:
         self, node: NodeProto, inputs: List[ValueInfoProto]
     ) -> Tuple[List[NodeProto], List[ValueInfoProto]]:
         return [], [oh.make_value_info(o, TypeProto()) for o in node.output if o]
+
+    def enumerate_nodes(self, nodes: List[NodeProto]) -> Iterator[NodeProto]:
+        "Enumerates nodes recursively."
+        for node in nodes:
+            if node.op_type in {"Scan", "If", "Loop"}:
+                for att in node.attribute:
+                    if att.type == AttributeProto.GRAPH:
+                        yield from self.enumerate_nodes(att.g.node)
+            yield node
 
     @classmethod
     def _get_hidden_inputs(self, graph: GraphProto) -> Set[str]:
