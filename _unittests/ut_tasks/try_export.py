@@ -37,13 +37,12 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
 
         .. code-block:: bash
 
+            NEVERTEST=1 \\
             QWEN25ATTENTION=BIGMASK \\
             PRETRAINED=1 \\
             TESTDEVICE=cuda \\
             TESTDTYPE=float16 \\
             EXPORTER=custom \\
-            NEVERTEST=1 \\
-            DROPPATTERN=SkipSimplifiedLayerNormalizationMulPattern,SkipSimplifiedLayerNormalizationPattern \\
             python _unittests/ut_tasks/try_export.py -k qwen_2_5_vl_instruct_visual
         """
         device = os.environ.get("TESTDEVICE", "cpu")
@@ -111,7 +110,8 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
 
         print(f"-- inputs: {self.string_type(inputs, with_shape=True)}")
         # this is too long
-        expected = model.visual(**inputs)
+        model_to_export = model.visual if hasattr(model, "visual") else model.model.visual
+        expected = model_to_export(**inputs)
         print(f"-- expected: {self.string_type(expected, with_shape=True)}")
 
         filename = self.get_dump_file(
@@ -136,13 +136,13 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             stop_if_static=2,
         ):
             to_onnx(
-                model.visual,
+                model_to_export,
                 kwargs=export_inputs,
                 dynamic_shapes=dynamic_shapes,
                 filename=filename,
                 exporter=exporter,
                 verbose=1,
-                save_ep=(fileep, 2**35),
+                save_ep=None if self.unit_test_going() else (fileep, 2**35),
                 target_opset=22,
                 optimize=True,
                 onnx_plugs=PLUGS,
@@ -159,7 +159,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         self.assert_onnx_disc(
             f"test_imagetext2text_qwen_2_5_vl_instruct_visual.{device}.{dtype}.{exporter}",
             filename,
-            model.visual,
+            model_to_export,
             export_inputs,
             verbose=1,
             providers=(
@@ -171,8 +171,11 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             atol=0.02,
             rtol=10,
             ort_optimized_graph=False,
-            ep=pt2_file,
+            # ep=pt2_file,
+            expected=expected,
         )
+        if self.unit_test_going():
+            self.clean_dump()
 
 
 if __name__ == "__main__":

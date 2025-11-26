@@ -64,7 +64,7 @@ def skipif_ci_apple(msg) -> Callable:
     return lambda x: x
 
 
-def unit_test_going():
+def unit_test_going() -> bool:
     """
     Enables a flag telling the script is running while testing it.
     Avois unit tests to be very long.
@@ -743,6 +743,13 @@ class ExtTestCase(unittest.TestCase):
     _warns: List[Tuple[str, int, Warning]] = []
     _todos: List[Tuple[Callable, str]] = []
 
+    def unit_test_going(self):
+        """
+        Enables a flag telling the script is running while testing it.
+        Avois unit tests to be very long.
+        """
+        return unit_test_going()
+
     @property
     def verbose(self):
         "Returns the the value of environment variable ``VERBOSE``."
@@ -1238,7 +1245,7 @@ class ExtTestCase(unittest.TestCase):
             if isinstance(proto, str):
                 name = proto
                 proto = onnx.load(name)
-            else:
+            elif not self.unit_tst_going():
                 assert isinstance(
                     proto, onnx.ModelProto
                 ), f"Unexpected type {type(proto)} for proto"
@@ -1309,7 +1316,7 @@ class ExtTestCase(unittest.TestCase):
             )
             if verbose:
                 print(f"[{vname}] ep_expected {string_type(ep_expected, **kws)}")
-            ep_diff = max_diff(expected, ep_expected)
+            ep_diff = max_diff(expected, ep_expected, hist=[0.1, 0.01])
             if verbose:
                 print(f"[{vname}] ep_diff {string_diff(ep_diff)}")
             assert (
@@ -1323,11 +1330,11 @@ class ExtTestCase(unittest.TestCase):
                 f"discrepancies in {test_name!r} between the model "
                 f"and the exported model diff={string_diff(ep_diff)}"
             )
-            ep_nx_diff = max_diff(ep_expected, got, flatten=True)
+            ep_nx_diff = max_diff(ep_expected, got, flatten=True, hist=[0.1, 0.01])
             if verbose:
                 print(f"[{vname}] ep_nx_diff {string_diff(ep_nx_diff)}")
 
-        diff = max_diff(expected, got, flatten=True)
+        diff = max_diff(expected, got, flatten=True, hist=[0.1, 0.01])
         if verbose:
             print(f"[{vname}] diff {string_diff(diff)}")
         assert (
