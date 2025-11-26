@@ -1245,7 +1245,7 @@ class ExtTestCase(unittest.TestCase):
             if isinstance(proto, str):
                 name = proto
                 proto = onnx.load(name)
-            elif not self.unit_tst_going():
+            elif not self.unit_test_going():
                 assert isinstance(
                     proto, onnx.ModelProto
                 ), f"Unexpected type {type(proto)} for proto"

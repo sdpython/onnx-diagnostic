@@ -1,4 +1,4 @@
-name: ci
+name: MODEL
 
 on:
   push:
@@ -10,14 +10,14 @@ on:
 
 jobs:
   run:
-    name: MODEL to-${{ matrix.torch }}-tr-${{ matrix.transformers }}-ci ${{ matrix.os }}-${{ matrix.python }}
+    name: to-${{ matrix.torch }}-tr-${{ matrix.transformers }}-ci ${{ matrix.os }}-${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
         python: ['3.12']
-        transformers: ['main']
+        transformers: ['4.57.3']
         torch: ['main']
     steps:
       - uses: actions/checkout@v3
