@@ -2,6 +2,7 @@ import os
 import time
 import unittest
 import onnx
+import textwrap
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, never_test, ignore_warnings
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -47,6 +48,16 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             TESTDTYPE=float16 \\
             EXPORTER=custom \\
             python _unittests/ut_tasks/try_export.py -k qwen25_vli_visual
+
+        .. code-block:: bash
+
+            python -m onnx_diagnostic sbs \\
+                -i qwen25_vli_visual.inputs.pt \\
+                -e test_qwen25_vli_visual.cuda.float16.PACKED.custom.graph.ep \\
+                -m test_qwen25_vli_visual.cuda.float16.PACKED.custom.onnx \\
+                -o test_qwen25_vli_visual.cuda.float16.PACKED.custom.xlsx \\
+                -v 1 --atol 0.1 --rtol 1000
+
         """
         begin = time.perf_counter()
         device = os.environ.get("TESTDEVICE", "cpu")
@@ -174,6 +185,24 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         onnx_plugs=PLUGS,
                     )
 
+                with open(
+                    self.get_dump_file(
+                        f"sbs_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.sh"
+                    ),
+                    "w",
+                ) as f:
+                    f.write(
+                        textwrap.dedent(
+                            f"""
+                            clear&&python -m onnx_diagnostic sbs \\
+                                -i qwen25_vli_visual.inputs.pt \\
+                                -e test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.graph.ep.pt2 \\
+                                -m test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.onnx \\
+                                -o test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}.xlsx \\
+                                -v 1 --atol 0.1 --rtol 1000
+                            """
+                        )
+                    )
                 print(f"-- MODEL CONVERTED IN {time.perf_counter() - begin}")
                 model = onnx.load(filename, load_external_data=False)
                 if attention == "PACKED":
