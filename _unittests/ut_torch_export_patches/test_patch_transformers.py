@@ -521,9 +521,9 @@ class TestPatchPatchTransformers(ExtTestCase):
 
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     @requires_cuda()
-    def test_plug_packed_multi_head_attention_qwen25(self):
+    def test_plug_packed_multi_head_attention_qwen25_packed(self):
         from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
-            qwen_sdpa_attention_versatile,
+            qwen_sdpa_attention_packed_versatile,
         )
 
         inputs = (
@@ -563,12 +563,71 @@ class TestPatchPatchTransformers(ExtTestCase):
             ).to("cuda"),
         )
 
-        results = qwen_sdpa_attention_versatile.verify(
+        results = qwen_sdpa_attention_packed_versatile.verify(
+            *inputs, scaling=0.5, num_heads=16
+        )
+        self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
+        self.assertEqual(len(results.eager_outputs), len(results.diffs))
+        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.01)
+        self.assertLess(results.diffs[0]["abs"], 0.01)
+
+        results = qwen_sdpa_attention_packed_versatile.verify(
+            *inputs, scaling=0.11180339887498948, num_heads=16
+        )
+        self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
+        self.assertEqual(len(results.eager_outputs), len(results.diffs))
+        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.01)
+        self.assertLess(results.diffs[0]["abs"], 0.01)
+
+    @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
+    def test_plug_packed_multi_head_attention_qwen25_loopmha(self):
+        from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
+            qwen_sdpa_attention_loopmha_versatile,
+        )
+
+        inputs = (
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.tensor(
+                [
+                    0,
+                    64,
+                    128,
+                    192,
+                    256,
+                    304,
+                    368,
+                    432,
+                    496,
+                    560,
+                    608,
+                    672,
+                    736,
+                    800,
+                    864,
+                    912,
+                    976,
+                    1040,
+                    1104,
+                    1168,
+                    1216,
+                    1232,
+                    1248,
+                    1264,
+                    1280,
+                    1292,
+                ],
+                dtype=torch.int64,
+            ),
+        )
+
+        results = qwen_sdpa_attention_loopmha_versatile.verify(
             *inputs,
             scaling=0.5,
             num_heads=16,
             dump_onnx_model=self.get_dump_file(
-                "test_plug_packed_multi_head_attention_qwen25.onnx"
+                "test_plug_packed_multi_head_attention_qwen25_loopmha.onnx"
             ),
         )
         self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
@@ -576,7 +635,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.01)
         self.assertLess(results.diffs[0]["abs"], 0.01)
 
-        results = qwen_sdpa_attention_versatile.verify(
+        results = qwen_sdpa_attention_loopmha_versatile.verify(
             *inputs, scaling=0.11180339887498948, num_heads=16
         )
         self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
