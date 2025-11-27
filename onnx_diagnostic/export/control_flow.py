@@ -55,7 +55,7 @@ def is_exporting() -> bool:
     return _TEST_EXPORT or torch.compiler.is_exporting() or torch.compiler.is_compiling()
 
 
-def _loop_for_fn(n_iter, body_fn, reduction_dim, args):
+def _loop_for_onnx_fn(n_iter, body_fn, reduction_dim, args):
     """
     Python implementation of the loop.
 
@@ -103,7 +103,7 @@ def _loop_for_fn(n_iter, body_fn, reduction_dim, args):
     return tuple(final) if len(final) > 1 else final[0]
 
 
-def make_custom_loop_for(
+def make_custom_loop_for_onnx(
     n_iter: torch.Tensor,
     body_fn: Callable,
     reduction_dim: Optional[Sequence[int]],
@@ -139,7 +139,7 @@ def make_custom_loop_for(
         .replace("<lambda>", "l")
         .replace(".", "_")
     )
-    name = f"loop_for_{full_name}_{srank}_{sred}"
+    name = f"loop_for_onnx_{full_name}_{srank}_{sred}"
     if name in _REGISTERED_SCHEMA:
         return name, _REGISTERED_SCHEMA[name][0]
     sig = inspect.signature(body_fn)
@@ -197,10 +197,10 @@ def convert_custom_loop_into_onnx(
     *args: str,
     body_callable: Callable[..., onnx.ModelProto],
     reduction_dim: Optional[Sequence[int]] = None,
-    name: str = "loop_for",
+    name: str = "loop_for_onnx",
 ) -> Union[str, List[str]]:
     """
-    Converts a custom op ``higher_ops::loop_for...`` into e sequence of node.
+    Converts a custom op ``higher_ops::loop_for_onnx...`` into e sequence of node.
 
     :param g: GreaphBuilder
     :param sts: if not defined, torch does not know the output shapes
@@ -267,7 +267,7 @@ def convert_custom_loop_into_onnx(
 
     sequences = [g.op.SequenceEmpty() for _ in outputs]
 
-    outloop = [g.unique_name(f"loop_for{i}") for i in range(len(sequences))]
+    outloop = [g.unique_name(f"loop_for_onnx{i}") for i in range(len(sequences))]
 
     for i, s in enumerate(sequences):
         g.set_sequence(s, graph.output[i].type.tensor_type.elem_type)
@@ -321,7 +321,7 @@ def convert_into_onnx(
     return container.model_proto
 
 
-def loop_for(
+def loop_for_onnx(
     n_iter: Union[torch.SymInt, torch.Tensor],
     body_fn: Callable[..., Tuple[torch.Tensor]],
     args: Sequence[torch.Tensor],
@@ -352,7 +352,7 @@ def loop_for(
         import torch
         import onnxruntime
         from onnx_diagnostic.export.api import to_onnx
-        from onnx_diagnostic.export.control_flow import loop_for
+        from onnx_diagnostic.export.control_flow import loop_for_onnx
 
 
         class Model(torch.nn.Module):
@@ -360,7 +360,7 @@ def loop_for(
                 def body(i, x):
                     return x[: i.item() + 1].unsqueeze(1)
 
-                return loop_for(n_iter, body, (x,))
+                return loop_for_onnx(n_iter, body, (x,))
 
 
         model = Model()
@@ -398,7 +398,7 @@ def loop_for(
         import torch
         import onnxruntime
         from onnx_diagnostic.export.api import to_onnx
-        from onnx_diagnostic.export.control_flow import loop_for
+        from onnx_diagnostic.export.control_flow import loop_for_onnx
 
 
         class Model(torch.nn.Module):
@@ -406,7 +406,7 @@ def loop_for(
                 def body(i, x):
                     return x[: i.item() + 1].unsqueeze(1), x[: i.item() + 1].unsqueeze(1) + 1
 
-                two = loop_for(n_iter, body, (x,))
+                two = loop_for_onnx(n_iter, body, (x,))
                 return two[0] + two[1]
 
 
@@ -445,7 +445,7 @@ def loop_for(
         import torch
         import onnxruntime
         from onnx_diagnostic.export.api import to_onnx
-        from onnx_diagnostic.export.control_flow import loop_for
+        from onnx_diagnostic.export.control_flow import loop_for_onnx
 
 
         class Model(torch.nn.Module):
@@ -453,7 +453,7 @@ def loop_for(
                 def body(i, x):
                     return x[: i.item() + 1].unsqueeze(1), x[: i.item() + 1].unsqueeze(0) + 1
 
-                two = loop_for(n_iter, body, (x,), reduction_dim=[0, 1])
+                two = loop_for_onnx(n_iter, body, (x,), reduction_dim=[0, 1])
                 return two[0] + two[1].T
 
 
@@ -501,7 +501,7 @@ def loop_for(
             body_mutated_inputs,
             body_outputs,
         ) = check_input_alias_and_mutation_return_outputs(body_gm)
-        name, _custom_ops = make_custom_loop_for(
+        name, _custom_ops = make_custom_loop_for_onnx(
             n_iter,
             body_fn,
             reduction_dim,
@@ -513,4 +513,4 @@ def loop_for(
         fct = getattr(torch.ops.onnx_higher_ops, name)
         return fct(n_iter, *args)
 
-    return _loop_for_fn(n_iter, body_fn, reduction_dim, args)
+    return _loop_for_onnx_fn(n_iter, body_fn, reduction_dim, args)

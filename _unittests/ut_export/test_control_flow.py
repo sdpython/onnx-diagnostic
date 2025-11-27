@@ -4,7 +4,7 @@ import torch
 from onnxscript import script, FLOAT, INT64
 from onnxscript import opset18 as op
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch, never_test
-from onnx_diagnostic.export.control_flow import enable_code_export_control_flow, loop_for
+from onnx_diagnostic.export.control_flow import enable_code_export_control_flow, loop_for_onnx
 from onnx_diagnostic.export.control_flow_research import simple_loop_for as loop_for_r
 from onnx_diagnostic.export.api import to_onnx
 
@@ -54,7 +54,7 @@ class TestControlFlow(ExtTestCase):
                 def body(i, x):
                     return x[: i.item() + 1].unsqueeze(1)
 
-                return loop_for(n_iter, body, (x,))
+                return loop_for_onnx(n_iter, body, (x,))
 
         model = Model()
         n_iter = torch.tensor(4, dtype=torch.int64)
@@ -67,7 +67,7 @@ class TestControlFlow(ExtTestCase):
             model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
         )
         self.assertIn(
-            "torch.ops.onnx_higher_ops.loop_for_TestControlFlow_test_loop_one_custom_L_Model_forward_L_body_",
+            "torch.ops.onnx_higher_ops.loop_for_onnx_TestControlFlow_test_loop_one_custom_L_Model_forward_L_body_",
             str(ep),
         )
 
@@ -88,7 +88,7 @@ class TestControlFlow(ExtTestCase):
                 def body(i, x):
                     return x[: i.item() + 1].unsqueeze(1)
 
-                return loop_for(n_iter, body, (x,))
+                return loop_for_onnx(n_iter, body, (x,))
 
         model = Model()
         n_iter = torch.tensor(4, dtype=torch.int64)
@@ -125,7 +125,7 @@ class TestControlFlow(ExtTestCase):
                 def body(i, x):
                     return x[: i.item() + 1].unsqueeze(1), x[: i.item() + 1].unsqueeze(1) + 1
 
-                res = loop_for(n_iter, body, (x,))
+                res = loop_for_onnx(n_iter, body, (x,))
                 return res[0] + res[1]
 
         model = Model()
@@ -139,7 +139,7 @@ class TestControlFlow(ExtTestCase):
             model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
         )
         self.assertIn(
-            "torch.ops.onnx_higher_ops.loop_for_TestControlFlow_test_loop_two_custom_L_Model_forward_L_body_",
+            "torch.ops.onnx_higher_ops.loop_for_onnx_TestControlFlow_test_loop_two_custom_L_Model_forward_L_body_",
             str(ep),
         )
 
@@ -160,7 +160,7 @@ class TestControlFlow(ExtTestCase):
                 def body(i, x):
                     return x[: i.item() + 1].unsqueeze(1), x[: i.item() + 1].unsqueeze(0) + 1
 
-                res = loop_for(n_iter, body, (x,), reduction_dim=[0, 1])
+                res = loop_for_onnx(n_iter, body, (x,), reduction_dim=[0, 1])
                 return res[0] + res[1].T
 
         model = Model()
@@ -174,7 +174,7 @@ class TestControlFlow(ExtTestCase):
             model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
         )
         self.assertIn(
-            "torch.ops.onnx_higher_ops.loop_for_TestControlFlow_test_loop_two_custom_reduction_dim_L_Model_forward_L_body_",
+            "torch.ops.onnx_higher_ops.loop_for_onnx_TestControlFlow_test_loop_two_custom_reduction_dim_L_Model_forward_L_body_",
             str(ep),
         )
 
