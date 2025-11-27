@@ -6,7 +6,7 @@ onnx_diagnostic.export
     :caption: modules
 
     api
-    control_flow
+    control_flow_onnx
     dynamic_shapes
     onnx_plug
     shape_helper
