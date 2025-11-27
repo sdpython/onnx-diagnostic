@@ -14,7 +14,7 @@ from torch._higher_order_ops.utils import (
 )
 from torch.fx.experimental.proxy_tensor import ProxyTorchDispatchMode, track_tensor_tree
 from torch.utils._python_dispatch import _get_current_dispatch_mode
-from .control_flow import _loop_for_fn
+from .control_flow_onnx import _loop_for_onnx_fn
 
 
 class SimpleLoopForOp(HigherOrderOperator):
@@ -66,7 +66,7 @@ def simple_loop_for(
         return simple_loop_for_op(n_iter, body_fn, (n_iter, *operands))
 
     if isinstance(n_iter, (bool, int, float)):
-        return _loop_for_fn(body_fn, n_iter, None, *operands)
+        return _loop_for_onnx_fn(body_fn, n_iter, None, *operands)
 
     def _validate_input(n_iter, body_fn, operands):
         assert isinstance(
@@ -127,7 +127,7 @@ def loop_for_op_dense(n_iter, body_fn, operands):
     ), f"Dense implementation operands must be a list of tensors and ints {operands}"
     mode = _get_current_dispatch_mode()
     assert mode is None, "Mode should never be enabled for CPU/CUDA key"
-    return _loop_for_fn(body_fn, n_iter, None, *operands)
+    return _loop_for_onnx_fn(body_fn, n_iter, None, *operands)
 
 
 @simple_loop_for_op.py_impl(ProxyTorchDispatchMode)

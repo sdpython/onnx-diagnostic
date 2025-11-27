@@ -4,7 +4,10 @@ import torch
 from onnxscript import script, FLOAT, INT64
 from onnxscript import opset18 as op
 from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch, never_test
-from onnx_diagnostic.export.control_flow import enable_code_export_control_flow, loop_for_onnx
+from onnx_diagnostic.export.control_flow_onnx import (
+    enable_code_export_control_flow,
+    loop_for_onnx,
+)
 from onnx_diagnostic.export.control_flow_research import simple_loop_for as loop_for_r
 from onnx_diagnostic.export.api import to_onnx
 

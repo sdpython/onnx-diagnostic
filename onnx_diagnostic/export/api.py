@@ -43,7 +43,7 @@ def to_onnx(
     :param save_ep: saves the exported program
     :param optimize: optimizes the model
     :param use_control_flow_dispatcher: use the dispatcher created to supported
-        custom loops (see :func:`onnx_diagnostic.export.control_flow.loop_for_onnx`)
+        custom loops (see :func:`onnx_diagnostic.export.control_flow_onnx.loop_for_onnx`)
     :param onnx_plugs: the code was modified to replace some parts with onnx translation
     :param inline: inline local functions
     :return: the output of the selected exporter, usually a structure including
@@ -62,7 +62,7 @@ def to_onnx(
         )
 
     Some examples using control flows are available in
-    :func:`onnx_diagnostic.export.control_flow.loop_for_onnx` or
+    :func:`onnx_diagnostic.export.control_flow_onnx.loop_for_onnx` or
     :class:`onnx_diagnostic.export.onnx_plug.EagerDirectReplacementWithOnnx`.
     """
     if exporter_kwargs and "inline" in exporter_kwargs:
@@ -86,7 +86,7 @@ def to_onnx(
             from experimental_experiment.torch_interpreter import Dispatcher
 
             if use_control_flow_dispatcher:
-                from .control_flow import create_global_dispatcher
+                from .control_flow_onnx import create_global_dispatcher
 
                 control_flow_dispatcher = create_global_dispatcher()
             else:
