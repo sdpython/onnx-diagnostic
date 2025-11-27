@@ -32,6 +32,7 @@ if patch_qwen2_5:
         cu_seqlens,
         scaling: float = 0.11180339887498948,
         num_heads: int = 16,
+        itype: int = onnx.TensorProto.FLOAT,
     ):
         to_3d_shape = op.Constant(value_ints=[0, 0, -1])
         query_transposed = op.Transpose(query_states, perm=[0, 2, 1, 3])
@@ -43,7 +44,8 @@ if patch_qwen2_5:
         num_patches = op.Size(cu_seqlens) - 1
         seq_axis = op.Constant(value_ints=[1])
         seq_axis_int32 = op.Cast(seq_axis, to=onnx.TensorProto.INT32)
-        attn_output = op.Slice(value_3d, [0], [0], seq_axis)
+        # attn_output = op.Slice(value_3d, [0], [0], seq_axis)
+        seq_attn = op.SequenceEmpty(dtype=itype)
         for i_patch in range(num_patches):
             i_1d = op.Reshape(i_patch, [1])
             i_plus_1_1d = i_1d + 1
@@ -59,7 +61,9 @@ if patch_qwen2_5:
                 num_heads=num_heads,
                 scale=scaling,
             )
-            attn_output = op.Concat(attn_output, mha_output, axis=1)
+            # attn_output = op.Concat(attn_output, mha_output, axis=1)
+            seq_attn = op.SequenceInsert(seq_attn, mha_output)
+        attn_output = op.ConcatFromSequence(seq_attn, axis=1)
         attn_output_4d = op.Reshape(attn_output, output_shape)
         return attn_output_4d
 
@@ -128,6 +132,7 @@ if patch_qwen2_5:
         cu_seqlens: torch.Tensor,  # F7su19
         scaling: float = 0,
         num_heads: int = 16,
+        itype: int = onnx.TensorProto.FLOAT,
     ) -> torch.Tensor:
         lengths = cu_seqlens[1:] - cu_seqlens[:-1]
         splits = [
@@ -162,7 +167,7 @@ if patch_qwen2_5:
         _add_com_microsoft_opset(PackedAttention.to_function_proto()),
         n_inputs=4,
         n_outputs=1,
-        kwargs=dict(scaling=0.11180339887498948, num_heads=16),
+        kwargs=dict(scaling=0.11180339887498948, num_heads=16, itype=onnx.TensorProto.FLOAT),
         name="qwen_sdpa_attention_packed",
     )
     PLUGS.append(qwen_sdpa_attention_packed_versatile)
@@ -177,7 +182,7 @@ if patch_qwen2_5:
         _add_com_microsoft_opset(LoopMHAAttention.to_function_proto()),
         n_inputs=4,
         n_outputs=1,
-        kwargs=dict(scaling=0.11180339887498948, num_heads=16),
+        kwargs=dict(scaling=0.11180339887498948, num_heads=16, itype=onnx.TensorProto.FLOAT),
         name="qwen_sdpa_attention_loopmha",
     )
     PLUGS.append(qwen_sdpa_attention_loopmha_versatile)
@@ -561,6 +566,15 @@ if patch_qwen2_5:
                         cu_seqlens,
                         self.scaling,
                         self.num_heads,
+                        (
+                            onnx.TensorProto.FLOAT
+                            if query_states.dtype == torch.float32
+                            else (
+                                onnx.TensorProto.FLOAT16
+                                if query_states.dtype == torch.float16
+                                else onnx.TensorProto.BFLOAT16
+                            )
+                        ),
                     )
 
                     # to rewrite later with a for loop
