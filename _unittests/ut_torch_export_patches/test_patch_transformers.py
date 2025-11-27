@@ -586,9 +586,9 @@ class TestPatchPatchTransformers(ExtTestCase):
         )
 
         inputs = (
-            torch.rand((1, 16, 1292, 80), dtype=torch.float16).to("cuda"),
-            torch.rand((1, 16, 1292, 80), dtype=torch.float16).to("cuda"),
-            torch.rand((1, 16, 1292, 80), dtype=torch.float16).to("cuda"),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
             torch.tensor(
                 [
                     0,
@@ -619,7 +619,7 @@ class TestPatchPatchTransformers(ExtTestCase):
                     1292,
                 ],
                 dtype=torch.int64,
-            ).to("cuda"),
+            ),
         )
 
         results = qwen_sdpa_attention_loopmha_versatile.verify(
