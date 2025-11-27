@@ -626,6 +626,7 @@ class TestPatchPatchTransformers(ExtTestCase):
             *inputs,
             scaling=0.5,
             num_heads=16,
+            itype=onnx.TensorProto.FLOAT16,
             dump_onnx_model=self.get_dump_file(
                 "test_plug_packed_multi_head_attention_qwen25_loopmha.onnx"
             ),
@@ -636,7 +637,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertLess(results.diffs[0]["abs"], 0.01)
 
         results = qwen_sdpa_attention_loopmha_versatile.verify(
-            *inputs, scaling=0.11180339887498948, num_heads=16
+            *inputs, scaling=0.11180339887498948, num_heads=16, itype=onnx.TensorProto.FLOAT16
         )
         self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
         self.assertEqual(len(results.eager_outputs), len(results.diffs))
