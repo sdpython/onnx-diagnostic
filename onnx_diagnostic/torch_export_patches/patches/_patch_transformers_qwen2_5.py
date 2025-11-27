@@ -43,7 +43,11 @@ if patch_qwen2_5:
         num_patches = op.Size(cu_seqlens) - 1
         seq_axis = op.Constant(value_ints=[1])
         seq_axis_int32 = op.Cast(seq_axis, to=onnx.TensorProto.INT32)
-        attn_output = op.Slice(value_3d, [0], [0], seq_axis)
+        # attn_output = op.Slice(value_3d, [0], [0], seq_axis)
+        # SequenceEmpty needs dtype to be filled but it should be possible
+        # to leave it empty and just ensure that all tensors stored
+        # in the sequence share the same type.
+        seq_attn = op.SequenceEmpty()  # dtype=onnx.TensorProto.FLOAT16)
         for i_patch in range(num_patches):
             i_1d = op.Reshape(i_patch, [1])
             i_plus_1_1d = i_1d + 1
@@ -59,7 +63,9 @@ if patch_qwen2_5:
                 num_heads=num_heads,
                 scale=scaling,
             )
-            attn_output = op.Concat(attn_output, mha_output, axis=1)
+            # attn_output = op.Concat(attn_output, mha_output, axis=1)
+            seq_attn = op.SequenceInsert(seq_attn, mha_output)
+        attn_output = op.ConcatFromSequence(seq_attn, axis=1)
         attn_output_4d = op.Reshape(attn_output, output_shape)
         return attn_output_4d
 
