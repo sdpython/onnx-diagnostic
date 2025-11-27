@@ -159,7 +159,9 @@ class MiniOnnxBuilder:
         """
         if not tensors:
             # empty list
-            self.nodes.append(oh.make_node("SequenceEmpty", [], [name]))
+            self.nodes.append(
+                oh.make_node("SequenceEmpty", [], [name], dtype=TensorProto.FLOAT)
+            )
             tensor_type_proto = oh.make_tensor_type_proto(
                 elem_type=TensorProto.FLOAT, shape=None
             )

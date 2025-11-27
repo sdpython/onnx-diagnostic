@@ -265,7 +265,17 @@ def convert_custom_loop_into_onnx(
         nodes, graph.name, inputs, graph_outputs, graph.initializer, graph.sparse_initializer
     )
 
-    sequences = [g.op.SequenceEmpty() for _ in outputs]
+    itypes = [
+        graph.output[i].type.sequence_type.elem_type.tensor_type.elem_type
+        for i in range(1, len(graph.output))
+    ]
+    assert len(outputs) == len(
+        itypes
+    ), f"Length mismatch between outputs={outputs} and graph.output={graph.output}"
+    assert (
+        0 not in itypes
+    ), f"Undefined types are not allowed in itype={itypes}, graph.output={graph.output}"
+    sequences = [g.op.SequenceEmpty(dtype=itype) for itype in itypes]
 
     outloop = [g.unique_name(f"loop_for_onnx{i}") for i in range(len(sequences))]
 
@@ -285,8 +295,10 @@ def convert_custom_loop_into_onnx(
     ]
     if not sts:
         for i, o in enumerate(outputs):
-            g.set_type(o, graph.output[i].type.tensor_type.elem_type)
-            g.set_rank(o, len(graph.output[i].type.tensor_type.shape.dims))
+            g.set_type(o, graph.output[i].type.sequence_type.elem_type.tensor_type.elem_type)
+            g.set_rank(
+                o, len(graph.output[i].type.sequence_type.elem_type.tensor_type.shape.dims)
+            )
     return outputs if len(outputs) > 1 else outputs[0]
 
 
