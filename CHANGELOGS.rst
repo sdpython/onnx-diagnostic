@@ -4,7 +4,7 @@ Change Logs
 0.8.3
 +++++
 
-* :pr:`325`: adds plug for LoopMHA
+* :pr:`325`: adds plug for LoopMHA, extends the unit test to measure the discrepancies
 * :pr:`324`: supports FunctionProto with arguments in OnnxruntimeEvaluator
 * :pr:`323`: drops torch 2.8 on CI
 * :pr:`322`: support rerunning onnx kernels with torch intermediate results in side-by-side
