@@ -8,8 +8,10 @@ from onnx_diagnostic.ext_test_case import (
     ignore_errors,
     requires_cuda,
 )
+from onnx_diagnostic.helpers.rt_helper import make_feeds
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator, OnnxruntimeEvaluator
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
+from onnx_diagnostic.torch_export_patches.patches.patch_transformers import patch_qwen2_5
 from onnx_diagnostic.torch_onnx.sbs import run_aligned
 from onnx_diagnostic.torch_onnx.sbs_dataclasses import RunAlignedRecord, ReplayConfiguration
 from onnx_diagnostic.export.api import to_onnx
@@ -670,6 +672,124 @@ class TestSideBySide(ExtTestCase):
             [-1, -1, -1, -1, -1, 0, 1, 2], df["onnx_id_node"].fillna(-10).tolist()
         )
         self.clean_dump()
+
+    @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
+    @hide_stdout()
+    def test_sbs_with_loops(self):
+        import torch
+        from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+            PLUGS_Qwen25,
+        )
+        from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
+            qwen_sdpa_attention_loopmha_versatile,
+        )
+
+        class Model(torch.nn.Module):
+            def forward(self, query, key, value, seq_lens):
+                rg1 = torch.arange(4, dtype=torch.int32).unsqueeze(0)
+                rg0 = torch.arange(4, dtype=torch.int32).unsqueeze(1)
+                mask = (rg0 <= rg1).flatten().reshape((1, -1, 1, 1)).to(query.dtype)
+                qs = query * mask
+                ks = key * mask
+                vs = value * mask
+                attn_output = qwen_sdpa_attention_loopmha_versatile(
+                    qs,
+                    ks,
+                    vs,
+                    seq_lens,
+                    0.11,
+                    16,
+                    (
+                        onnx.TensorProto.FLOAT
+                        if query.dtype == torch.float32
+                        else (
+                            onnx.TensorProto.FLOAT16
+                            if query.dtype == torch.float16
+                            else onnx.TensorProto.BFLOAT16
+                        )
+                    ),
+                )
+                red = attn_output.mean(dim=-1, keepdim=True)
+                return attn_output - red
+
+        model = Model()
+        inputs = (
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.rand((1, 16, 1292, 80), dtype=torch.float16),
+            torch.tensor(
+                [
+                    0,
+                    64,
+                    128,
+                    192,
+                    256,
+                    304,
+                    368,
+                    432,
+                    496,
+                    560,
+                    608,
+                    672,
+                    736,
+                    800,
+                    864,
+                    912,
+                    976,
+                    1040,
+                    1104,
+                    1168,
+                    1216,
+                    1232,
+                    1248,
+                    1264,
+                    1280,
+                    1292,
+                ],
+                dtype=torch.int64,
+            ),
+        )
+        expected = model(*inputs)
+        ds = ({2: "seq_length"}, {2: "seq_length"}, {2: "seq_length"}, {0: "num_patches"})
+        onnx_file = self.get_dump_file("test_sbs_with_loops.onnx")
+        ep_file = self.get_dump_file("test_sbs_with_loops")
+        to_onnx(
+            model,
+            inputs,
+            dynamic_shapes=ds,
+            filename=onnx_file,
+            save_ep=(ep_file, 2**28),
+            exporter="custom",
+            onnx_plugs=PLUGS_Qwen25,
+            target_opset=22,
+        )
+        input_file = ep_file + ".input.pt"
+        ep_file = ep_file + ".ep.pt2"
+        self.assertExists(onnx_file)
+        self.assertExists(ep_file)
+        self.assertExists(input_file)
+        sess = self.check_ort(onnx_file)
+        input_names = [i.name for i in sess.get_inputs()]
+        feeds = make_feeds(input_names, inputs, use_numpy=True)
+        got = sess.run(None, feeds)
+        self.assertEqualArray(expected, got[0], atol=1e-3)
+        # sbs
+        ep = torch.export.load(ep_file)
+        onx = onnx.load(onnx_file)
+        kwargs = make_feeds(input_names, inputs, use_numpy=False)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=kwargs,
+                run_cls=OnnxruntimeEvaluator,
+                verbose=11,
+                use_tensor=True,
+            ),
+        )
+        df = pandas.DataFrame(list(results)).dropna(axis=1, how="all")
+        df.to_excel(self.get_dump_file("test_sbs_with_loops.xlsx"))
+        # self.clean_dump()
 
 
 if __name__ == "__main__":

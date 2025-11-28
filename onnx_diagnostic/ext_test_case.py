@@ -1111,7 +1111,10 @@ class ExtTestCase(unittest.TestCase):
     ) -> "onnxruntime.InferenceSession":  # noqa: F821
         from onnxruntime import InferenceSession
 
-        return InferenceSession(onx.SerializeToString(), providers=["CPUExecutionProvider"])
+        return InferenceSession(
+            onx if isinstance(onx, str) else onx.SerializeToString(),
+            providers=["CPUExecutionProvider"],
+        )
 
     def assertRaise(self, fct: Callable, exc_type: type[Exception], msg: Optional[str] = None):
         """In the name"""
