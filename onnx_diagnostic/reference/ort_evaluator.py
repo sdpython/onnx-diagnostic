@@ -479,8 +479,11 @@ class OnnxruntimeEvaluator:
         used by a subgraph.
         """
         hidden = set()
-        memo = set(i.name for i in graph.initializer)
-        memo |= set(i.name for i in graph.sparse_initializer)
+        memo = (
+            {i.name for i in graph.initializer}
+            | {i.name for i in graph.sparse_initializer}
+            | {i.name for i in graph.input}
+        )
         for node in graph.node:
             for i in node.input:
                 if i not in memo:
@@ -627,6 +630,10 @@ class OnnxruntimeEvaluator:
                 unique_names.add(i)
                 value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(v.dtype), v.shape)
                 vinputs.append(value)
+        assert len(reduced_set & set(context)) == len(reduced_set), (
+            f"Missing hidden inputs {sorted(reduced_set)} from context={sorted(context)} "
+            f"(len(inputs)={len([i for i in inputs if i])}) for node {pretty_onnx(node)}"
+        )
         return vinputs
 
     def _get_sess_if(
