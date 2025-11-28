@@ -714,7 +714,7 @@ class OnnxruntimeEvaluator:
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         assert not any(type(v) is list for v in outputs), (
             f"One output type is a list, this should not be allowed, "
-            f"node.op_type={node.op_type}, feeds={string_type(feeds,with_shape_type=True)}"
+            f"node.op_type={node.op_type}, feeds={string_type(feeds, with_shape=True)}"
         )
         return outputs
 
