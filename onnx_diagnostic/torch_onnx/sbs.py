@@ -9,6 +9,7 @@ from ..helpers import string_type, string_diff, max_diff, flatten_object
 from ..helpers.onnx_helper import pretty_onnx
 from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor, torch_dtype_to_onnx_dtype
 from ..helpers.torch_fx_graph_helper import prepare_args_kwargs, run_fx_node
+from ..reference.ort_evaluator import OnnxList
 from .sbs_dataclasses import (
     ReplayConfiguration,
     RunAlignedRecord,
@@ -26,11 +27,11 @@ def _check_tensor_(use_tensor, name, obj, flip_type=False):
             if isinstance(obj, torch.Tensor):
                 obj = to_numpy(obj)
 
-    assert not use_tensor or isinstance(obj, torch.Tensor), (
+    assert not use_tensor or isinstance(obj, (torch.Tensor, OnnxList)), (
         f"Unexpected type {type(obj)} for {name!r}. "
         f"use_tensor is True so torch.Tensor is expected."
     )
-    assert use_tensor or isinstance(obj, np.ndarray), (
+    assert use_tensor or isinstance(obj, (np.ndarray, OnnxList)), (
         f"Unexpected type {type(obj)} for {name!r}. "
         f"use_tensor is False so np.array is expected."
     )

@@ -81,6 +81,10 @@ class OnnxList(list):
             ]
         )
 
+    def clone(self) -> "OnnxList":
+        "Clone (torch)."
+        return [t.clone() for t in self]
+
 
 class OnnxruntimeEvaluator:
     """
@@ -708,6 +712,10 @@ class OnnxruntimeEvaluator:
 
         outputs = list(sess.run(None, feeds))
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
+        assert not any(type(v) is list for v in outputs), (
+            f"One output type is a list, this should not be allowed, "
+            f"node.op_type={node.op_type}, feeds={string_type(feeds,with_shape_type=True)}"
+        )
         return outputs
 
     def _run_if(
@@ -783,6 +791,11 @@ class OnnxruntimeEvaluator:
         self, node: NodeProto, inputs: List[Any], results: Dict[str, Any]
     ) -> List[Any]:
         """Runs a node Scan."""
+        assert not any(type(i) is list for i in inputs), (
+            f"One input is a list but it should an OnnxList, "
+            f"node.op_type={node.op_type!r}, node.input={node.input}, "
+            f"inputs={string_type(inputs, with_shape=True)}"
+        )
         feeds = dict(zip(node.input, inputs))
         feeds.update(results)
         name = "body"
