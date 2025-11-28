@@ -1,10 +1,11 @@
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
 from onnx_diagnostic.export.control_flow import loop_for
 
 
 class TestControlFlow(ExtTestCase):
+    @requires_torch("2.9.99")
     def test_loop_for(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
