@@ -364,7 +364,7 @@ def loop_for_onnx(
         import torch
         import onnxruntime
         from onnx_diagnostic.export.api import to_onnx
-        from onnx_diagnostic.export.control_flow import loop_for_onnx
+        from onnx_diagnostic.export.control_flow_onnx import loop_for_onnx
 
 
         class Model(torch.nn.Module):
@@ -410,7 +410,7 @@ def loop_for_onnx(
         import torch
         import onnxruntime
         from onnx_diagnostic.export.api import to_onnx
-        from onnx_diagnostic.export.control_flow import loop_for_onnx
+        from onnx_diagnostic.export.control_flow_onnx import loop_for_onnx
 
 
         class Model(torch.nn.Module):
@@ -457,7 +457,7 @@ def loop_for_onnx(
         import torch
         import onnxruntime
         from onnx_diagnostic.export.api import to_onnx
-        from onnx_diagnostic.export.control_flow import loop_for_onnx
+        from onnx_diagnostic.export.control_flow_onnx import loop_for_onnx
 
 
         class Model(torch.nn.Module):
