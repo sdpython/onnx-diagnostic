@@ -4,6 +4,7 @@ Change Logs
 0.8.3
 +++++
 
+* :pr:`330`: fixes access rope_parameters for ``transformers>=5``
 * :pr:`329`: supports lists with OnnxruntimeEvaluator
 * :pr:`326`: use ConcatFromSequence in LoopMHA with the loop
 * :pr:`325`: adds plug for LoopMHA, extends the unit tests to measure the discrepancies

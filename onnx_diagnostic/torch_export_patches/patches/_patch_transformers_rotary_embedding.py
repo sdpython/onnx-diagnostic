@@ -48,16 +48,26 @@ def patched__compute_dynamic_ntk_parameters(
         max_position_embeddings = rope_kwargs["max_position_embeddings"]
         factor = rope_kwargs["factor"]
     elif config is not None:
-        base = config.rope_theta
-        partial_rotary_factor = (
-            config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
-        )
+        if hasattr(config, "rope_theta"):
+            # transformers<5
+            base = config.rope_theta
+            partial_rotary_factor = (
+                config.partial_rotary_factor
+                if hasattr(config, "partial_rotary_factor")
+                else 1.0
+            )
+            factor = config.rope_scaling["factor"]
+        else:
+            print("-----")
+            print(config)
+            base = config.rope_parameters["rope_theta"]
+            partial_rotary_factor = config.rope_parameters["partial_rotary_factor"]
+            factor = config.rope_parameters["factor"]
         head_dim = getattr(
             config, "head_dim", config.hidden_size // config.num_attention_heads
         )
         dim = int(head_dim * partial_rotary_factor)
         max_position_embeddings = config.max_position_embeddings
-        factor = config.rope_scaling["factor"]
 
     attention_factor = 1.0  # Unused in this type of RoPE
 
