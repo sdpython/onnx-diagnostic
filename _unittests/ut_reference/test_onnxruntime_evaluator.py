@@ -433,8 +433,9 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         got = ev.run(None, feeds)
         self.assertEqual((6,), got[0].shape)
         self.assertEqualArray(
-            np.array([1.0, 1.0, 2.0, 1.0, 2.0, 3.0], dtype=np.float32), got[0]
+            torch.tensor([1.0, 1.0, 2.0, 1.0, 2.0, 3.0], dtype=torch.float32), got[0]
         )
+        self.assertIsInstance(got[0], torch.Tensor)
 
 
 if __name__ == "__main__":

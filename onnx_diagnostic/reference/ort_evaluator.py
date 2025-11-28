@@ -23,7 +23,7 @@ from ..helpers.onnx_helper import (
     to_array_extended,
     np_dtype_to_tensor_dtype,
 )
-from ..helpers.torch_helper import onnx_dtype_to_torch_dtype
+from ..helpers.torch_helper import onnx_dtype_to_torch_dtype, torch_dtype_to_onnx_dtype
 from ..helpers.ort_session import (
     InferenceSessionForTorch,
     InferenceSessionForNumpy,
@@ -48,22 +48,38 @@ class OnnxList(list):
             self.dtype = onnx_dtype_to_torch_dtype(itype)
         else:
             assert itype, "The list cannot be created with an empty list."
-            self.itype = np_dtype_to_tensor_dtype(itype[0].dtype)
+            self.itype = (
+                np_dtype_to_tensor_dtype(itype[0].dtype)
+                if isinstance(itype[0], np.ndarray)
+                else torch_dtype_to_onnx_dtype(itype[0].dtype)
+            )
             self.extend(itype)
             self.dtype = itype[0].dtype
         self.shape = "OnnxList"
 
     def get_device(self):
+        "Returns the device of the first tensor."
         assert len(self) > 0, "Cannot access the device for an empty list."
         return self[0].get_device() if hasattr(self[0], "get_device") else -1
 
     def numpy(self):
+        "Creates a new list with all tensors on numpy or self it is already the case."
         if all(isinstance(v, np.ndarray) for v in self):
             return self
-        res = OnnxList()
-        for v in self:
-            res.append(v.detach().cpu().numpy())
-        return res
+        return OnnxList([v.detach().cpu().numpy() for v in self])
+
+    def to(self, tensor_like) -> "OnnxList":
+        "Creates a new list with all tensors on numpy or pytorch depending on `tensor_like`."
+        if isinstance(tensor_like, np.ndarray):
+            return self
+        import torch
+
+        return OnnxList(
+            [
+                torch.from_numpy(t).to(tensor_like.device) if isinstance(t, np.ndarray) else t
+                for t in self
+            ]
+        )
 
 
 class OnnxruntimeEvaluator:
@@ -245,7 +261,7 @@ class OnnxruntimeEvaluator:
         if isinstance(a, (str, int, float)):
             return a
         if isinstance(a, OnnxList):
-            return f"#{len(a)}[]"
+            return string_type(a)
         device = f"D{a.get_device()}:" if hasattr(a, "detach") else ""
         if hasattr(a, "shape"):
             prefix = "A:" if hasattr(a, "astype") else "T:"
@@ -683,8 +699,12 @@ class OnnxruntimeEvaluator:
 
         if node.op_type[0] == "C":
             if node.op_type == "ConcatFromSequence":
-                #                sess._run_init(feeds   )
-                return list(sess.sess.run(None, self.feeds_to_numpy(feeds)))
+                res = sess.sess.run(None, self.feeds_to_numpy(feeds))  # type: ignore[union-attr]
+                if isinstance(inputs[0][0], np.ndarray):
+                    return list(res)
+                import torch
+
+                return [torch.from_numpy(r).to(inputs[0][0].device) for r in res]
 
         outputs = list(sess.run(None, feeds))
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
@@ -778,9 +798,12 @@ class OnnxruntimeEvaluator:
         feeds = {name: results[name] for name in sess.input_names}
         if node.op_type == "Loop" and any(isinstance(v, OnnxList) for v in feeds.values()):
             # This operator uses sequence. onnxruntime does not play well with sequence.
-            sess._run_init(feeds)
-            outputs = sess.sess_.sess.run(None, self.feeds_to_numpy(feeds))
-            return [(OnnxList(v) if isinstance(v, list) else v) for v in outputs]
+            sess._run_init(feeds)  # type: ignore[union-attr]
+            outputs = sess.sess_.sess.run(None, self.feeds_to_numpy(feeds))  # type: ignore[union-attr]
+            return [
+                (OnnxList(v).to(feeds[node.input[0]]) if isinstance(v, list) else v)
+                for v in outputs
+            ]
 
         outputs = sess.run(None, feeds)
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
