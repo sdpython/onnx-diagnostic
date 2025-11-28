@@ -108,7 +108,10 @@ class _InferenceSession:
                     session_options,
                     providers=providers,
                 )
-            except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
+            except (
+                onnxruntime.capi.onnxruntime_pybind11_state.Fail,
+                onnxruntime.capi.onnxruntime_pybind11_state.InvalidGraph,
+            ) as e:
                 if isinstance(sess, onnx.ModelProto):
                     debug_path = "_debug_InferenceSession_last_failure.onnx"
                     onnx.save(
