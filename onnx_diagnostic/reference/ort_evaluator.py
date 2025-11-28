@@ -6,6 +6,7 @@ from onnx import (
     FunctionProto,
     ModelProto,
     NodeProto,
+    TensorProto,
     TypeProto,
     ValueInfoProto,
     helper as oh,
@@ -16,7 +17,13 @@ from onnx import (
 from onnx.defs import onnx_opset_version
 import onnxruntime
 from ..helpers import string_type
-from ..helpers.onnx_helper import pretty_onnx, dtype_to_tensor_dtype, to_array_extended
+from ..helpers.onnx_helper import (
+    pretty_onnx,
+    dtype_to_tensor_dtype,
+    to_array_extended,
+    np_dtype_to_tensor_dtype,
+)
+from ..helpers.torch_helper import onnx_dtype_to_torch_dtype
 from ..helpers.ort_session import (
     InferenceSessionForTorch,
     InferenceSessionForNumpy,
@@ -29,6 +36,34 @@ from .evaluator import ExtendedReferenceEvaluator
 
 PROTO = (FunctionProto, ModelProto, GraphProto, NodeProto)
 Proto = Union[FunctionProto, ModelProto, GraphProto, NodeProto]
+
+
+class OnnxList(list):
+    """Defines a list for the runtime."""
+
+    def __init__(self, itype: Union[list, int]):
+        super().__init__()
+        if isinstance(itype, int):
+            self.itype = itype
+            self.dtype = onnx_dtype_to_torch_dtype(itype)
+        else:
+            assert itype, "The list cannot be created with an empty list."
+            self.itype = np_dtype_to_tensor_dtype(itype[0].dtype)
+            self.extend(itype)
+            self.dtype = itype[0].dtype
+        self.shape = "OnnxList"
+
+    def get_device(self):
+        assert len(self) > 0, "Cannot access the device for an empty list."
+        return self[0].get_device() if hasattr(self[0], "get_device") else -1
+
+    def numpy(self):
+        if all(isinstance(v, np.ndarray) for v in self):
+            return self
+        res = OnnxList()
+        for v in self:
+            res.append(v.detach().cpu().numpy())
+        return res
 
 
 class OnnxruntimeEvaluator:
@@ -209,6 +244,8 @@ class OnnxruntimeEvaluator:
     def _log_arg(self, a: Any) -> Any:
         if isinstance(a, (str, int, float)):
             return a
+        if isinstance(a, OnnxList):
+            return f"#{len(a)}[]"
         device = f"D{a.get_device()}:" if hasattr(a, "detach") else ""
         if hasattr(a, "shape"):
             prefix = "A:" if hasattr(a, "astype") else "T:"
@@ -230,6 +267,12 @@ class OnnxruntimeEvaluator:
 
     def _is_local_function(self, node: NodeProto) -> bool:
         return (node.domain, node.op_type) in self.local_functions
+
+    def _run_init(self, feed_inputs):
+        if self.sess_ is None:
+            assert self.proto, "self.proto is empty"
+            _, self.sess_ = self._get_sess(self.proto, list(feed_inputs.values()))
+        return self.sess_
 
     def run(
         self,
@@ -254,9 +297,7 @@ class OnnxruntimeEvaluator:
         """
         if self.rt_nodes_ is None:
             # runs a whole
-            if self.sess_ is None:
-                assert self.proto, "self.proto is empty"
-                _, self.sess_ = self._get_sess(self.proto, list(feed_inputs.values()))
+            self._run_init(feed_inputs)
             assert self.sess_, "mypy not happy"
             return self.sess_.run(outputs, feed_inputs)
         if outputs is None:
@@ -283,7 +324,7 @@ class OnnxruntimeEvaluator:
             if node.op_type == "If" and node.domain == "":
                 outputs = self._run_if(node, inputs, results)
             elif node.op_type in {"Scan", "Loop"} and node.domain == "":
-                outputs = self._run_scan(node, inputs, results)
+                outputs = self._run_scan_or_loop(node, inputs, results)
             elif self._is_local_function(node):
                 outputs = self._run_local(node, inputs, results)
             else:
@@ -472,6 +513,18 @@ class OnnxruntimeEvaluator:
                     )
                 ]
                 prenodes = []  # type: ignore[var-annotated]
+            elif node.op_type == "ConcatFromSequence" and node.domain == "":
+                # We force the type to be a boolean.
+                vinputs = [
+                    oh.make_value_info(
+                        node.input[0],
+                        type_proto=oh.make_sequence_type_proto(
+                            oh.make_tensor_type_proto(elem_type=inputs[0].itype, shape=None)
+                        ),
+                    )
+                ]
+                voutputs = [oh.make_tensor_value_info(node.output[0], inputs[0].itype, None)]
+                prenodes = []  # type: ignore[var-annotated]
             else:
                 unique_names = set()
                 vinputs = []
@@ -535,7 +588,17 @@ class OnnxruntimeEvaluator:
             if i == "" or i in unique_names:
                 continue
             unique_names.add(i)
-            value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(it.dtype), it.shape)
+            if isinstance(it, OnnxList):
+                value = oh.make_value_info(
+                    i,
+                    type_proto=oh.make_sequence_type_proto(
+                        oh.make_tensor_type_proto(
+                            elem_type=dtype_to_tensor_dtype(it.dtype), shape=None
+                        )
+                    ),
+                )
+            else:
+                value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(it.dtype), it.shape)
             vinputs.append(value)
 
         reduced_set = self._get_hidden_inputs(g)
@@ -592,6 +655,14 @@ class OnnxruntimeEvaluator:
 
     def _run(self, node: NodeProto, inputs: List[Any], results: Dict[str, Any]) -> List[Any]:
         """Runs a node."""
+        if node.op_type[0] == "S":
+            if node.op_type == "SequenceEmpty":
+                dtype = TensorProto.FLOAT
+                for att in node.attribute:
+                    if att.name == "dtype":
+                        dtype = att.i
+                return [OnnxList(itype=dtype)]
+
         types = [(None if a is None else (a.dtype, a.shape)) for a in inputs]
         key = (id(node), *types)
         if key in self._cache:
@@ -609,6 +680,12 @@ class OnnxruntimeEvaluator:
                 continue
             feeds[i] = val
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
+
+        if node.op_type[0] == "C":
+            if node.op_type == "ConcatFromSequence":
+                #                sess._run_init(feeds   )
+                return list(sess.sess.run(None, self.feeds_to_numpy(feeds)))
+
         outputs = list(sess.run(None, feeds))
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs
@@ -636,7 +713,7 @@ class OnnxruntimeEvaluator:
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs
 
-    def _get_sess_scan(
+    def _get_sess_scan_or_loop(
         self, node: NodeProto, branch: str, inputs: List[Any], context: Dict[str, Any]
     ) -> Tuple[ModelProto, "OnnxruntimeEvaluator"]:
         g = None
@@ -671,7 +748,18 @@ class OnnxruntimeEvaluator:
         )
         return onx, sess
 
-    def _run_scan(
+    def feeds_to_numpy(self, feeds):
+        new_feeds = {}
+        for k, v in feeds.items():
+            if hasattr(v, "detach"):
+                new_feeds[k] = v.detach().cpu().numpy()
+            elif isinstance(v, OnnxList):
+                new_feeds[k] = v.numpy()
+            else:
+                new_feeds[k] = v
+        return new_feeds
+
+    def _run_scan_or_loop(
         self, node: NodeProto, inputs: List[Any], results: Dict[str, Any]
     ) -> List[Any]:
         """Runs a node Scan."""
@@ -682,10 +770,18 @@ class OnnxruntimeEvaluator:
         if key in self._cache:
             sess = self._cache[key][1]
         else:
-            self._cache[key] = _onx, sess = self._get_sess_scan(node, name, inputs, results)
+            self._cache[key] = _onx, sess = self._get_sess_scan_or_loop(
+                node, name, inputs, results
+            )
 
         assert hasattr(sess, "run"), f"Missing method run for type {type(sess)}"
         feeds = {name: results[name] for name in sess.input_names}
+        if node.op_type == "Loop" and any(isinstance(v, OnnxList) for v in feeds.values()):
+            # This operator uses sequence. onnxruntime does not play well with sequence.
+            sess._run_init(feeds)
+            outputs = sess.sess_.sess.run(None, self.feeds_to_numpy(feeds))
+            return [(OnnxList(v) if isinstance(v, list) else v) for v in outputs]
+
         outputs = sess.run(None, feeds)
         assert isinstance(outputs, list), f"Unexpected type for outputs {type(outputs)}"
         return outputs

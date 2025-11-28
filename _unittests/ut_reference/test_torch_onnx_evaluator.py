@@ -1123,7 +1123,9 @@ class TestTorchOnnxEvaluator(ExtTestCase):
                         new_axis=0,
                     ),
                 ],
-            )
+            ),
+            ir_version=10,
+            opset_imports=[oh.make_opsetid("", 22)],
         )
         self._finalize_test(
             model, torch.tensor(5, dtype=torch.int64), torch.tensor(1, dtype=torch.bool)

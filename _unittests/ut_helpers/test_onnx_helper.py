@@ -402,7 +402,9 @@ class TestOnnxHelper(ExtTestCase):
                         new_axis=0,
                     ),
                 ],
-            )
+            ),
+            ir_version=10,
+            opset_imports=[oh.make_opsetid("", 22)],
         )
         res = list(enumerate_results(model, "slice_start", verbose=2))
         self.assertEqual(len(res), 2)
