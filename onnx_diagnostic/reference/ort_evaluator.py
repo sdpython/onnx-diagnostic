@@ -83,7 +83,7 @@ class OnnxList(list):
 
     def clone(self) -> "OnnxList":
         "Clone (torch)."
-        return OnnxList([t.clone() for t in self])
+        return OnnxList([t.clone() for t in self]) if len(self) > 0 else OnnxList(self.itype)
 
 
 class OnnxruntimeEvaluator:
