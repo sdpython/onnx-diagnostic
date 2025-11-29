@@ -9,7 +9,7 @@ from ..helpers import string_type, string_diff, max_diff, flatten_object
 from ..helpers.onnx_helper import pretty_onnx
 from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor, torch_dtype_to_onnx_dtype
 from ..helpers.torch_fx_graph_helper import prepare_args_kwargs, run_fx_node
-from ..reference.ort_evaluator import OnnxList
+from ..reference.ort_evaluator import OnnxList, OnnxruntimeEvaluator
 from .sbs_dataclasses import (
     ReplayConfiguration,
     RunAlignedRecord,
@@ -176,10 +176,12 @@ def _loop_onnx_node(
 
     ref = run_cls(node, **run_cls_kwargs)
     # We need to clone because the runtime maybe using dlpack to create OrtValue
+    hidden_inputs = OnnxruntimeEvaluator._get_hidden_node_inputs(node)
+    all_inputs = [*node.input, *hidden_inputs] if hidden_inputs else node.input
     feeds = (
-        {k: onnx_results[k].clone() for k in node.input if k}
+        {k: onnx_results[k].clone() for k in all_inputs if k}
         if use_tensor
-        else {k: onnx_results[k].copy() for k in node.input if k}
+        else {k: onnx_results[k].copy() for k in all_inputs if k}
     )
     assert "" not in feeds, f"Unexpected feeds={string_type(feeds, **str_kws)}"
     if verbose > 1:

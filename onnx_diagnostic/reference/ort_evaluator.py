@@ -473,7 +473,7 @@ class OnnxruntimeEvaluator:
             yield node
 
     @classmethod
-    def _get_hidden_inputs(self, graph: GraphProto) -> Set[str]:
+    def _get_hidden_inputs(cls, graph: GraphProto) -> Set[str]:
         """
         Returns the hidden inputs (inputs coming from an upper context)
         used by a subgraph.
@@ -490,21 +490,21 @@ class OnnxruntimeEvaluator:
                     hidden.add(i)
             for att in node.attribute:
                 if att.type == AttributeProto.GRAPH and att.g:
-                    hid = self._get_hidden_inputs(att.g)
+                    hid = cls._get_hidden_inputs(att.g)
                     less = set(h for h in hid if h not in memo)
                     hidden |= less
             memo |= set(node.output)
         return hidden
 
     @classmethod
-    def _get_hidden_node_inputs(self, node: NodeProto) -> Set[str]:
+    def _get_hidden_node_inputs(cls, node: NodeProto) -> Set[str]:
         """Calls multiple _get_hidden_inputs on every attribute."""
         if node.op_type not in {"Loop", "Scan", "If"}:
             return set()
         hidden = set()
         for att in node.attribute:
             if att.type == AttributeProto.GRAPH:
-                hidden |= self._get_hidden_inputs(att.g)
+                hidden |= cls._get_hidden_inputs(att.g)
         return hidden - (hidden & set(node.input))
 
     def _get_sess(
