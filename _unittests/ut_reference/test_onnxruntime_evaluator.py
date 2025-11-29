@@ -20,6 +20,7 @@ except ImportError:
 
 
 TFLOAT = onnx.TensorProto.FLOAT
+TINT64 = onnx.TensorProto.INT64
 
 
 class TestOnnxruntimeEvaluator(ExtTestCase):
@@ -318,6 +319,123 @@ class TestOnnxruntimeEvaluator(ExtTestCase):
         )
         got = sess.run(None, feeds)
         self.assertEqualArray(expected, got[0], atol=1e-5)
+
+    @hide_stdout()
+    def test_ort_eval_loop_seq(self):
+        x = np.array([1, 2, 3, 4, 5]).astype(np.float32)
+        _mkv_ = oh.make_tensor_value_info
+        model = oh.make_model(
+            graph=oh.make_graph(
+                name="loop_test",
+                inputs=[
+                    oh.make_tensor_value_info("trip_count", TINT64, ["a"]),
+                    oh.make_tensor_value_info("cond", onnx.TensorProto.BOOL, []),
+                ],
+                outputs=[oh.make_tensor_value_info("res", TFLOAT, [])],
+                nodes=[
+                    oh.make_node("SequenceEmpty", [], ["seq_empty"], dtype=TFLOAT),
+                    oh.make_node(
+                        "Loop",
+                        inputs=["trip_count", "cond", "seq_empty"],
+                        outputs=["seq_res"],
+                        body=oh.make_graph(
+                            [
+                                oh.make_node(
+                                    "Identity", inputs=["cond_in"], outputs=["cond_out"]
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["x"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_x",
+                                        data_type=TFLOAT,
+                                        dims=x.shape,
+                                        vals=x.flatten().astype(float),
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["one"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_one",
+                                        data_type=TINT64,
+                                        dims=(),
+                                        vals=[1],
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["slice_start"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_zero",
+                                        data_type=TINT64,
+                                        dims=(1,),
+                                        vals=[0],
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Add", inputs=["iter_count", "one"], outputs=["end"]
+                                ),
+                                oh.make_node(
+                                    "Constant",
+                                    inputs=[],
+                                    outputs=["axes"],
+                                    value=oh.make_tensor(
+                                        name="const_tensor_axes",
+                                        data_type=TINT64,
+                                        dims=(1,),
+                                        vals=[0],
+                                    ),
+                                ),
+                                oh.make_node(
+                                    "Unsqueeze", inputs=["end", "axes"], outputs=["slice_end"]
+                                ),
+                                oh.make_node(
+                                    "Slice",
+                                    inputs=["x", "slice_start", "slice_end"],
+                                    outputs=["slice_out"],
+                                ),
+                                oh.make_node(
+                                    "SequenceInsert",
+                                    inputs=["seq_in", "slice_out"],
+                                    outputs=["seq_out"],
+                                ),
+                            ],
+                            "loop_body",
+                            [
+                                _mkv_("iter_count", TINT64, []),
+                                _mkv_("cond_in", onnx.TensorProto.BOOL, []),
+                                oh.make_tensor_sequence_value_info("seq_in", TFLOAT, None),
+                            ],
+                            [
+                                _mkv_("cond_out", onnx.TensorProto.BOOL, []),
+                                oh.make_tensor_sequence_value_info("seq_out", TFLOAT, None),
+                            ],
+                        ),
+                    ),
+                    oh.make_node(
+                        "ConcatFromSequence",
+                        inputs=["seq_res"],
+                        outputs=["res"],
+                        axis=0,
+                        new_axis=0,
+                    ),
+                ],
+            ),
+            ir_version=10,
+            opset_imports=[oh.make_opsetid("", 22)],
+        )
+        ev = OnnxruntimeEvaluator(model, verbose=10)
+        feeds = dict(trip_count=torch.tensor([3], dtype=torch.int64), cond=torch.tensor(True))
+        got = ev.run(None, feeds)
+        self.assertEqual((6,), got[0].shape)
+        self.assertEqualArray(
+            torch.tensor([1.0, 1.0, 2.0, 1.0, 2.0, 3.0], dtype=torch.float32), got[0]
+        )
+        self.assertIsInstance(got[0], torch.Tensor)
 
 
 if __name__ == "__main__":
