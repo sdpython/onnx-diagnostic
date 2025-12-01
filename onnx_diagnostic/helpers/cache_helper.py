@@ -80,7 +80,7 @@ def flatten_unflatten_for_dynamic_shapes(
     start = 0
     end = 0
     subtrees = []
-    for subspec in spec.children():
+    for subspec in (spec.children() if hasattr(spec, "children") else spec.children_specs):
         end += subspec.num_leaves
         value = subspec.unflatten(flat[start:end])
         value = flatten_unflatten_for_dynamic_shapes(
