@@ -1,5 +1,6 @@
 from typing import Dict, Set
 import onnx
+import onnx.numpy_helper as onh
 from .onnx_helper import onnx_dtype_name, pretty_onnx
 
 
@@ -42,6 +43,24 @@ def _make_node_label(node: onnx.NodeProto) -> str:
     if node.op_type == "Constant":
         els.extend([" -> ", node.output[0]])
     return "".join(els)
+
+
+def _make_edge_label(value_info: onnx.ValueInfoProto, multi_line: bool = False) -> str:
+    itype = value_info.type.tensor_type.elem_type
+    if itype == onnx.TensorProto.UNDEFINED:
+        return ""
+    shape = tuple(
+        d.dim_param if d.dim_param else d.dim_value
+        for d in value_info.type.tensor_type.shape.dim
+    )
+    res = [
+        str(a)
+        for a in [("?" if isinstance(s, str) and s.startswith("unk") else s) for s in shape]
+    ]
+    sshape = ",".join(res)
+    if multi_line and len(sshape) > 30:
+        sshape = ",\\n".join(res)
+    return f"{onnx_dtype_name(itype)}({sshape})"
 
 
 def to_dot(model: onnx.ModelProto) -> str:
@@ -103,19 +122,7 @@ def to_dot(model: onnx.ModelProto) -> str:
 
     edge_label = {}
     for val in model.graph.value_info:
-        itype = val.type.tensor_type.elem_type
-        if itype == onnx.TensorProto.UNDEFINED:
-            continue
-        shape = tuple(
-            d.dim_param if d.dim_param else d.dim_value for d in val.type.tensor_type.shape.dim
-        )
-        sshape = ",".join(
-            map(
-                str,
-                [("?" if isinstance(s, str) and s.startswith("unk") else s) for s in shape],
-            )
-        )
-        edge_label[val.name] = f"{onnx_dtype_name(itype)}({sshape})"
+        edge_label[val.name] = _make_edge_label(val, multi_line=True)
 
     rows = [
         "digraph {",
@@ -124,7 +131,7 @@ def to_dot(model: onnx.ModelProto) -> str:
             "ranksep=0.2, fontsize=8];"
         ),
         '  node [style="rounded,filled", color="#888888", fontcolor="#222222", shape=box];',
-        "  edge [arrowhead=vee, fontsize=6];",
+        "  edge [arrowhead=vee, fontsize=7, labeldistance=-5, labelangle=0];",
     ]
     inputs = list(model.graph.input)
     outputs = list(model.graph.output)
@@ -134,11 +141,23 @@ def to_dot(model: onnx.ModelProto) -> str:
     for inp in inputs:
         if not inp.name:
             continue
-        rows.append(f'  I_{_mkn(inp)} [label="{inp.name}", fillcolor="#aaeeaa"];')
+        lab = _make_edge_label(inp)
+        rows.append(f'  I_{_mkn(inp)} [label="{inp.name}\\n{lab}", fillcolor="#aaeeaa"];')
         name_to_ids[inp.name] = f"I_{_mkn(inp)}"
+        edge_label[inp.name] = _make_edge_label(inp, multi_line=True)
     for init in inits:
-        rows.append(f'  i_{_mkn(init)} [label="{init.name}", fillcolor="#cccc00"];')
+        shape = tuple(init.dims)
+        if len(shape) == 0 or (len(shape) == 1 and shape[0] < 10):
+            a = onh.to_array(init)
+            vals = f" = {a}" if len(shape) == 0 else f"\\n=[{', '.join([str(i) for i in a])}]"
+        else:
+            vals = ""
+        ls = f"{onnx_dtype_name(init.data_type)}({', '.join(map(str,shape))})"
+        rows.append(
+            f'  i_{_mkn(init)} [label="{init.name}\\n{ls}{vals}", fillcolor="#cccc00"];'
+        )
         name_to_ids[init.name] = f"i_{_mkn(init)}"
+        edge_label[init.name] = ls
     for node in nodes:
         color = op_type_colors.get(node.op_type, "#cccccc")
         label = _make_node_label(node)
@@ -179,7 +198,8 @@ def to_dot(model: onnx.ModelProto) -> str:
     for out in outputs:
         if not out.name:
             continue
-        rows.append(f'  O_{_mkn(out)} [label="{out.name}", fillcolor="#aaaaee"];')
+        lab = _make_edge_label(inp)
+        rows.append(f'  O_{_mkn(out)} [label="{out.name}\\n{lab}", fillcolor="#aaaaee"];')
         edge = name_to_ids[out.name], f"O_{_mkn(out)}"
         rows.append(f"  {edge[0]} -> {edge[1]};")
 

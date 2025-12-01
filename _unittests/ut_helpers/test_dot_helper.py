@@ -43,18 +43,18 @@ class TestDotHelper(ExtTestCase):
             digraph {
               graph [rankdir=TB, splines=true, overlap=false, nodesep=0.2, ranksep=0.2, fontsize=8];
               node [style="rounded,filled", color="#888888", fontcolor="#222222", shape=box];
-              edge [arrowhead=vee, fontsize=6];
-              I_0 [label="X", fillcolor="#aaeeaa"];
-              I_1 [label="W", fillcolor="#aaeeaa"];
-              I_2 [label="B", fillcolor="#aaeeaa"];
+              edge [arrowhead=vee, fontsize=7, labeldistance=-5, labelangle=0];
+              I_0 [label="X\\nFLOAT16(b,c,d)", fillcolor="#aaeeaa"];
+              I_1 [label="W\\nFLOAT16(d)", fillcolor="#aaeeaa"];
+              I_2 [label="B\\nFLOAT16(d)", fillcolor="#aaeeaa"];
               LayerNormalization_3 [label="LayerNormalization(., ., ., axis=-1)", fillcolor="#cccccc"];
               Add_4 [label="Add(., ., axis=-1)", fillcolor="#cccccc"];
-              I_0 -> LayerNormalization_3;
-              I_1 -> LayerNormalization_3;
-              I_2 -> LayerNormalization_3;
+              I_0 -> LayerNormalization_3 [label="FLOAT16(b,c,d)"];
+              I_1 -> LayerNormalization_3 [label="FLOAT16(d)"];
+              I_2 -> LayerNormalization_3 [label="FLOAT16(d)"];
               LayerNormalization_3 -> Add_4 [label="FLOAT16(b,c,d)"];
-              I_1 -> Add_4;
-              O_5 [label="Z", fillcolor="#aaaaee"];
+              I_1 -> Add_4 [label="FLOAT16(d)"];
+              O_5 [label="Z\\nFLOAT16(d)", fillcolor="#aaaaee"];
               Add_4 -> O_5;
             }
             """
