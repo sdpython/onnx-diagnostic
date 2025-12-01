@@ -1,4 +1,4 @@
-from typing import Set
+from typing import Dict, Set
 import onnx
 from .onnx_helper import onnx_dtype_name, pretty_onnx
 
@@ -83,7 +83,7 @@ def to_dot(model: onnx.ModelProto) -> str:
         dot = to_dot(em.model_proto)
         print("DOT-SECTION", dot)
     """
-    _unique = {}
+    _unique: Dict[int, int] = {}
 
     def _mkn(obj: object) -> int:
         id_obj = id(obj)
@@ -169,7 +169,7 @@ def to_dot(model: onnx.ModelProto) -> str:
                 if att.type == onnx.AttributeProto.GRAPH:
                     unique |= _get_hidden_inputs(att.g)
             for i in unique:
-                edge = name_to_ids[i], _mkn(node)
+                edge = name_to_ids[i], _mkn(node)  # type: ignore[assignment]
                 if edge in done:
                     continue
                 done.add(edge)
