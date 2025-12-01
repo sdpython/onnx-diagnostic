@@ -11,6 +11,77 @@ from typing import Any, Dict, List, Optional, Union
 from argparse import ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
 
 
+def get_parser_dot() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="dot",
+        description=textwrap.dedent(
+            """
+            Converts a model into a dot file dot can draw into a graph.
+            """
+        ),
+    )
+    parser.add_argument("input", type=str, help="onnx model to lighten")
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="",
+        type=str,
+        required=False,
+        help="dot model to output or empty to print out the result",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        type=int,
+        default=0,
+        required=False,
+        help="verbosity",
+    )
+    parser.add_argument(
+        "-r",
+        "--run",
+        default="",
+        required=False,
+        help="run dot, in that case, format must be given (svg, png)",
+    )
+    return parser
+
+
+def _cmd_dot(argv: List[Any]):
+    import subprocess
+    from .helpers.dot_helper import to_dot
+
+    parser = get_parser_dot()
+    args = parser.parse_args(argv[1:])
+    if args.verbose:
+        print(f"-- loads {args.input!r}")
+    onx = onnx.load(args.input, load_external_data=False)
+    if args.verbose:
+        print("-- converts into dot")
+    dot = to_dot(onx)
+    if args.output:
+        if args.verbose:
+            print(f"-- saves into {args.output}")
+        with open(args.output, "w") as f:
+            f.write(dot)
+    else:
+        print(dot)
+    if args.run:
+        assert args.output, "Cannot run dot without an output file."
+        cmds = ["dot", f"-T{args.run}", args.output, "-o", f"{args.output}.{args.run}"]
+        if args.verbose:
+            print(f"-- run {' '.join(cmds)}")
+        p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        res = p.communicate()
+        out, err = res
+        if out:
+            print("--")
+            print(out)
+        if err:
+            print("--")
+            print(err)
+
+
 def get_parser_lighten() -> ArgumentParser:
     parser = ArgumentParser(
         prog="lighten",
@@ -1412,6 +1483,7 @@ def get_main_parser() -> ArgumentParser:
 
             agg          - aggregates statistics from multiple files
             config       - prints a configuration for a model id
+            dot          - converts an onnx model into dot format
             exportsample - produces a code to export a model
             find         - find node consuming or producing a result
             lighten      - makes an onnx model lighter by removing the weights,
@@ -1428,6 +1500,7 @@ def get_main_parser() -> ArgumentParser:
         choices=[
             "agg",
             "config",
+            "dot",
             "exportsample",
             "find",
             "lighten",
@@ -1446,6 +1519,7 @@ def main(argv: Optional[List[Any]] = None):
     fcts = dict(
         agg=_cmd_agg,
         config=_cmd_config,
+        dot=_cmd_dot,
         exportsample=_cmd_export_sample,
         find=_cmd_find,
         lighten=_cmd_lighten,
@@ -1470,6 +1544,7 @@ def main(argv: Optional[List[Any]] = None):
             parsers = dict(
                 agg=get_parser_agg,
                 config=get_parser_config,
+                dot=get_parser_dot,
                 exportsample=lambda: get_parser_validate("exportsample"),  # type: ignore[operator]
                 find=get_parser_find,
                 lighten=get_parser_lighten,

@@ -153,15 +153,12 @@ def to_dot(model: onnx.ModelProto) -> str:
         shape = tuple(init.dims)
         if len(shape) == 0 or (len(shape) == 1 and shape[0] < 10):
             a = onh.to_array(init)
-            vals = f" = {a}" if len(shape) == 0 else f"\\n=[{', '.join([str(i) for i in a])}]"
             tiny_inits[init.name] = (
                 str(a) if len(shape) == 0 else f"[{', '.join([str(i) for i in a])}]"
             )
         else:
             ls = f"{onnx_dtype_name(init.data_type)}({', '.join(map(str,shape))})"
-            rows.append(
-                f'  i_{_mkn(init)} [label="{init.name}\\n{ls}{vals}", fillcolor="#cccc00"];'
-            )
+            rows.append(f'  i_{_mkn(init)} [label="{init.name}\\n{ls}", fillcolor="#cccc00"];')
             name_to_ids[init.name] = f"i_{_mkn(init)}"
             edge_label[init.name] = ls
     for node in nodes:
