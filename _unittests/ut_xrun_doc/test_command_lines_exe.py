@@ -162,6 +162,45 @@ class TestCommandLines(ExtTestCase):
         sdf = df[(df.ep_target == "placeholder") & (df.onnx_op_type == "initializer")]
         self.assertEqual(sdf.shape[0], 4)
 
+    @ignore_warnings(UserWarning)
+    @requires_transformers("4.53")
+    def test_i_parser_dot(self):
+        import torch
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super(Model, self).__init__()
+                self.fc1 = torch.nn.Linear(10, 32)  # input size 10 → hidden size 32
+                self.relu = torch.nn.ReLU()
+                self.fc2 = torch.nn.Linear(32, 1)  # hidden → output
+
+            def forward(self, x):
+                x = self.relu(self.fc1(x))
+                x = self.fc2(x)
+                return x
+
+        inputs = dict(x=torch.randn((5, 10)))
+        ds = dict(x={0: "batch"})
+        onnx_file = self.get_dump_file("test_i_parser_dot.model.onnx")
+        to_onnx(
+            Model(),
+            kwargs=inputs,
+            dynamic_shapes=ds,
+            exporter="custom",
+            filename=onnx_file,
+        )
+
+        output = self.get_dump_file("test_i_parser_dot.dot")
+        args = ["dot", onnx_file, "-v", "1", "-o", output]
+        if not self.unit_test_going():
+            args.extend(["--run", "svg"])
+
+        st = StringIO()
+        with redirect_stdout(st):
+            main(args)
+        text = st.getvalue()
+        print(text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -6,6 +6,7 @@ from onnx_diagnostic._command_lines_parser import (
     get_main_parser,
     get_parser_agg,
     get_parser_config,
+    get_parser_dot,
     get_parser_find,
     get_parser_lighten,
     get_parser_print,
@@ -23,6 +24,7 @@ class TestCommandLines(ExtTestCase):
             get_main_parser().print_help()
         text = st.getvalue()
         self.assertIn("lighten", text)
+        self.assertIn("dot", text)
 
     def test_parser_lighten(self):
         st = StringIO()
@@ -86,6 +88,13 @@ class TestCommandLines(ExtTestCase):
             get_parser_sbs().print_help()
         text = st.getvalue()
         self.assertIn("--onnx", text)
+
+    def test_parser_dot(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            get_parser_dot().print_help()
+        text = st.getvalue()
+        self.assertIn("--run", text)
 
 
 if __name__ == "__main__":
