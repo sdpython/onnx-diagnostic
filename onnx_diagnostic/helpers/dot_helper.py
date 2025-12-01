@@ -201,7 +201,7 @@ def to_dot(model: onnx.ModelProto) -> str:
     for out in outputs:
         if not out.name:
             continue
-        lab = _make_edge_label(inp)
+        lab = _make_edge_label(out)
         rows.append(f'  O_{_mkn(out)} [label="{out.name}\\n{lab}", fillcolor="#aaaaee"];')
         edge = name_to_ids[out.name], f"O_{_mkn(out)}"
         rows.append(f"  {edge[0]} -> {edge[1]};")
