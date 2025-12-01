@@ -2,7 +2,7 @@ import textwrap
 import unittest
 import onnx
 import onnx.helper as oh
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
 from onnx_diagnostic.helpers.dot_helper import to_dot
 from onnx_diagnostic.export.api import to_onnx
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -62,6 +62,7 @@ class TestDotHelper(ExtTestCase):
         self.maxDiff = None
         self.assertEqual(expected.strip("\n "), dot.strip("\n "))
 
+    @requires_transformers("4.57")
     def test_dot_plot_tiny(self):
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM")
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]

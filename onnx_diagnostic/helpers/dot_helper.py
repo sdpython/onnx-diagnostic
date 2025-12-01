@@ -24,13 +24,13 @@ def _get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     return hidden
 
 
-def _make_node_label(node: onnx.NodeProto) -> str:
+def _make_node_label(node: onnx.NodeProto, tiny_inits: Dict[str, str]) -> str:
     els = [f"{node.domain}.\\n{node.op_type}" if node.domain else node.op_type, "("]
-    ee = ["." if i else "" for i in node.input]
+    ee = [tiny_inits.get(i, ".") if i else "" for i in node.input]
     for att in node.attribute:
         if att.name == "to":
             ee.append(f"{att.name}={onnx_dtype_name(att.i)}")
-        elif att.name in {"to", "axis", "value_int", "stash_type"}:
+        elif att.name in {"to", "axis", "value_int", "stash_type", "start", "end"}:
             ee.append(f"{att.name}={att.i}")
         elif att.name in {"value_float"}:
             ee.append(f"{att.name}={att.f}")
@@ -115,9 +115,12 @@ def to_dot(model: onnx.ModelProto) -> str:
     model = onnx.shape_inference.infer_shapes(model)
 
     op_type_colors = {
-        "Shape": "#eeeeee",
+        "Shape": "#d2a81f",
         "MatMul": "#ee9999",
         "Transpose": "#ee99ee",
+        "Reshape": "#eeeeee",
+        "Squeeze": "#eeeeee",
+        "Unsqueeze": "#eeeeee",
     }
 
     edge_label = {}
@@ -137,6 +140,7 @@ def to_dot(model: onnx.ModelProto) -> str:
     outputs = list(model.graph.output)
     nodes = list(model.graph.node)
     inits = list(model.graph.initializer)
+    tiny_inits = {}
     name_to_ids = {}
     for inp in inputs:
         if not inp.name:
@@ -150,17 +154,19 @@ def to_dot(model: onnx.ModelProto) -> str:
         if len(shape) == 0 or (len(shape) == 1 and shape[0] < 10):
             a = onh.to_array(init)
             vals = f" = {a}" if len(shape) == 0 else f"\\n=[{', '.join([str(i) for i in a])}]"
+            tiny_inits[init.name] = (
+                str(a) if len(shape) == 0 else f"[{', '.join([str(i) for i in a])}]"
+            )
         else:
-            vals = ""
-        ls = f"{onnx_dtype_name(init.data_type)}({', '.join(map(str,shape))})"
-        rows.append(
-            f'  i_{_mkn(init)} [label="{init.name}\\n{ls}{vals}", fillcolor="#cccc00"];'
-        )
-        name_to_ids[init.name] = f"i_{_mkn(init)}"
-        edge_label[init.name] = ls
+            ls = f"{onnx_dtype_name(init.data_type)}({', '.join(map(str,shape))})"
+            rows.append(
+                f'  i_{_mkn(init)} [label="{init.name}\\n{ls}{vals}", fillcolor="#cccc00"];'
+            )
+            name_to_ids[init.name] = f"i_{_mkn(init)}"
+            edge_label[init.name] = ls
     for node in nodes:
         color = op_type_colors.get(node.op_type, "#cccccc")
-        label = _make_node_label(node)
+        label = _make_node_label(node, tiny_inits)
         rows.append(f'  {node.op_type}_{_mkn(node)} [label="{label}", fillcolor="{color}"];')
         name_to_ids.update({o: f"{node.op_type}_{_mkn(node)}" for o in node.output if o})
 
@@ -169,7 +175,7 @@ def to_dot(model: onnx.ModelProto) -> str:
     for node in nodes:
         names = list(node.input)
         for i in names:
-            if not i:
+            if not i or i in tiny_inits:
                 continue
             if i not in name_to_ids:
                 raise ValueError(f"Unable to find {i!r}\n{pretty_onnx(model)}")
