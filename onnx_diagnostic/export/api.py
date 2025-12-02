@@ -149,6 +149,7 @@ def to_onnx(
 
     if exporter in ("dynamo", "onnx-dynamo"):
         import os
+        from ..helpers import flatten_object
         import onnxscript.rewriter.ort_fusions as ort_fusions
 
         assert (
@@ -180,7 +181,12 @@ def to_onnx(
             import onnx_ir as ir
             import onnx_ir.passes.common as common_passes
 
-            irfunctions = [ir.from_proto(plug.function_proto) for plug in onnx_plugs]
+            irfunctions = [
+                ir.from_proto(
+                    plug.get_function_proto(*flatten_object((args, kwargs), drop_keys=True))
+                )
+                for plug in onnx_plugs
+            ]
             for func in irfunctions:
                 epo.model.functions[func.identifier()] = func
             if inline:

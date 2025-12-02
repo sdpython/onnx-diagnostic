@@ -4,6 +4,8 @@ Change Logs
 0.8.4
 +++++
 
+* :pr:`336`: implements versioned onnx plugs
+
 0.8.3
 +++++
 

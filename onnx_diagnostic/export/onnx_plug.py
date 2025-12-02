@@ -210,10 +210,10 @@ class EagerDirectReplacementWithOnnx:
         # multiple protos
         assert all(
             self.n_inputs == len(v.input) for v in self._function_proto_versioned.values()
-        ), f"Output mismatch n_inputs={self.n_inputs} but one verion is wrong"
+        ), f"Output mismatch n_inputs={self.n_inputs} but one version is wrong"
         assert all(
             self.n_outputs == len(v.output) for v in self._function_proto_versioned.values()
-        ), f"Output mismatch n_outputs={self.n_outputs} but one verion is wrong"
+        ), f"Output mismatch n_outputs={self.n_outputs} but one version is wrong"
         assert all(
             v.domain == self.domain for v in self._function_proto_versioned.values()
         ), f"Function domain must be {self.domain!r} but it is different in one version"
