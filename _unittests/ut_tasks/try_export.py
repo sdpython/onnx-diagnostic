@@ -4,7 +4,12 @@ import unittest
 import onnx
 import textwrap
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, never_test, ignore_warnings
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    never_test,
+    ignore_warnings,
+    has_onnxruntime,
+)
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.export.api import to_onnx
@@ -157,6 +162,8 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
 
         # fake_inputs = make_fake_with_dynamic_dimensions(inputs, dynamic_shapes)[0]
         for attention in attention_options:
+            if attention == "LOOPA24" and not has_onnxruntime("1.24"):
+                continue
             with self.subTest(attention=attention):
                 print()
                 print(f"-- attention={attention!r}")
