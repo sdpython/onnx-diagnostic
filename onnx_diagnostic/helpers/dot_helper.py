@@ -157,8 +157,9 @@ def to_dot(model: onnx.ModelProto) -> str:
         edge_label[inp.name] = _make_edge_label(inp, multi_line=True)
 
     # Small constant --> initializer
+    output_names = {n.name for n in outputs}
     for node in nodes:
-        if node.op_type != "Constant":
+        if node.op_type != "Constant" or node.output[0] in output_names:
             continue
         skip = False
         for att in node.attribute:
