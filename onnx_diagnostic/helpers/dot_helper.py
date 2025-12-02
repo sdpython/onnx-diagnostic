@@ -1,6 +1,8 @@
 from typing import Dict, Set
+import numpy as np
 import onnx
 import onnx.numpy_helper as onh
+from ..reference import ExtendedReferenceEvaluator as Inference
 from .onnx_helper import onnx_dtype_name, pretty_onnx
 
 
@@ -142,6 +144,7 @@ def to_dot(model: onnx.ModelProto) -> str:
     inits = list(model.graph.initializer)
     tiny_inits = {}
     name_to_ids = {}
+
     for inp in inputs:
         if not inp.name:
             continue
@@ -149,7 +152,29 @@ def to_dot(model: onnx.ModelProto) -> str:
         rows.append(f'  I_{_mkn(inp)} [label="{inp.name}\\n{lab}", fillcolor="#aaeeaa"];')
         name_to_ids[inp.name] = f"I_{_mkn(inp)}"
         edge_label[inp.name] = _make_edge_label(inp, multi_line=True)
+
+    # Small constant --> initializer
+    for node in nodes:
+        if node.op_type != "Constant":
+            continue
+        skip = False
+        for att in node.attribute:
+            if att.name == "value" and (
+                len(att.t.dims) > 1 or np.prod(tuple(att.t.dims)) > 10
+            ):
+                skip = True
+                break
+        if skip:
+            continue
+
+        sess = Inference(node)
+        value = sess.run(None, {})[0]
+        inits.append(onh.from_array(value, name=node.output[0]))
+
     for init in inits:
+        if init.name in inputs:
+            # hide optional inputs
+            continue
         shape = tuple(init.dims)
         if len(shape) == 0 or (len(shape) == 1 and shape[0] < 10):
             a = onh.to_array(init)
@@ -161,7 +186,10 @@ def to_dot(model: onnx.ModelProto) -> str:
             rows.append(f'  i_{_mkn(init)} [label="{init.name}\\n{ls}", fillcolor="#cccc00"];')
             name_to_ids[init.name] = f"i_{_mkn(init)}"
             edge_label[init.name] = ls
+
     for node in nodes:
+        if node.op_type == "Constant" and node.output[0] in name_to_ids:
+            continue
         color = op_type_colors.get(node.op_type, "#cccccc")
         label = _make_node_label(node, tiny_inits)
         rows.append(f'  {node.op_type}_{_mkn(node)} [label="{label}", fillcolor="{color}"];')
