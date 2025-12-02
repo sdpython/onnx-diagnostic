@@ -148,7 +148,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         elif device == "cuda" and dtype in ("float16", "bfloat16"):
             attention_options = ["PACKED", "BIGMASK"]
         else:
-            attention_options = ["LOOPMHA", "BIGMASK"]
+            attention_options = ["LOOPMHA", "LOOPA24", "BIGMASK"]
 
         # fake_inputs = make_fake_with_dynamic_dimensions(inputs, dynamic_shapes)[0]
         for attention in attention_options:
@@ -180,7 +180,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         exporter=exporter,
                         verbose=1,
                         save_ep=None if self.unit_test_going() else (fileep, 2**35),
-                        target_opset=22,
+                        target_opset=24 if attention == "LOOPMHA" else 22,
                         optimize=True,
                         onnx_plugs=PLUGS,
                     )
@@ -207,17 +207,18 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 print(f"-- MODEL CONVERTED IN {time.perf_counter() - begin}")
                 model = onnx.load(filename, load_external_data=False)
                 if attention == "PACKED":
-                    self.assertIn(
-                        "PackedMultiHeadAttention", {n.op_type for n in model.graph.node}
-                    )
+                    self.assertIn("PackedMultiHeadAttention", str(model))
                 elif attention == "BIGMASK":
-                    self.assertNotIn(
-                        "PackedMultiHeadAttention", {n.op_type for n in model.graph.node}
-                    )
+                    self.assertNotIn("PackedMultiHeadAttention", str(model))
+                    self.assertNotIn("MultiHeadAttention", str(model))
+                    self.assertNotIn("Loop", {n.op_type for n in model.graph.node})
                 elif attention == "LOOPMHA":
-                    self.assertNotIn(
-                        "PackedMultiHeadAttention", {n.op_type for n in model.graph.node}
-                    )
+                    self.assertNotIn("PackedMultiHeadAttention", str(model))
+                    self.assertIn("MultiHeadAttention", str(model))
+                    self.assertIn("Loop", {n.op_type for n in model.graph.node})
+                elif attention == "LOOPA24":
+                    self.assertNotIn("PackedMultiHeadAttention", str(model))
+                    self.assertNotIn("MultiHeadAttention", str(model))
                     self.assertIn("Loop", {n.op_type for n in model.graph.node})
                 else:
                     raise AssertionError(f"attention={attention!r} not expected")
