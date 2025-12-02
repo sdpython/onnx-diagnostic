@@ -27,7 +27,7 @@ def _get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
 
 
 def _make_node_label(node: onnx.NodeProto, tiny_inits: Dict[str, str]) -> str:
-    els = [f"{node.domain}.\\n{node.op_type}" if node.domain else node.op_type, "("]
+    els = [f"{node.domain}.\\n{node.op_type}" if node.domain else node.op_type, "\\n("]
     ee = [tiny_inits.get(i, ".") if i else "" for i in node.input]
     for att in node.attribute:
         if att.name == "to":
@@ -44,7 +44,10 @@ def _make_node_label(node: onnx.NodeProto, tiny_inits: Dict[str, str]) -> str:
     els.append(")")
     if node.op_type == "Constant":
         els.extend([" -> ", node.output[0]])
-    return "".join(els)
+    res = "".join(els)
+    if len(res) < 40:
+        return res.replace("\\n(", "(")
+    return res
 
 
 def _make_edge_label(value_info: onnx.ValueInfoProto, multi_line: bool = False) -> str:
@@ -172,7 +175,7 @@ def to_dot(model: onnx.ModelProto) -> str:
         inits.append(onh.from_array(value, name=node.output[0]))
 
     for init in inits:
-        if init.name in inputs:
+        if init.name in name_to_ids:
             # hide optional inputs
             continue
         shape = tuple(init.dims)
@@ -188,7 +191,7 @@ def to_dot(model: onnx.ModelProto) -> str:
             edge_label[init.name] = ls
 
     for node in nodes:
-        if node.op_type == "Constant" and node.output[0] in name_to_ids:
+        if node.op_type == "Constant" and node.output[0] in tiny_inits:
             continue
         color = op_type_colors.get(node.op_type, "#cccccc")
         label = _make_node_label(node, tiny_inits)
