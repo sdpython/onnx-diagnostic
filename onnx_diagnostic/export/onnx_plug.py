@@ -232,7 +232,7 @@ class EagerDirectReplacementWithOnnx:
         ):
             return self._function_proto_versioned[args[0]]
         try:
-            key = self.version_selector(*args)
+            key = self.version_selector(*args)  # type: ignore[misc]
         except (ValueError, AttributeError) as e:
             raise AssertionError(
                 f"Unable to select a version, fails to get a key, available="

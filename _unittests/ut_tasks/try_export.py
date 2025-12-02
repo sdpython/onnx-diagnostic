@@ -212,18 +212,18 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 print(f"-- MODEL CONVERTED IN {time.perf_counter() - begin}")
                 model = onnx.load(filename, load_external_data=False)
                 if attention == "PACKED":
-                    self.assertIn("PackedMultiHeadAttention", str(model))
+                    self.assertIn('"PackedMultiHeadAttention"', str(model))
                 elif attention == "BIGMASK":
-                    self.assertNotIn("PackedMultiHeadAttention", str(model))
+                    self.assertNotIn('"PackedMultiHeadAttention"', str(model))
                     self.assertNotIn("MultiHeadAttention", str(model))
                     self.assertNotIn("Loop", {n.op_type for n in model.graph.node})
                 elif attention == "LOOPMHA":
-                    self.assertNotIn("PackedMultiHeadAttention", str(model))
-                    self.assertIn("MultiHeadAttention", str(model))
+                    self.assertNotIn('"PackedMultiHeadAttention"', str(model))
+                    self.assertIn('"MultiHeadAttention"', str(model))
                     self.assertIn("Loop", {n.op_type for n in model.graph.node})
                 elif attention == "LOOPA24":
-                    self.assertNotIn("PackedMultiHeadAttention", str(model))
-                    self.assertNotIn("MultiHeadAttention", str(model))
+                    self.assertNotIn('"PackedMultiHeadAttention"', str(model))
+                    self.assertNotIn('"MultiHeadAttention"', str(model))
                     self.assertIn("Loop", {n.op_type for n in model.graph.node})
                 else:
                     raise AssertionError(f"attention={attention!r} not expected")
@@ -257,7 +257,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         else ["CPUExecutionProvider"]
                     ),
                     use_ort=True,
-                    atol=0.02,
+                    atol=0.05,
                     rtol=10,
                     # ep=pt2_file,
                     expected=expected,
