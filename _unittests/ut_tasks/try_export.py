@@ -17,6 +17,11 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
     @ignore_warnings(UserWarning)
     def test_qwen25_vli_visual(self):
         """
+        unittest::
+
+            UNITTEST_GOING=1 NEVERTEST=1 TESTDTYPE=float16 TESTDEVICE=cpu python \\
+                _unittests/ut_tasks/try_export.py -f -k test_qwen25_vli_visual
+
         # task: imagetext2text
         clear&&NEVERTEST=1 python _unittests/ut_tasks/try_export.py -k qwen_2_5
 
@@ -180,7 +185,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         exporter=exporter,
                         verbose=1,
                         save_ep=None if self.unit_test_going() else (fileep, 2**35),
-                        target_opset=24 if attention == "LOOPMHA" else 22,
+                        target_opset=24 if attention == "LOOPA24" else 22,
                         optimize=True,
                         onnx_plugs=PLUGS,
                     )

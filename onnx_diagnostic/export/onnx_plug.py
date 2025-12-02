@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import onnx
 import torch
-from ..helpers import max_diff
+from ..helpers import max_diff, string_type
 from ..helpers.torch_helper import torch_dtype_to_onnx_dtype
 from ..reference import OnnxruntimeEvaluator
 
@@ -50,6 +50,7 @@ class EagerDirectReplacementWithOnnx:
         only tensors must be counted
     :param name: the name of the custom op, the function name if not specified
     :param kwargs: constants parameters with their default values
+    :param version_selector: selects the version based on the arguments
     :param verbose: verbose level
 
     Here is an example:
@@ -139,21 +140,28 @@ class EagerDirectReplacementWithOnnx:
         self,
         eager_fn: Callable[[TUPLE_TENSORS], TUPLE_TENSORS],
         shape_fn: Callable[[TUPLE_TENSORS], TUPLE_TENSORS],
-        function_proto: onnx.FunctionProto,
+        function_proto: Union[onnx.FunctionProto, Dict[Any, onnx.FunctionProto]],
         n_inputs: Optional[int] = None,
         n_outputs: Optional[int] = None,
         name: Optional[str] = None,
         kwargs: Optional[Dict[str, Union[int, float]]] = None,
         verbose: int = 0,
+        version_selector: Optional[Callable[[Any], Any]] = None,
     ):
-        assert isinstance(
-            function_proto, onnx.FunctionProto
+        assert isinstance(function_proto, onnx.FunctionProto) or (
+            isinstance(function_proto, dict)
+            or all(isinstance(v, onnx.FunctionProto) for v in function_proto.values())
         ), f"Unexpected type {type(function_proto)} for function_proto"
         assert isinstance(n_inputs, int), f"not implemented yet when n_inputs={n_inputs}"
-        assert isinstance(n_outputs, int), f"not implemented yet when n_inputs={n_outputs}"
+        assert isinstance(n_outputs, int), f"not implemented yet when n_outputs={n_outputs}"
         self.eager_fn = eager_fn
         self.shape_fn = shape_fn
-        self.function_proto = function_proto
+        self._function_proto = (
+            function_proto if isinstance(function_proto, onnx.FunctionProto) else None
+        )
+        self._function_proto_versioned = (
+            function_proto if isinstance(function_proto, dict) else {}
+        )
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
         self.name = name or (
@@ -170,24 +178,72 @@ class EagerDirectReplacementWithOnnx:
         )
         sig = inspect.signature(self.eager_fn)
         params = list(sig.parameters)
-        assert (
-            len(params) >= n_inputs
-        ), f"{self.eager_fn} accepts {params} as parameters < n_inputs={n_inputs}"
-        assert n_inputs == len(function_proto.input), (
-            f"Input mismatch n_inputs={n_inputs} but "
-            f"function_proto.input={function_proto.input}"
-        )
-        assert n_outputs == len(function_proto.output), (
-            f"Output mismatch n_outputs={n_outputs} but "
-            f"function_proto.output={function_proto.output}"
-        )
-        assert (
-            function_proto.domain == self.domain
-        ), f"Function domain must be {self.domain!r} but it is {function_proto.domain!r}"
         self.args_name = [p for p in params if p not in self.kwargs]
         self.kwargs_name = [p for p in params if p in self.kwargs]
         self.verbose = verbose
         self.custom_op = self._register()
+        self.version_selector = version_selector
+        self._check_protos(params)
+
+    def _check_protos(self, params):
+        assert (
+            len(params) >= self.n_inputs
+        ), f"{self.eager_fn} accepts {params} as parameters < n_inputs={self.n_inputs}"
+
+        # one proto
+        assert self._function_proto is None or self.n_inputs == len(
+            self._function_proto.input
+        ), (
+            f"Input mismatch n_inputs={self.n_inputs} but "
+            f"function_proto.input={self._function_proto.input}"
+        )
+        assert self._function_proto is None or self.n_outputs == len(
+            self._function_proto.output
+        ), (
+            f"Output mismatch n_outputs={self.n_outputs} but "
+            f"function_proto.output={self._function_proto.output}"
+        )
+        assert self._function_proto is None or (
+            self._function_proto.domain == self.domain
+        ), f"Function domain must be {self.domain!r} but it is {self._function_proto.domain!r}"
+
+        # multiple protos
+        assert all(
+            self.n_inputs == len(v.input) for v in self._function_proto_versioned.values()
+        ), f"Output mismatch n_inputs={self.n_inputs} but one verion is wrong"
+        assert all(
+            self.n_outputs == len(v.output) for v in self._function_proto_versioned.values()
+        ), f"Output mismatch n_outputs={self.n_outputs} but one verion is wrong"
+        assert all(
+            v.domain == self.domain for v in self._function_proto_versioned.values()
+        ), f"Function domain must be {self.domain!r} but it is different in one version"
+        assert (
+            not self._function_proto_versioned or self.version_selector
+        ), "version_selector is needed when multiple protos are given."
+
+    def get_function_proto(self, *args) -> onnx.FunctionProto:
+        """Returns the correct version based on the inputs."""
+        if self._function_proto:
+            return self._function_proto
+        if (
+            len(args) == 1
+            and isinstance(args[0], (int, str))
+            and args[0] in self._function_proto_versioned
+        ):
+            return self._function_proto_versioned[args[0]]
+        try:
+            key = self.version_selector(*args)
+        except (ValueError, AttributeError) as e:
+            raise AssertionError(
+                f"Unable to select a version, fails to get a key, available="
+                f"{set(self._function_proto_versioned)}, "
+                f"args={string_type(args,with_shape=True)}"
+            ) from e
+        assert key in self._function_proto_versioned, (
+            f"Unable to select a version, key={key}, available="
+            f"{set(self._function_proto_versioned)}, args={string_type(args,with_shape=True)}"
+        )
+        return self._function_proto_versioned[key]
 
     @property
     def domain(self) -> str:
@@ -291,7 +347,7 @@ class EagerDirectReplacementWithOnnx:
         assert engine is None, f"Not implemented yet with engine={engine!r}"
         ags, kws = self._make_args_kwargs(*args, **kwargs)
         sess = OnnxruntimeEvaluator(
-            self.function_proto,
+            self.get_function_proto(*args),
             whole=True,
             dump_onnx_model=dump_onnx_model,
             function_kwargs=kws,
@@ -324,16 +380,15 @@ class EagerDirectReplacementWithOnnx:
             *args,
             **kwargs,
         ) -> Any:
-            if not g.has_local_function(
-                self.function_proto.name, domain=self.function_proto.domain
-            ):
-                g.add_function(self.function_proto)
+            function_proto = self.get_function_proto(g.get_type(args[0]))
+            if not g.has_local_function(function_proto.name, domain=function_proto.domain):
+                g.add_function(function_proto)
             ags, kws = self._make_args_kwargs(*args, **kwargs)
             res = g.make_node(
-                self.function_proto.name,
+                function_proto.name,
                 ags,
                 outputs,
-                domain=self.function_proto.domain,
+                domain=function_proto.domain,
                 name=self.target_name,
                 **kws,
             )
@@ -356,41 +411,46 @@ class EagerDirectReplacementWithOnnx:
         """
         import onnxscript
 
-        onnx_plug_op = onnxscript.values.Opset(domain=self.function_proto.domain, version=1)
-        schema = onnx_plug_op[self.function_proto.name]
-        if schema is None:
-            all_types = [
-                "tensor(float)",
-                "tensor(float16)",
-                "tensor(bfloat16)",
-                "tensor(double)",
-                "tensor(int64)",
-                "tensor(int32)",
-            ]
-            type_constraints = []
-            for i in range(self.n_inputs):
-                type_constraints.append((f"T{i}", all_types, ""))
-            for i in range(self.n_outputs):
-                type_constraints.append((f"U{i}", all_types, ""))
-            schema = onnx.defs.OpSchema(
-                self.function_proto.name,
-                self.function_proto.domain,
-                1,
-                inputs=[
-                    onnx.defs.OpSchema.FormalParameter(f"arg_{i}", f"T{i}")
-                    for i in range(self.n_inputs)
-                ],
-                outputs=[
-                    onnx.defs.OpSchema.FormalParameter(f"res_{i}", f"U{i}")
-                    for i in range(self.n_outputs)
-                ],
-                type_constraints=type_constraints,
-            )
-            onnx.defs.register_schema(schema)
-        op = onnxscript.values.Op(onnx_plug_op, self.function_proto.name, schema)
+        onnx_plug_op = onnxscript.values.Opset(domain=self.domain, version=1)
+
+        def get_proto(*args):
+            function_proto = self.get_function_proto()
+            schema = onnx_plug_op[function_proto.name]
+            if schema is None:
+                all_types = [
+                    "tensor(float)",
+                    "tensor(float16)",
+                    "tensor(bfloat16)",
+                    "tensor(double)",
+                    "tensor(int64)",
+                    "tensor(int32)",
+                ]
+                type_constraints = []
+                for i in range(self.n_inputs):
+                    type_constraints.append((f"T{i}", all_types, ""))
+                for i in range(self.n_outputs):
+                    type_constraints.append((f"U{i}", all_types, ""))
+                schema = onnx.defs.OpSchema(
+                    function_proto.name,
+                    function_proto.domain,
+                    1,
+                    inputs=[
+                        onnx.defs.OpSchema.FormalParameter(f"arg_{i}", f"T{i}")
+                        for i in range(self.n_inputs)
+                    ],
+                    outputs=[
+                        onnx.defs.OpSchema.FormalParameter(f"res_{i}", f"U{i}")
+                        for i in range(self.n_outputs)
+                    ],
+                    type_constraints=type_constraints,
+                )
+                onnx.defs.register_schema(schema)
+            op = onnxscript.values.Op(onnx_plug_op, function_proto.name, schema)
+            return op
 
         def converter(*cargs, **ckwargs):
             ags, kws = self._make_args_kwargs(*cargs, **ckwargs)
+            op = get_proto(*cargs)
             return op(*ags, n_outputs=self.n_outputs, **kws)
 
         return onnxscript.values.TracedOnnxFunction(onnx_plug_op, converter)

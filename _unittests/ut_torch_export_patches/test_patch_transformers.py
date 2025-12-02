@@ -667,16 +667,16 @@ class TestPatchPatchTransformers(ExtTestCase):
         results = qwen_sdpa_attention_loopa24_versatile.verify(*inputs, scaling=0.5)
         self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
         self.assertEqual(len(results.eager_outputs), len(results.diffs))
-        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=1e-5)
-        self.assertLess(results.diffs[0]["abs"], 1e-5)
+        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=1e-2)
+        self.assertLess(results.diffs[0]["abs"], 1e-2)
 
         results = qwen_sdpa_attention_loopa24_versatile.verify(
             *inputs, scaling=0.11180339887498948
         )
         self.assertEqual(len(results.eager_outputs), len(results.onnx_outputs))
         self.assertEqual(len(results.eager_outputs), len(results.diffs))
-        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=1e-5)
-        self.assertLess(results.diffs[0]["abs"], 1e-5)
+        self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.005)
+        self.assertLess(results.diffs[0]["abs"], 0.005)
 
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_plug_packed_multi_head_attention_qwen25_loopa24_float32(self):

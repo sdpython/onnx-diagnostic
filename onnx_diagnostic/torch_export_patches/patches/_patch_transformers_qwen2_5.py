@@ -1,8 +1,10 @@
 import os
 from typing import Callable, Optional
 import onnx
+import onnx.helper as oh
 import torch
 import torch.nn.functional as F
+from ...helpers.torch_helper import torch_dtype_to_onnx_dtype
 from ...export.onnx_plug import EagerDirectReplacementWithOnnx
 from .patch_helper import _is_torchdynamo_exporting
 from ._patch_transformers_attention import patched_sdpa_attention_forward
@@ -24,6 +26,36 @@ if patch_qwen2_5:
     op = onnxscript.opset22
     op24 = onnxscript.onnx_opset.opset24
     msft_op = onnxscript.values.Opset("com.microsoft", 1)
+
+    def _add_com_microsoft_opset(function_proto: onnx.FunctionProto) -> onnx.FunctionProto:
+        opsets = {d.domain: d.version for d in function_proto.opset_import}
+        if "com.microsoft" not in opsets:
+            d = function_proto.opset_import.add()
+            d.domain = "com.microsoft"
+            d.version = 1
+        return function_proto
+
+    def _update_sequence_type(
+        itype: int, function_proto: onnx.FunctionProto
+    ) -> onnx.FunctionProto:
+        proto = oh.make_function(
+            function_proto.domain,
+            function_proto.name,
+            function_proto.input,
+            function_proto.output,
+            [
+                (
+                    oh.make_node("SequenceEmpty", node.input, node.output, dtype=itype)
+                    if node.op_type == "SequenceEmpty"
+                    else node
+                )
+                for node in function_proto.node
+            ],
+            attributes=function_proto.attribute,
+            attribute_protos=function_proto.attribute_proto,
+            opset_imports=function_proto.opset_import,
+        )
+        return proto
 
     @onnxscript.script(opset=onnx_plugs_op)
     def LoopMHAAttention(
@@ -98,19 +130,12 @@ if patch_qwen2_5:
                 scale=scaling,
                 q_num_heads=num_heads,
                 kv_num_heads=num_heads,
+                softmax_precision=onnx.TensorProto.FLOAT,
             )
             seq_attn = op24.SequenceInsert(seq_attn, mha_output)
         attn_output = op24.ConcatFromSequence(seq_attn, axis=1)
         attn_output_4d = op24.Reshape(attn_output, output_shape)
         return attn_output_4d
-
-    def _add_com_microsoft_opset(function_proto):
-        opsets = {d.domain: d.version for d in function_proto.opset_import}
-        if "com.microsoft" not in opsets:
-            d = function_proto.opset_import.add()
-            d.domain = "com.microsoft"
-            d.version = 1
-        return function_proto
 
     @onnxscript.script(opset=onnx_plugs_op)
     def PackedAttention(
@@ -215,11 +240,20 @@ if patch_qwen2_5:
             dtype=qs.dtype,
             device=qs.device,
         ),
-        _add_com_microsoft_opset(LoopMHAAttention.to_function_proto()),
+        {
+            onnx.TensorProto.FLOAT: _add_com_microsoft_opset(
+                LoopMHAAttention.to_function_proto()
+            ),
+            onnx.TensorProto.FLOAT16: _update_sequence_type(
+                onnx.TensorProto.FLOAT16,
+                _add_com_microsoft_opset(LoopMHAAttention.to_function_proto()),
+            ),
+        },
         n_inputs=4,
         n_outputs=1,
         kwargs=dict(scaling=0.11180339887498948, num_heads=16),
         name="qwen_sdpa_attention_loopmha",
+        version_selector=lambda *args: torch_dtype_to_onnx_dtype(args[0].dtype),
     )
     PLUGS.append(qwen_sdpa_attention_loopmha_versatile)
 
@@ -230,11 +264,17 @@ if patch_qwen2_5:
             dtype=qs.dtype,
             device=qs.device,
         ),
-        LoopAttention24.to_function_proto(),
+        {
+            onnx.TensorProto.FLOAT: LoopAttention24.to_function_proto(),
+            onnx.TensorProto.FLOAT16: _update_sequence_type(
+                onnx.TensorProto.FLOAT16, LoopAttention24.to_function_proto()
+            ),
+        },
         n_inputs=4,
         n_outputs=1,
         kwargs=dict(scaling=0.11180339887498948, num_heads=16),
         name="qwen_sdpa_attention_loopa24",
+        version_selector=lambda *args: torch_dtype_to_onnx_dtype(args[0].dtype),
     )
     PLUGS.append(qwen_sdpa_attention_loopa24_versatile)
 
