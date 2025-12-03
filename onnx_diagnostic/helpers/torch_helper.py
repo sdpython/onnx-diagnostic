@@ -811,7 +811,8 @@ def torch_deepcopy(value: Any) -> Any:
     if isinstance(value, tuple):
         return tuple(torch_deepcopy(v) for v in value)
     if isinstance(value, list):
-        return [torch_deepcopy(v) for v in value]
+        if type(value) is list:
+            return [torch_deepcopy(v) for v in value]
     if isinstance(value, set):
         return {torch_deepcopy(v) for v in value}
     if isinstance(value, dict):

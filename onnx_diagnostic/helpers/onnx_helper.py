@@ -1213,7 +1213,7 @@ def shadowing_names(
 def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     """
     Returns the hidden inputs (inputs coming from an upper context)
-    used by a subgraph.
+    used by a subgraph. It excludes empty names.
     """
     hidden = set()
     memo = (
@@ -1223,7 +1223,7 @@ def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     )
     for node in graph.node:
         for i in node.input:
-            if i not in memo:
+            if i and i not in memo:
                 hidden.add(i)
         for att in node.attribute:
             if att.type == onnx.AttributeProto.GRAPH and att.g:
@@ -1237,9 +1237,9 @@ def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
 def get_all_node_inputs(node: onnx.NodeProto) -> Set[str]:
     """
     Returns input and hidden inputs of a node.
-    See :func:`get_hidden_inputs`.
+    See :func:`get_hidden_inputs`. It excludes empty names.
     """
-    start = set(node.input)
+    start = {i for i in node.input if i}
     if node.op_type in {"Scan", "Loop", "If"}:
         for att in node.attribute:
             if att.type == onnx.AttributeProto.GRAPH:
@@ -1489,7 +1489,7 @@ def onnx_remove_node_unused(
     for node in reversed(nodes):
         used = False
         for o in node.output:
-            if o in marked:
+            if o and o in marked:
                 for i in get_all_node_inputs(node):
                     marked[o].add(i)
                     used = True
@@ -1501,7 +1501,7 @@ def onnx_remove_node_unused(
     removed = set()
     marked_set = set(marked)
     for ind, node in enumerate(nodes):
-        if not (set(node.output) & marked_set):
+        if not ({o for o in node.output if o} & marked_set):
             removed.add(ind)
 
     if not is_function:
@@ -1592,7 +1592,7 @@ def select_model_inputs_outputs(
     for inp in inputs:
         mark_var[inp] = 0
     for out in outputs:
-        assert out in mark_var, "Output '{out}' not found in model."
+        assert out in mark_var, f"Output {out!r} not found in model."
         mark_var[out] = 1
 
     nodes = list(model.graph.node[::-1])

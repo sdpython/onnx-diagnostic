@@ -306,7 +306,7 @@ class ReplayConfiguration:
             del submodel.graph.input[:]
             submodel.graph.input.extend(new_inputs)
             if verbose:
-                print(f"[ReplayConfiguration.dump] removed input {removed_inputs}")
+                print(f"[ReplayConfiguration.dump] removed inputs {removed_inputs}")
                 print(f"[ReplayConfiguration.dump] final model inputs {input_names}")
 
         onnx.save(submodel, os.path.join(folder, "model.onnx"))
@@ -337,8 +337,11 @@ class ReplayConfiguration:
             torch.save(main_inputs, os.path.join(folder, "onnx_main_inputs.pt"))
 
             model_inputs_file = os.path.join(folder, "model.inputs.onnx")
+            exclude = {i.name for i in model.graph.input} | {
+                i.name for i in model.graph.initializer
+            }
             model_inputs = select_model_inputs_outputs(
-                model, inputs=[i.name for i in submodel.graph.input]
+                model, outputs=[i.name for i in submodel.graph.input if i.name not in exclude]
             )
             onnx.save(model_inputs, model_inputs_file)
 
