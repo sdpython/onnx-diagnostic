@@ -1418,18 +1418,18 @@ def _enumerate_model_node_outputs(
     assert hasattr(model, "graph"), "Parameter model is not an ONNX model but {type(model)}"
     if order:
         edges = []
-        dorder = {}
+        d_order = {}
         node_names = {}
         for inp in model.graph.input:
-            dorder[0, inp.name] = 0
+            d_order[0, inp.name] = 0
         for node in model.graph.node:
-            dorder[1, node.name] = 0
+            d_order[1, node.name] = 0
             for i in node.input:
                 edges.append(("in", i, node.name))
             for o in node.output:
                 edges.append(("out", o, node.name))
                 node_names[o] = node
-                dorder[0, o] = 0
+                d_order[0, o] = 0
 
         modif = 1
         n_iter = 0
@@ -1438,17 +1438,17 @@ def _enumerate_model_node_outputs(
             n_iter += 1
             for kind, data_name, node_name in edges:
                 if kind == "in":
-                    if (0, data_name) not in dorder:
+                    if (0, data_name) not in d_order:
                         continue
-                    if dorder[0, data_name] + 1 > dorder[1, node_name]:
+                    if d_order[0, data_name] + 1 > d_order[1, node_name]:
                         modif += 1
-                        dorder[1, node_name] = dorder[0, data_name] + 1
+                        d_order[1, node_name] = d_order[0, data_name] + 1
                 else:
-                    if dorder[1, node_name] + 1 > dorder[0, data_name]:
+                    if d_order[1, node_name] + 1 > d_order[0, data_name]:
                         modif += 1
-                        dorder[0, data_name] = dorder[1, node_name] + 1
+                        d_order[0, data_name] = d_order[1, node_name] + 1
 
-        orders = [(v, k) for k, v in dorder.items()]
+        orders = [(v, k) for k, v in d_order.items()]
         orders.sort()
 
         for _, k in orders:
@@ -1478,7 +1478,7 @@ def onnx_remove_node_unused(
     is_function = isinstance(graph, FunctionProto)
 
     # mark outputs
-    marked = (
+    marked: Dict[str, Set[str]] = (
         {o: set() for o in graph.output}
         if is_function
         else {o.name: set() for o in graph.output}

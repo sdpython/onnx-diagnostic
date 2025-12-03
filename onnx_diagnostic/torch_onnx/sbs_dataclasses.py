@@ -66,7 +66,7 @@ class ReplayConfiguration:
     :param selected_names: list of results names to dump
     :param selected_op_types: list of onnx operators to dump
     :param threshold: only keep those whose discrepancies is greater than that threshold
-    :param dump_prefix_model: aftrer dumping the smallest model able to replicate
+    :param dump_prefix_model: after dumping the smallest model able to replicate
         one given output, if also dumps the models producing the inputs
         and the outputs truncated from the big one
     """
