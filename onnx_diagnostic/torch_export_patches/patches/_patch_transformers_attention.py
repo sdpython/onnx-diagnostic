@@ -118,6 +118,7 @@ def patched_sdpa_attention_forward(
             torch._check(value.shape[1] > 0)
             torch._check(value.shape[2] > 0)
             torch._check(value.shape[3] > 0)
+
             return (
                 torch.nn.functional.scaled_dot_product_attention(
                     query,
