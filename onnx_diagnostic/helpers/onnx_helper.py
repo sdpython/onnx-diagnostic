@@ -1243,13 +1243,22 @@ def extract_subset_of_nodes(
     inputs = set(k for k in node.input if k)
     while not (inputs <= cut_points) and current_node_index >= 0:
         node = model.graph.node[current_node_index]
-        if current_input_index == 0:
+        if current_input_index == 0 or not node.input:
             needs = [o for o in node.output if o in intermediate and o not in cut_points]
             if needs:
                 selected.add(current_node_index)
+                if not node.input:
+                    current_node_index -= 1
+                    current_input_index = 0
+                    continue
             else:
                 current_node_index -= 1
+                current_input_index = 0
                 continue
+        assert current_input_index < len(node.input), (
+            f"current_input_index={current_input_index} but node.input={node.input}, "
+            f"node={pretty_onnx(node)}"
+        )
         res = node.input[current_input_index]
         if res not in cut_points:
             intermediate.add(res)
@@ -1294,8 +1303,8 @@ def make_submodel(
         oh.make_graph(
             nodes,
             "submodel",
-            [_mkv_(n, *type_rank_fn(n)) for n in sorted(not_known)],
-            [_mkv_(n, *type_rank_fn(n)) for n in sorted(output_names)],
+            [_mkv_(n, *type_rank_fn(n)) for n in sorted(not_known) if n],
+            [_mkv_(n, *type_rank_fn(n)) for n in sorted(output_names) if n],
         ),
         ir_version=ir_version,
         opset_imports=opset_imports,
