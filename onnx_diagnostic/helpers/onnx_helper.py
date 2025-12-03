@@ -3,7 +3,19 @@ import json
 import os
 import sys
 import warnings
-from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 import numpy as np
 import numpy.typing as npt
 import onnx
@@ -1222,6 +1234,16 @@ def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     return hidden
 
 
+def get_all_node_inputs(node: onnx.NodeProto) -> Set[str]:
+    """
+    Returns input and hidden inputs of a node.
+    See :func:`get_hidden_inputs`.
+    """
+    if node.op_type in {"Scan", "Loop", "If"}:
+        return set(node.input) | get_hidden_inputs(node)
+    return set(node.input)
+
+
 def extract_subset_of_nodes(
     model: ModelProto,
     name: str,
@@ -1354,3 +1376,338 @@ def make_submodel(
         opset_imports=opset_imports,
     )
     return model
+
+
+def get_tensor_shape(
+    obj: Union[onnx.ValueInfoProto, onnx.TypeProto, onnx.TensorProto],
+) -> Optional[List[Optional[Union[int, str]]]]:
+    """
+    Returns the shape if that makes sense for this object.
+    """
+    if isinstance(obj, ValueInfoProto):
+        return get_tensor_shape(obj.type)
+    elif not isinstance(obj, onnx.TypeProto):
+        raise TypeError(f"Unexpected type {type(obj)!r}.")
+    if not obj.tensor_type.HasField("shape"):
+        return None
+    shape = []
+    for d in obj.tensor_type.shape.dim:
+        v = d.dim_value if d.dim_value > 0 else d.dim_param
+        shape.append(v)
+    if not shape:
+        return shape
+    return [None if s in (0, "") else s for s in shape]
+
+
+def _enumerate_model_node_outputs(
+    model: ModelProto, add_node: bool = False, order: bool = False
+) -> Iterable[Union[str, Tuple[str, NodeProto]]]:
+    """
+    Enumerates all the nodes of a model.
+
+    :param model: :epkg:`ONNX` graph
+    :param add_node: if False, the function enumerates
+        all output names from every node, otherwise, it
+        enumerates tuple (output name, node)
+    :param order: goes through outputs following the graph order
+    :return: enumerator
+    """
+    assert hasattr(model, "graph"), "Parameter model is not an ONNX model but {type(model)}"
+    if order:
+        edges = []
+        dorder = {}
+        node_names = {}
+        for inp in model.graph.input:
+            dorder[0, inp.name] = 0
+        for node in model.graph.node:
+            dorder[1, node.name] = 0
+            for i in node.input:
+                edges.append(("in", i, node.name))
+            for o in node.output:
+                edges.append(("out", o, node.name))
+                node_names[o] = node
+                dorder[0, o] = 0
+
+        modif = 1
+        n_iter = 0
+        while modif > 0 and n_iter <= len(model.graph.node):
+            modif = 0
+            n_iter += 1
+            for kind, data_name, node_name in edges:
+                if kind == "in":
+                    if (0, data_name) not in dorder:
+                        continue
+                    if dorder[0, data_name] + 1 > dorder[1, node_name]:
+                        modif += 1
+                        dorder[1, node_name] = dorder[0, data_name] + 1
+                else:
+                    if dorder[1, node_name] + 1 > dorder[0, data_name]:
+                        modif += 1
+                        dorder[0, data_name] = dorder[1, node_name] + 1
+
+        orders = [(v, k) for k, v in dorder.items()]
+        orders.sort()
+
+        for _, k in orders:
+            if k[0] == 1:
+                continue
+            out = k[1]
+            if out not in node_names:
+                continue
+            yield (out, node_names[out]) if add_node else out
+    else:
+        for node in model.graph.node:
+            for out in node.output:
+                yield (out, node) if add_node else out
+
+
+def onnx_remove_node_unused(
+    graph: Union[onnx.GraphProto, onnx.FunctionProto], recursive=True
+) -> Union[onnx.GraphProto, onnx.FunctionProto]:
+    """
+    Removes unused nodes of the graph. An unused node
+    is not involved in the output computation.
+
+    :param onnx_model: onnx model
+    :param recursive: looks into subgraphs
+    :return: new Graph
+    """
+    is_function = isinstance(graph, FunctionProto)
+
+    # mark outputs
+    marked = (
+        {o: set() for o in graph.output}
+        if is_function
+        else {o.name: set() for o in graph.output}
+    )
+    nodes = list(graph.node)
+
+    # mark node output
+    for node in reversed(nodes):
+        used = False
+        for o in node.output:
+            if o in marked:
+                for i in get_all_node_inputs(node):
+                    marked[o].add(i)
+                    used = True
+        if used:
+            for i in get_all_node_inputs(node):
+                marked[i] = set()
+
+    # removed nodes
+    removed = set()
+    marked_set = set(marked)
+    for ind, node in enumerate(nodes):
+        if not (set(node.output) & marked_set):
+            removed.add(ind)
+
+    if not is_function:
+        initializers = [i for i in graph.initializer if i.name in marked]
+        sparse_initializers = [i for i in graph.sparse_initializer if i.name in marked]
+    new_nodes = [node for i, node in enumerate(nodes) if i not in removed]
+
+    # Finally create the new graph.
+    if is_function:
+        return oh.make_function(
+            graph.domain,
+            graph.name,
+            graph.input,
+            graph.output,
+            new_nodes,
+            opset_imports=graph.opset_import,
+            attributes=graph.attribute,
+            doc_string=graph.doc_string,
+        )
+    new_graph = oh.make_graph(
+        new_nodes,
+        graph.name,
+        graph.input,
+        graph.output,
+        initializers,
+        sparse_initializers,
+    )
+    new_graph.value_info.extend(graph.value_info)
+    return new_graph
+
+
+def select_model_inputs_outputs(
+    model: ModelProto,
+    outputs: Optional[List[str]] = None,
+    inputs: Optional[List[str]] = None,
+    infer_shapes: bool = True,
+    overwrite: Optional[Dict[str, Any]] = None,
+    remove_unused: bool = True,
+    verbose: int = 0,
+):
+    """
+    Takes a model and changes its outputs.
+
+    :param model: :epkg:`ONNX` model
+    :param inputs: new inputs, same ones if None
+    :param outputs: new outputs, same ones if None
+    :param infer_shapes: infer inputs and outputs shapes
+    :param overwrite: overwrite type and shapes for
+        inputs or outputs, *overwrite* is a
+        dictionary `{'name': (numpy dtype, shape)}`
+    :param remove_unused: remove unused nodes from the graph
+    :param verbose: display information while converting
+    :return: modified model
+
+    The function removes unneeded nodes.
+
+    The following example shows how to change the inputs of model
+    to bypass the first nodes. Shape inferences fails to determine
+    the new inputs type. They need to be overwritten.
+    `verbose=1` shows the number of deleted nodes.
+
+    ::
+
+        import onnx
+        from onnx_extended.tools.onnx_nodes import select_model_inputs_outputs
+
+        onx = onnx.load(path)
+        onx2 = select_model_inputs_outputs(
+            onx, inputs=["a", "b"],
+            infer_shapes=True, verbose=1,
+            overwrite={'a': (numpy.int32, None), 'b': (numpy.int64, None)})
+        onnx.save(onx2, path2)
+    """
+    if not isinstance(model, ModelProto):
+        raise TypeError(f"Unexpected type {type(model)} for model.")
+    if inputs is not None and not isinstance(inputs, list):
+        inputs = [inputs]
+    if outputs is not None and not isinstance(outputs, list):
+        outputs = [outputs]
+    if inputs is None:
+        inputs = [i.name for i in model.graph.input]
+    if outputs is None:
+        outputs = [o.name for o in model.graph.output]
+
+    mark_var = {}
+    for out in _enumerate_model_node_outputs(model):
+        mark_var[out] = 0
+    for inp in inputs:
+        mark_var[inp] = 0
+    for out in outputs:
+        assert out in mark_var, "Output '{out}' not found in model."
+        mark_var[out] = 1
+
+    nodes = list(model.graph.node[::-1])
+    mark_op = {}
+    for node in list(nodes):
+        mark_op[id(node)] = 0
+
+    # We mark all the nodes we need to keep.
+    nb = 1
+    while nb > 0:
+        nb = 0
+        for node in nodes:
+            if mark_op[id(node)] == 1:
+                continue
+            mod = False
+            for out in node.output:
+                if mark_var[out] == 1:
+                    mark_op[id(node)] = 1
+                    mod = True
+                    break
+            if not mod:
+                continue
+
+            hidden = get_hidden_inputs([node])
+            node_inputs = list(node.input) + list(hidden)
+
+            nb += 1
+            for inp in node_inputs:
+                if inp in inputs:
+                    continue
+                if mark_var.get(inp, 0) == 1:
+                    continue
+                mark_var[inp] = 1
+                nb += 1
+
+    # All nodes verifies mark_op[node.name] == 1
+    keep_nodes = [node for node in nodes[::-1] if mark_op[id(node)] == 1]
+
+    known_shapes = {}
+    if infer_shapes:
+        shapes = onnx.shape_inference.infer_shapes(model)
+        for shape in shapes.graph.value_info:
+            known_shapes[shape.name] = shape.type
+        for shape in shapes.graph.input:
+            known_shapes[shape.name] = shape.type
+        for shape in shapes.graph.output:
+            known_shapes[shape.name] = shape.type
+    else:
+        for shape in model.graph.input:
+            known_shapes[shape.name] = shape.type
+        for shape in model.graph.output:
+            known_shapes[shape.name] = shape.type
+
+    var_in = []
+    for name in inputs:
+        if overwrite is not None and name in overwrite:
+            dtype, shape = overwrite[name]
+            proto_dtype = np_dtype_to_tensor_dtype(dtype)
+            value_info = oh.make_tensor_value_info(name, proto_dtype, shape)
+        elif name in known_shapes:
+            info = known_shapes[name].tensor_type
+            proto_dtype = info.elem_type
+            if proto_dtype == 0:
+                value_info = ValueInfoProto()
+                value_info.name = name
+            else:
+                shape = get_tensor_shape(known_shapes[name])
+                value_info = oh.make_tensor_value_info(name, proto_dtype, shape)
+        else:
+            value_info = ValueInfoProto()
+            value_info.name = name
+        var_in.append(value_info)
+
+    var_out = []
+    for name in outputs:
+        if overwrite is not None and name in overwrite:
+            dtype, shape = overwrite[name]
+            proto_dtype = np_dtype_to_tensor_dtype(dtype)
+            value_info = oh.make_tensor_value_info(name, proto_dtype, shape)
+        elif name in known_shapes:
+            info = known_shapes[name].tensor_type
+            proto_dtype = info.elem_type
+            if proto_dtype == 0:
+                value_info = ValueInfoProto()
+                value_info.name = name
+            else:
+                shape = get_tensor_shape(known_shapes[name])
+                value_info = oh.make_tensor_value_info(name, proto_dtype, shape)
+        else:
+            value_info = ValueInfoProto()
+            value_info.name = name
+        var_out.append(value_info)
+
+    graph = oh.make_graph(
+        keep_nodes,
+        model.graph.name,
+        var_in,
+        var_out,
+        model.graph.initializer,
+        sparse_initializer=model.graph.sparse_initializer,
+    )
+    if remove_unused:
+        graph = onnx_remove_node_unused(graph, recursive=False)
+    onnx_model = oh.make_model(graph, functions=model.functions)
+    onnx_model.ir_version = model.ir_version
+    onnx_model.producer_name = model.producer_name
+    onnx_model.producer_version = model.producer_version
+    onnx_model.domain = model.domain
+    onnx_model.model_version = model.model_version
+    onnx_model.doc_string = model.doc_string
+    if model.metadata_props:
+        values = {p.key: p.value for p in model.metadata_props}
+        oh.set_model_props(onnx_model, values)
+
+    del onnx_model.opset_import[:]
+    for oimp in model.opset_import:
+        op_set = onnx_model.opset_import.add()
+        op_set.domain = oimp.domain
+        op_set.version = oimp.version
+
+    return onnx_model

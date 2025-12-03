@@ -61,12 +61,16 @@ class ReplayConfiguration:
     :param selected_names: list of results names to dump
     :param selected_op_types: list of onnx operators to dump
     :param threshold: only keep those whose discrepancies is greater than that threshold
+    :param dump_prefix_model: aftrer dumping the smallest model able to replicate
+        one given output, if also dumps the models producing the inputs
+        and the outputs truncated from the big one
     """
 
     dump_folder: str
     selected_names: Optional[Set[str]] = None
     selected_op_types: Optional[Set[str]] = None
     threshold: float = 0.1
+    dump_prefix_model: bool = False
 
     def __post_init__(self):
         assert self.dump_folder, "dump_folder is empty and this is not allowed for the replay"
@@ -318,6 +322,29 @@ class ReplayConfiguration:
         )
         with open(os.path.join(folder, "replay.py"), "w") as f:
             f.write(self.get_replay_code())
+
+        if self.dump_prefix_model:
+            from onnx_extended.tools.onnx_nodes import select_model_inputs_outputs
+
+            main_inputs = {
+                i.name: onnx_inputs.get(i.name, torch_inputs.get(i.name, None))
+                for i in model.graph.input
+            }
+            # only saving onnx inputs, torch should be the same
+            torch.save(main_inputs, os.path.join(folder, "onnx_main_inputs.pt"))
+
+            model_inputs_file = os.path.join(folder, "model.inputs.onnx")
+            model_inputs = select_model_inputs_outputs(
+                model, inputs=[i.name for i in submodel.graph.input]
+            )
+            onnx.save(model_inputs, model_inputs_file)
+
+            model_outputs_file = os.path.join(folder, "model.inputs.onnx")
+            model_outputs = select_model_inputs_outputs(
+                model, outputs=[i.name for i in submodel.graph.output]
+            )
+            onnx.save(model_outputs, model_outputs_file)
+
         if verbose:
             print(f"[ReplayConfiguration.dump] done {folder!r}")
         return folder
