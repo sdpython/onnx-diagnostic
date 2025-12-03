@@ -11,7 +11,12 @@ except ImportError:
 import onnx
 import numpy as np
 import torch
-from ..helpers.onnx_helper import extract_subset_of_nodes, make_submodel, from_array_extended
+from ..helpers.onnx_helper import (
+    extract_subset_of_nodes,
+    make_submodel,
+    from_array_extended,
+    select_model_inputs_outputs,
+)
 from ..helpers.torch_helper import torch_dtype_to_onnx_dtype
 
 
@@ -324,8 +329,6 @@ class ReplayConfiguration:
             f.write(self.get_replay_code())
 
         if self.dump_prefix_model:
-            from onnx_extended.tools.onnx_nodes import select_model_inputs_outputs
-
             main_inputs = {
                 i.name: onnx_inputs.get(i.name, torch_inputs.get(i.name, None))
                 for i in model.graph.input
