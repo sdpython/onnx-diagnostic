@@ -1198,6 +1198,30 @@ def shadowing_names(
     return shadow, post_shadow, created
 
 
+def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
+    """
+    Returns the hidden inputs (inputs coming from an upper context)
+    used by a subgraph.
+    """
+    hidden = set()
+    memo = (
+        set(i.name for i in graph.initializer)
+        | set(i.name for i in graph.sparse_initializer)
+        | set(i.name for i in graph.input)
+    )
+    for node in graph.node:
+        for i in node.input:
+            if i not in memo:
+                hidden.add(i)
+        for att in node.attribute:
+            if att.type == onnx.AttributeProto.GRAPH and att.g:
+                hid = get_hidden_inputs(att.g)
+                less = set(h for h in hid if h not in memo)
+                hidden |= less
+        memo |= set(node.output)
+    return hidden
+
+
 def extract_subset_of_nodes(
     model: ModelProto,
     name: str,
@@ -1240,14 +1264,28 @@ def extract_subset_of_nodes(
     current_input_index = 0
     intermediate = {name}
     cut_points -= {name}
+    cached = {}
     inputs = set(k for k in node.input if k)
     while not (inputs <= cut_points) and current_node_index >= 0:
         node = model.graph.node[current_node_index]
-        if current_input_index == 0 or not node.input:
+        # node inputs including hidden ones
+        if current_node_index in cached:
+            node_inputs = cached[current_node_index]
+        else:
+            node_inputs = set(i for i in node.input if i)
+            if node.op_type in {"Scan", "If", "Loop"}:
+                # there are hidden inputs
+                for att in node.attribute:
+                    if att.type == onnx.AttributeProto.GRAPH:
+                        node_inputs |= get_hidden_inputs(att.g)
+            node_inputs = list(node_inputs)
+            cached[current_node_index] = node_inputs
+        # processing
+        if current_input_index == 0 or not node_inputs:
             needs = [o for o in node.output if o in intermediate and o not in cut_points]
             if needs:
                 selected.add(current_node_index)
-                if not node.input:
+                if not node_inputs:
                     current_node_index -= 1
                     current_input_index = 0
                     continue
@@ -1255,15 +1293,16 @@ def extract_subset_of_nodes(
                 current_node_index -= 1
                 current_input_index = 0
                 continue
-        assert current_input_index < len(node.input), (
-            f"current_input_index={current_input_index} but node.input={node.input}, "
+        # more intermediate results
+        assert current_input_index < len(node_inputs), (
+            f"current_input_index={current_input_index} but node_inputs={node_inputs}, "
             f"node={pretty_onnx(node)}"
         )
-        res = node.input[current_input_index]
+        res = node_inputs[current_input_index]
         if res not in cut_points:
             intermediate.add(res)
         current_input_index += 1
-        if current_input_index >= len(node.input):
+        if current_input_index >= len(node_inputs):
             current_node_index -= 1
             current_input_index = 0
 
@@ -1296,8 +1335,14 @@ def make_submodel(
 
     not_known: Set[str] = set()
     for node in nodes[::-1]:
-        not_known -= set(node.output)
-        not_known |= set(node.input)
+        not_known -= {o for o in node.output if o}
+        not_known |= {i for i in node.input if i}
+        if node.op_type in {"Scan", "If", "Loop"}:
+            # there are hidden inputs
+            for att in node.attribute:
+                if att.type == onnx.AttributeProto.GRAPH:
+                    print("++++", get_hidden_inputs(att.g))
+                    not_known |= get_hidden_inputs(att.g)
 
     model = oh.make_model(
         oh.make_graph(

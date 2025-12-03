@@ -12,7 +12,7 @@ class TestDiscrepancies(ExtTestCase):
         )
         sess = self.check_ort(model)
         feeds = dict(
-            c_lift_tensor_0=np.array([0], dtype=np.int64),
+            c_lifted_tensor_0=np.array([0], dtype=np.int64),
             cat_2=np.array(
                 [
                     0,
@@ -45,9 +45,12 @@ class TestDiscrepancies(ExtTestCase):
                 dtype=np.int64,
             ),
             unsqueeze_4=np.random.randn(1, 16, 1292, 80).astype(np.float32),
+            unsqueeze_5=np.random.randn(1, 16, 1292, 80).astype(np.float32),
+            unsqueeze_6=np.random.randn(1, 16, 1292, 80).astype(np.float32),
         )
         got = sess.run(None, feeds)
         self.assertEqual(len(got), 1)
+        self.assertEqual((1, 1292, 16, 80), got[0].shape)
 
 
 if __name__ == "__main__":

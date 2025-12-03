@@ -18,10 +18,11 @@ from onnx.defs import onnx_opset_version
 import onnxruntime
 from ..helpers import string_type
 from ..helpers.onnx_helper import (
-    pretty_onnx,
+    get_hidden_inputs,
     dtype_to_tensor_dtype,
-    to_array_extended,
     np_dtype_to_tensor_dtype,
+    to_array_extended,
+    pretty_onnx,
 )
 from ..helpers.torch_helper import onnx_dtype_to_torch_dtype, torch_dtype_to_onnx_dtype
 from ..helpers.ort_session import (
@@ -473,38 +474,14 @@ class OnnxruntimeEvaluator:
             yield node
 
     @classmethod
-    def _get_hidden_inputs(cls, graph: GraphProto) -> Set[str]:
-        """
-        Returns the hidden inputs (inputs coming from an upper context)
-        used by a subgraph.
-        """
-        hidden = set()
-        memo = (
-            {i.name for i in graph.initializer}
-            | {i.name for i in graph.sparse_initializer}
-            | {i.name for i in graph.input}
-        )
-        for node in graph.node:
-            for i in node.input:
-                if i not in memo:
-                    hidden.add(i)
-            for att in node.attribute:
-                if att.type == AttributeProto.GRAPH and att.g:
-                    hid = cls._get_hidden_inputs(att.g)
-                    less = set(h for h in hid if h not in memo)
-                    hidden |= less
-            memo |= set(node.output)
-        return hidden
-
-    @classmethod
     def _get_hidden_node_inputs(cls, node: NodeProto) -> Set[str]:
-        """Calls multiple _get_hidden_inputs on every attribute."""
+        """Calls multiple get_hidden_inputs on every attribute."""
         if node.op_type not in {"Loop", "Scan", "If"}:
             return set()
         hidden = set()
         for att in node.attribute:
             if att.type == AttributeProto.GRAPH:
-                hidden |= cls._get_hidden_inputs(att.g)
+                hidden |= get_hidden_inputs(att.g)
         return hidden - (hidden & set(node.input))
 
     def _get_sess(
@@ -624,7 +601,7 @@ class OnnxruntimeEvaluator:
                 value = oh.make_tensor_value_info(i, dtype_to_tensor_dtype(it.dtype), it.shape)
             vinputs.append(value)
 
-        reduced_set = self._get_hidden_inputs(g)
+        reduced_set = get_hidden_inputs(g)
         for i, v in context.items():
             if i in reduced_set and i not in unique_names:
                 unique_names.add(i)

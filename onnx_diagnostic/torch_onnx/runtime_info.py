@@ -4,6 +4,7 @@ import onnx
 import torch
 from ..api import TensorLike
 from ..helpers import string_type
+from ..helpers.onnx_helper import get_hidden_inputs
 
 
 class RuntimeValueKind(enum.IntEnum):
@@ -149,30 +150,6 @@ class RuntimeValue:
     def is_initializer(self) -> bool:
         "Tells if it is an initializer."
         return self.kind == RuntimeValueKind.INITIALIZER
-
-
-def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
-    """
-    Returns the hidden inputs (inputs coming from an upper context)
-    used by a subgraph.
-    """
-    hidden = set()
-    memo = (
-        set(i.name for i in graph.initializer)
-        | set(i.name for i in graph.sparse_initializer)
-        | set(i.name for i in graph.input)
-    )
-    for node in graph.node:
-        for i in node.input:
-            if i not in memo:
-                hidden.add(i)
-        for att in node.attribute:
-            if att.type == onnx.AttributeProto.GRAPH and att.g:
-                hid = get_hidden_inputs(att.g)
-                less = set(h for h in hid if h not in memo)
-                hidden |= less
-        memo |= set(node.output)
-    return hidden
 
 
 def set_is_shape(
