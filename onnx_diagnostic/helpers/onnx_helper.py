@@ -332,7 +332,7 @@ def onnx_dtype_name(itype: int, exc: bool = True) -> str:
         print(onnx_dtype_name(7))
     """
     for k in dir(TensorProto):
-        if k.upper() == k and k != "EXTERNAL":
+        if k.upper() == k and k not in {"DESCRIPTOR", "EXTERNAL", "DEFAULT"}:
             v = getattr(TensorProto, k)
             if v == itype:
                 return k
@@ -1219,11 +1219,14 @@ def extract_subset_of_nodes(
             if name in node.output:
                 node_index = i
                 break
-    assert (
-        node_index is not None
-        and node_index < len(model.graph.node)
-        and name in model.graph.node[node_index].output
-    ), f"node_index is still empty or wrong for result {name!r}"
+    assert node_index is not None and node_index < len(model.graph.node), (
+        f"node_index={node_index} (n_nodes={len(model.graph.node)}) "
+        f"is still empty or wrong for result {name!r}"
+    )
+    assert name in model.graph.node[node_index].output, (
+        f"Unable to find {name!r} in {model.graph.node[node_index].output}, "
+        f"node={pretty_onnx(model.graph.node[node_index])}"
+    )
     if cut_points is None:
         cut_points = {n.name for n in model.graph.input} | {
             n.name for n in model.graph.initializer
@@ -1236,6 +1239,7 @@ def extract_subset_of_nodes(
     current_node_index = node_index
     current_input_index = 0
     intermediate = {name}
+    cut_points -= {name}
     inputs = set(k for k in node.input if k)
     while not (inputs <= cut_points) and current_node_index >= 0:
         node = model.graph.node[current_node_index]

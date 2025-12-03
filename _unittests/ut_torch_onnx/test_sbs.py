@@ -1,3 +1,4 @@
+import os
 import unittest
 import pandas
 import onnx
@@ -776,6 +777,81 @@ class TestSideBySide(ExtTestCase):
         df = pandas.DataFrame(list(results)).dropna(axis=1, how="all")
         df.to_excel(self.get_dump_file("test_sbs_with_loops.xlsx"))
         # self.clean_dump()
+
+    @hide_stdout()
+    @ignore_warnings((DeprecationWarning, FutureWarning, UserWarning))
+    def test_sbs_mha_split_every_piece(self):
+        torch = self.torch
+
+        class Model(self.torch.nn.Module):
+            def __init__(self, embed_dim: int, num_heads: int):
+                super(Model, self).__init__()
+                self.embed_dim = embed_dim
+                self.num_heads = num_heads
+                self.head_dim = embed_dim // num_heads
+
+                assert embed_dim % num_heads == 0, (
+                    f"embed_dim % num_heads =! 0 -> "
+                    f"{embed_dim} % {num_heads} = {embed_dim % num_heads}"
+                )
+
+                self.W_q = torch.nn.Linear(embed_dim, embed_dim)
+                self.W_k = torch.nn.Linear(embed_dim, embed_dim)
+                self.W_v = torch.nn.Linear(embed_dim, embed_dim)
+
+            def split_heads(self, t, seq_len):
+                return t.view(t.shape[0], seq_len, self.num_heads, self.head_dim).transpose(
+                    1, 2
+                )
+
+            def forward(self, x):
+                q = self.split_heads(self.W_q(x), x.shape[1])
+                k = self.split_heads(self.W_k(x), x.shape[1])
+                v = self.split_heads(self.W_v(x), x.shape[1])
+                return (
+                    torch.nn.functional.scaled_dot_product_attention(q, k, v)
+                    .transpose(1, 2)
+                    .reshape(x.shape[0], x.shape[1], self.embed_dim)
+                )
+
+        embed_dim = 16
+        num_heads = 4
+        seq_len = 10
+        batch_size = 2
+        inputs = dict(x=torch.randn(batch_size, seq_len, embed_dim))
+        model = Model(embed_dim, num_heads)
+        model(**inputs)
+        ds = dict(x={0: "batch", 1: "seqlen"})
+
+        ep = self.torch.export.export(
+            model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
+        )
+        self.dump_text("test_sbs_mha_split_every_piece.ep", str(ep))
+        filename = self.get_dump_file("test_sbs_mha_split_every_piece.onnx")
+        to_onnx(ep, exporter="custom", filename=filename)
+        replay = self.get_dump_folder("test_sbs_mha_split_every_piece_replay")
+        onx = onnx.load(filename)
+        results = list(
+            run_aligned(
+                ep,
+                onx,
+                kwargs=inputs,
+                run_cls=OnnxruntimeEvaluator,
+                verbose=11,
+                use_tensor=True,
+                run_onnx_with_torch_inputs=True,
+                replay_configuration=ReplayConfiguration(
+                    dump_folder=replay, selected_op_types={"MatMul"}, threshold=2**20
+                ),
+            ),
+        )
+        df = pandas.DataFrame(list(results)).dropna(axis=1, how="all")
+        df.to_excel(self.get_dump_file("test_sbs_mha_split_every_piece.xlsx"))
+        max_abs = df["err_abs"].max()
+        self.assertLess(max_abs, 1e-5)
+        # self.clean_dump()
+        subonnx = onnx.load(os.path.join(replay, "scaled_dot_product_attention", "model.onnx"))
+        self.assertEqual(len(subonnx.graph.input), 3)
 
 
 if __name__ == "__main__":

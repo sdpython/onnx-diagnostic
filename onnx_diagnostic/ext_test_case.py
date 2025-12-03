@@ -845,6 +845,13 @@ class ExtTestCase(unittest.TestCase):
             f.write(proto.SerializeToString())
         return fullname
 
+    def dump_text(self, name: str, text: str, folder: Optional[str] = None) -> str:
+        """Dumps text in a file."""
+        fullname = self.get_dump_file(name, folder=folder)
+        with open(fullname, "w") as f:
+            f.write(text)
+        return fullname
+
     def assertExists(self, name):
         """Checks the existing of a file."""
         if not os.path.exists(name):

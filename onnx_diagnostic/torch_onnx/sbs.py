@@ -381,7 +381,8 @@ def _preparation_with_fx_graph(
                 assert len(torch_input_names) < len(onx.graph.input), (
                     f"torch_input_names={torch_input_names!r}, "
                     f"onnx_input_names={[n.name for n in onx.graph.input]}, "
-                    f"node.name={node.name!r} cannot be an input"
+                    f"node.name={node.name!r} cannot be an input, "
+                    f"placeholders_to_state_dict={sorted(placeholders_to_state_dict)}"
                 )
                 assert node.name not in skip_mapping_torch_onnx, (
                     f"{node.name!r} is ambiguous, cannot be mapped due to "
@@ -772,9 +773,9 @@ def run_aligned(
     # preparation with ep.graph.nodes
     ep_state_dict = {**ep.state_dict, **dict(ep.named_buffers(), **ep.tensor_constants)}
     placeholders_to_state_dict = {
-        **{f"p_{name.replace('.', '_')}": name for name in ep.state_dict},
-        **{f"b_{name.replace('.', '_')}": name for name, _ in ep.named_buffers()},
-        **{f"c_{name.replace('.', '_')}": name for name in ep.tensor_constants},
+        **{f"p_{name.replace('.', '_').lower()}": name for name in ep.state_dict},
+        **{f"b_{name.replace('.', '_').lower()}": name for name, _ in ep.named_buffers()},
+        **{f"c_{name.replace('.', '_').lower()}": name for name in ep.tensor_constants},
     }
     skip_mapping_torch_onnx = _duplicated_values(placeholders_to_state_dict)
     placeholders = {}
