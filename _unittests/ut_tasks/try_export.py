@@ -222,7 +222,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     self.assertIn('"PackedMultiHeadAttention"', str(model))
                 elif attention == "BIGMASK":
                     self.assertNotIn('"PackedMultiHeadAttention"', str(model))
-                    self.assertNotIn("MultiHeadAttention", str(model))
+                    self.assertIn("MultiHeadAttention", str(model))
                     self.assertNotIn("Loop", {n.op_type for n in model.graph.node})
                 elif attention == "LOOPMHA":
                     self.assertNotIn('"PackedMultiHeadAttention"', str(model))
