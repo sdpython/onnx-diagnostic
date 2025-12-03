@@ -1341,7 +1341,6 @@ def make_submodel(
             # there are hidden inputs
             for att in node.attribute:
                 if att.type == onnx.AttributeProto.GRAPH:
-                    print("++++", get_hidden_inputs(att.g))
                     not_known |= get_hidden_inputs(att.g)
 
     model = oh.make_model(
