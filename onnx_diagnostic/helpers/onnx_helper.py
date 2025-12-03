@@ -1239,9 +1239,12 @@ def get_all_node_inputs(node: onnx.NodeProto) -> Set[str]:
     Returns input and hidden inputs of a node.
     See :func:`get_hidden_inputs`.
     """
+    start = set(node.input)
     if node.op_type in {"Scan", "Loop", "If"}:
-        return set(node.input) | get_hidden_inputs(node)
-    return set(node.input)
+        for att in node.attribute:
+            if att.type == onnx.AttributeProto.GRAPH:
+                start |= get_hidden_inputs(att.g)
+    return start
 
 
 def extract_subset_of_nodes(
@@ -1613,8 +1616,7 @@ def select_model_inputs_outputs(
             if not mod:
                 continue
 
-            hidden = get_hidden_inputs([node])
-            node_inputs = list(node.input) + list(hidden)
+            node_inputs = get_all_node_inputs(node)
 
             nb += 1
             for inp in node_inputs:
