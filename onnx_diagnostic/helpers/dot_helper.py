@@ -1,29 +1,9 @@
-from typing import Dict, Set
+from typing import Dict
 import numpy as np
 import onnx
 import onnx.numpy_helper as onh
 from ..reference import ExtendedReferenceEvaluator as Inference
-from .onnx_helper import onnx_dtype_name, pretty_onnx
-
-
-def _get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
-    hidden = set()
-    memo = (
-        {i.name for i in graph.initializer}
-        | {i.values.name for i in graph.sparse_initializer}
-        | {i.name for i in graph.input}
-    )
-    for node in graph.node:
-        for i in node.input:
-            if i not in memo:
-                hidden.add(i)
-        for att in node.attribute:
-            if att.type == onnx.AttributeProto.GRAPH and att.g:
-                hid = _get_hidden_inputs(att.g)
-                less = set(h for h in hid if h not in memo)
-                hidden |= less
-        memo |= set(node.output)
-    return hidden
+from .onnx_helper import onnx_dtype_name, pretty_onnx, get_hidden_inputs
 
 
 def _make_node_label(node: onnx.NodeProto, tiny_inits: Dict[str, str]) -> str:
@@ -221,7 +201,7 @@ def to_dot(model: onnx.ModelProto) -> str:
             unique = set()
             for att in node.attribute:
                 if att.type == onnx.AttributeProto.GRAPH:
-                    unique |= _get_hidden_inputs(att.g)
+                    unique |= get_hidden_inputs(att.g)
             for i in unique:
                 edge = name_to_ids[i], _mkn(node)  # type: ignore[assignment]
                 if edge in done:

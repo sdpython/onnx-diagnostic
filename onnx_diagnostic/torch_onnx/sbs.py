@@ -7,7 +7,13 @@ import numpy as np
 import torch
 from ..helpers import string_type, string_diff, max_diff, flatten_object
 from ..helpers.onnx_helper import pretty_onnx
-from ..helpers.torch_helper import to_numpy, from_numpy, to_tensor, torch_dtype_to_onnx_dtype
+from ..helpers.torch_helper import (
+    to_numpy,
+    from_numpy,
+    to_tensor,
+    torch_dtype_to_onnx_dtype,
+    torch_deepcopy,
+)
 from ..helpers.torch_fx_graph_helper import prepare_args_kwargs, run_fx_node
 from ..reference.ort_evaluator import OnnxList, OnnxruntimeEvaluator
 from .sbs_dataclasses import (
@@ -188,7 +194,7 @@ def _loop_onnx_node(
         print(f"[run_aligned] feeds={string_type(feeds, **str_kws)}")
     begin = time.perf_counter()
     try:
-        res = ref.run(None, feeds)  # type: ignore[attr-defined]
+        res = ref.run(None, torch_deepcopy(feeds))  # type: ignore[attr-defined]
     except Exception as e:
         raise RuntimeError(
             f"Unable to run node {node.op_type}, domain={node.domain} "
@@ -241,7 +247,7 @@ def _loop_onnx_node(
                     f"[run_aligned] feeds for second run="
                     f"{string_type(new_feeds, **str_kws)}"
                 )
-            cross = ref.run(None, new_feeds)
+            cross = ref.run(None, torch_deepcopy(new_feeds))
             if verbose > 1:
                 print(f"[run_aligned] got for second run={string_type(cross, **str_kws)}")
             # Gemm = torch.nn.function.linear, in that case, we just run it as well

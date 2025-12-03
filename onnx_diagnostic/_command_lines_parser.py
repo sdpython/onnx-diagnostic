@@ -1342,6 +1342,20 @@ def get_parser_sbs() -> ArgumentParser:
         default="replay",
         help="If the replay is triggered, this defines the folder where everything is dumped.",
     )
+    parser.add_argument(
+        "-p",
+        "--replay-prefix-model",
+        action=BooleanOptionalAction,
+        default=False,
+        help=textwrap.dedent(
+            """
+            There are two ways to recompute an intermediate output, the first one is to "
+            produce the minimal model between torch and onnx.
+            The second one is to dump onnx models from the inputs
+            to the considered intermediate results. This enables the second one.
+            """
+        ),
+    )
 
     return parser
 
@@ -1431,6 +1445,7 @@ def _cmd_sbs(argv: List[Any]):
                 set(args.replay_op_types.split(",")) if args.replay_op_types else None
             ),
             dump_folder=args.replay_folder,
+            dump_prefix_model=args.replay_prefix_model,
         )
 
     print("-- starts side-by-side")

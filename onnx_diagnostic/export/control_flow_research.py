@@ -92,10 +92,11 @@ def simple_loop_for(
 
     from torch._higher_order_ops.utils import setup_compilation_env
 
-    with setup_compilation_env() as backend:
-        return torch.compile(_loop_for_op_wrapper, backend=backend, fullgraph=True)(
-            n_iter, body_fn, operands
-        )
+    with setup_compilation_env() as _backend:
+        return _loop_for_op_wrapper(n_iter, body_fn, *operands)
+        # return torch.compile(_loop_for_op_wrapper, backend=backend, fullgraph=True)(
+        #    n_iter, body_fn, operands
+        # )
 
 
 def trace_loop_for(proxy_mode, func_overload, n_iter, body_fn, operands):
@@ -127,9 +128,13 @@ def loop_for_op_dense(n_iter, body_fn, operands):
     ), f"Dense implementation operands must be a list of tensors and ints {operands}"
     mode = _get_current_dispatch_mode()
     assert mode is None, "Mode should never be enabled for CPU/CUDA key"
-    return _loop_for_onnx_fn(body_fn, n_iter, None, *operands)
+    return _loop_for_onnx_fn(body_fn, n_iter, None, operands)
 
 
 @simple_loop_for_op.py_impl(ProxyTorchDispatchMode)
 def inner(mode, n_iter, body_fn, operands):
     return trace_loop_for(mode, simple_loop_for_op, n_iter, body_fn, operands)
+
+
+simple_loop_for_op.fallthrough(torch._C.DispatchKey.AutogradCPU)
+simple_loop_for_op.fallthrough(torch._C.DispatchKey.AutogradCUDA)

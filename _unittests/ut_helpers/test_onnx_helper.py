@@ -7,8 +7,14 @@ import onnx.helper as oh
 import onnx.numpy_helper as onh
 from onnx import TensorProto, FunctionProto, ValueInfoProto
 from onnx.checker import check_model
+from onnx.external_data_helper import (
+    load_external_data_for_model,
+    _get_all_tensors,
+    uses_external_data,
+)
 import torch
 from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 from onnx_diagnostic.helpers.onnx_helper import (
     onnx_lighten,
     onnx_unlighten,
@@ -23,6 +29,7 @@ from onnx_diagnostic.helpers.onnx_helper import (
     onnx_dtype_name,
     extract_subset_of_nodes,
     make_submodel,
+    select_model_inputs_outputs,
 )
 
 
@@ -569,6 +576,97 @@ class TestOnnxHelper(ExtTestCase):
             ],
             [n.op_type for n in nodes],
         )
+
+    def _get_model_select(self):
+        X = oh.make_tensor_value_info("X", TensorProto.FLOAT, [None, None])
+        Z = oh.make_tensor_value_info("Z", TensorProto.INT64, [None, None])
+        graph = oh.make_graph(
+            [
+                oh.make_node("Mul", ["X", "X"], ["X2"]),
+                oh.make_node("Add", ["X2", "Y"], ["z1"]),
+                oh.make_node("Mul", ["z1", "W"], ["z2"]),
+                oh.make_node("Cast", ["z2"], ["Z"], to=TensorProto.INT64),
+            ],
+            "add",
+            [X],
+            [Z],
+            [
+                onh.from_array(np.arange(16).reshape((-1, 4)).astype(np.float32), name="Y"),
+                onh.from_array(
+                    (np.arange(16).reshape((-1, 4)) + 100).astype(np.float32), name="W"
+                ),
+            ],
+        )
+        onnx_model = oh.make_model(
+            graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=8
+        )
+        return onnx_model
+
+    def test_select_model_inputs_outputs(self):
+        def enumerate_model_tensors(model):
+            for tensor in _get_all_tensors(model):
+                yield tensor, uses_external_data(tensor)
+
+        model = self._get_model_select()
+        root = self.get_dump_folder("test_select_model_inputs_outputs")
+        name = os.path.join(root, "model_ext.onnx")
+        location = os.path.basename(name) + ".data"
+        onnx.save(
+            model, name, save_as_external_data=True, size_threshold=15, location=location
+        )
+        self.assertEqual(
+            list(sorted(os.listdir(root))),
+            ["model_ext.onnx", "model_ext.onnx.data"],
+        )
+
+        # X
+        name2 = os.path.join(root, "sub_model_ext.onnx")
+        model2 = onnx.load(name, load_external_data=False)
+        new_model = select_model_inputs_outputs(model2, outputs=["X2"])
+        onnx.save(new_model, name2)
+
+        x = np.arange(16).reshape((-1, 4)).astype(np.float32)
+        y = np.arange(16).reshape((-1, 4)).astype(np.float32)
+
+        sess = ExtendedReferenceEvaluator(new_model)
+        got = sess.run(None, {"X": x})[0]
+        self.assertEqual((x**2).tolist(), got.tolist())
+
+        sess = ExtendedReferenceEvaluator(name2)
+        got = sess.run(None, {"X": x})[0]
+        self.assertEqual((x**2).tolist(), got.tolist())
+
+        # z1
+        name3 = os.path.join(root, "sub_model_ext_z1.onnx")
+        model2 = onnx.load(name, load_external_data=False)
+        new_model = select_model_inputs_outputs(model2, outputs=["z1"])
+        onnx.save(new_model, name3)
+        self.assertEqual(
+            [
+                "model_ext.onnx",
+                "model_ext.onnx.data",
+                "sub_model_ext.onnx",
+                "sub_model_ext_z1.onnx",
+            ],
+            list(sorted(os.listdir(root))),
+        )
+
+        x = np.arange(16).reshape((-1, 4)).astype(np.float32)
+
+        sess = ExtendedReferenceEvaluator(name3)
+        got = sess.run(None, {"X": x})[0]
+        self.assertEqual((x**2 + y).tolist(), got.tolist())
+
+        tensors = list(enumerate_model_tensors(new_model))
+        self.assertEqual(len(tensors), 1)
+        self.assertIsInstance(tensors[0], tuple)
+        self.assertEqual(len(tensors[0]), 2)
+        self.assertTrue(tensors[0][-1])
+        self.assertIsInstance(tensors[0][0], TensorProto)
+        load_external_data_for_model(new_model, root)
+        sess = ExtendedReferenceEvaluator(new_model)
+        got = sess.run(None, {"X": x})[0]
+        self.assertEqual((x**2 + y).tolist(), got.tolist())
 
 
 if __name__ == "__main__":
