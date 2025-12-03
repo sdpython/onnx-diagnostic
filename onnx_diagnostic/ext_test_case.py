@@ -610,6 +610,21 @@ def requires_onnxruntime(version: str, msg: str = "") -> Callable:
     return lambda x: x
 
 
+def has_onnxruntime(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`onnxruntime` is not recent enough."""
+    import packaging.version as pv
+    import onnxruntime
+
+    if not hasattr(onnxruntime, "__version__"):
+        # development version
+        return True
+
+    if pv.Version(onnxruntime.__version__) < pv.Version(version):
+        msg = f"onnxruntime version {onnxruntime.__version__} < {version}: {msg}"
+        return False
+    return True
+
+
 def has_onnxruntime_training(push_back_batch: bool = False):
     """Tells if onnxruntime_training is installed."""
     try:

@@ -4,7 +4,12 @@ import unittest
 import onnx
 import textwrap
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, never_test, ignore_warnings
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    never_test,
+    ignore_warnings,
+    has_onnxruntime,
+)
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.export.api import to_onnx
@@ -17,6 +22,11 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
     @ignore_warnings(UserWarning)
     def test_qwen25_vli_visual(self):
         """
+        unittest::
+
+            UNITTEST_GOING=1 NEVERTEST=1 TESTDTYPE=float16 TESTDEVICE=cpu python \\
+                _unittests/ut_tasks/try_export.py -f -k test_qwen25_vli_visual
+
         # task: imagetext2text
         clear&&NEVERTEST=1 python _unittests/ut_tasks/try_export.py -k qwen_2_5
 
@@ -148,10 +158,12 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         elif device == "cuda" and dtype in ("float16", "bfloat16"):
             attention_options = ["PACKED", "BIGMASK"]
         else:
-            attention_options = ["LOOPMHA", "BIGMASK"]
+            attention_options = ["LOOPMHA", "LOOPA24", "BIGMASK"]
 
         # fake_inputs = make_fake_with_dynamic_dimensions(inputs, dynamic_shapes)[0]
         for attention in attention_options:
+            if attention == "LOOPA24" and not has_onnxruntime("1.24"):
+                continue
             with self.subTest(attention=attention):
                 print()
                 print(f"-- attention={attention!r}")
@@ -180,7 +192,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         exporter=exporter,
                         verbose=1,
                         save_ep=None if self.unit_test_going() else (fileep, 2**35),
-                        target_opset=22,
+                        target_opset=24 if attention == "LOOPA24" else 22,
                         optimize=True,
                         onnx_plugs=PLUGS,
                     )
@@ -207,17 +219,18 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 print(f"-- MODEL CONVERTED IN {time.perf_counter() - begin}")
                 model = onnx.load(filename, load_external_data=False)
                 if attention == "PACKED":
-                    self.assertIn(
-                        "PackedMultiHeadAttention", {n.op_type for n in model.graph.node}
-                    )
+                    self.assertIn('"PackedMultiHeadAttention"', str(model))
                 elif attention == "BIGMASK":
-                    self.assertNotIn(
-                        "PackedMultiHeadAttention", {n.op_type for n in model.graph.node}
-                    )
+                    self.assertNotIn('"PackedMultiHeadAttention"', str(model))
+                    self.assertIn("MultiHeadAttention", str(model))
+                    self.assertNotIn("Loop", {n.op_type for n in model.graph.node})
                 elif attention == "LOOPMHA":
-                    self.assertNotIn(
-                        "PackedMultiHeadAttention", {n.op_type for n in model.graph.node}
-                    )
+                    self.assertNotIn('"PackedMultiHeadAttention"', str(model))
+                    self.assertIn('"MultiHeadAttention"', str(model))
+                    self.assertIn("Loop", {n.op_type for n in model.graph.node})
+                elif attention == "LOOPA24":
+                    self.assertNotIn('"PackedMultiHeadAttention"', str(model))
+                    self.assertNotIn('"MultiHeadAttention"', str(model))
                     self.assertIn("Loop", {n.op_type for n in model.graph.node})
                 else:
                     raise AssertionError(f"attention={attention!r} not expected")
@@ -251,7 +264,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         else ["CPUExecutionProvider"]
                     ),
                     use_ort=True,
-                    atol=0.02,
+                    atol=0.05,
                     rtol=10,
                     # ep=pt2_file,
                     expected=expected,

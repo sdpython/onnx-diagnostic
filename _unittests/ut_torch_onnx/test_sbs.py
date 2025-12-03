@@ -693,21 +693,7 @@ class TestSideBySide(ExtTestCase):
                 ks = key * mask
                 vs = value * mask
                 attn_output = qwen_sdpa_attention_loopmha_versatile(
-                    qs,
-                    ks,
-                    vs,
-                    seq_lens,
-                    0.11,
-                    16,
-                    (
-                        onnx.TensorProto.FLOAT
-                        if query.dtype == torch.float32
-                        else (
-                            onnx.TensorProto.FLOAT16
-                            if query.dtype == torch.float16
-                            else onnx.TensorProto.BFLOAT16
-                        )
-                    ),
+                    qs, ks, vs, seq_lens, 0.11, 16
                 )
                 red = attn_output.mean(dim=-1, keepdim=True)
                 return attn_output - red
