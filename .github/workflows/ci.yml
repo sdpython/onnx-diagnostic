@@ -106,15 +106,16 @@ jobs:
             pip install torch==${{ matrix.torch }} torchvision torchaudio
           fi
 
-      - name: Cache pip
-        if: ${{ matrix.torch != 'main' && matrix.transformers != 'main' }}
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
+      # two slow
+      #- name: Cache pip
+      #  if: ${{ matrix.torch != 'main' && matrix.transformers != 'main' }}
+      #  uses: actions/cache@v4
+      #  with:
+      #    path: ~/.cache/pip
+      #    key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
+      #    restore-keys: |
+      #      ${{ runner.os }}-pip-
+      #      ${{ runner.os }}-
 
       - name: pip freeze
         run: python -m pip freeze

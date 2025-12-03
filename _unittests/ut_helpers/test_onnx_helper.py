@@ -1,6 +1,8 @@
+import os
 import unittest
 from typing import Any, Dict, List
 import numpy as np
+import onnx
 import onnx.helper as oh
 import onnx.numpy_helper as onh
 from onnx import TensorProto, FunctionProto, ValueInfoProto
@@ -475,7 +477,7 @@ class TestOnnxHelper(ExtTestCase):
 
     def test_onnx_dtype_name(self):
         for k in dir(TensorProto):
-            if k.upper() == k and k not in {"DESCRIPTOR", "EXTERNAL"}:
+            if k.upper() == k and k not in {"DESCRIPTOR", "EXTERNAL", "DEFAULT"}:
                 self.assertEqual(k, onnx_dtype_name(getattr(TensorProto, k)))
         self.assertRaise(lambda: onnx_dtype_name(1000), ValueError)
         self.assertEqual(onnx_dtype_name(1000, exc=False), "UNEXPECTED")
@@ -531,6 +533,42 @@ class TestOnnxHelper(ExtTestCase):
         )
         check_model(new_model)
         self.check_ort(new_model)
+
+    def test_extract_subset_of_nodes_bigger(self):
+        model = onnx.load(
+            os.path.join(
+                os.path.dirname(__file__), "data", "test_sbs_mha_split_every_piece.onnx"
+            )
+        )
+        nodes = extract_subset_of_nodes(
+            model=model,
+            name="scaled_dot_product_attention",
+            node_index=16,
+            cut_points={
+                "linear",
+                "linear_1",
+                "linear_2",
+                "output_0",
+                "scaled_dot_product_attention",
+                "transpose_2",
+                "view_2",
+                "x",
+            },
+        )
+        self.assertEqual(
+            [
+                "Mul",
+                "Reshape",
+                "Transpose",
+                "Mul",
+                "Reshape",
+                "Transpose",
+                "FusedMatMul",
+                "Softmax",
+                "MatMul",
+            ],
+            [n.op_type for n in nodes],
+        )
 
 
 if __name__ == "__main__":

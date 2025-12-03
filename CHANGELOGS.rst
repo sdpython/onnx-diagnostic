@@ -4,6 +4,7 @@ Change Logs
 0.8.4
 +++++
 
+* :pr:`337`: fixes extract_subset_of_nodes
 * :pr:`336`: implements versioned onnx plugs
 
 0.8.3

@@ -243,7 +243,17 @@ class ReplayConfiguration:
         :return: the folder created to dump everything
         """
         if verbose:
-            print(f"[ReplayConfiguration.dump] extract subset of node for {name!r}")
+            print(
+                f"[ReplayConfiguration.dump] extract subset of nodes for "
+                f"{name!r} (onnx_id_node={onnx_id_node})"
+            )
+            if verbose >= 10:
+                print(f"[ReplayConfiguration.dump] onnx_results={sorted(onnx_results)}")
+                print(f"[ReplayConfiguration.dump] torch_results={sorted(torch_results)}")
+                print(
+                    f"[ReplayConfiguration.dump] onnx_name_to_ep_name="
+                    f"{sorted(onnx_name_to_ep_name)}"
+                )
         nodes = extract_subset_of_nodes(
             model=model,
             name=name,
@@ -253,7 +263,8 @@ class ReplayConfiguration:
         if not nodes:
             if verbose:
                 print(
-                    f"[ReplayConfiguration.dump] could not extract subset of node for {name!r}"
+                    f"[ReplayConfiguration.dump] could not extract subset of "
+                    f"nodes for {name!r}"
                 )
             return None
         if verbose:
