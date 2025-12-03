@@ -342,7 +342,7 @@ class ReplayConfiguration:
             )
             onnx.save(model_inputs, model_inputs_file)
 
-            model_outputs_file = os.path.join(folder, "model.inputs.onnx")
+            model_outputs_file = os.path.join(folder, "model.outputs.onnx")
             model_outputs = select_model_inputs_outputs(
                 model, outputs=[i.name for i in submodel.graph.output]
             )
