@@ -1264,7 +1264,7 @@ def extract_subset_of_nodes(
     current_input_index = 0
     intermediate = {name}
     cut_points -= {name}
-    cached = {}
+    cached: Dict[int, List[str]] = {}
     inputs = set(k for k in node.input if k)
     while not (inputs <= cut_points) and current_node_index >= 0:
         node = model.graph.node[current_node_index]
@@ -1272,13 +1272,13 @@ def extract_subset_of_nodes(
         if current_node_index in cached:
             node_inputs = cached[current_node_index]
         else:
-            node_inputs = set(i for i in node.input if i)
+            set_inputs = set(i for i in node.input if i)
             if node.op_type in {"Scan", "If", "Loop"}:
                 # there are hidden inputs
                 for att in node.attribute:
                     if att.type == onnx.AttributeProto.GRAPH:
-                        node_inputs |= get_hidden_inputs(att.g)
-            node_inputs = list(node_inputs)
+                        set_inputs |= get_hidden_inputs(att.g)
+            node_inputs = list(set_inputs)
             cached[current_node_index] = node_inputs
         # processing
         if current_input_index == 0 or not node_inputs:
