@@ -1327,16 +1327,15 @@ class ExtTestCase(unittest.TestCase):
             if copy_inputs:
                 expected = [
                     (
-                        model(*copy.deepcopy(inputs))
-                        if isinstance(inputs, tuple)
+                        model(*copy.deepcopy(inp))
+                        if isinstance(inp, tuple)
                         else model(**copy.deepcopy(inp))
                     )
                     for inp in inputs
                 ]
             else:
                 expected = [
-                    model(*inp) if isinstance(inputs, tuple) else model(**inp)
-                    for inp in inputs
+                    model(*inp) if isinstance(inp, tuple) else model(**inp) for inp in inputs
                 ]
 
         if verbose:
