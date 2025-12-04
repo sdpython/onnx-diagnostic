@@ -1437,6 +1437,10 @@ def _cmd_sbs(argv: List[Any]):
         print("-- done")
         del sess
 
+    if not args.sbs:
+        print("-- done")
+        return
+
     print(f"-- load onnx {args.onnx!r}")
     begin = time.perf_counter()
     onx = onnx.load(args.onnx)

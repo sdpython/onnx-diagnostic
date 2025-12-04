@@ -26,6 +26,11 @@ if patch_qwen2_5:
     op = onnxscript.opset22
     op24 = onnxscript.onnx_opset.opset24
     msft_op = onnxscript.values.Opset("com.microsoft", 1)
+    STOPAT = (
+        int(os.environ.get("STOPAT", None))
+        if os.environ.get("STOPAT", None) is not None
+        else None
+    )
 
     def _add_com_microsoft_opset(function_proto: onnx.FunctionProto) -> onnx.FunctionProto:
         opsets = {d.domain: d.version for d in function_proto.opset_import}
@@ -529,8 +534,12 @@ if patch_qwen2_5:
                     position_embeddings=position_embeddings,
                     **kwargs,
                 )
+                if STOPAT is not None and layer_num > STOPAT:
+                    break
 
             hidden_states = self.merger(hidden_states)
+            if STOPAT is not None:
+                return hidden_states
             reverse_indices = torch.argsort(window_index)
             hidden_states = hidden_states[reverse_indices, :]
             return hidden_states
