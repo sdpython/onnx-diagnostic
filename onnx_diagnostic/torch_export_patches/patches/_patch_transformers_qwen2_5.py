@@ -253,7 +253,9 @@ if patch_qwen2_5:
         n_outputs=1,
         kwargs=dict(scaling=0.11180339887498948, num_heads=16),
         name="qwen_sdpa_attention_loopmha",
-        version_selector=lambda *args: torch_dtype_to_onnx_dtype(args[0].dtype),
+        version_selector=lambda *args: torch_dtype_to_onnx_dtype(
+            next(a for a in args if a is not None).dtype
+        ),
     )
     PLUGS.append(qwen_sdpa_attention_loopmha_versatile)
 
@@ -274,7 +276,9 @@ if patch_qwen2_5:
         n_outputs=1,
         kwargs=dict(scaling=0.11180339887498948, num_heads=16),
         name="qwen_sdpa_attention_loopa24",
-        version_selector=lambda *args: torch_dtype_to_onnx_dtype(args[0].dtype),
+        version_selector=lambda *args: torch_dtype_to_onnx_dtype(
+            next(a for a in args if a is not None).dtype
+        ),
     )
     PLUGS.append(qwen_sdpa_attention_loopa24_versatile)
 

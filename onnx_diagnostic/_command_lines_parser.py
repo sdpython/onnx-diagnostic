@@ -1286,7 +1286,13 @@ def get_parser_sbs() -> ArgumentParser:
         "--first",
         action=BooleanOptionalAction,
         default=False,
-        help="First runs the whole model.",
+        help="First runs the whole model (default is False).",
+    )
+    parser.add_argument(
+        "--sbs",
+        action=BooleanOptionalAction,
+        default=True,
+        help="Runs the side-by-side (default is True).",
     )
     parser.add_argument(
         "-2",
