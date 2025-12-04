@@ -1220,7 +1220,7 @@ class ExtTestCase(unittest.TestCase):
         test_name: str,
         proto: Union[str, "onnx.ModelProto"],  # noqa: F821
         model: "torch.nn.Module",  # noqa: F821
-        inputs: Union[Tuple[Any], Dict[str, Any]],
+        inputs: Union[Tuple[Any], Dict[str, Any], List[Any]],
         verbose: int = 0,
         atol: float = 1e-5,
         rtol: float = 1e-3,
@@ -1279,11 +1279,16 @@ class ExtTestCase(unittest.TestCase):
         if verbose:
             print(f"[{vname}] make feeds {string_type(inputs, **kws)}")
 
+        if not isinstance(inputs, list):
+            inputs = [inputs]
+            if expected is not None:
+                expected = [expected]
+
+        gots = []
         if use_ort:
             assert isinstance(
                 proto, onnx.ModelProto
             ), f"Unexpected type {type(proto)} for proto"
-            feeds = make_feeds(proto, inputs, use_numpy=True, copy=True)
             import onnxruntime
 
             options = onnxruntime.SessionOptions()
@@ -1299,29 +1304,40 @@ class ExtTestCase(unittest.TestCase):
             sess = onnxruntime.InferenceSession(
                 model_file or proto.SerializeToString(), options, providers=providers
             )
-            if verbose:
-                print(f"[{vname}] run ort feeds {string_type(feeds, **kws)}")
-            got = sess.run(None, feeds)
+            for inp in inputs:
+                feeds = make_feeds(proto, inp, use_numpy=True, copy=True)
+                if verbose:
+                    print(f"[{vname}] run ort feeds {string_type(feeds, **kws)}")
+                got = sess.run(None, feeds)
+                gots.append(got)
         else:
-            feeds = make_feeds(proto, inputs, copy=True)
             if verbose:
                 print(f"[{vname}] create InferenceSessionForTorch")
             sess = InferenceSessionForTorch(proto, **kwargs)
-            if verbose:
-                print(f"[{vname}] run orttorch feeds {string_type(feeds, **kws)}")
-            got = sess.run(None, feeds)
+            for inp in inputs:
+                feeds = make_feeds(proto, inp, copy=True)
+                if verbose:
+                    print(f"[{vname}] run orttorch feeds {string_type(feeds, **kws)}")
+                got = sess.run(None, feeds)
+                gots.append(got)
         if verbose:
             print(f"[{vname}] compute expected values")
 
         if expected is None:
             if copy_inputs:
-                expected = (
-                    model(*copy.deepcopy(inputs))
-                    if isinstance(inputs, tuple)
-                    else model(**copy.deepcopy(inputs))
-                )
+                expected = [
+                    (
+                        model(*copy.deepcopy(inputs))
+                        if isinstance(inputs, tuple)
+                        else model(**copy.deepcopy(inp))
+                    )
+                    for inp in inputs
+                ]
             else:
-                expected = model(*inputs) if isinstance(inputs, tuple) else model(**inputs)
+                expected = [
+                    model(*inp) if isinstance(inputs, tuple) else model(**inp)
+                    for inp in inputs
+                ]
 
         if verbose:
             print(f"[{vname}] expected {string_type(expected, **kws)}")
@@ -1334,47 +1350,50 @@ class ExtTestCase(unittest.TestCase):
                 import torch
 
                 ep = torch.export.load(ep)
-            ep_inputs = copy.deepcopy(inputs) if copy_inputs else inputs
-            ep_model = ep.module()  # type: ignore[union-attr]
-            ep_expected = (
-                ep_model(*copy.deepcopy(ep_inputs))
-                if isinstance(ep_inputs, tuple)
-                else ep_model(**copy.deepcopy(ep_inputs))
-            )
-            if verbose:
-                print(f"[{vname}] ep_expected {string_type(ep_expected, **kws)}")
-            ep_diff = max_diff(expected, ep_expected, hist=[0.1, 0.01])
-            if verbose:
-                print(f"[{vname}] ep_diff {string_diff(ep_diff)}")
-            assert (
-                isinstance(ep_diff["abs"], float)
-                and isinstance(ep_diff["rel"], float)
-                and not numpy.isnan(ep_diff["abs"])
-                and ep_diff["abs"] <= atol
-                and not numpy.isnan(ep_diff["rel"])
-                and ep_diff["rel"] <= rtol
-            ), (
-                f"discrepancies in {test_name!r} between the exported program "
-                f"and the exported model diff={string_diff(ep_diff)}"
-            )
-            ep_nx_diff = max_diff(ep_expected, got, flatten=True, hist=[0.1, 0.01])
-            if verbose:
-                print(f"[{vname}] ep_nx_diff {string_diff(ep_nx_diff)}")
 
-        diff = max_diff(expected, got, flatten=True, hist=[0.1, 0.01])
-        if verbose:
-            print(f"[{vname}] diff {string_diff(diff)}")
-        assert (
-            isinstance(diff["abs"], float)
-            and isinstance(diff["rel"], float)
-            and not numpy.isnan(diff["abs"])
-            and diff["abs"] <= atol
-            and not numpy.isnan(diff["rel"])
-            and diff["rel"] <= rtol
-        ), (
-            f"discrepancies in {test_name!r} between the model and "
-            f"the onnx model diff={string_diff(diff)}"
-        )
+            ep_model = ep.module()  # type: ignore[union-attr]
+            for expe, inp, got in zip(expected, inputs, gots):
+                ep_inputs = copy.deepcopy(inp) if copy_inputs else inp
+                ep_expected = (
+                    ep_model(*copy.deepcopy(ep_inputs))
+                    if isinstance(ep_inputs, tuple)
+                    else ep_model(**copy.deepcopy(ep_inputs))
+                )
+                if verbose:
+                    print(f"[{vname}] ep_expected {string_type(ep_expected, **kws)}")
+                ep_diff = max_diff(expe, ep_expected, hist=[0.1, 0.01])
+                if verbose:
+                    print(f"[{vname}] ep_diff {string_diff(ep_diff)}")
+                assert (
+                    isinstance(ep_diff["abs"], float)
+                    and isinstance(ep_diff["rel"], float)
+                    and not numpy.isnan(ep_diff["abs"])
+                    and ep_diff["abs"] <= atol
+                    and not numpy.isnan(ep_diff["rel"])
+                    and ep_diff["rel"] <= rtol
+                ), (
+                    f"discrepancies in {test_name!r} between the exported program "
+                    f"and the exported model diff={string_diff(ep_diff)}"
+                )
+                ep_nx_diff = max_diff(ep_expected, got, flatten=True, hist=[0.1, 0.01])
+                if verbose:
+                    print(f"[{vname}] ep_nx_diff {string_diff(ep_nx_diff)}")
+
+        for expe, got in zip(expected, gots):
+            diff = max_diff(expe, got, flatten=True, hist=[0.1, 0.01])
+            if verbose:
+                print(f"[{vname}] diff {string_diff(diff)}")
+            assert (
+                isinstance(diff["abs"], float)
+                and isinstance(diff["rel"], float)
+                and not numpy.isnan(diff["abs"])
+                and diff["abs"] <= atol
+                and not numpy.isnan(diff["rel"])
+                and diff["rel"] <= rtol
+            ), (
+                f"discrepancies in {test_name!r} between the model and "
+                f"the onnx model diff={string_diff(diff)}"
+            )
 
     def _debug(self):
         "Tells if DEBUG=1 is set up."

@@ -149,6 +149,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             expected_big = model_to_export(**big_inputs)
         else:
             expected = None
+            expected_big = None
         print(f"-- MODEL RUN IN {time.perf_counter() - begin}")
         print(f"-- expected: {self.string_type(expected, with_shape=True)}")
 
@@ -191,6 +192,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 ):
                     if expected is None:
                         expected = model_to_export(**inputs)
+                        expected_big = model_to_export(**big_inputs)
                     to_onnx(
                         model_to_export,
                         kwargs=export_inputs,
@@ -263,7 +265,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     (f"test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}"),
                     filename,
                     model_to_export,
-                    big_inputs,  # export_inputs,
+                    [export_inputs, big_inputs],
                     verbose=1,
                     providers=(
                         ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -274,7 +276,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     atol=0.05,
                     rtol=10,
                     # ep=pt2_file,
-                    expected=expected_big,
+                    expected=[expected, expected_big],
                     log_severity_level=0,
                     log_verbosity_level=0,
                 )

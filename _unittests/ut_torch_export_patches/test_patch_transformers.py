@@ -270,7 +270,7 @@ class TestPatchPatchTransformers(ExtTestCase):
             "test_qwen_apply_multimodal_rotary_pos_emb",
             proto,
             model,
-            inputs,
+            [inputs],
             verbose=1,
             atol=1e-3,
             rtol=1,
