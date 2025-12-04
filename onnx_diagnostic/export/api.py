@@ -21,7 +21,6 @@ def to_onnx(
     use_control_flow_dispatcher: bool = False,
     onnx_plugs: Optional[List[EagerDirectReplacementWithOnnx]] = None,
     inline: bool = True,
-    cut_ep: Optional[List[str]] = None,
 ) -> Any:
     """
     Common API for exporters. By default, the models are optimized to use the
@@ -47,8 +46,6 @@ def to_onnx(
         custom loops (see :func:`onnx_diagnostic.export.control_flow_onnx.loop_for_onnx`)
     :param onnx_plugs: the code was modified to replace some parts with onnx translation
     :param inline: inline local functions
-    :param cut_ep: cut the exported program before exporting,
-        this is used to investigate issues.
     :return: the output of the selected exporter, usually a structure including
         an onnx model
 
@@ -143,7 +140,7 @@ def to_onnx(
             dynamic_shapes=dynamic_shapes,
             large_model=True,
             output_dynamic_shapes=output_dynamic_shapes,
-            export_options=ExportOptions(save_ep=save_ep, cut_ep=cut_ep),
+            export_options=ExportOptions(save_ep=save_ep),
             options=options,
             inline=inline,
             dispatcher=main_dispatcher,
@@ -158,7 +155,6 @@ def to_onnx(
         assert (
             not output_dynamic_shapes
         ), f"output_dynamic_shapes not supported for exporter={exporter!r}"
-        assert not cut_ep, f"cut_ep={cut_ep} not available with exporter={exporter!r}"
         custom_translation_table = {}
         if onnx_plugs:
             for plug in onnx_plugs:
@@ -222,7 +218,6 @@ def to_onnx(
             f"Only a specified set of inputs is supported for exporter={exporter!r}, "
             f"but it is {list(kwargs)}"  # type: ignore[arg-type]
         )
-        assert not cut_ep, f"cut_ep={cut_ep} not available with exporter={exporter!r}"
         flat_inputs = flatten_object(kwargs, drop_keys=True)
         first = flat_inputs[0]
         first_float = [

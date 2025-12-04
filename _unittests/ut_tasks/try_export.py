@@ -79,9 +79,6 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             "float32": torch.float32,
         }[dtype]
         exporter = os.environ.get("EXPORTER", "custom")
-        cut_ep = os.environ.get("CUT_EXPORTED_PROGRAM", None)
-        if cut_ep is not None:
-            cut_ep = cut_ep.split(",")
 
         from transformers import AutoModel, AutoProcessor
         from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
@@ -205,7 +202,6 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         target_opset=24 if attention == "LOOPA24" else 22,
                         optimize=True,
                         onnx_plugs=PLUGS,
-                        cut_ep=cut_ep,
                     )
 
                 if not self.unit_test_going():
