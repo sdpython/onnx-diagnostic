@@ -1218,7 +1218,7 @@ class ExtTestCase(unittest.TestCase):
     def assert_onnx_disc(
         self,
         test_name: str,
-        proto: "onnx.ModelProto",  # noqa: F821
+        proto: Union[str, "onnx.ModelProto"],  # noqa: F821
         model: "torch.nn.Module",  # noqa: F821
         inputs: Union[Tuple[Any], Dict[str, Any]],
         verbose: int = 0,
@@ -1264,7 +1264,9 @@ class ExtTestCase(unittest.TestCase):
             name = f"{test_name}.onnx"
             if verbose:
                 print(f"[{vname}] save the onnx model into {name!r}")
+            model_file = None
             if isinstance(proto, str):
+                model_file = proto
                 name = proto
                 proto = onnx.load(name)
             elif not self.unit_test_going():
@@ -1287,11 +1289,15 @@ class ExtTestCase(unittest.TestCase):
             options = onnxruntime.SessionOptions()
             if ort_optimized_graph:
                 options.optimized_model_filepath = f"{name}.optort.onnx"
+            if "log_severity_level" in kwargs:
+                options.log_severity_level = kwargs["log_severity_level"]
+            if "log_verbosity_level" in kwargs:
+                options.log_verbosity_level = kwargs["log_verbosity_level"]
             providers = kwargs.get("providers", ["CPUExecutionProvider"])
             if verbose:
                 print(f"[{vname}] create onnxruntime.InferenceSession with {providers}")
             sess = onnxruntime.InferenceSession(
-                proto.SerializeToString(), options, providers=providers
+                model_file or proto.SerializeToString(), options, providers=providers
             )
             if verbose:
                 print(f"[{vname}] run ort feeds {string_type(feeds, **kws)}")

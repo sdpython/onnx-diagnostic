@@ -149,6 +149,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         begin = time.perf_counter()
         if not os.environ.get("STOPAT", ""):
             expected = model_to_export(**inputs)
+            expected_big = model_to_export(**big_inputs)
         else:
             expected = None
         print(f"-- MODEL RUN IN {time.perf_counter() - begin}")
@@ -266,7 +267,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     (f"test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}"),
                     filename,
                     model_to_export,
-                    export_inputs,
+                    big_inputs,  # export_inputs,
                     verbose=1,
                     providers=(
                         ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -277,7 +278,9 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     atol=0.05,
                     rtol=10,
                     # ep=pt2_file,
-                    expected=expected,
+                    expected=expected_big,
+                    log_severity_level=0,
+                    log_verbosity_level=0,
                 )
                 print(f"-- MODEL VERIFIED IN {time.perf_counter() - begin}")
         os.environ["QWEN25ATTENTION"] = qwen25_attention

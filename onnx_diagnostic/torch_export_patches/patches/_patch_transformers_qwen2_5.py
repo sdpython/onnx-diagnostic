@@ -538,8 +538,6 @@ if patch_qwen2_5:
                     break
 
             hidden_states = self.merger(hidden_states)
-            if STOPAT is not None:
-                return hidden_states
             reverse_indices = torch.argsort(window_index)
             hidden_states = hidden_states[reverse_indices, :]
             return hidden_states
