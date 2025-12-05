@@ -6,10 +6,8 @@ from .onnx_plug import EagerDirectReplacementWithOnnx
 def get_main_dispatcher(
     use_control_flow_dispatcher: bool = False,
     onnx_plugs: Optional[List[EagerDirectReplacementWithOnnx]] = None,
-) -> "Dispatcher":  # noqa: F821
-    """
-    Creates a custom dispatcher for the custom exporter.
-    """
+) -> Any:  # Dispatcher
+    """Creates a custom dispatcher for the custom exporter."""
     from experimental_experiment.torch_interpreter import Dispatcher
 
     if use_control_flow_dispatcher:
@@ -189,10 +187,12 @@ def to_onnx(
             import onnx_ir as ir
             import onnx_ir.passes.common as common_passes
 
+            opset = target_opset if isinstance(target_opset, int) else target_opset[""]
+
             irfunctions = [
                 ir.from_proto(
                     plug.get_function_proto(
-                        target_opset, *flatten_object((args, kwargs), drop_keys=True)
+                        opset, *flatten_object((args, kwargs), drop_keys=True)
                     )
                 )
                 for plug in onnx_plugs
