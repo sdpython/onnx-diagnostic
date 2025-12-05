@@ -17,7 +17,6 @@ from typing import (
     Union,
 )
 import numpy as np
-import numpy.typing as npt
 import onnx
 import onnx.helper as oh
 import onnx.numpy_helper as onh
@@ -32,6 +31,8 @@ from onnx import (
     ValueInfoProto,
     load as onnx_load,
 )
+
+TensorLike = Union[np.ndarray, "torch.Tensor"]  # noqa: F821
 
 
 def _make_stat(init: TensorProto) -> Dict[str, float]:
@@ -490,7 +491,7 @@ def convert_endian(tensor: TensorProto) -> None:
     tensor.raw_data = np.frombuffer(tensor.raw_data, dtype=np_dtype).byteswap().tobytes()
 
 
-def from_array_ml_dtypes(arr: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
+def from_array_ml_dtypes(arr: TensorLike, name: Optional[str] = None) -> TensorProto:
     """
     Converts a numpy array to a tensor def assuming the dtype
     is defined in ml_dtypes.
@@ -536,7 +537,7 @@ _STORAGE_TYPE = {
 }
 
 
-def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> TensorProto:
+def from_array_extended(tensor: TensorLike, name: Optional[str] = None) -> TensorProto:
     """
     Converts an array into a :class:`onnx.TensorProto`.
 
@@ -603,7 +604,7 @@ def from_array_extended(tensor: npt.ArrayLike, name: Optional[str] = None) -> Te
     return t
 
 
-def to_array_extended(proto: TensorProto) -> npt.ArrayLike:
+def to_array_extended(proto: TensorProto) -> TensorLike:
     """Converts :class:`onnx.TensorProto` into a numpy array."""
     arr = onh.to_array(proto)
     if proto.data_type >= onnx.TensorProto.BFLOAT16:

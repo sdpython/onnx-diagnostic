@@ -143,7 +143,7 @@ class EagerDirectReplacementWithOnnx:
         print(pretty_onnx(onx))
 
     This shows how to define multiple versions depending on the device,
-    the type or the targetted onnx opset.
+    the type or the targeted onnx opset.
 
     .. code-block:: python
 
