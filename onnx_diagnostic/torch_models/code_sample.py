@@ -236,7 +236,7 @@ def code_sample(
             )
         )
     """
-    model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
+    model_id, subfolder, same_as_pretrained, use_pretrained, submodule = _preprocess_model_id(
         model_id,
         subfolder,
         same_as_pretrained=same_as_pretrained,
@@ -256,6 +256,7 @@ def code_sample(
         model_kwargs=mop,
         subfolder=subfolder,
         add_second_input=False,
+        submodule=submodule,
     )
     if drop_inputs:
         update = {}

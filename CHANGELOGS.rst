@@ -4,6 +4,7 @@ Change Logs
 0.8.4
 +++++
 
+* :pr:`341`: preliminary support to export submodule
 * :pr:`340`: supports devices in onnx plugs
 * :pr:`338`: fixes ReplayConfiguration.dump, add function to select of part of a model
 * :pr:`337`: fixes extract_subset_of_nodes

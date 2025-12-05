@@ -349,13 +349,15 @@ def _prepare_validation(
     verbose,
     output_names,
     dump_folder,
+    submodule,
 ):
     main_validation_begin = time.perf_counter()
-    model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
+    model_id, subfolder, same_as_pretrained, use_pretrained, submodule = _preprocess_model_id(
         model_id,
         subfolder,
         same_as_pretrained=same_as_pretrained,
         use_pretrained=use_pretrained,
+        submodule=submodule,
     )
     time_preprocess_model_id = time.perf_counter() - main_validation_begin
     patch_kwargs = make_patch_kwargs(patch=patch, rewrite=rewrite)
@@ -364,6 +366,7 @@ def _prepare_validation(
     summary.update(
         dict(
             version_model_id=model_id,
+            version_submodule=submodule,
             version_do_run=str(do_run),
             version_dtype=str(dtype or ""),
             version_device=str(device or ""),
@@ -444,6 +447,7 @@ def _prepare_validation(
         dump_folder,
         folder_name,
         patch_kwargs,
+        submodule,
     )
 
 
@@ -460,6 +464,7 @@ def _get_untrained_model_with_inputs(
     inputs2,
     quiet,
     dump_folder,
+    submodule,
 ):
     iop = input_options or {}
     mop = model_options or {}
@@ -480,6 +485,7 @@ def _get_untrained_model_with_inputs(
                     model_kwargs=mop,
                     subfolder=sub,
                     add_second_input=i2,
+                    submodule=submodule,
                 )
             )
         ),
@@ -842,6 +848,7 @@ def validate_model(
     ort_logs: bool = False,
     quiet_input_sets: Optional[Set[str]] = None,
     save_ep: Optional[str] = None,
+    submodule: Optional[str] = None,
 ) -> Tuple[Dict[str, Union[int, float, str]], Dict[str, Any]]:
     """
     Validates a model.
@@ -902,6 +909,7 @@ def validate_model(
         even if quiet is False
     :param save_ep: if not empty, this can be used to save the input sets and
         the exported program
+    :param submodule: to test not the model but a submodule of this model
     :return: two dictionaries, one with some metrics,
         another one with whatever the function produces
 
@@ -966,6 +974,7 @@ def validate_model(
         use_pretrained=use_pretrained,
         same_as_pretrained=same_as_pretrained,
         save_ep=save_ep,
+        submodule=submodule,
     )
     if dump_folder:
         with open(dump_stats, "w") as f:
@@ -1053,6 +1062,7 @@ def _validate_model_step1(
     use_pretrained,
     same_as_pretrained,
     save_ep,
+    submodule,
 ):
     assert not do_same or do_run, (
         f"Discrepancies cannot be measured if the model is not run, "
@@ -1067,6 +1077,7 @@ def _validate_model_step1(
         dump_folder,
         folder_name,
         patch_kwargs,
+        submodule,
     ) = _prepare_validation(
         model_id=model_id,
         subfolder=subfolder,
@@ -1093,6 +1104,7 @@ def _validate_model_step1(
         verbose=verbose,
         output_names=output_names,
         dump_folder=dump_folder,
+        submodule=submodule,
     )
 
     data, iop, mop = _get_untrained_model_with_inputs(
@@ -1108,6 +1120,7 @@ def _validate_model_step1(
         inputs2=inputs2,
         quiet=quiet,
         dump_folder=dump_folder,
+        submodule=submodule,
     )
 
     second_input_keys = [k for k in data if k.startswith("inputs") and k != "inputs"]

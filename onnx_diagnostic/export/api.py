@@ -3,6 +3,52 @@ import torch
 from .onnx_plug import EagerDirectReplacementWithOnnx
 
 
+def get_main_dispatcher(
+    use_control_flow_dispatcher: bool = False,
+    onnx_plugs: Optional[List[EagerDirectReplacementWithOnnx]] = None,
+) -> Any:  # Dispatcher
+    """Creates a custom dispatcher for the custom exporter."""
+    from experimental_experiment.torch_interpreter import Dispatcher
+
+    if use_control_flow_dispatcher:
+        from .control_flow_onnx import create_global_dispatcher
+
+        control_flow_dispatcher = create_global_dispatcher()
+    else:
+        control_flow_dispatcher = None
+
+    class MainDispatcher(Dispatcher):
+        def __init__(self, previous_dispatcher=None):
+            super().__init__({})
+            self.previous_dispatcher = previous_dispatcher
+
+        @property
+        def supported(self):
+            if self.previous_dispatcher:
+                return set(self.registered_functions) | self.previous_dispatcher.supported
+            return set(self.registered_functions)
+
+        def find_function(self, name: Any):
+            if self.previous_dispatcher:
+                find = self.previous_dispatcher.find_function(name)
+                if find:
+                    return find
+            return Dispatcher.find_function(self, name)
+
+        def find_method(self, name: Any):
+            if self.previous_dispatcher:
+                find = self.previous_dispatcher.find_method(name)
+                if find:
+                    return find
+            return Dispatcher.find_method(self, name)
+
+    main_dispatcher = MainDispatcher(control_flow_dispatcher)
+    if onnx_plugs:
+        for plug in onnx_plugs:
+            main_dispatcher.registered_functions[plug.target_name] = plug.custom_converter()
+    return main_dispatcher
+
+
 def to_onnx(
     mod: Union["torch.nn.Module", "torch.fx.GraphModule"],  # noqa: F821
     args: Optional[Sequence["torch.Tensor"]] = None,  # noqa: F821
@@ -82,51 +128,11 @@ def to_onnx(
             options = exporter_kwargs.pop("options", None)
         if options is None:
             options = OptimizationOptions(patterns="default+onnxruntime")
-        if onnx_plugs or use_control_flow_dispatcher:
-            from experimental_experiment.torch_interpreter import Dispatcher
-
-            if use_control_flow_dispatcher:
-                from .control_flow_onnx import create_global_dispatcher
-
-                control_flow_dispatcher = create_global_dispatcher()
-            else:
-                control_flow_dispatcher = None
-
-            class MainDispatcher(Dispatcher):
-                def __init__(self, previous_dispatcher=None):
-                    super().__init__({})
-                    self.previous_dispatcher = previous_dispatcher
-
-                @property
-                def supported(self):
-                    if self.previous_dispatcher:
-                        return (
-                            set(self.registered_functions) | self.previous_dispatcher.supported
-                        )
-                    return set(self.registered_functions)
-
-                def find_function(self, name: Any):
-                    if self.previous_dispatcher:
-                        find = self.previous_dispatcher.find_function(name)
-                        if find:
-                            return find
-                    return Dispatcher.find_function(self, name)
-
-                def find_method(self, name: Any):
-                    if self.previous_dispatcher:
-                        find = self.previous_dispatcher.find_method(name)
-                        if find:
-                            return find
-                    return Dispatcher.find_method(self, name)
-
-            main_dispatcher = MainDispatcher(control_flow_dispatcher)
-            if onnx_plugs:
-                for plug in onnx_plugs:
-                    main_dispatcher.registered_functions[plug.target_name] = (
-                        plug.custom_converter()
-                    )
-        else:
-            main_dispatcher = None
+        main_dispatcher = (
+            get_main_dispatcher(use_control_flow_dispatcher, onnx_plugs)
+            if onnx_plugs or use_control_flow_dispatcher
+            else None
+        )
 
         return _to_onnx(
             mod,
@@ -181,9 +187,17 @@ def to_onnx(
             import onnx_ir as ir
             import onnx_ir.passes.common as common_passes
 
+            opset = (
+                18
+                if target_opset is None
+                else (target_opset if isinstance(target_opset, int) else target_opset[""])
+            )
+
             irfunctions = [
                 ir.from_proto(
-                    plug.get_function_proto(*flatten_object((args, kwargs), drop_keys=True))
+                    plug.get_function_proto(
+                        opset, *flatten_object((args, kwargs), drop_keys=True)
+                    )
                 )
                 for plug in onnx_plugs
             ]

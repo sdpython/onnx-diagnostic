@@ -262,12 +262,14 @@ if patch_qwen2_5:
         itype = torch_dtype_to_onnx_dtype(dtype)
         if strategy is not None:
             return strategy, itype
-        if dtype == torch.float32:
+        if dtype == torch.float32 or itype == onnx.TensorProto.FLOAT:
             if opset >= 24:
                 return "LOOPA24", itype
             return "LOOPMHA", itype
-        if dtype == torch.float16:
-            if first_tensor.is_cuda:
+        if dtype == torch.float16 or itype == onnx.TensorProto.FLOAT16:
+            # first_tensor may be a SymbolicTensor (onnx).
+            # is_cuda is not available.
+            if hasattr(first_tensor, "is_cuda") and first_tensor.is_cuda:
                 return "PACKED", itype
             return "LOOPMHA", itype
         raise AssertionError(
@@ -638,12 +640,14 @@ if patch_qwen2_5:
                     self.config._attn_implementation
                 ]
 
-            is_sdpa = (
+            is_sdpa_or_eager = (
                 attention_interface
                 is transformers.integrations.sdpa_attention.sdpa_attention_forward
                 or attention_interface is patched_sdpa_attention_forward
+                or attention_interface
+                is transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.eager_attention_forward
             )
-            if is_sdpa:
+            if is_sdpa_or_eager:
                 attn_output = qwen_sdpa_attention_versatile(
                     query_states,
                     key_states,
