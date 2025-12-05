@@ -1,10 +1,9 @@
 import os
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 import onnx
 import onnx.helper as oh
 import torch
 import torch.nn.functional as F
-from ...helpers.torch_helper import torch_dtype_to_onnx_dtype
 from ...export.onnx_plug import EagerDirectReplacementWithOnnx
 from .patch_helper import _is_torchdynamo_exporting
 from ._patch_transformers_attention import patched_sdpa_attention_forward
@@ -222,23 +221,25 @@ if patch_qwen2_5:
         attn_output = torch.cat(attn_outputs, dim=1)
         return attn_output
 
-    # not ideal
-    qwen_sdpa_attention_packed_versatile = EagerDirectReplacementWithOnnx(
-        qwen_sdpa_attention,
-        lambda qs, *args, **kwargs: torch.empty(
-            (qs.shape[0], qs.shape[2], qs.shape[1], qs.shape[3]),
-            dtype=qs.dtype,
-            device=qs.device,
-        ),
-        _add_com_microsoft_opset(PackedAttention.to_function_proto()),
-        n_inputs=4,
-        n_outputs=1,
-        kwargs=dict(scaling=0.11180339887498948, num_heads=16),
-        name="qwen_sdpa_attention_packed",
-    )
-    PLUGS.append(qwen_sdpa_attention_packed_versatile)
+    def qwen_version_selector(opset: int, *args: torch.Tensor) -> Tuple[str, torch.dtype]:
+        first_tensor = next(a for a in args if a is not None)
+        dtype = first_tensor.dtype
+        strategy = patched_Qwen2_5_VLVisionAttention.STRATEGY_FOR_ATTENTION()
+        if strategy is not None:
+            return strategy, dtype
+        if dtype == torch.float32:
+            if opset >= 24:
+                return "LOOPA24", dtype
+            return "LOOPMHA", dtype
+        if dtype == torch.float16:
+            if first_tensor.is_cuda:
+                return "PACKED", dtype
+            return "LOOPMHA", dtype
+        raise AssertionError(
+            f"Unable to handle type {torch.dtype} on device {torch.device} with opset={opset}"
+        )
 
-    qwen_sdpa_attention_loopmha_versatile = EagerDirectReplacementWithOnnx(
+    qwen_sdpa_attention_versatile = EagerDirectReplacementWithOnnx(
         qwen_sdpa_attention,
         lambda qs, *args, **kwargs: torch.empty(
             (qs.shape[0], qs.shape[2], qs.shape[1], qs.shape[3]),
@@ -246,10 +247,17 @@ if patch_qwen2_5:
             device=qs.device,
         ),
         {
-            onnx.TensorProto.FLOAT: _add_com_microsoft_opset(
+            ("PACKED", onnx.TensorProto.FLOAT16): _add_com_microsoft_opset(
+                PackedAttention.to_function_proto()
+            ),
+            ("LOOPA24", onnx.TensorProto.FLOAT): LoopAttention24.to_function_proto(),
+            ("LOOPA24", onnx.TensorProto.FLOAT16): _update_sequence_type(
+                onnx.TensorProto.FLOAT16, LoopAttention24.to_function_proto()
+            ),
+            ("LOOPMHA", onnx.TensorProto.FLOAT): _add_com_microsoft_opset(
                 LoopMHAAttention.to_function_proto()
             ),
-            onnx.TensorProto.FLOAT16: _update_sequence_type(
+            ("LOOPMHA", onnx.TensorProto.FLOAT16): _update_sequence_type(
                 onnx.TensorProto.FLOAT16,
                 _add_com_microsoft_opset(LoopMHAAttention.to_function_proto()),
             ),
@@ -257,35 +265,10 @@ if patch_qwen2_5:
         n_inputs=4,
         n_outputs=1,
         kwargs=dict(scaling=0.11180339887498948, num_heads=16),
-        name="qwen_sdpa_attention_loopmha",
-        version_selector=lambda *args: torch_dtype_to_onnx_dtype(
-            next(a for a in args if a is not None).dtype
-        ),
+        name="qwen_sdpa_attention_versatile",
+        version_selector=qwen_version_selector,
     )
-    PLUGS.append(qwen_sdpa_attention_loopmha_versatile)
-
-    qwen_sdpa_attention_loopa24_versatile = EagerDirectReplacementWithOnnx(
-        qwen_sdpa_attention,
-        lambda qs, *args, **kwargs: torch.empty(
-            (qs.shape[0], qs.shape[2], qs.shape[1], qs.shape[3]),
-            dtype=qs.dtype,
-            device=qs.device,
-        ),
-        {
-            onnx.TensorProto.FLOAT: LoopAttention24.to_function_proto(),
-            onnx.TensorProto.FLOAT16: _update_sequence_type(
-                onnx.TensorProto.FLOAT16, LoopAttention24.to_function_proto()
-            ),
-        },
-        n_inputs=4,
-        n_outputs=1,
-        kwargs=dict(scaling=0.11180339887498948, num_heads=16),
-        name="qwen_sdpa_attention_loopa24",
-        version_selector=lambda *args: torch_dtype_to_onnx_dtype(
-            next(a for a in args if a is not None).dtype
-        ),
-    )
-    PLUGS.append(qwen_sdpa_attention_loopa24_versatile)
+    PLUGS.append(qwen_sdpa_attention_versatile)
 
     class patched_Qwen2_5_VLForConditionalGeneration:
         _PATCHES_ = ["prepare_inputs_for_generation"]
@@ -626,9 +609,8 @@ if patch_qwen2_5:
                 is transformers.integrations.sdpa_attention.sdpa_attention_forward
                 or attention_interface is patched_sdpa_attention_forward
             )
-            attention_strategy = patched_Qwen2_5_VLVisionAttention.STRATEGY_FOR_ATTENTION()
-            if is_sdpa and attention_strategy in "PACKED":
-                attn_output = qwen_sdpa_attention_packed_versatile(
+            if is_sdpa:
+                attn_output = qwen_sdpa_attention_versatile(
                     query_states,
                     key_states,
                     value_states,
@@ -660,78 +642,10 @@ if patch_qwen2_5:
                         ),
                         version=1,
                     )
-                elif is_sdpa and attention_strategy == "LOOPA24":
-                    attn_output = qwen_sdpa_attention_loopa24_versatile(
-                        query_states,
-                        key_states,
-                        value_states,
-                        cu_seqlens,
-                        self.scaling,
-                        self.num_heads,
-                    )
-                elif is_sdpa and attention_strategy == "LOOPMHA":
-                    attn_output = qwen_sdpa_attention_loopmha_versatile(
-                        query_states,
-                        key_states,
-                        value_states,
-                        cu_seqlens,
-                        self.scaling,
-                        self.num_heads,
-                    )
-
-                    # to rewrite later with a for loop
-                    # def _iteration(start_end, query_states, key_states, value_states):
-                    #     return patched_Qwen2_5_VLVisionAttentionOneIteration.forward(
-                    #         self,
-                    #         start_end,
-                    #         query_states,
-                    #         key_states,
-                    #         value_states,
-                    #         scaling=self.scaling,
-                    #         dropout=0.0 if not self.training else self.attention_dropout,
-                    #    )
-
-                    # starts = cu_seqlens[:-1]
-                    # ends = cu_seqlens[1:]
-                    # torch._check(starts.shape[0] > 0)
-                    # torch._check(ends.shape[0] > 0)
-                    # starts_ends = torch.cat([starts.unsqueeze(1), ends.unsqueeze(1)], dim=1)
-                    # attn_outputs = [
-                    #    _iteration(start_end, query_states, key_states, value_states)
-                    #    for start_end in starts_ends
-                    # ]
-                    # attn_output = torch.cat(attn_outputs, dim=1)
-                elif is_sdpa and attention_strategy == "BIGMASK":
-                    # make square mask
-                    indices = torch.arange(
-                        cu_seqlens.max(), dtype=cu_seqlens.dtype, device=cu_seqlens.device
-                    )
-                    dot = (cu_seqlens.unsqueeze(1) <= indices.unsqueeze(0)).to(
-                        cu_seqlens.dtype
-                    )
-                    dot = dot.sum(dim=0)
-                    mask = dot.unsqueeze(1) - dot.unsqueeze(0)
-                    bool_mask = mask == 0
-                    bool_mask = bool_mask.unsqueeze(0).unsqueeze(0)
-
-                    torch._check(bool_mask.shape[2] == key_states.shape[2])
-                    torch._check(bool_mask.shape[3] == key_states.shape[2])
-
-                    attn_output, _ = attention_interface(
-                        self,
-                        query_states,
-                        key_states,
-                        value_states,
-                        attention_mask=bool_mask,
-                        scaling=self.scaling,
-                        dropout=0.0 if not self.training else self.attention_dropout,
-                        is_causal=False,
-                        **kwargs,
-                    )
                 else:
                     raise NotImplementedError(
-                        f"No corresponding export strategy for "
-                        f"{attention_strategy!r}, "
+                        f"No corresponding export strategy for implementation "
+                        f"{self.config._attn_implementation!r}, "
                         f"(use QWEN25ATTENTION to change it), and attention_interface="
                         f"{attention_interface!r} (use sdpa)"
                     )
@@ -755,6 +669,7 @@ if patch_qwen2_5:
                 )
             else:
                 # Other implementations: Process each chunk separately
+                # = qwen_sdpa_attention
                 lengths = cu_seqlens[1:] - cu_seqlens[:-1]
                 splits = [
                     torch.split(tensor, lengths.tolist(), dim=2)

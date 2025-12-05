@@ -1103,3 +1103,13 @@ def study_discrepancies(
     if name:
         fig.savefig(name)
     return ax
+
+
+def int_device_to_torch_device(device_id: int) -> torch.device:
+    """
+    Converts a device defined as an integer (coming from :meth:`torch.get_device`)
+    into a ``torch.device``.
+    """
+    if device_id < 0:
+        return torch.device("cpu")
+    return torch.device("cuda", device_id)

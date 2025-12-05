@@ -4,7 +4,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import onnx
 import torch
 from ..helpers import max_diff, string_type
-from ..helpers.torch_helper import torch_dtype_to_onnx_dtype
+from ..helpers.torch_helper import (
+    torch_dtype_to_onnx_dtype,
+    onnx_dtype_to_torch_dtype,
+    int_device_to_torch_device,
+)
 from ..reference import OnnxruntimeEvaluator
 
 TUPLE_TENSORS = Tuple[torch.Tensor, ...]
@@ -50,7 +54,10 @@ class EagerDirectReplacementWithOnnx:
         only tensors must be counted
     :param name: the name of the custom op, the function name if not specified
     :param kwargs: constants parameters with their default values
-    :param version_selector: selects the version based on the arguments
+    :param version_selector: selects the version based on the arguments,
+        see below for an example, this allows the user to define different
+        onnx version depending on the inputs
+    :param default_opset: opset to use by default
     :param verbose: verbose level
 
     Here is an example:
@@ -134,6 +141,60 @@ class EagerDirectReplacementWithOnnx:
         ).model_proto
 
         print(pretty_onnx(onx))
+
+    This shows how to define multiple versions depending on the device,
+    the type or the targetted onnx opset.
+
+    .. code-block:: python
+
+        def qwen_version_selector(opset: int, *args: torch.Tensor) -> Tuple[str, torch.dtype]:
+            first_tensor = next(a for a in args if a is not None)
+            dtype = first_tensor.dtype
+            strategy = patched_Qwen2_5_VLVisionAttention.STRATEGY_FOR_ATTENTION()
+            if strategy is not None:
+                return strategy, dtype
+            if dtype == torch.float32:
+                if opset >= 24:
+                    return "LOOPA24", dtype
+                return "LOOPMHA", dtype
+            if dtype == torch.float16:
+                if first_tensor.is_cuda:
+                    return "PACKED", dtype
+                return "LOOPMHA", dtype
+            raise AssertionError(
+                f"Unable to handle type {torch.dtype} on "
+                f"device {torch.device} with opset={opset}"
+            )
+
+        qwen_sdpa_attention_versatile = EagerDirectReplacementWithOnnx(
+            qwen_sdpa_attention,
+            lambda qs, *args, **kwargs: torch.empty(
+                (qs.shape[0], qs.shape[2], qs.shape[1], qs.shape[3]),
+                dtype=qs.dtype,
+                device=qs.device,
+            ),
+            {
+                ("PACKED", onnx.TensorProto.FLOAT16): _add_com_microsoft_opset(
+                    PackedAttention.to_function_proto()
+                ),
+                ("LOOPA24", onnx.TensorProto.FLOAT): LoopAttention24.to_function_proto(),
+                ("LOOPA24", onnx.TensorProto.FLOAT16): _update_sequence_type(
+                    onnx.TensorProto.FLOAT16, LoopAttention24.to_function_proto()
+                ),
+                ("LOOPMHA", onnx.TensorProto.FLOAT): _add_com_microsoft_opset(
+                    LoopMHAAttention.to_function_proto()
+                ),
+                ("LOOPMHA", onnx.TensorProto.FLOAT16): _update_sequence_type(
+                    onnx.TensorProto.FLOAT16,
+                    _add_com_microsoft_opset(LoopMHAAttention.to_function_proto()),
+                ),
+            },
+            n_inputs=4,
+            n_outputs=1,
+            kwargs=dict(scaling=0.11180339887498948, num_heads=16),
+            name="qwen_sdpa_attention_versatile",
+            version_selector=qwen_version_selector,
+        )
     """
 
     def __init__(
@@ -146,7 +207,8 @@ class EagerDirectReplacementWithOnnx:
         name: Optional[str] = None,
         kwargs: Optional[Dict[str, Union[int, float]]] = None,
         verbose: int = 0,
-        version_selector: Optional[Callable[[Any], Any]] = None,
+        version_selector: Optional[Callable[..., Tuple[Any, ...]]] = None,
+        default_opset: int = 22,
     ):
         assert isinstance(function_proto, onnx.FunctionProto) or (
             isinstance(function_proto, dict)
@@ -183,6 +245,7 @@ class EagerDirectReplacementWithOnnx:
         self.verbose = verbose
         self.custom_op = self._register()
         self.version_selector = version_selector
+        self.default_opset = default_opset
         self._check_protos(params)
 
     def _check_protos(self, params):
@@ -221,21 +284,18 @@ class EagerDirectReplacementWithOnnx:
             not self._function_proto_versioned or self.version_selector
         ), "version_selector is needed when multiple protos are given."
 
-    def get_function_proto(self, *args) -> onnx.FunctionProto:
+    def get_function_proto(self, opset: int, *args) -> onnx.FunctionProto:
         """Returns the correct version based on the inputs."""
         if self._function_proto:
             return self._function_proto
-        if (
-            len(args) == 1
-            and isinstance(args[0], (int, str))
-            and args[0] in self._function_proto_versioned
-        ):
-            return self._function_proto_versioned[args[0]]
+        assert isinstance(
+            opset, int
+        ), f"The first argument must be an integer for the onnx opset but it is {type(opset)}"
         assert any(
             a is not None for a in args
         ), f"Unexpected args={string_type(args, with_shape=True)}"
         try:
-            key = self.version_selector(*args)  # type: ignore[misc]
+            key = self.version_selector(opset, *args)  # type: ignore[misc]
         except (ValueError, AttributeError) as e:
             raise AssertionError(
                 f"Unable to select a version, fails to get a key, available="
@@ -302,6 +362,7 @@ class EagerDirectReplacementWithOnnx:
         *args,
         engine: Optional[Callable] = None,
         dump_onnx_model: Optional[str] = None,
+        opset: int = 22,
         **kwargs,
     ) -> VerifyResult:
         """
@@ -316,6 +377,7 @@ class EagerDirectReplacementWithOnnx:
             :class:`onnx_diagnostic.reference.OnnxruntimeEvaluator`.
         :param dump_onnx_model: to dump the onnx model used to verify
             eager and onnx produce the same results
+        :param opset: onnx opset to use
         :param kwargs: additional arguments to the function
         :return: outputs of :func:`onnx_diagnostic.helpers.max_diff`
         """
@@ -350,7 +412,7 @@ class EagerDirectReplacementWithOnnx:
         assert engine is None, f"Not implemented yet with engine={engine!r}"
         ags, kws = self._make_args_kwargs(*args, **kwargs)
         sess = OnnxruntimeEvaluator(
-            self.get_function_proto(*args),
+            self.get_function_proto(opset, *args),
             whole=True,
             dump_onnx_model=dump_onnx_model,
             function_kwargs=kws,
@@ -383,7 +445,17 @@ class EagerDirectReplacementWithOnnx:
             *args,
             **kwargs,
         ) -> Any:
-            function_proto = self.get_function_proto(g.get_type(args[0]))
+            has_devices = [a for a in args if g.has_device(a)]
+            assert (
+                has_devices
+            ), f"Missing device for any of the inputs {args}{g.get_debug_msg()}"
+            arg_device = has_devices[0]
+            fake_tensor = torch.empty(
+                tuple([(_ if isinstance(_, int) else 2) for _ in g.get_shape(args[0])]),
+                dtype=onnx_dtype_to_torch_dtype(g.get_type(args[0])),
+                device=int_device_to_torch_device(g.get_device(arg_device)),
+            )
+            function_proto = self.get_function_proto(g.main_opset, fake_tensor)
             if not g.has_local_function(function_proto.name, domain=function_proto.domain):
                 g.add_function(function_proto)
             ags, kws = self._make_args_kwargs(*args, **kwargs)
@@ -417,7 +489,7 @@ class EagerDirectReplacementWithOnnx:
         onnx_plug_op = onnxscript.values.Opset(domain=self.domain, version=1)
 
         def get_proto(*args):
-            function_proto = self.get_function_proto(*args)
+            function_proto = self.get_function_proto(self.default_opset, *args)
             schema = onnx_plug_op[function_proto.name]
             if schema is None:
                 all_types = [
