@@ -1646,6 +1646,7 @@ def select_model_inputs_outputs(
             known_shapes[shape.name] = shape.type
 
     var_in = []
+    existing = {i.name: i for i in model.graph.input}
     for name in inputs:
         if overwrite is not None and name in overwrite:
             dtype, shape = overwrite[name]
@@ -1660,12 +1661,15 @@ def select_model_inputs_outputs(
             else:
                 shape = get_tensor_shape(known_shapes[name])
                 value_info = oh.make_tensor_value_info(name, proto_dtype, shape)
+        elif name in existing:
+            value_info = existing[name]
         else:
             value_info = ValueInfoProto()
             value_info.name = name
         var_in.append(value_info)
 
     var_out = []
+    existing = {i.name: i for i in model.graph.output}
     for name in outputs:
         if overwrite is not None and name in overwrite:
             dtype, shape = overwrite[name]
@@ -1680,6 +1684,8 @@ def select_model_inputs_outputs(
             else:
                 shape = get_tensor_shape(known_shapes[name])
                 value_info = oh.make_tensor_value_info(name, proto_dtype, shape)
+        elif name in existing:
+            value_info = existing[name]
         else:
             value_info = ValueInfoProto()
             value_info.name = name

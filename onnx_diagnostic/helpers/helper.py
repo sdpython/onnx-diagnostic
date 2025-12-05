@@ -94,6 +94,20 @@ def size_type(dtype: Any) -> int:
     raise AssertionError(f"Unexpected dtype={dtype}")
 
 
+def _string_tensor(obj, cls: str, with_shape: bool, with_device: bool, verbose: int) -> str:
+    from .torch_helper import torch_dtype_to_onnx_dtype
+
+    i = torch_dtype_to_onnx_dtype(obj.dtype)
+    prefix = ("G" if obj.get_device() >= 0 else "C") if with_device else ""
+    if not with_shape:
+        if verbose:
+            print(f"[string_type] {cls}1:{type(obj)}")
+        return f"{prefix}{cls}{i}r{len(obj.shape)}"
+    if verbose:
+        print(f"[string_type] {cls}2:{type(obj)}")
+    return f"{prefix}{cls}{i}s{'x'.join(map(str, obj.shape))}"
+
+
 def string_type(
     obj: Any,
     with_shape: bool = False,
@@ -453,17 +467,7 @@ def string_type(
 
     # Tensors
     if isinstance(obj, torch._subclasses.fake_tensor.FakeTensor):
-        from .torch_helper import torch_dtype_to_onnx_dtype
-
-        i = torch_dtype_to_onnx_dtype(obj.dtype)
-        prefix = ("G" if obj.get_device() >= 0 else "C") if with_device else ""
-        if not with_shape:
-            if verbose:
-                print(f"[string_type] F1:{type(obj)}")
-            return f"{prefix}F{i}r{len(obj.shape)}"
-        if verbose:
-            print(f"[string_type] F2:{type(obj)}")
-        return f"{prefix}F{i}s{'x'.join(map(str, obj.shape))}"
+        return _string_tensor(obj, "F", with_shape, with_device, verbose)
 
     if isinstance(obj, torch.Tensor):
         from .torch_helper import torch_dtype_to_onnx_dtype
@@ -543,6 +547,9 @@ def string_type(
         if verbose:
             print(f"[string_type] V6:{type(obj)}")
         return f"{dev}OV{dt}r{len(shape)}"
+
+    if obj.__class__.__name__ == "SymbolicTensor":
+        return _string_tensor(obj, "ST", with_shape, with_device, verbose)
 
     # others classes
 

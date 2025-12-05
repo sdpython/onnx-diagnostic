@@ -231,6 +231,9 @@ class EagerDirectReplacementWithOnnx:
             and args[0] in self._function_proto_versioned
         ):
             return self._function_proto_versioned[args[0]]
+        assert any(
+            a is not None for a in args
+        ), f"Unexpected args={string_type(args, with_shape=True)}"
         try:
             key = self.version_selector(*args)  # type: ignore[misc]
         except (ValueError, AttributeError) as e:
@@ -414,7 +417,7 @@ class EagerDirectReplacementWithOnnx:
         onnx_plug_op = onnxscript.values.Opset(domain=self.domain, version=1)
 
         def get_proto(*args):
-            function_proto = self.get_function_proto()
+            function_proto = self.get_function_proto(*args)
             schema = onnx_plug_op[function_proto.name]
             if schema is None:
                 all_types = [

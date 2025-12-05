@@ -26,6 +26,11 @@ if patch_qwen2_5:
     op = onnxscript.opset22
     op24 = onnxscript.onnx_opset.opset24
     msft_op = onnxscript.values.Opset("com.microsoft", 1)
+    STOPAT = (
+        int(os.environ.get("STOPAT", None))
+        if os.environ.get("STOPAT", None) is not None
+        else None
+    )
 
     def _add_com_microsoft_opset(function_proto: onnx.FunctionProto) -> onnx.FunctionProto:
         opsets = {d.domain: d.version for d in function_proto.opset_import}
@@ -253,7 +258,9 @@ if patch_qwen2_5:
         n_outputs=1,
         kwargs=dict(scaling=0.11180339887498948, num_heads=16),
         name="qwen_sdpa_attention_loopmha",
-        version_selector=lambda *args: torch_dtype_to_onnx_dtype(args[0].dtype),
+        version_selector=lambda *args: torch_dtype_to_onnx_dtype(
+            next(a for a in args if a is not None).dtype
+        ),
     )
     PLUGS.append(qwen_sdpa_attention_loopmha_versatile)
 
@@ -274,7 +281,9 @@ if patch_qwen2_5:
         n_outputs=1,
         kwargs=dict(scaling=0.11180339887498948, num_heads=16),
         name="qwen_sdpa_attention_loopa24",
-        version_selector=lambda *args: torch_dtype_to_onnx_dtype(args[0].dtype),
+        version_selector=lambda *args: torch_dtype_to_onnx_dtype(
+            next(a for a in args if a is not None).dtype
+        ),
     )
     PLUGS.append(qwen_sdpa_attention_loopa24_versatile)
 
@@ -525,6 +534,8 @@ if patch_qwen2_5:
                     position_embeddings=position_embeddings,
                     **kwargs,
                 )
+                if STOPAT is not None and layer_num > STOPAT:
+                    break
 
             hidden_states = self.merger(hidden_states)
             reverse_indices = torch.argsort(window_index)

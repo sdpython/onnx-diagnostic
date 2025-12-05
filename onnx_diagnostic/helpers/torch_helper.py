@@ -139,6 +139,15 @@ def onnx_dtype_to_torch_dtype(itype: int) -> torch.dtype:
     )
 
 
+_TYPENAME = dict(
+    FLOAT=onnx.TensorProto.FLOAT,
+    INT64=onnx.TensorProto.INT64,
+    INT32=onnx.TensorProto.INT32,
+    FLOAT16=onnx.TensorProto.FLOAT16,
+    BFLOAT16=onnx.TensorProto.BFLOAT16,
+)
+
+
 def torch_dtype_to_onnx_dtype(to: torch.dtype) -> int:
     """
     Converts a torch dtype into a onnx element type.
@@ -182,7 +191,13 @@ def torch_dtype_to_onnx_dtype(to: torch.dtype) -> int:
         return onnx.TensorProto.COMPLEX64
     if to == torch.complex128:
         return onnx.TensorProto.COMPLEX128
-    raise NotImplementedError(f"Unable to convert torch dtype {to!r} to onnx dtype.")
+    # SymbolicTensor
+    sto = str(to)
+    if sto in _TYPENAME:
+        return _TYPENAME[sto]
+    raise NotImplementedError(
+        f"Unable to convert torch dtype {to!r} ({type(to)}) to onnx dtype."
+    )
 
 
 def _forward_(

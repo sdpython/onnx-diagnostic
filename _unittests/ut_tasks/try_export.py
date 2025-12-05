@@ -57,6 +57,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
             TESTDEVICE=cuda \\
             TESTDTYPE=float16 \\
             EXPORTER=custom \\
+            CUT_EXPORTED_PROGRAM=qwen_sdpa_attention_loopmha_16 \\
             python _unittests/ut_tasks/try_export.py -k qwen25_vli_visual
 
         .. code-block:: bash
@@ -125,25 +126,32 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         print(f"-- processor={type(processor)}")
         print(f"-- PROCESSOR LOADED IN {time.perf_counter() - begin}")
 
-        big_inputs = dict(
-            hidden_states=torch.rand((14308, 1176), dtype=torch_dtype).to(device),
-            grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64).to(device),
-        )
-        print("-- save inputs")
         inputs = dict(
             hidden_states=torch.rand((1292, 1176), dtype=torch_dtype).to(device),
             grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
         )
         if not self.unit_test_going():
             print("-- save inputs")
-            torch.save(big_inputs, self.get_dump_file("qwen25_vli_visual.inputs.big.pt"))
             torch.save(inputs, self.get_dump_file("qwen25_vli_visual.inputs.pt"))
+            print("-- save big inputs")
+            big_inputs = dict(
+                hidden_states=torch.rand((14308, 1176), dtype=torch_dtype).to(device),
+                grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64).to(device),
+            )
+            torch.save(big_inputs, self.get_dump_file("qwen25_vli_visual.inputs.big.pt"))
+        else:
+            big_inputs = None
 
         print(f"-- inputs: {self.string_type(inputs, with_shape=True)}")
         # this is too long
         model_to_export = model.visual if hasattr(model, "visual") else model.model.visual
         begin = time.perf_counter()
-        expected = model_to_export(**inputs)
+        if not os.environ.get("STOPAT", ""):
+            expected = model_to_export(**inputs)
+            expected_big = None if big_inputs is None else model_to_export(**big_inputs)
+        else:
+            expected = None
+            expected_big = None
         print(f"-- MODEL RUN IN {time.perf_counter() - begin}")
         print(f"-- expected: {self.string_type(expected, with_shape=True)}")
 
@@ -184,6 +192,11 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     verbose=1,
                     stop_if_static=2,
                 ):
+                    if expected is None:
+                        expected = model_to_export(**inputs)
+                        expected_big = (
+                            None if big_inputs is None else model_to_export(**big_inputs)
+                        )
                     to_onnx(
                         model_to_export,
                         kwargs=export_inputs,
@@ -256,7 +269,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     (f"test_qwen25_vli_visual.{device}.{dtype}.{attention}.{exporter}"),
                     filename,
                     model_to_export,
-                    export_inputs,
+                    [_ for _ in [export_inputs, big_inputs] if _ is not None],
                     verbose=1,
                     providers=(
                         ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -267,7 +280,9 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     atol=0.05,
                     rtol=10,
                     # ep=pt2_file,
-                    expected=expected,
+                    expected=[_ for _ in [expected, expected_big] if _ is not None],
+                    log_severity_level=0,
+                    log_verbosity_level=0,
                 )
                 print(f"-- MODEL VERIFIED IN {time.perf_counter() - begin}")
         os.environ["QWEN25ATTENTION"] = qwen25_attention
