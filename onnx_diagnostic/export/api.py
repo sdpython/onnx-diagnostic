@@ -187,7 +187,11 @@ def to_onnx(
             import onnx_ir as ir
             import onnx_ir.passes.common as common_passes
 
-            opset = target_opset if isinstance(target_opset, int) else target_opset[""]
+            opset = (
+                18
+                if target_opset is None
+                else (target_opset if isinstance(target_opset, int) else target_opset[""])
+            )
 
             irfunctions = [
                 ir.from_proto(
