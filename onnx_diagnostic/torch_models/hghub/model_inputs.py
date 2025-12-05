@@ -44,7 +44,7 @@ def _preprocess_model_id(
         return _preprocess_model_id("//".join(spl[:-1]), "", True, True, submodule)
     if spl[-1] in {"transformer", "vae"}:
         # known subfolder
-        return "//".join(spl[:-1]), spl[-1], same_as_pretrained, use_pretrained
+        return "//".join(spl[:-1]), spl[-1], same_as_pretrained, use_pretrained, submodule
     return model_id, subfolder, same_as_pretrained, use_pretrained, submodule
 
 
