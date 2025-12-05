@@ -26,17 +26,26 @@ def _code_needing_rewriting(model: Any) -> Any:
 
 
 def _preprocess_model_id(
-    model_id: str, subfolder: Optional[str], same_as_pretrained: bool, use_pretrained: bool
-) -> Tuple[str, Optional[str], bool, bool]:
+    model_id: str,
+    subfolder: Optional[str],
+    same_as_pretrained: bool,
+    use_pretrained: bool,
+    submodule: Optional[str] = None,
+) -> Tuple[str, Optional[str], bool, bool, Optional[str]]:
+    if "::" in model_id:
+        assert (
+            not submodule
+        ), f"submodule={submodule!r} cannot be defined in model_id={model_id!r} as well"
+        model_id, submodule = model_id.split("::", maxsplit=1)
     if subfolder or "//" not in model_id:
-        return model_id, subfolder, same_as_pretrained, use_pretrained
+        return model_id, subfolder, same_as_pretrained, use_pretrained, submodule
     spl = model_id.split("//")
     if spl[-1] == "pretrained":
-        return _preprocess_model_id("//".join(spl[:-1]), "", True, True)
+        return _preprocess_model_id("//".join(spl[:-1]), "", True, True, submodule)
     if spl[-1] in {"transformer", "vae"}:
         # known subfolder
         return "//".join(spl[:-1]), spl[-1], same_as_pretrained, use_pretrained
-    return model_id, subfolder, same_as_pretrained, use_pretrained
+    return model_id, subfolder, same_as_pretrained, use_pretrained, submodule
 
 
 def get_untrained_model_with_inputs(
@@ -54,6 +63,7 @@ def get_untrained_model_with_inputs(
     subfolder: Optional[str] = None,
     use_only_preinstalled: bool = False,
     config_reduction: Optional[Callable[[Any, str], Dict]] = None,
+    submodule: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
@@ -82,6 +92,7 @@ def get_untrained_model_with_inputs(
         <onnx_diagnostic.torch_models.hghub.reduce_model_config>`,
         this function takes a configuration and a task (string)
         as arguments
+    :param submodule: use a submodule instead of the main model
     :return: dictionary with a model, inputs, dynamic shapes, and the configuration,
         some necessary rewriting as well
 
@@ -108,11 +119,12 @@ def get_untrained_model_with_inputs(
         f"model_id={model_id!r}, preinstalled model is only available "
         f"if use_only_preinstalled is False."
     )
-    model_id, subfolder, same_as_pretrained, use_pretrained = _preprocess_model_id(
+    model_id, subfolder, same_as_pretrained, use_pretrained, submodule = _preprocess_model_id(
         model_id,
         subfolder,
         same_as_pretrained=same_as_pretrained,
         use_pretrained=use_pretrained,
+        submodule=submodule,
     )
     if verbose:
         print(
@@ -147,6 +159,8 @@ def get_untrained_model_with_inputs(
         if verbose:
             print(f"[get_untrained_model_with_inputs] architecture={arch!r}")
             print(f"[get_untrained_model_with_inputs] cls={config.__class__.__name__!r}")
+            if submodule:
+                print(f"[get_untrained_model_with_inputs] submodule={submodule!r}")
         if task is None:
             task = task_from_arch(arch, model_id=model_id, subfolder=subfolder)
         if verbose:
@@ -356,6 +370,19 @@ def get_untrained_model_with_inputs(
     res["model_kwargs"] = mkwargs
     if diff_config is not None:
         res["dump_info"] = dict(config_diff=diff_config)
+
+    if submodule:
+        path = submodule.split("::") if "::" in submodule else [submodule]
+        for p in path:
+            assert hasattr(model, p), (
+                f"Unable to find submodule {p!r} in in class {type(model)}, "
+                f"submodule={submodule!r}, possible candidates: "
+                f"{[k for k in dir(model) if isinstance(getattr(model, k), torch.nn.Module)]}"
+            )
+            model = getattr(model, p)
+
+    if verbose:
+        print(f"[get_untrained_model_with_inputs] model class={model.__class__.__name__!r}")
 
     sizes = compute_model_size(model)
     res["model"] = model

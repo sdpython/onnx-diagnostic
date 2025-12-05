@@ -638,12 +638,14 @@ if patch_qwen2_5:
                     self.config._attn_implementation
                 ]
 
-            is_sdpa = (
+            is_sdpa_or_eager = (
                 attention_interface
                 is transformers.integrations.sdpa_attention.sdpa_attention_forward
                 or attention_interface is patched_sdpa_attention_forward
+                or attention_interface
+                is transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.eager_attention_forward
             )
-            if is_sdpa:
+            if is_sdpa_or_eager:
                 attn_output = qwen_sdpa_attention_versatile(
                     query_states,
                     key_states,
