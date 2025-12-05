@@ -6,6 +6,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     has_transformers,
     ignore_warnings,
+    requires_transformers,
 )
 from onnx_diagnostic.helpers import max_diff
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
@@ -43,6 +44,7 @@ class TestValidate(ExtTestCase):
 
     @hide_stdout()
     @ignore_warnings(FutureWarning)
+    @requires_transformers("4.50")
     def test_tiny_llm_to_onnx(self):
         import onnxruntime
 
