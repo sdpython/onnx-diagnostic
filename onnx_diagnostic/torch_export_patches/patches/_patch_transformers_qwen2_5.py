@@ -200,6 +200,39 @@ if patch_qwen2_5:
         scaling: float = 0,
         num_heads: int = 16,
     ) -> torch.Tensor:
+        """
+        The loop can be removed with the following code
+        but it hits memory overflow for big inputs.
+
+        .. code-block:: python
+
+            # make square mask
+            indices = torch.arange(
+                cu_seqlens.max(), dtype=cu_seqlens.dtype, device=cu_seqlens.device
+            )
+            dot = (cu_seqlens.unsqueeze(1) <= indices.unsqueeze(0)).to(
+                cu_seqlens.dtype
+            )
+            dot = dot.sum(dim=0)
+            mask = dot.unsqueeze(1) - dot.unsqueeze(0)
+            bool_mask = mask == 0
+            bool_mask = bool_mask.unsqueeze(0).unsqueeze(0)
+
+            torch._check(bool_mask.shape[2] == key_states.shape[2])
+            torch._check(bool_mask.shape[3] == key_states.shape[2])
+
+            attn_output, _ = attention_interface(
+                self,
+                query_states,
+                key_states,
+                value_states,
+                attention_mask=bool_mask,
+                scaling=self.scaling,
+                dropout=0.0 if not self.training else self.attention_dropout,
+                is_causal=False,
+                **kwargs,
+            )
+        """
         lengths = cu_seqlens[1:] - cu_seqlens[:-1]
         splits = [
             torch.split(tensor, lengths.tolist(), dim=2)

@@ -52,7 +52,6 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         .. code-block:: bash
 
             NEVERTEST=1 \\
-            QWEN25ATTENTION=BIGMASK \\
             PRETRAINED=1 \\
             TESTDEVICE=cuda \\
             TESTDTYPE=float16 \\
@@ -164,9 +163,11 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
         if qwen25_attention:
             attention_options = [qwen25_attention]
         elif device == "cuda" and dtype in ("float16", "bfloat16"):
-            attention_options = ["PACKED", "BIGMASK"]
+            attention_options = [
+                "PACKED",
+            ]
         else:
-            attention_options = ["LOOPMHA", "LOOPA24", "BIGMASK"]
+            attention_options = ["LOOPMHA", "LOOPA24"]
 
         # fake_inputs = make_fake_with_dynamic_dimensions(inputs, dynamic_shapes)[0]
         for attention in attention_options:
