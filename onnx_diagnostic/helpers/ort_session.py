@@ -1,7 +1,6 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import onnx
 import numpy as np
-import numpy.typing as npt
 import torch
 from torch._C import _from_dlpack
 import onnxruntime
@@ -16,6 +15,7 @@ from .torch_helper import torch_dtype_to_onnx_dtype
 
 
 DEVICES = {-1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memory(), 0)}
+TensorLike = Union[np.ndarray, torch.Tensor]
 
 
 class _InferenceSession:
@@ -243,16 +243,16 @@ class InferenceSessionForNumpy(_InferenceSession):
         )
 
     def run(
-        self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
-    ) -> List[Optional[npt.ArrayLike]]:
+        self, output_names: Optional[List[str]], feeds: Dict[str, TensorLike]
+    ) -> List[Optional[TensorLike]]:
         """Calls :meth:`onnxruntime.InferenceSession.run`."""
         # sess.run does not support blfoat16
         # res = self.sess.run(output_names, feeds)
         return self._post_process_inplace(list(self.run_dlpack(output_names, feeds)))
 
     def run_dlpack(
-        self, output_names: Optional[List[str]], feeds: Dict[str, npt.ArrayLike]
-    ) -> Tuple[Optional[npt.ArrayLike], ...]:
+        self, output_names: Optional[List[str]], feeds: Dict[str, TensorLike]
+    ) -> Tuple[Optional[TensorLike], ...]:
         """
         Same as :meth:`onnxruntime.InferenceSession.run` except that
         feeds is a dictionary of :class:`np.ndarray`.
@@ -289,13 +289,13 @@ class InferenceSessionForNumpy(_InferenceSession):
     def _ortvalues_to_numpy_tensor(
         self,
         ortvalues: Union[List[ORTC.OrtValue], ORTC.OrtValueVector],
-    ) -> Tuple[Optional[npt.ArrayLike], ...]:
+    ) -> Tuple[Optional[TensorLike], ...]:
         if len(ortvalues) == 0:
             return tuple()
 
         if self.nvtx:
             self.torch.cuda.nvtx.range_push("_ortvalues_to_numpy_tensor")
-        res: List[Optional[npt.ArrayLike]] = []  # noqa: F823
+        res: List[Optional[TensorLike]] = []  # noqa: F823
         for i in range(len(ortvalues)):
             if not ortvalues[i].has_value():
                 res.append(None)
@@ -556,7 +556,7 @@ def investigate_onnxruntime_issue(
         Union[str, Callable[[onnx.ModelProto], onnxruntime.InferenceSession]]
     ] = None,
     # if model needs to be run.
-    feeds: Optional[Union[Dict[str, torch.Tensor], Dict[str, npt.ArrayLike]]] = None,
+    feeds: Optional[Union[Dict[str, torch.Tensor], Dict[str, TensorLike]]] = None,
     verbose: int = 0,
     dump_filename: Optional[str] = None,
     infer_shapes: bool = True,
