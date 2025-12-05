@@ -159,7 +159,7 @@ About the exporter 'custom'
 +++++++++++++++++++++++++++
 
 It used to investigate issues or scenarios. It is usually very strict
-and fails everytime it falls in one unexpected situation.
+and fails every time it falls in one unexpected situation.
 It call :func:`experimental_experiment.torch_interpreter.to_onnx`.
 Some useful environment variables to set before running the command line.
 
