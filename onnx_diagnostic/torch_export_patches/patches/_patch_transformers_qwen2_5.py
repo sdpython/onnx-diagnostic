@@ -5,6 +5,7 @@ import onnx.helper as oh
 import torch
 import torch.nn.functional as F
 from ...export.onnx_plug import EagerDirectReplacementWithOnnx
+from ...helpers.torch_helper import torch_dtype_to_onnx_dtype
 from .patch_helper import _is_torchdynamo_exporting
 from ._patch_transformers_attention import patched_sdpa_attention_forward
 
@@ -225,18 +226,20 @@ if patch_qwen2_5:
         first_tensor = next(a for a in args if a is not None)
         dtype = first_tensor.dtype
         strategy = patched_Qwen2_5_VLVisionAttention.STRATEGY_FOR_ATTENTION()
+        itype = torch_dtype_to_onnx_dtype(dtype)
         if strategy is not None:
-            return strategy, dtype
+            return strategy, itype
         if dtype == torch.float32:
             if opset >= 24:
-                return "LOOPA24", dtype
-            return "LOOPMHA", dtype
+                return "LOOPA24", itype
+            return "LOOPMHA", itype
         if dtype == torch.float16:
             if first_tensor.is_cuda:
-                return "PACKED", dtype
-            return "LOOPMHA", dtype
+                return "PACKED", itype
+            return "LOOPMHA", itype
         raise AssertionError(
-            f"Unable to handle type {torch.dtype} on device {torch.device} with opset={opset}"
+            f"Unable to handle type {torch.dtype} (itype={itype}) "
+            f"on device {torch.device} with opset={opset}"
         )
 
     qwen_sdpa_attention_versatile = EagerDirectReplacementWithOnnx(
@@ -558,9 +561,7 @@ if patch_qwen2_5:
         _PATCHED_CLASS_ = (
             transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLVisionAttention
         )
-        STRATEGY_FOR_ATTENTION = lambda: os.environ.get(  # noqa: E731
-            "QWEN25ATTENTION", "PACKED"
-        )
+        STRATEGY_FOR_ATTENTION = lambda: os.environ.get("QWEN25ATTENTION", None)  # noqa: E731
 
         def forward(
             self,

@@ -150,20 +150,18 @@ class EagerDirectReplacementWithOnnx:
         def qwen_version_selector(opset: int, *args: torch.Tensor) -> Tuple[str, torch.dtype]:
             first_tensor = next(a for a in args if a is not None)
             dtype = first_tensor.dtype
-            strategy = patched_Qwen2_5_VLVisionAttention.STRATEGY_FOR_ATTENTION()
-            if strategy is not None:
-                return strategy, dtype
+            itype = torch_dtype_to_onnx_dtype(dtype)
             if dtype == torch.float32:
                 if opset >= 24:
-                    return "LOOPA24", dtype
-                return "LOOPMHA", dtype
+                    return "LOOPA24", itype
+                return "LOOPMHA", itype
             if dtype == torch.float16:
                 if first_tensor.is_cuda:
-                    return "PACKED", dtype
-                return "LOOPMHA", dtype
+                    return "PACKED", itype
+                return "LOOPMHA", itype
             raise AssertionError(
-                f"Unable to handle type {torch.dtype} on "
-                f"device {torch.device} with opset={opset}"
+                f"Unable to handle type {torch.dtype} (itype={itype}) "
+                f"on device {torch.device} with opset={opset}"
             )
 
         qwen_sdpa_attention_versatile = EagerDirectReplacementWithOnnx(
@@ -338,6 +336,8 @@ class EagerDirectReplacementWithOnnx:
                 input_args.append(f"int {p}={val}")
             elif isinstance(val, float):
                 input_args.append(f"float {p}={val}")
+            elif isinstance(val, str):
+                input_args.append(f"str {p}={val}")
             else:
                 raise NotImplementedError(
                     f"kwargs {p!r} has a default value of unsupported type {type(val)}"
@@ -445,7 +445,7 @@ class EagerDirectReplacementWithOnnx:
             *args,
             **kwargs,
         ) -> Any:
-            has_devices = [a for a in args if g.has_device(a)]
+            has_devices = [a for a in args if isinstance(a, str) and g.has_device(a)]
             assert (
                 has_devices
             ), f"Missing device for any of the inputs {args}{g.get_debug_msg()}"

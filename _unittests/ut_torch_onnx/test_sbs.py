@@ -682,7 +682,7 @@ class TestSideBySide(ExtTestCase):
             PLUGS_Qwen25,
         )
         from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
-            qwen_sdpa_attention_loopmha_versatile,
+            qwen_sdpa_attention_versatile,
         )
 
         class Model(torch.nn.Module):
@@ -693,9 +693,7 @@ class TestSideBySide(ExtTestCase):
                 qs = query * mask
                 ks = key * mask
                 vs = value * mask
-                attn_output = qwen_sdpa_attention_loopmha_versatile(
-                    qs, ks, vs, seq_lens, 0.11, 16
-                )
+                attn_output = qwen_sdpa_attention_versatile(qs, ks, vs, seq_lens, 0.11, 16)
                 red = attn_output.mean(dim=-1, keepdim=True)
                 return attn_output - red
 
