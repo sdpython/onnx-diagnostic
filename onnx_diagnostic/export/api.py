@@ -191,7 +191,9 @@ def to_onnx(
 
             irfunctions = [
                 ir.from_proto(
-                    plug.get_function_proto(*flatten_object((args, kwargs), drop_keys=True))
+                    plug.get_function_proto(
+                        target_opset, *flatten_object((args, kwargs), drop_keys=True)
+                    )
                 )
                 for plug in onnx_plugs
             ]
