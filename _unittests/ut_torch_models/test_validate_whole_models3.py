@@ -10,11 +10,8 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.torch_models.validate import validate_model
 
-torch29_and_tr_main = not has_torch("2.9.9") and has_transformers("4.99999")
-
 
 class TestValidateWholeModels3(ExtTestCase):
-    @unittest.skipIf(torch29_and_tr_main, "combination not working")
     @requires_torch("2.7")
     @hide_stdout()
     @ignore_warnings(FutureWarning)
