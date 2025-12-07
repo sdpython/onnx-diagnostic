@@ -121,6 +121,7 @@ class TestCacheHelpers(ExtTestCase):
             )
             self.assertEqual(0, max_diff(c2, c2)["abs"])
             self.assertIsInstance(c2, transformers.cache_utils.EncoderDecoderCache)
+            self.assertEqual(max_diff(c2, c2)["abs"], 0)
             flat, _spec = torch.utils._pytree.tree_flatten(c2)
             self.assertIsInstance(flat, list)
             self.assertEqual(len(flat), 12)

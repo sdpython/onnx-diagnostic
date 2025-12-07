@@ -517,12 +517,12 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         nargs="*",
         help=textwrap.dedent(
             """
-        Applies patches before exporting, it can be a boolean
-        to enable to disable the patches or be more finetuned
-        (default is True). It is possible to disable patch for torch
-        by adding:
-            --patch "patch_sympy=False" --patch "patch_torch=False"
-        """.strip(
+            Applies patches before exporting, it can be a boolean
+            to enable to disable the patches or be more finetuned
+            (default is True). It is possible to disable patch for torch
+            by adding:
+                --patch "patch_sympy=False" --patch "patch_torch=False"
+            """.strip(
                 "\n"
             )
         ),

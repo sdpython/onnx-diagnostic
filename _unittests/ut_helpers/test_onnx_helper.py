@@ -30,6 +30,7 @@ from onnx_diagnostic.helpers.onnx_helper import (
     extract_subset_of_nodes,
     make_submodel,
     select_model_inputs_outputs,
+    _enumerate_model_node_outputs,
 )
 
 
@@ -601,6 +602,12 @@ class TestOnnxHelper(ExtTestCase):
             graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=8
         )
         return onnx_model
+
+    def test__enumerate_model_node_outputs(self):
+        model = self._get_model_select()
+        outputs1 = list(_enumerate_model_node_outputs(model, order=False))
+        outputs2 = list(_enumerate_model_node_outputs(model, order=True))
+        self.assertEqual(set(outputs1), set(outputs2))
 
     def test_select_model_inputs_outputs(self):
         def enumerate_model_tensors(model):

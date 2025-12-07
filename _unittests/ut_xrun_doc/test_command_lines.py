@@ -68,6 +68,60 @@ class TestCommandLines(ExtTestCase):
         text = st.getvalue()
         self.assertIn("mid", text)
 
+    def test_parser_validate_cmd(self):
+        parser = get_parser_validate()
+        args = parser.parse_args(
+            [
+                "-m",
+                "arnir0/Tiny-LLM",
+                "--run",
+                "-v",
+                "1",
+                "--mop",
+                "cache_implementation=static",
+                "--iop",
+                "cls_cache=StaticCache",
+                "--patch",
+            ]
+        )
+        self.assertEqual(args.mid, "arnir0/Tiny-LLM")
+        self.assertEqual(args.run, True)
+        self.assertEqual(args.patch, True)
+        self.assertEqual(args.verbose, 1)
+        self.assertEqual(args.mop, {"cache_implementation": "static"})
+        self.assertEqual(args.iop, {"cls_cache": "StaticCache"})
+        args = parser.parse_args(
+            [
+                "-m",
+                "arnir0/Tiny-LLM",
+                "--run",
+                "-v",
+                "1",
+                "--mop",
+                "cache_implementation=static",
+                "--iop",
+                "cls_cache=StaticCache",
+                "--patch",
+                "patch_sympy=False",
+                "--patch",
+                "patch_torch=False",
+            ]
+        )
+        self.assertEqual(args.mid, "arnir0/Tiny-LLM")
+        self.assertEqual(args.run, True)
+        self.assertEqual(
+            args.patch,
+            {
+                "patch_diffusers": True,
+                "patch_sympy": False,
+                "patch_torch": False,
+                "patch_transformers": True,
+            },
+        )
+        self.assertEqual(args.verbose, 1)
+        self.assertEqual(args.mop, {"cache_implementation": "static"})
+        self.assertEqual(args.iop, {"cls_cache": "StaticCache"})
+
     def test_parser_stats(self):
         st = StringIO()
         with redirect_stdout(st):
@@ -81,6 +135,26 @@ class TestCommandLines(ExtTestCase):
             get_parser_agg().print_help()
         text = st.getvalue()
         self.assertIn("--recent", text)
+
+    def test_parser_agg_cmd(self):
+        parser = get_parser_agg()
+        args = parser.parse_args(
+            [
+                "o.xlsx",
+                "*.zip",
+                "--sbs",
+                "dynamo:exporter=onnx-dynamo,opt=ir,attn_impl=eager",
+                "--sbs",
+                "custom:exporter=custom,opt=default,attn_impl=eager",
+            ]
+        )
+        self.assertEqual(
+            args.sbs,
+            {
+                "custom": {"attn_impl": "eager", "exporter": "custom", "opt": "default"},
+                "dynamo": {"attn_impl": "eager", "exporter": "onnx-dynamo", "opt": "ir"},
+            },
+        )
 
     def test_parser_sbs(self):
         st = StringIO()
