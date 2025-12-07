@@ -8,8 +8,6 @@ from onnx_diagnostic.ext_test_case import (
     requires_experimental,
     requires_transformers,
     requires_cuda,
-    has_torch,
-    has_transformers,
 )
 from onnx_diagnostic.torch_models.validate import validate_model
 

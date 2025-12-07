@@ -7,8 +7,6 @@ from onnx_diagnostic.ext_test_case import (
     ignore_warnings,
     requires_torch,
     requires_transformers,
-    has_torch,
-    has_transformers,
 )
 from onnx_diagnostic.torch_models.validate import validate_model
 
