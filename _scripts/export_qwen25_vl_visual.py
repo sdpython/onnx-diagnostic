@@ -1,6 +1,56 @@
+"""
+Export visual embedding of Qwen/Qwen2.5-VL-7B-Instruct
+======================================================
+
+requirements
+++++++++++++
+
+git+https://github.com/sdpython/experimental-experiment.git
+huggingface_hub>=1.2.1
+onnx-diagnostic>=0.8.4
+onnxruntime>=1.23
+torch>=2.9  # weekly is better
+transformers>=4.57
+
+Examples
+++++++++
+
+.. code-block:: bash
+
+    python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input
+
+Attention
++++++++++
+
+The attention is either implemented with ``MultiHeadAttention`` in a loop, either with ``PackedMultiHeadAttention``.
+The choice is made based on the device. It is possible to overwrite this by by setting
+environment variable to ``QWEN25ATTENTION`` to:
+
+* ``PACKED``: PackedMultiHeadAttention
+* ``LOOPMHA``: Loop over MultiHeadAttention
+* ``LOOPA24``: Loop over Attention(24), needs opset 23 or 24.
+"""
+
 import os
 import sys
+import time
 from argparse import ArgumentParser, BooleanOptionalAction
+
+
+def remove_inplace_body_last_input_output_type_for_loop(filename: str):
+    import onnx
+
+    model = onnx.load(filename, load_external_data=False)
+    for node in model.graph.node:
+        if node.op_type == "Loop":
+            g = node.attribute[0].g
+            g.input[-1].type.CopyFrom(onnx.TypeProto())
+            g.output[-1].type.CopyFrom(onnx.TypeProto())
+    onnx.save(model, filename, save_as_external_data=False)
+
+
+def simplify_model_id_for_a_filename(model_id: str) -> str:
+    return model_id.lower().replace("/", ".")
 
 
 def main(
@@ -105,8 +155,16 @@ def main(
         grid_thw={},  # {0: "n_images"}, # TODO: fix
     )
 
-    filename = f"qwen25_vli_visual.{device}.{dtype}.{exporter}.onnx"
+    prefix = simplify_model_id_for_a_filename(model_id)
+    if "QWEN25ATTENTION" in os.environ:
+        prefix = f"{prefix}.{os.environ['QWEN25ATTENTION']}"
+    filename = f"model.{prefix}.visual.{device}.{dtype}.{exporter}.onnx"
     print(f"-- export in {filename!r}")
+    stat_file = filename.replace(".onnx", ".stats")
+    begin = time.perf_counter()
+
+    if exporter == "onnx-dynamo" and device == "cuda" and "QWEN25ATTENTION" not in os.environ:
+        os.environ["QWEN25ATTENTION"] = "PACKED"
 
     export_inputs = inputs
     with torch_export_patches(
@@ -131,25 +189,45 @@ def main(
             optimize=True,
             onnx_plugs=PLUGS,
         )
+    duration = time.perf_counter() - begin
 
-    print("-- checking discrepancies")
-    providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-    if device == "cpu":
-        providers = providers[1:]
-    sess = onnxruntime.InferenceSession(filename, providers=providers)
+    if exporter == "onnx-dynamo":
+        # onnx-dynamo fails at producing function body with sequences as input / output.
+        # They are replaced by tensor type one step in the model.
+        print("-- remove_body_last_input_output_for_loop")
+        remove_inplace_body_last_input_output_type_for_loop(filename)
+        print("-- done.")
 
-    print(f"-- inputs {string_type(inputs, with_shape=True)}")
-    feeds = {k: v.detach().cpu().numpy() for k, v in inputs.items()}
-    small = sess.run(None, feeds)
-    diff = max_diff(expected, small[0], hist=[0.1])
-    print(f"-- discrepancies={diff}")
+    with open(stat_file, "w") as f:
 
-    if second_input:
-        print(f"-- inputs {string_type(big_inputs, with_shape=True)}")
-        feeds = {k: v.detach().cpu().numpy() for k, v in big_inputs.items()}
-        big = sess.run(None, feeds)
-        diff = max_diff(expected_big, big[0], hist=[0.1])
-        print(f"-- discrepancies={diff}")
+        def fprint(s):
+            print(s)
+            f.write(f"{s}\n")
+
+        fprint(f"-- export duration: {duration}")
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        if device == "cpu":
+            providers = providers[1:]
+        fprint(f"-- checking discrepancies with providers={providers!r}")
+        sess = onnxruntime.InferenceSession(filename, providers=providers)
+
+        fprint(f"-- inputs {string_type(inputs, with_shape=True, with_device=True)}")
+        fprint(f"-- expected {string_type(expected, with_shape=True, with_device=True)}")
+        feeds = {k: v.detach().cpu().numpy() for k, v in inputs.items()}
+        small = sess.run(None, feeds)
+        diff = max_diff(expected, small[0], hist=[0.1])
+        fprint(f"-- discrepancies={diff}")
+
+        if second_input:
+            fprint("")
+            fprint(f"-- inputs {string_type(big_inputs, with_shape=True, with_device=True)}")
+            fprint(
+                f"-- expected {string_type(expected_big, with_shape=True, with_device=True)}"
+            )
+            feeds = {k: v.detach().cpu().numpy() for k, v in big_inputs.items()}
+            big = sess.run(None, feeds)
+            diff = max_diff(expected_big, big[0], hist=[0.1])
+            fprint(f"-- discrepancies={diff}")
 
 
 def get_parser() -> ArgumentParser:

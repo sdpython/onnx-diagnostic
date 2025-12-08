@@ -64,6 +64,7 @@ def to_onnx(
     exporter_kwargs: Optional[Dict[str, Any]] = None,
     save_ep: Optional[str] = None,
     optimize: bool = True,
+    optimizer_for_ort: bool = True,
     use_control_flow_dispatcher: bool = False,
     onnx_plugs: Optional[List[EagerDirectReplacementWithOnnx]] = None,
     inline: bool = True,
@@ -88,6 +89,7 @@ def to_onnx(
     :param exporter_kwargs: additional parameters sent to the exporter
     :param save_ep: saves the exported program
     :param optimize: optimizes the model
+    :param optimizer_for_ort: optimizes the model for onnxruntime
     :param use_control_flow_dispatcher: use the dispatcher created to supported
         custom loops (see :func:`onnx_diagnostic.export.control_flow_onnx.loop_for_onnx`)
     :param onnx_plugs: the code was modified to replace some parts with onnx translation
@@ -126,8 +128,10 @@ def to_onnx(
         options = None
         if exporter_kwargs is not None:
             options = exporter_kwargs.pop("options", None)
-        if options is None:
-            options = OptimizationOptions(patterns="default+onnxruntime")
+        if options is None and optimize:
+            options = OptimizationOptions(
+                patterns="default+onnxruntime" if optimizer_for_ort else "default"
+            )
         main_dispatcher = (
             get_main_dispatcher(use_control_flow_dispatcher, onnx_plugs)
             if onnx_plugs or use_control_flow_dispatcher
@@ -161,6 +165,9 @@ def to_onnx(
         assert (
             not output_dynamic_shapes
         ), f"output_dynamic_shapes not supported for exporter={exporter!r}"
+        assert (
+            optimize
+        ), f"torch.onnx.export always optimizes the model but optimize={optimize}"
         custom_translation_table = {}
         if onnx_plugs:
             for plug in onnx_plugs:
@@ -180,7 +187,7 @@ def to_onnx(
             custom_translation_table=custom_translation_table,
             **(exporter_kwargs or {}),
         )
-        if not inline and optimize:
+        if not inline and optimize and optimizer_for_ort:
             ort_fusions.optimize_for_ort(epo.model)
 
         if onnx_plugs:
@@ -207,7 +214,7 @@ def to_onnx(
                 common_passes.InlinePass()(epo.model)
                 common_passes.RemoveUnusedOpsetsPass()(epo.model)
 
-        if inline and optimize:
+        if inline and optimize and optimizer_for_ort:
             ort_fusions.optimize_for_ort(epo.model)
         if filename:
             epo.save(filename, external_data=True)
@@ -231,6 +238,10 @@ def to_onnx(
         assert list(kwargs) == ["input_ids", "attention_mask", "past_key_values"], (  # type: ignore[arg-type]
             f"Only a specified set of inputs is supported for exporter={exporter!r}, "
             f"but it is {list(kwargs)}"  # type: ignore[arg-type]
+        )
+        assert optimizer_for_ort and optimize, (
+            f"ModelBuilder only produces model optimized for onnxruntime but "
+            f"optimizer_for_ort={optimizer_for_ort} and optimize={optimize}"
         )
         flat_inputs = flatten_object(kwargs, drop_keys=True)
         first = flat_inputs[0]
