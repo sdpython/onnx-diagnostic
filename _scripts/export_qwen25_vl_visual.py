@@ -19,6 +19,12 @@ Examples
 
     python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input
 
+Merge model and data into one file:
+
+.. code-block:: bash
+
+    tar -czvf model.tar.gz model.onnx model.data
+
 Attention
 +++++++++
 

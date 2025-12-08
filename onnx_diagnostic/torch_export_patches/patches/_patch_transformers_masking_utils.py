@@ -1,3 +1,4 @@
+import inspect
 from typing import Callable, List, Optional, Tuple
 import torch
 
@@ -17,6 +18,12 @@ if patch_masking_utils:
         causal_mask_function,
         padding_mask_function,
         prepare_padding_mask,
+    )
+
+    _prepare_padding_mask_kwargs = (
+        dict(_slice=False)
+        if "_slice" in inspect.signature(prepare_padding_mask).parameters
+        else {}
     )
 
     try:
@@ -132,7 +139,9 @@ if patch_masking_utils:
     ) -> Optional[torch.Tensor]:
         """manual patch for function ``transformers.masking_utils.sdpa_mask_recent_torch``."""
         q_length = cache_position.shape[0]
-        padding_mask = prepare_padding_mask(attention_mask, kv_length, kv_offset, _slice=False)
+        padding_mask = prepare_padding_mask(
+            attention_mask, kv_length, kv_offset, **_prepare_padding_mask_kwargs
+        )
         if allow_is_causal_skip and _ignore_causal_mask_sdpa(
             padding_mask, q_length, kv_length, kv_offset, local_size
         ):

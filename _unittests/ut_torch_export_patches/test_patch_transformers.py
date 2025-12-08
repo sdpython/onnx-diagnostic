@@ -62,6 +62,83 @@ class TestPatchPatchTransformers(ExtTestCase):
         got = patched_sdpa_mask_recent_torch(**kwargs)
         self.assertEqualArray(expected, got)
 
+    @requires_transformers("4.99")
+    def test_sdpa_mask_recent_torch_is_running(self):
+        def _copy_vmap_for_bhqkv(mask_function, bh_indices=True):
+            dimensions = [(None, None, None, 0), (None, None, 0, None)]
+            if bh_indices:
+                dimensions.extend([(None, 0, None, None), (0, None, None, None)])
+            for dims in dimensions:
+                mask_function = torch.vmap(mask_function, in_dims=dims, out_dims=0)
+            return mask_function
+
+        def copy_of_sdpa_mask_recent_torch(
+            batch_size,
+            cache_position,
+            kv_length,
+            kv_offset=0,
+            mask_function=transformers.masking_utils.causal_mask_function,
+            attention_mask=None,
+            local_size=None,
+            allow_is_causal_skip=True,
+            **kwargs,
+        ):
+            q_length = cache_position.shape[0]
+            padding_mask = transformers.masking_utils.prepare_padding_mask(
+                attention_mask, kv_length, kv_offset
+            )
+            if allow_is_causal_skip and transformers.masking_utils._ignore_causal_mask_sdpa(
+                padding_mask, q_length, kv_length, kv_offset, local_size
+            ):
+                return None
+            kv_arange = torch.arange(kv_length, device=cache_position.device)
+            kv_arange += kv_offset
+            if padding_mask is not None:
+                mask_function = transformers.masking_utils.and_masks(
+                    mask_function,
+                    transformers.masking_utils.padding_mask_function(padding_mask),
+                )
+
+            batch_arange = torch.arange(batch_size, device=cache_position.device)
+            head_arange = torch.arange(1, device=cache_position.device)
+            with transformers.masking_utils.TransformGetItemToIndex():
+                causal_mask = _copy_vmap_for_bhqkv(mask_function)(
+                    batch_arange, head_arange, cache_position, kv_arange
+                )
+            return causal_mask
+
+        sdpa_mask_recent_torch = copy_of_sdpa_mask_recent_torch
+        patched_sdpa_mask_recent_torch = patch_transformers.patched_sdpa_mask_recent_torch
+        kwargs = {
+            "batch_size": 1,
+            "cache_position": torch.tensor([3], dtype=torch.int64),
+            "kv_length": 4,
+            "kv_offset": 0,
+            "mask_function": transformers.masking_utils.causal_mask_function,
+            "attention_mask": torch.tensor([[True, True, True, True]]),
+            "local_size": None,
+            "allow_is_causal_skip": True,
+            "allow_is_bidirectional_skip": False,
+        }
+        expected = sdpa_mask_recent_torch(**kwargs)
+        got = patched_sdpa_mask_recent_torch(**kwargs)
+        self.assertEqual(expected, got)
+
+        kwargs = {
+            "batch_size": 1,
+            "cache_position": torch.tensor([3], dtype=torch.int64),
+            "kv_length": 4,
+            "kv_offset": 0,
+            "mask_function": transformers.masking_utils.causal_mask_function,
+            "attention_mask": torch.tensor([[True, True, True, True]]),
+            "local_size": None,
+            "allow_is_causal_skip": False,
+            "allow_is_bidirectional_skip": False,
+        }
+        expected = sdpa_mask_recent_torch(**kwargs)
+        got = patched_sdpa_mask_recent_torch(**kwargs)
+        self.assertEqualArray(expected, got)
+
     def test_sdpa_attention_forward_not_causal(self):
         sdpa_attention_forward = sdpa_attention.sdpa_attention_forward
         patched_sdpa_attention_forward = patch_transformers.patched_sdpa_attention_forward
