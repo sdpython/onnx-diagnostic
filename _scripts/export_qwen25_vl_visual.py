@@ -1,5 +1,5 @@
 """
-export visual embedding of Qwen/Qwen2.5-VL-7B-Instruct
+Export visual embedding of Qwen/Qwen2.5-VL-7B-Instruct
 ======================================================
 
 requirements
@@ -12,12 +12,12 @@ onnxruntime>=1.23
 torch>=2.9  # weekly is better
 transformers>=4.57
 
-example
-+++++++
+Examples
+++++++++
 
 .. code-block:: bash
 
-    python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter custom --pretrained --second-input
+    python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input
 """
 
 import os
@@ -36,6 +36,10 @@ def remove_inplace_body_last_input_output_type_for_loop(filename: str):
             g.input[-1].type.CopyFrom(onnx.TypeProto())
             g.output[-1].type.CopyFrom(onnx.TypeProto())
     onnx.save(model, filename, save_as_external_data=False)
+
+
+def simplify_model_id_for_a_filename(model_id: str) -> str:
+    return model_id.lower().replace("/", ".")
 
 
 def main(
@@ -140,7 +144,8 @@ def main(
         grid_thw={},  # {0: "n_images"}, # TODO: fix
     )
 
-    filename = f"qwen25_vli_visual.{device}.{dtype}.{exporter}.onnx"
+    prefix = simplify_model_id_for_a_filename(model_id)
+    filename = f"model.{prefix}.visual.{device}.{dtype}.{exporter}.onnx"
     print(f"-- export in {filename!r}")
     stat_file = filename.replace(".onnx", ".stats")
     begin = time.perf_counter()
