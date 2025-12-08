@@ -18,6 +18,17 @@ Examples
 .. code-block:: bash
 
     python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input
+
+Attention
++++++++++
+
+The attention is either implemented with ``MultiHeadAttention`` in a loop, either with ``PackedMultiHeadAttention``.
+The choice is made based on the device. It is possible to overwrite this by by setting
+environment variable to ``QWEN25ATTENTION`` to:
+
+* ``PACKED``: PackedMultiHeadAttention
+* ``LOOPMHA``: Loop over MultiHeadAttention
+* ``LOOPA24``: Loop over Attention(24), needs opset 23 or 24.
 """
 
 import os
@@ -145,10 +156,15 @@ def main(
     )
 
     prefix = simplify_model_id_for_a_filename(model_id)
+    if "QWEN25ATTENTION" in os.environ:
+        prefix = f"{prefix}.{os.environ['QWEN25ATTENTION']}"
     filename = f"model.{prefix}.visual.{device}.{dtype}.{exporter}.onnx"
     print(f"-- export in {filename!r}")
     stat_file = filename.replace(".onnx", ".stats")
     begin = time.perf_counter()
+
+    if exporter == "onnx-dynamo" and device == "cuda" and "QWEN25ATTENTION" not in os.environ:
+        os.environ["QWEN25ATTENTION"] = "PACKED"
 
     export_inputs = inputs
     with torch_export_patches(
@@ -189,14 +205,14 @@ def main(
             f.write(f"{s}\n")
 
         fprint(f"-- export duration: {duration}")
-        fprint("-- checking discrepancies")
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         if device == "cpu":
             providers = providers[1:]
+        fprint(f"-- checking discrepancies with providers={providers!r}")
         sess = onnxruntime.InferenceSession(filename, providers=providers)
 
-        fprint(f"-- inputs {string_type(inputs, with_shape=True)}")
-        fprint(f"-- expected {string_type(expected, with_shape=True)}")
+        fprint(f"-- inputs {string_type(inputs, with_shape=True, with_device=True)}")
+        fprint(f"-- expected {string_type(expected, with_shape=True, with_device=True)}")
         feeds = {k: v.detach().cpu().numpy() for k, v in inputs.items()}
         small = sess.run(None, feeds)
         diff = max_diff(expected, small[0], hist=[0.1])
@@ -204,8 +220,10 @@ def main(
 
         if second_input:
             fprint("")
-            fprint(f"-- inputs {string_type(big_inputs, with_shape=True)}")
-            fprint(f"-- expected {string_type(expected_big, with_shape=True)}")
+            fprint(f"-- inputs {string_type(big_inputs, with_shape=True, with_device=True)}")
+            fprint(
+                f"-- expected {string_type(expected_big, with_shape=True, with_device=True)}"
+            )
             feeds = {k: v.detach().cpu().numpy() for k, v in big_inputs.items()}
             big = sess.run(None, feeds)
             diff = max_diff(expected_big, big[0], hist=[0.1])
