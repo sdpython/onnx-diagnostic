@@ -22,6 +22,7 @@
 *.svg
 *.onnx.stats
 *.stats
+*.zip
 CodeLlama*
 _tools/benchenv**
 _tools/repos**
