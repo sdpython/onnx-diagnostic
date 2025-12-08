@@ -5,19 +5,21 @@ Export visual embedding of Qwen/Qwen2.5-VL-7B-Instruct
 requirements
 ++++++++++++
 
-git+https://github.com/sdpython/experimental-experiment.git
-huggingface_hub>=1.2.1
-onnx-diagnostic>=0.8.4
-onnxruntime>=1.23
-torch>=2.9  # weekly is better
-transformers>=4.57
+::
+
+    git+https://github.com/sdpython/experimental-experiment.git  # optional
+    huggingface_hub>=1.2.1
+    onnx-diagnostic>=0.8.4
+    onnxruntime>=1.23
+    torch>=2.9  # weekly is better
+    transformers>=4.57
 
 Examples
 ++++++++
 
 .. code-block:: bash
 
-    python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input
+    python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input --zip
 
 Cheat sheet for tar commands. To make a tar:
 ``tar -czvf model.tar.gz model.onnx model.data``
