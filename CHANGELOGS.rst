@@ -4,6 +4,8 @@ Change Logs
 0.8.5
 +++++
 
+* :pr:`346`: fix patch for sdpa_mask_recent_torch even if it was removed in transformers>=5.0
+
 0.8.4
 +++++
 
