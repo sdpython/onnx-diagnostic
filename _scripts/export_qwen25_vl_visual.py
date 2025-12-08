@@ -5,25 +5,26 @@ Export visual embedding of Qwen/Qwen2.5-VL-7B-Instruct
 requirements
 ++++++++++++
 
-git+https://github.com/sdpython/experimental-experiment.git
-huggingface_hub>=1.2.1
-onnx-diagnostic>=0.8.4
-onnxruntime>=1.23
-torch>=2.9  # weekly is better
-transformers>=4.57
+::
+
+    git+https://github.com/sdpython/experimental-experiment.git  # optional
+    huggingface_hub>=1.2.1
+    onnx-diagnostic>=0.8.4
+    onnxruntime>=1.23
+    torch>=2.9  # weekly is better
+    transformers>=4.57
 
 Examples
 ++++++++
 
 .. code-block:: bash
 
-    python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input
+    python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input --zip
 
-Merge model and data into one file:
-
-.. code-block:: bash
-
-    tar -czvf model.tar.gz model.onnx model.data
+Cheat sheet for tar commands. To make a tar:
+``tar -czvf model.tar.gz model.onnx model.data``
+And to untar:
+``tar -xzvf model.tar.gz``.
 
 Attention
 +++++++++
@@ -38,6 +39,7 @@ environment variable to ``QWEN25ATTENTION`` to:
 """
 
 import os
+import subprocess
 import sys
 import time
 from argparse import ArgumentParser, BooleanOptionalAction
@@ -66,6 +68,7 @@ def main(
     exporter: str = "onnx-dynamo",
     pretrained: bool = True,
     second_input: bool = True,
+    zip: bool = False,
 ):
     print("-- import torch")
     import torch
@@ -164,9 +167,10 @@ def main(
     prefix = simplify_model_id_for_a_filename(model_id)
     if "QWEN25ATTENTION" in os.environ:
         prefix = f"{prefix}.{os.environ['QWEN25ATTENTION']}"
-    filename = f"model.{prefix}.visual.{device}.{dtype}.{exporter}.onnx"
+    basename = f"model.{prefix}.visual.{device}.{dtype}.{exporter}"
+    filename = f"{basename}.onnx"
     print(f"-- export in {filename!r}")
-    stat_file = filename.replace(".onnx", ".stats")
+    stat_file = f"{basename}.stats"
     begin = time.perf_counter()
 
     if exporter == "onnx-dynamo" and device == "cuda" and "QWEN25ATTENTION" not in os.environ:
@@ -235,6 +239,18 @@ def main(
             diff = max_diff(expected_big, big[0], hist=[0.1])
             fprint(f"-- discrepancies={diff}")
 
+    if zip:
+        tar_file_name = f"{basename}.zip"
+        print()
+        print(f"-- make file {tar_file_name!r}")
+        cmd = ["zip", "-v", "-1", tar_file_name]
+        for name in [filename, f"{filename}.data"]:
+            print(f"-- add {name!r}")
+            cmd.append(name)
+        print(f"-- cmd: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
+        print("-- done.")
+
 
 def get_parser() -> ArgumentParser:
     parser = ArgumentParser(
@@ -266,6 +282,12 @@ def get_parser() -> ArgumentParser:
         help="check discrepancies with other inputs",
         action=BooleanOptionalAction,
     )
+    parser.add_argument(
+        "--zip",
+        default=False,
+        help="Creates a file .zip with onnx file and data file.",
+        action=BooleanOptionalAction,
+    )
     return parser
 
 
@@ -279,4 +301,5 @@ if __name__ == "__main__":
         exporter=args.exporter,
         pretrained=args.pretrained,
         second_input=args.second_input,
+        zip=args.zip,
     )
