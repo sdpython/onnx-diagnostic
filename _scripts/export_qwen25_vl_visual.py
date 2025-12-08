@@ -19,7 +19,7 @@ Examples
 
     python export_qwen25_vl_visual.py -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input
 
-Cheat sheet for tar commmands. To make a tar:
+Cheat sheet for tar commands. To make a tar:
 ``tar -czvf model.tar.gz model.onnx model.data``
 And to untar:
 ``tar -xzvf model.tar.gz``.
