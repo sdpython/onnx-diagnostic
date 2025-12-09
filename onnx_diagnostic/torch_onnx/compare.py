@@ -1,6 +1,6 @@
 import enum
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 import onnx
 from ..helpers.onnx_helper import onnx_dtype_name
 
@@ -33,7 +33,7 @@ class ObsCompare:
     The description of an observation, a node, an input, an output, an initializer.
 
     :param kind: node type, see :class:`ObsType`
-    :param name_or_outputs: name of an initilizer or the outputs of a node
+    :param name_or_outputs: name of an initializer or the outputs of a node
     :param itype: onnx type
     :param index: index of an input or output
     :param shape: shape
@@ -108,8 +108,8 @@ class ObsCompare:
         :return: distance and alignment
         """
         delay = max(50, abs(len(s2) - len(s1)) + 1)
-        distance = {(-1, -1): 0}
-        predecessor = {(-1, -1): None}
+        distance: Dict[Tuple[int, int], Union[int, float]] = {(-1, -1): 0}
+        predecessor: Dict[Tuple[int, int], Tuple[int, int]] = {(-1, -1): None}
         insert_cost = 1e3
         for i in range(len(s1)):
             for j in range(max(0, i - delay), min(len(s2), i + delay)):
@@ -138,7 +138,7 @@ class ObsCompare:
 
         # reverse
         way = []
-        last = len(s1) - 1, len(s2) - 1
+        last: Optional[Tuple[int, int]] = len(s1) - 1, len(s2) - 1
         while last is not None:
             way.append(last)
             last = predecessor[last]
