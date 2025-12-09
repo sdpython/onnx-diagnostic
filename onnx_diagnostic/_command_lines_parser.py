@@ -198,15 +198,19 @@ def get_parser_print() -> ArgumentParser:
     )
     parser.add_argument(
         "fmt",
-        choices=["pretty", "raw", "text", "printer"],
+        choices=["dot", "pretty", "printer", "raw", "shape", "text"],
         default="pretty",
         help=textwrap.dedent(
             """
             Prints out a model on the standard output.
-            raw     - just prints the model with print(...)
-            printer - onnx.printer.to_text(...)
+
+            dot     - converts the graph into dot
             pretty  - an improved rendering
+            printer - onnx.printer.to_text(...)
+            raw     - just prints the model with print(...)
+            shape   - prints every node node with input and output shapes
             text    - uses GraphRendering
+
             """.strip(
                 "\n"
             )
@@ -232,6 +236,14 @@ def _cmd_print(argv: List[Any]):
         from .helpers.graph_helper import GraphRendering
 
         print(GraphRendering(onx).text_rendering())
+    elif args.fmt == "shape":
+        from experimental_experiment.xbuilder import GraphBuilder
+
+        print(GraphBuilder(onx).pretty_text())
+    elif args.fmt == "dot":
+        from .helpers.dot_helper import to_dot
+
+        print(to_dot(onx))
     else:
         raise ValueError(f"Unexpected value fmt={args.fmt!r}")
 
