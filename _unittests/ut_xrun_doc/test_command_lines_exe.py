@@ -201,7 +201,7 @@ class TestCommandLines(ExtTestCase):
         text = st.getvalue()
         if text:
             # text is empty is dot is not installed
-            self.assertIn("svg", text)
+            self.assertIn("converts into dot", text)
 
 
 if __name__ == "__main__":
