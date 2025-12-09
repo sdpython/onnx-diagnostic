@@ -2,6 +2,7 @@ import ast
 import enum
 import inspect
 import itertools
+import json
 from dataclasses import is_dataclass, fields
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
@@ -1730,8 +1731,26 @@ def max_diff(
     )
 
 
-def string_diff(diff: Dict[str, Any]) -> str:
-    """Renders discrepancies return by :func:`max_diff` into one string."""
+def string_diff(diff: Dict[str, Any], js: bool = False, ratio: bool = False, **kwargs) -> str:
+    """
+    Renders discrepancies return by :func:`max_diff` into one string.
+
+    :param diff: differences
+    :param js: json format
+    :param ratio: display mismatch ratio
+    :param kwargs: addition values to add in the json format
+    """
+    if js:
+        if "rep" in diff:
+            rep = diff["rep"]
+            diff = {**{k: v for k, v in diff.items() if k != "rep"}, **rep}
+            if ratio:
+                for k, v in rep.items():
+                    diff[f"%{k}"] = v / diff["n"]
+                diff["mean"] = diff["sum"] / diff["n"]
+            diff.update(kwargs)
+        return json.dumps(diff)
+
     # dict(abs=, rel=, sum=, n=n_diff, dnan=)
     if "dev" in diff:
         ddiff = {k: v for k, v in diff.items() if k != "dev"}

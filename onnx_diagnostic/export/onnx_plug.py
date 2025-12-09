@@ -206,8 +206,8 @@ class EagerDirectReplacementWithOnnx:
             dtype = first_tensor.dtype
             itype = torch_dtype_to_onnx_dtype(dtype)
             if dtype == torch.float32:
-                if opset >= 24:
-                    return "LOOPA24", itype
+                if opset >= 23:
+                    return "LOOPA23", itype
                 return "LOOPMHA", itype
             if dtype == torch.float16:
                 if first_tensor.is_cuda:
@@ -229,9 +229,9 @@ class EagerDirectReplacementWithOnnx:
                 ("PACKED", onnx.TensorProto.FLOAT16): _add_com_microsoft_opset(
                     PackedAttention.to_function_proto()
                 ),
-                ("LOOPA24", onnx.TensorProto.FLOAT): LoopAttention24.to_function_proto(),
-                ("LOOPA24", onnx.TensorProto.FLOAT16): _update_sequence_type(
-                    onnx.TensorProto.FLOAT16, LoopAttention24.to_function_proto()
+                ("LOOPA23", onnx.TensorProto.FLOAT): LoopAttention23.to_function_proto(),
+                ("LOOPA23", onnx.TensorProto.FLOAT16): _update_sequence_type(
+                    onnx.TensorProto.FLOAT16, LoopAttention23.to_function_proto()
                 ),
                 ("LOOPMHA", onnx.TensorProto.FLOAT): _add_com_microsoft_opset(
                     LoopMHAAttention.to_function_proto()

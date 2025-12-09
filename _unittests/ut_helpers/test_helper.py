@@ -829,6 +829,16 @@ class TestHelpers(ExtTestCase):
             diff1,
         )
 
+    def test_max_diff_json(self):
+        abase = np.arange(12).reshape((3, -1)).astype(np.float32)
+        pred = abase.copy()
+        pred[1, 2] += 0.999
+        pred[2, 2] += 0.0999
+        pred[2, 3] += 0.00999
+        diff1 = max_diff(abase, pred, hist=[0.1, 0.01, 0.001])
+        st = string_diff(diff1, js=True, A=0.5, ratio=True)
+        print(st)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

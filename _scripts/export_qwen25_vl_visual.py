@@ -43,9 +43,10 @@ It is possible to overwrite this by by setting environment variable
 
 * ``PACKED``: PackedMultiHeadAttention
 * ``LOOPMHA``: Loop over MultiHeadAttention
-* ``LOOPA24``: Loop over Attention(24), needs opset 23 or 24.
+* ``LOOPA23``: Loop over Attention(23), needs opset 23+.
 """
 
+import datetime
 import os
 import subprocess
 import sys
@@ -62,11 +63,29 @@ def remove_inplace_body_last_input_output_type_for_loop(filename: str):
             g = node.attribute[0].g
             g.input[-1].type.CopyFrom(onnx.TypeProto())
             g.output[-1].type.CopyFrom(onnx.TypeProto())
+    del model.graph.value_info[:]
+    model = onnx.shape_inference.infer_shapes(model)
     onnx.save(model, filename, save_as_external_data=False)
 
 
 def simplify_model_id_for_a_filename(model_id: str) -> str:
     return model_id.lower().replace("/", ".")
+
+
+def get_versions():
+    import onnx
+    import onnx_diagnostic
+    import onnxruntime
+    import torch
+    import transformers
+
+    return {
+        "transformers": transformers.__version__,
+        "onnxruntime": onnxruntime.__version__,
+        "onnx": onnx.__version__,
+        "onnx-diagnostic": onnx_diagnostic.__version__,
+        "torch": torch.__version__,
+    }
 
 
 def main(
@@ -90,7 +109,7 @@ def main(
 
     print("-- import onnx_diagnostic")
     import tqdm
-    from onnx_diagnostic.helpers import string_type, max_diff
+    from onnx_diagnostic.helpers import string_type, string_diff, max_diff
     from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
         PLUGS,
     )
@@ -257,8 +276,11 @@ def main(
     stat_file = f"{basename}.stats"
     begin = time.perf_counter()
 
+    target_opset = 22
     if exporter == "onnx-dynamo" and device == "cuda" and "QWEN25ATTENTION" not in os.environ:
         os.environ["QWEN25ATTENTION"] = "PACKED"
+    elif "QWEN25ATTENTION" in os.environ and os.environ["QWEN25ATTENTION"] == "LOOPA23":
+        target_opset = 23
 
     with torch_export_patches(
         patch_torch=False,
@@ -277,7 +299,7 @@ def main(
             exporter=exporter,
             verbose=1,
             save_ep=None,
-            target_opset=22,
+            target_opset=target_opset,
             optimize=True,
             onnx_plugs=PLUGS,
         )
@@ -333,9 +355,47 @@ def main(
                 f"-- torch duration={duration}, onnx duration={oduration}, speedup={duration/oduration}"
             )
 
-            for fe, e, b in zip(feeds, other_expected, gots):
-                diff = max_diff(e, b, hist=[0.1, 0.01])
-                fprint(f"-- inputs={string_type(fe, with_shape=True)} -- {diff}")
+            info = {
+                "model_id": model_id,
+                "device": device,
+                "dtype": dtype,
+                "exporter": exporter,
+                "pretrained": pretrained,
+                "attention": os.environ.get("QWEN25ATTENTION", "default"),
+                "timestamp": datetime.datetime.now().isoformat(),
+                "export_duration": export_duration,
+                "latency_torch": duration,
+                "latency_ort": oduration,
+                "speedup": duration / oduration,
+                "opset": target_opset,
+                **get_versions(),
+            }
+            with open(os.path.join(output_folder, "collection_statistics.js"), "a") as fs:
+                for fe, e, b in zip(feeds, other_expected, gots):
+                    se = string_type(fe, with_shape=True)
+                    diff = max_diff(e, b, hist=[0.1, 0.01])
+                    js = string_diff(diff, js=True, ratio=True, inputs=se, **info)
+                    fs.write(js)
+                    fs.write("\n")
+                    fprint(f"-- inputs={se} -- {js}")
+
+    statistics = os.path.join(output_folder, "collection_statistics.js")
+    if os.path.exists(statistics):
+        print(f"-- statistics into excel {statistics!r}")
+        import pandas
+
+        df = pandas.read_json(statistics, lines=True)
+        first = [
+            "timestamp",
+            "model_id",
+            "pretrained",
+            "device",
+            "dtype",
+            "attention",
+            "opset",
+        ]
+        df = df[[*first, *[c for c in df.columns if c not in set(first)]]]
+        df.to_excel(statistics + ".xlsx")
 
     if make_zip:
         tar_file_name = f"{basename}.zip"
