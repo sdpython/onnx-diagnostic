@@ -364,6 +364,7 @@ def main(
             for i, feed in enumerate(tqdm.tqdm(feeds)):
                 if (
                     device == "cpu"
+                    and dtype == "float16"
                     and os.environ.get("QWEN25ATTENTION", "default") == "LOOPA23"
                     and i >= 2
                 ):
@@ -437,9 +438,27 @@ def main(
             "latency_torch",
             "latency_ort_n",
         ]
-        stat = df[[*index, *values]].groupby(index).max()
+        stat = (
+            df[[*index, *values]]
+            .groupby(index)
+            .agg(
+                {
+                    **{c: "max" for c in values if c != "speedup"},
+                    "speedup": "min",
+                }
+            )
+        )
         stat.to_excel(statistics + ".agg.xlsx")
-        stat = df[df.exporter == "onnx-dynamo"][[*index, *values]].groupby(index).max()
+        stat = (
+            df[df.exporter == "onnx-dynamo"][[*index, *values]]
+            .groupby(index)
+            .agg(
+                {
+                    **{c: "max" for c in values if c != "speedup"},
+                    "speedup": "min",
+                }
+            )
+        )
         stat.to_excel(statistics + ".agg.onnx-dynamo.xlsx")
 
     if make_zip:
