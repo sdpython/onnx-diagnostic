@@ -5,6 +5,7 @@ onnx_diagnostic.torch_onnx
     :maxdepth: 1
     :caption: submodules
 
+    compare
     runtime_info
     sbs
     sbs_dataclasses

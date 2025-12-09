@@ -5,6 +5,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic._command_lines_parser import (
     get_main_parser,
     get_parser_agg,
+    get_parser_compare,
     get_parser_config,
     get_parser_dot,
     get_parser_find,
@@ -169,6 +170,13 @@ class TestCommandLines(ExtTestCase):
             get_parser_dot().print_help()
         text = st.getvalue()
         self.assertIn("--run", text)
+
+    def test_parser_compare(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            get_parser_compare().print_help()
+        text = st.getvalue()
+        self.assertIn("compare", text)
 
 
 if __name__ == "__main__":

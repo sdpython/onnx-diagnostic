@@ -1508,6 +1508,51 @@ def _cmd_sbs(argv: List[Any]):
     print("-- done")
 
 
+def get_parser_compare() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="compare",
+        description=textwrap.dedent(
+            """
+            Compares two onnx models by aligning the nodes between both models.
+            This is done through an edit distance.
+            """
+        ),
+        epilog=textwrap.dedent(
+            """
+            Each element (initializer, input, node, output) of the model
+            is converted into an observation. Then it defines a distance between
+            two elements. And finally, it finds the best alignment with
+            an edit distance.
+            """
+        ),
+    )
+    parser.add_argument("model1", type=str, help="first model to compare")
+    parser.add_argument("model2", type=str, help="second model to compare")
+    return parser
+
+
+def _cmd_compare(argv: List[Any]):
+    import onnx
+    from .torch_onnx.compare import ObsCompare
+
+    parser = get_parser_compare()
+    args = parser.parse_args(argv[1:])
+    print(f"-- loading {args.model1!r}")
+    seq1 = ObsCompare.obs_sequence_from_model(onnx.load(args.model1, load_external_data=False))
+    print(f"-- loading {args.model2!r}")
+    seq2 = ObsCompare.obs_sequence_from_model(onnx.load(args.model2, load_external_data=False))
+    print("-- starts comparison")
+    dist, _path, pair_cmp = ObsCompare.distance_sequence(seq1, seq2)
+    print(f"-- done with distance {dist}")
+    for i, (o1, o2) in enumerate(pair_cmp):
+        print(f"{i:04d} {o1} | {o2}")
+
+
+#############
+# main parser
+#############
+
+
 def get_main_parser() -> ArgumentParser:
     parser = ArgumentParser(
         prog="onnx_diagnostic",
@@ -1555,6 +1600,7 @@ def get_main_parser() -> ArgumentParser:
 def main(argv: Optional[List[Any]] = None):
     fcts = dict(
         agg=_cmd_agg,
+        compare=_cmd_compare,
         config=_cmd_config,
         dot=_cmd_dot,
         exportsample=_cmd_export_sample,
@@ -1580,6 +1626,7 @@ def main(argv: Optional[List[Any]] = None):
         else:
             parsers = dict(
                 agg=get_parser_agg,
+                compare=get_parser_compare,
                 config=get_parser_config,
                 dot=get_parser_dot,
                 exportsample=lambda: get_parser_validate("exportsample"),  # type: ignore[operator]
