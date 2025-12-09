@@ -51,6 +51,8 @@ test_example_transform_method_*.py
 test_*.txt
 _cache/*
 .coverage
+_scripts/run.sh
+_scripts/dump_models/*
 dist/*
 build/*
 _sbs_*

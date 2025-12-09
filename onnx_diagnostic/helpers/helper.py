@@ -2,6 +2,7 @@ import ast
 import enum
 import inspect
 import itertools
+import json
 from dataclasses import is_dataclass, fields
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
@@ -1373,11 +1374,7 @@ def max_diff(
         if hist:
             if isinstance(hist, bool):
                 hist = np.array([0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype)
-            ind = np.digitize(diff.reshape((-1,)), hist, right=True)
-            cou = np.bincount(ind, minlength=ind.shape[0] + 1)
-            res["rep"] = dict(
-                zip([f">{x}" for x in hist], [int(i) for i in (cou.sum() - np.cumsum(cou))])
-            )
+            res["rep"] = {f">{h}": (diff > h).sum().item() for h in hist}
         return res  # type: ignore
 
     if isinstance(expected, torch.Tensor) and isinstance(got, torch.Tensor):
@@ -1493,27 +1490,11 @@ def max_diff(
             dev=dev,
         )
         if hist:
-            if isinstance(hist, list) and len(hist) == 1:
-                res["rep"] = {f">{hist[0]}": (diff > hist[0]).sum().item()}
-            elif isinstance(hist, list) and len(hist) == 2:
-                res["rep"] = {
-                    f">{hist[0]}": (diff > hist[0]).sum().item(),
-                    f">{hist[1]}": (diff > hist[1]).sum().item(),
-                }
-            else:
-                if isinstance(hist, bool):
-                    hist = torch.tensor(
-                        [0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype
-                    )
-                hist = torch.tensor(hist).to(diff.device)
-                ind = torch.bucketize(diff.reshape((-1,)), hist, right=False)
-                cou = torch.bincount(ind, minlength=ind.shape[0] + 1)
-                res["rep"] = dict(
-                    zip(
-                        [f">{x}" for x in hist],
-                        [int(i) for i in (cou.sum() - torch.cumsum(cou, 0))],
-                    )
+            if isinstance(hist, bool):
+                hist = torch.tensor(
+                    [0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100], dtype=diff.dtype
                 )
+            res["rep"] = {f">{h}": (diff > h).sum().item() for h in hist}
         return res  # type: ignore
 
     if isinstance(expected, int) and isinstance(got, torch.Tensor):
@@ -1750,8 +1731,26 @@ def max_diff(
     )
 
 
-def string_diff(diff: Dict[str, Any]) -> str:
-    """Renders discrepancies return by :func:`max_diff` into one string."""
+def string_diff(diff: Dict[str, Any], js: bool = False, ratio: bool = False, **kwargs) -> str:
+    """
+    Renders discrepancies return by :func:`max_diff` into one string.
+
+    :param diff: differences
+    :param js: json format
+    :param ratio: display mismatch ratio
+    :param kwargs: addition values to add in the json format
+    """
+    if js:
+        if "rep" in diff:
+            rep = diff["rep"]
+            diff = {**{k: v for k, v in diff.items() if k != "rep"}, **rep}
+            if ratio:
+                for k, v in rep.items():
+                    diff[f"%{k}"] = v / diff["n"]
+                diff["mean"] = diff["sum"] / diff["n"]
+            diff.update(kwargs)
+        return json.dumps(diff)
+
     # dict(abs=, rel=, sum=, n=n_diff, dnan=)
     if "dev" in diff:
         ddiff = {k: v for k, v in diff.items() if k != "dev"}

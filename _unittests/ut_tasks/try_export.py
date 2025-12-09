@@ -167,11 +167,11 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                 "PACKED",
             ]
         else:
-            attention_options = ["LOOPMHA", "LOOPA24"]
+            attention_options = ["LOOPMHA", "LOOPA23"]
 
         # fake_inputs = make_fake_with_dynamic_dimensions(inputs, dynamic_shapes)[0]
         for attention in attention_options:
-            if attention == "LOOPA24" and not has_onnxruntime("1.24"):
+            if attention == "LOOPA23" and not has_onnxruntime("1.24"):
                 continue
             with self.subTest(attention=attention):
                 print()
@@ -206,7 +206,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                         exporter=exporter,
                         verbose=1,
                         save_ep=None if self.unit_test_going() else (fileep, 2**35),
-                        target_opset=24 if attention == "LOOPA24" else 22,
+                        target_opset=23 if attention == "LOOPA23" else 22,
                         optimize=True,
                         onnx_plugs=PLUGS,
                     )
@@ -242,7 +242,7 @@ class TestTryExportHuggingFaceHubModel(ExtTestCase):
                     self.assertNotIn('"PackedMultiHeadAttention"', str(model))
                     self.assertIn('"MultiHeadAttention"', str(model))
                     self.assertIn("Loop", {n.op_type for n in model.graph.node})
-                elif attention == "LOOPA24":
+                elif attention == "LOOPA23":
                     self.assertNotIn('"PackedMultiHeadAttention"', str(model))
                     self.assertNotIn('"MultiHeadAttention"', str(model))
                     self.assertIn("Loop", {n.op_type for n in model.graph.node})

@@ -682,6 +682,163 @@ class TestHelpers(ExtTestCase):
         cache2 = make_dynamic_cache([*data[0]])
         self.assertEqual(max_diff(cache1, cache2)["abs"], 0)
 
+    def test_max_diff_hist_precision(self):
+        base = torch.arange(12).reshape((3, -1)).to(torch.float32)
+        pred = base.clone()
+        pred[1, 2] += 0.999
+        pred[2, 2] += 0.0999
+        pred[2, 3] += 0.00999
+        diff1 = max_diff(base, pred, hist=[0.1])
+        self.assertEqual(
+            {
+                "abs": 0.999000072479248,
+                "rel": 0.16647226670209098,
+                "sum": 1.1088900566101074,
+                "n": 12.0,
+                "dnan": 0.0,
+                "argm": (1, 2),
+                "dev": 0,
+                "rep": {">0.1": 1},
+            },
+            diff1,
+        )
+        diff1 = max_diff(base, pred, hist=[0.1, 0.01])
+        self.assertEqual(
+            {
+                "abs": 0.999000072479248,
+                "rel": 0.16647226670209098,
+                "sum": 1.1088900566101074,
+                "n": 12.0,
+                "dnan": 0.0,
+                "argm": (1, 2),
+                "dev": 0,
+                "rep": {">0.1": 1, ">0.01": 2},
+            },
+            diff1,
+        )
+        diff1 = max_diff(base, pred, hist=[0.1, 0.01, 0.001])
+        self.assertEqual(
+            {
+                "abs": 0.999000072479248,
+                "rel": 0.16647226670209098,
+                "sum": 1.1088900566101074,
+                "n": 12.0,
+                "dnan": 0.0,
+                "argm": (1, 2),
+                "dev": 0,
+                "rep": {">0.1": 1, ">0.01": 2, ">0.001": 3},
+            },
+            diff1,
+        )
+
+    def test_max_diff_hist_precision_array(self):
+        abase = np.arange(12).reshape((3, -1)).astype(np.float32)
+        pred = abase.copy()
+        pred[1, 2] += 0.999
+        pred[2, 2] += 0.0999
+        pred[2, 3] += 0.00999
+        self.assertNotEqual(id(abase), id(pred))
+        self.assertNotEqual(abase.sum(), pred.sum())
+        diff1 = max_diff(abase, pred, hist=[0.1])
+        self.assertEqual(
+            {
+                "abs": 0.999000072479248,
+                "rel": 0.16647226670209098,
+                "sum": 1.1088900566101074,
+                "n": 12.0,
+                "dnan": 0.0,
+                "argm": (1, 2),
+                "rep": {">0.1": 1},
+            },
+            diff1,
+        )
+        diff1 = max_diff(abase, pred, hist=[0.1, 0.01])
+        self.assertEqual(
+            {
+                "abs": 0.999000072479248,
+                "rel": 0.16647226670209098,
+                "sum": 1.1088900566101074,
+                "n": 12.0,
+                "dnan": 0.0,
+                "argm": (1, 2),
+                "rep": {">0.1": 1, ">0.01": 2},
+            },
+            diff1,
+        )
+        diff1 = max_diff(abase, pred, hist=[0.1, 0.01, 0.001])
+        self.assertEqual(
+            {
+                "abs": 0.999000072479248,
+                "rel": 0.16647226670209098,
+                "sum": 1.1088900566101074,
+                "n": 12.0,
+                "dnan": 0.0,
+                "argm": (1, 2),
+                "rep": {">0.1": 1, ">0.01": 2, ">0.001": 3},
+            },
+            diff1,
+        )
+
+    @requires_cuda()
+    def test_max_diff_hist_precision_cuda(self):
+        base = torch.arange(12).reshape((3, -1)).to(torch.float32).to("cuda")
+        pred = base.clone()
+        pred[1, 2] += 0.999
+        pred[2, 2] += 0.0999
+        pred[2, 3] += 0.00999
+        diff1 = max_diff(base, pred, hist=[0.1])
+        self.assertEqual(
+            {
+                "abs": 0.999000072479248,
+                "rel": 0.16647226670209098,
+                "sum": 1.1088900566101074,
+                "n": 12.0,
+                "dnan": 0.0,
+                "argm": (1, 2),
+                "dev": 0,
+                "rep": {">0.1": 1},
+            },
+            diff1,
+        )
+        diff1 = max_diff(base, pred, hist=[0.1, 0.01])
+        self.assertEqual(
+            {
+                "abs": 0.999000072479248,
+                "rel": 0.16647226670209098,
+                "sum": 1.1088900566101074,
+                "n": 12.0,
+                "dnan": 0.0,
+                "argm": (1, 2),
+                "dev": 0,
+                "rep": {">0.1": 1, ">0.01": 2},
+            },
+            diff1,
+        )
+        diff1 = max_diff(base, pred, hist=[0.1, 0.01, 0.001])
+        self.assertEqual(
+            {
+                "abs": 0.999000072479248,
+                "rel": 0.16647226670209098,
+                "sum": 1.1088900566101074,
+                "n": 12.0,
+                "dnan": 0.0,
+                "argm": (1, 2),
+                "dev": 0,
+                "rep": {">0.1": 1, ">0.01": 2, ">0.001": 3},
+            },
+            diff1,
+        )
+
+    def test_max_diff_json(self):
+        abase = np.arange(12).reshape((3, -1)).astype(np.float32)
+        pred = abase.copy()
+        pred[1, 2] += 0.999
+        pred[2, 2] += 0.0999
+        pred[2, 3] += 0.00999
+        diff1 = max_diff(abase, pred, hist=[0.1, 0.01, 0.001])
+        st = string_diff(diff1, js=True, A=0.5, ratio=True)
+        print(st)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

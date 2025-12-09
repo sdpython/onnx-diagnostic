@@ -24,7 +24,7 @@ if patch_qwen2_5:
 
     onnx_plugs_op = onnxscript.values.Opset("onnx_plug", 1)
     op = onnxscript.opset22
-    op24 = onnxscript.onnx_opset.opset24
+    op23 = onnxscript.onnx_opset.opset23
     msft_op = onnxscript.values.Opset("com.microsoft", 1)
     STOPAT = (
         int(os.environ.get("STOPAT", None))
@@ -101,7 +101,7 @@ if patch_qwen2_5:
         return attn_output_4d
 
     @onnxscript.script(opset=onnx_plugs_op)
-    def LoopAttention24(
+    def LoopAttention23(
         query_states,
         key_states,
         value_states,
@@ -109,26 +109,26 @@ if patch_qwen2_5:
         scaling: float = 0.11180339887498948,
         num_heads: int = 16,
     ):
-        to_3d_shape = op24.Constant(value_ints=[0, 0, -1])
-        query_transposed = op24.Transpose(query_states, perm=[0, 2, 1, 3])
-        output_shape = op24.Shape(query_transposed)
-        query_3d = op24.Reshape(query_transposed, to_3d_shape)
-        value_3d = op24.Reshape(op24.Transpose(value_states, perm=[0, 2, 1, 3]), to_3d_shape)
-        key_3d = op24.Reshape(op24.Transpose(key_states, perm=[0, 2, 1, 3]), to_3d_shape)
-        cu_seqlens = op24.Cast(cu_seqlens, to=onnx.TensorProto.INT32)
-        num_patches = op24.Size(cu_seqlens) - 1
-        seq_axis = op24.Constant(value_ints=[1])
-        seq_axis_int32 = op24.Cast(seq_axis, to=onnx.TensorProto.INT32)
-        seq_attn = op24.SequenceEmpty(dtype=onnx.TensorProto.FLOAT)
+        to_3d_shape = op23.Constant(value_ints=[0, 0, -1])
+        query_transposed = op23.Transpose(query_states, perm=[0, 2, 1, 3])
+        output_shape = op23.Shape(query_transposed)
+        query_3d = op23.Reshape(query_transposed, to_3d_shape)
+        value_3d = op23.Reshape(op23.Transpose(value_states, perm=[0, 2, 1, 3]), to_3d_shape)
+        key_3d = op23.Reshape(op23.Transpose(key_states, perm=[0, 2, 1, 3]), to_3d_shape)
+        cu_seqlens = op23.Cast(cu_seqlens, to=onnx.TensorProto.INT32)
+        num_patches = op23.Size(cu_seqlens) - 1
+        seq_axis = op23.Constant(value_ints=[1])
+        seq_axis_int32 = op23.Cast(seq_axis, to=onnx.TensorProto.INT32)
+        seq_attn = op23.SequenceEmpty(dtype=onnx.TensorProto.FLOAT)
         for i_patch in range(num_patches):
-            i_1d = op24.Reshape(i_patch, [1])
+            i_1d = op23.Reshape(i_patch, [1])
             i_plus_1_1d = i_1d + 1
-            start = op24.Gather(cu_seqlens, i_1d, axis=0)
-            end = op24.Gather(cu_seqlens, i_plus_1_1d, axis=0)
-            query_i = op24.Slice(query_3d, start, end, seq_axis_int32)
-            key_i = op24.Slice(key_3d, start, end, seq_axis_int32)
-            value_i = op24.Slice(value_3d, start, end, seq_axis_int32)
-            mha_output = op24.Attention(
+            start = op23.Gather(cu_seqlens, i_1d, axis=0)
+            end = op23.Gather(cu_seqlens, i_plus_1_1d, axis=0)
+            query_i = op23.Slice(query_3d, start, end, seq_axis_int32)
+            key_i = op23.Slice(key_3d, start, end, seq_axis_int32)
+            value_i = op23.Slice(value_3d, start, end, seq_axis_int32)
+            mha_output = op23.Attention(
                 query_i,
                 key_i,
                 value_i,
@@ -137,9 +137,9 @@ if patch_qwen2_5:
                 kv_num_heads=num_heads,
                 softmax_precision=onnx.TensorProto.FLOAT,
             )
-            seq_attn = op24.SequenceInsert(seq_attn, mha_output)
-        attn_output = op24.ConcatFromSequence(seq_attn, axis=1)
-        attn_output_4d = op24.Reshape(attn_output, output_shape)
+            seq_attn = op23.SequenceInsert(seq_attn, mha_output)
+        attn_output = op23.ConcatFromSequence(seq_attn, axis=1)
+        attn_output_4d = op23.Reshape(attn_output, output_shape)
         return attn_output_4d
 
     @onnxscript.script(opset=onnx_plugs_op)
@@ -263,8 +263,8 @@ if patch_qwen2_5:
         if strategy is not None:
             return strategy, itype
         if dtype == torch.float32 or itype == onnx.TensorProto.FLOAT:
-            if opset >= 24:
-                return "LOOPA24", itype
+            if opset >= 23:
+                return "LOOPA23", itype
             return "LOOPMHA", itype
         if dtype == torch.float16 or itype == onnx.TensorProto.FLOAT16:
             # first_tensor may be a SymbolicTensor (onnx).
@@ -288,9 +288,9 @@ if patch_qwen2_5:
             ("PACKED", onnx.TensorProto.FLOAT16): _add_com_microsoft_opset(
                 PackedAttention.to_function_proto()
             ),
-            ("LOOPA24", onnx.TensorProto.FLOAT): LoopAttention24.to_function_proto(),
-            ("LOOPA24", onnx.TensorProto.FLOAT16): _update_sequence_type(
-                onnx.TensorProto.FLOAT16, LoopAttention24.to_function_proto()
+            ("LOOPA23", onnx.TensorProto.FLOAT): LoopAttention23.to_function_proto(),
+            ("LOOPA23", onnx.TensorProto.FLOAT16): _update_sequence_type(
+                onnx.TensorProto.FLOAT16, LoopAttention23.to_function_proto()
             ),
             ("LOOPMHA", onnx.TensorProto.FLOAT): _add_com_microsoft_opset(
                 LoopMHAAttention.to_function_proto()
