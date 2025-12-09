@@ -419,6 +419,29 @@ def main(
         df = df[[*first, *[c for c in df.columns if c not in set(first)]]]
         df.to_excel(statistics + ".xlsx")
 
+        index = [
+            "model_id",
+            "pretrained",
+            "device",
+            "dtype",
+            "attention",
+            "opset",
+            "exporter",
+        ]
+        values = [
+            "abs",
+            "%>0.1",
+            "%>0.01",
+            "export_duration",
+            "speedup",
+            "latency_torch",
+            "latency_ort_n",
+        ]
+        stat = df[[*index, *values]].groupby(index).max()
+        stat.to_excel(statistics + ".agg.xlsx")
+        stat = df[df.exporter == "onnx-dynamo"][[*index, *values]].groupby(index).max()
+        stat.to_excel(statistics + ".agg.onnx-dynamo.xlsx")
+
     if make_zip:
         tar_file_name = f"{basename}.zip"
         print()
