@@ -9,7 +9,7 @@ Requirements
 
     git+https://github.com/sdpython/experimental-experiment.git  # optional
     huggingface_hub>=1.2.1
-    onnx-diagnostic>=0.8.4
+    onnx-diagnostic>=0.8.5
     onnxruntime>=1.23
     torch>=2.9  # weekly is better
     tqdm
@@ -98,6 +98,27 @@ def main(
     make_zip: bool = False,
     output_folder: str = "dump_models",
 ):
+    prefix = simplify_model_id_for_a_filename(model_id)
+    if "QWEN25ATTENTION" in os.environ:
+        prefix = f"{prefix}.{os.environ['QWEN25ATTENTION']}"
+    basename = os.path.join(
+        output_folder, f"model.{prefix}.visual.{device}.{dtype}.{exporter}"
+    )
+    filename = f"{basename}.onnx"
+    stat_file = f"{basename}.stats"
+
+    print("------------------------------------------------------------------")
+    print(
+        f"-- {model_id} {device} {dtype} {exporter} {pretrained} "
+        f"{second_input} {make_zip} {output_folder} {prefix}"
+    )
+    print("------------------------------------------------------------------")
+    print(f"-- export in {filename!r}")
+
+    if os.path.exists(stat_file):
+        print(f"-- skipping because {stat_file!r} already exists")
+        return
+
     print("-- import torch")
     import torch
 
@@ -171,7 +192,6 @@ def main(
     print("-- INPUT/OUTPUT")
     print("-- ############")
 
-    prefix = simplify_model_id_for_a_filename(model_id)
     input_filename = os.path.join(output_folder, f"inputs.{prefix}.visual.{device}.{dtype}.pt")
     if os.path.exists(input_filename):
         print(f"-- restore inputs from {input_filename!r}")
@@ -219,7 +239,7 @@ def main(
             expected = torch.load(output_filename)
             export_expected = expected["export_expected"]
             other_expected = expected["other_expected"]
-            duration = expected["duration"]
+            durations = expected["durations"]
         else:
             print(
                 f"-- compute with inputs: {string_type(export_inputs, with_shape=True, with_device=True)}"
@@ -229,31 +249,32 @@ def main(
             print(
                 f"-- compute with inputs: {string_type(other_inputs, with_shape=True, with_device=True)}"
             )
-            begin = time.perf_counter()
             other_expected = []
+            durations = []
             for other in tqdm.tqdm(other_inputs):
+                begin = time.perf_counter()
                 expected = model_to_export(**other)
                 other_expected.append(expected)
-            duration = time.perf_counter() - begin
+                durations.append(time.perf_counter() - begin)
             print(f"-- got: {string_type(other_expected, with_shape=True, with_device=True)}")
 
             expected = dict(
                 export_expected=export_expected,
                 other_expected=other_expected,
-                duration=duration,
+                durations=durations,
             )
             print(f"-- dump expected outputs into {output_filename!r}")
             torch.save(expected, output_filename)
-        print(f"-- computation took {duration}")
+        print(f"-- computation took {sum(durations)}")
         print(
             f"-- export_expected={string_type(export_expected, with_shape=True, with_device=True)}"
         )
         print(
             f"-- other_expected={string_type(other_expected, with_shape=True, with_device=True)}"
         )
-        return export_expected, other_expected, duration
+        return export_expected, other_expected, durations
 
-    export_expected, other_expected, duration = (
+    export_expected, other_expected, durations = (
         compute_expected() if not os.environ.get("STOPAT", "") else (None, None)
     )
 
@@ -266,14 +287,6 @@ def main(
         grid_thw={},  # {0: "n_images"}, # TODO: fix
     )
 
-    if "QWEN25ATTENTION" in os.environ:
-        prefix = f"{prefix}.{os.environ['QWEN25ATTENTION']}"
-    basename = os.path.join(
-        output_folder, f"model.{prefix}.visual.{device}.{dtype}.{exporter}"
-    )
-    filename = f"{basename}.onnx"
-    print(f"-- export in {filename!r}")
-    stat_file = f"{basename}.stats"
     begin = time.perf_counter()
 
     target_opset = 22
@@ -290,7 +303,7 @@ def main(
         stop_if_static=2,
     ):
         if export_expected is None:
-            export_expected, other_expected, duration = compute_expected()
+            export_expected, other_expected, durations = compute_expected()
         to_onnx(
             model_to_export,
             kwargs=export_inputs,
@@ -348,11 +361,19 @@ def main(
             )
             begin = time.perf_counter()
             gots = []
-            for feed in tqdm.tqdm(feeds):
+            for i, feed in enumerate(tqdm.tqdm(feeds)):
+                if (
+                    device == "cpu"
+                    and os.environ.get("QWEN25ATTENTION", "default") == "LOOPA23"
+                    and i >= 2
+                ):
+                    # two slow
+                    break
                 gots.append(sess.run(None, feed)[0])
             oduration = time.perf_counter() - begin
             fprint(
-                f"-- torch duration={duration}, onnx duration={oduration}, speedup={duration/oduration}"
+                f"-- torch duration={sum(durations[:len(gots)])}, onnx duration={oduration}, "
+                f"speedup={sum(durations[:len(gots)])/oduration} n={len(gots)}"
             )
 
             info = {
@@ -364,9 +385,10 @@ def main(
                 "attention": os.environ.get("QWEN25ATTENTION", "default"),
                 "timestamp": datetime.datetime.now().isoformat(),
                 "export_duration": export_duration,
-                "latency_torch": duration,
+                "latency_torch": sum(durations[: len(gots)]),
                 "latency_ort": oduration,
-                "speedup": duration / oduration,
+                "speedup": sum(durations[: len(gots)]) / oduration,
+                "latency_ort_n": len(gots),
                 "opset": target_opset,
                 **get_versions(),
             }
