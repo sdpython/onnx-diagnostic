@@ -2,7 +2,7 @@
 Export visual embedding of Qwen/Qwen2.5-VL-7B-Instruct
 ======================================================
 
-requirements
+Requirements
 ++++++++++++
 
 ::
@@ -12,6 +12,7 @@ requirements
     onnx-diagnostic>=0.8.4
     onnxruntime>=1.23
     torch>=2.9  # weekly is better
+    tqdm
     transformers>=4.57
 
 Examples
@@ -26,12 +27,19 @@ Cheat sheet for tar commands. To make a tar:
 And to untar:
 ``tar -xzvf model.tar.gz``.
 
+Rewritings
+++++++++++
+
+* `overview <https://sdpython.github.io/doc/onnx-diagnostic/dev/status/patches_diff.html#auto-patch-transformers-qwen2-5-vlforconditionalgeneration-prepare-inputs-for-generation-patched-qwen2-5-vlforconditionalgeneration-prepare-inputs-for-generation>`_
+* code: `_patch_transformers_qwen2_5.py <https://github.com/sdpython/onnx-diagnostic/blob/main/onnx_diagnostic/torch_export_patches/patches/_patch_transformers_qwen2_5.py>`_
+
 Attention
 +++++++++
 
-The attention is either implemented with ``MultiHeadAttention`` in a loop, either with ``PackedMultiHeadAttention``.
-The choice is made based on the device. It is possible to overwrite this by by setting
-environment variable to ``QWEN25ATTENTION`` to:
+The attention is either implemented with ``MultiHeadAttention`` in a loop,
+either with ``PackedMultiHeadAttention``. The choice is made based on the device.
+It is possible to overwrite this by by setting environment variable
+``QWEN25ATTENTION`` to:
 
 * ``PACKED``: PackedMultiHeadAttention
 * ``LOOPMHA``: Loop over MultiHeadAttention
@@ -68,7 +76,8 @@ def main(
     exporter: str = "onnx-dynamo",
     pretrained: bool = True,
     second_input: bool = True,
-    zip: bool = False,
+    make_zip: bool = False,
+    output_folder: str = "dump_models",
 ):
     print("-- import torch")
     import torch
@@ -80,6 +89,7 @@ def main(
     from transformers import AutoModel, AutoProcessor
 
     print("-- import onnx_diagnostic")
+    import tqdm
     from onnx_diagnostic.helpers import string_type, max_diff
     from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
         PLUGS,
@@ -87,6 +97,9 @@ def main(
     from onnx_diagnostic.torch_export_patches import torch_export_patches
     from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
     from onnx_diagnostic.export.api import to_onnx
+
+    if output_folder and output_folder != ".":
+        os.makedirs(output_folder, exist_ok=True)
 
     print(f"-- creating model {model_id!r}")
     print(
@@ -132,42 +145,113 @@ def main(
     print(f"-- model.device={model.device}")
     processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
     print(f"-- processor={type(processor)}")
-
-    inputs = dict(
-        hidden_states=torch.rand((1292, 1176), dtype=torch_dtype).to(device),
-        grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
-    )
-    big_inputs = (
-        dict(
-            hidden_states=torch.rand((14308, 1176), dtype=torch_dtype).to(device),
-            grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64).to(device),
-        )
-        if second_input
-        else None
-    )
-
     model_to_export = model.visual if hasattr(model, "visual") else model.model.visual
-    if not os.environ.get("STOPAT", ""):
-        print(f"-- compute with inputs: {string_type(inputs, with_shape=True)}")
-        expected = model_to_export(**inputs)
-        print(f"-- got: {string_type(expected, with_shape=True)}")
-        print(f"-- compute with inputs: {string_type(big_inputs, with_shape=True)}")
-        expected_big = None if big_inputs is None else model_to_export(**big_inputs)
-        print(f"-- got: {string_type(expected_big, with_shape=True)}")
+    print(f"-- model_to_export={type(model_to_export)}")
+
+    print("-- ############")
+    print("-- INPUT/OUTPUT")
+    print("-- ############")
+
+    prefix = simplify_model_id_for_a_filename(model_id)
+    input_filename = os.path.join(output_folder, f"inputs.{prefix}.visual.{device}.{dtype}.pt")
+    if os.path.exists(input_filename):
+        print(f"-- restore inputs from {input_filename!r}")
+        data = torch.load(input_filename)
+        export_inputs = data["export_inputs"]
+        other_inputs = data["other_inputs"]
     else:
-        expected = None
-        expected_big = None
-    print(f"-- expected: {string_type(expected, with_shape=True)}")
+        export_inputs = dict(
+            hidden_states=torch.randn((1292, 1176), dtype=torch_dtype).to(device),
+            grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
+        )
+        other_inputs = []
+        if second_input:
+            other_inputs = [
+                dict(
+                    hidden_states=torch.randn((1292, 1176), dtype=torch_dtype).to(device),
+                    grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
+                ),
+                dict(
+                    hidden_states=torch.rand((1292, 1176), dtype=torch_dtype).to(device),
+                    grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
+                ),
+                dict(
+                    hidden_states=torch.randn((14308, 1176), dtype=torch_dtype).to(device),
+                    grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64).to(device),
+                ),
+                dict(
+                    hidden_states=torch.rand((14308, 1176), dtype=torch_dtype).to(device),
+                    grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64).to(device),
+                ),
+            ]
+        data = dict(export_inputs=export_inputs, other_inputs=other_inputs)
+        print(f"-- dump inputs into {input_filename!r}")
+        torch.save(data, input_filename)
+
+    print(f"-- export_inputs={string_type(export_inputs, with_shape=True, with_device=True)}")
+    print(f"-- other_inputs={string_type(other_inputs, with_shape=True, with_device=True)}")
+
+    def compute_expected():
+        output_filename = os.path.join(
+            output_folder, f"expected.{prefix}.visual.{device}.{dtype}.pt"
+        )
+        if os.path.exists(output_filename):
+            print(f"-- restore expected outputs from {output_filename!r}")
+            expected = torch.load(output_filename)
+            export_expected = expected["export_expected"]
+            other_expected = expected["other_expected"]
+            duration = expected["duration"]
+        else:
+            print(
+                f"-- compute with inputs: {string_type(export_inputs, with_shape=True, with_device=True)}"
+            )
+            export_expected = model_to_export(**export_inputs)
+            print(f"-- got: {string_type(export_expected, with_shape=True)}")
+            print(
+                f"-- compute with inputs: {string_type(other_inputs, with_shape=True, with_device=True)}"
+            )
+            begin = time.perf_counter()
+            other_expected = []
+            for other in tqdm.tqdm(other_inputs):
+                expected = model_to_export(**other)
+                other_expected.append(expected)
+            duration = time.perf_counter() - begin
+            print(f"-- got: {string_type(other_expected, with_shape=True, with_device=True)}")
+
+            expected = dict(
+                export_expected=export_expected,
+                other_expected=other_expected,
+                duration=duration,
+            )
+            print(f"-- dump expected outputs into {output_filename!r}")
+            torch.save(expected, output_filename)
+        print(f"-- computation took {duration}")
+        print(
+            f"-- export_expected={string_type(export_expected, with_shape=True, with_device=True)}"
+        )
+        print(
+            f"-- other_expected={string_type(other_expected, with_shape=True, with_device=True)}"
+        )
+        return export_expected, other_expected, duration
+
+    export_expected, other_expected, duration = (
+        compute_expected() if not os.environ.get("STOPAT", "") else (None, None)
+    )
+
+    print("-- ######")
+    print("-- EXPORT")
+    print("-- ######")
 
     dynamic_shapes = dict(
         hidden_states={0: "hidden_width", 1: "hidden_height"},
         grid_thw={},  # {0: "n_images"}, # TODO: fix
     )
 
-    prefix = simplify_model_id_for_a_filename(model_id)
     if "QWEN25ATTENTION" in os.environ:
         prefix = f"{prefix}.{os.environ['QWEN25ATTENTION']}"
-    basename = f"model.{prefix}.visual.{device}.{dtype}.{exporter}"
+    basename = os.path.join(
+        output_folder, f"model.{prefix}.visual.{device}.{dtype}.{exporter}"
+    )
     filename = f"{basename}.onnx"
     print(f"-- export in {filename!r}")
     stat_file = f"{basename}.stats"
@@ -176,7 +260,6 @@ def main(
     if exporter == "onnx-dynamo" and device == "cuda" and "QWEN25ATTENTION" not in os.environ:
         os.environ["QWEN25ATTENTION"] = "PACKED"
 
-    export_inputs = inputs
     with torch_export_patches(
         patch_torch=False,
         patch_sympy=False,
@@ -184,9 +267,8 @@ def main(
         verbose=1,
         stop_if_static=2,
     ):
-        if expected is None:
-            expected = model_to_export(**inputs)
-            expected_big = None if big_inputs is None else model_to_export(**big_inputs)
+        if export_expected is None:
+            export_expected, other_expected, duration = compute_expected()
         to_onnx(
             model_to_export,
             kwargs=export_inputs,
@@ -199,7 +281,7 @@ def main(
             optimize=True,
             onnx_plugs=PLUGS,
         )
-    duration = time.perf_counter() - begin
+    export_duration = time.perf_counter() - begin
 
     if exporter == "onnx-dynamo":
         # onnx-dynamo fails at producing function body with sequences as input / output.
@@ -214,32 +296,48 @@ def main(
             print(s)
             f.write(f"{s}\n")
 
-        fprint(f"-- export duration: {duration}")
+        fprint(f"-- export duration: {export_duration}")
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         if device == "cpu":
             providers = providers[1:]
         fprint(f"-- checking discrepancies with providers={providers!r}")
         sess = onnxruntime.InferenceSession(filename, providers=providers)
 
-        fprint(f"-- inputs {string_type(inputs, with_shape=True, with_device=True)}")
-        fprint(f"-- expected {string_type(expected, with_shape=True, with_device=True)}")
-        feeds = {k: v.detach().cpu().numpy() for k, v in inputs.items()}
+        fprint(
+            f"-- export_inputs {string_type(export_inputs, with_shape=True, with_device=True)}"
+        )
+        fprint(
+            f"-- export_expected {string_type(export_expected, with_shape=True, with_device=True)}"
+        )
+        feeds = {k: v.detach().cpu().numpy() for k, v in export_inputs.items()}
         small = sess.run(None, feeds)
-        diff = max_diff(expected, small[0], hist=[0.1])
+        diff = max_diff(export_expected, small[0], hist=[0.1, 0.01])
         fprint(f"-- discrepancies={diff}")
 
         if second_input:
+            feeds = [
+                {k: v.detach().cpu().numpy() for k, v in inputs.items()}
+                for inputs in other_inputs
+            ]
             fprint("")
-            fprint(f"-- inputs {string_type(big_inputs, with_shape=True, with_device=True)}")
+            fprint(f"-- inputs {string_type(feeds, with_shape=True, with_device=True)}")
             fprint(
-                f"-- expected {string_type(expected_big, with_shape=True, with_device=True)}"
+                f"-- expected {string_type(other_expected, with_shape=True, with_device=True)}"
             )
-            feeds = {k: v.detach().cpu().numpy() for k, v in big_inputs.items()}
-            big = sess.run(None, feeds)
-            diff = max_diff(expected_big, big[0], hist=[0.1])
-            fprint(f"-- discrepancies={diff}")
+            begin = time.perf_counter()
+            gots = []
+            for feed in tqdm.tqdm(feeds):
+                gots.append(sess.run(None, feed)[0])
+            oduration = time.perf_counter() - begin
+            fprint(
+                f"-- torch duration={duration}, onnx duration={oduration}, speedup={duration/oduration}"
+            )
 
-    if zip:
+            for fe, e, b in zip(feeds, other_expected, gots):
+                diff = max_diff(e, b, hist=[0.1, 0.01])
+                fprint(f"-- inputs={string_type(fe, with_shape=True)} -- {diff}")
+
+    if make_zip:
         tar_file_name = f"{basename}.zip"
         print()
         print(f"-- make file {tar_file_name!r}")
@@ -288,6 +386,13 @@ def get_parser() -> ArgumentParser:
         help="Creates a file .zip with onnx file and data file.",
         action=BooleanOptionalAction,
     )
+    parser.add_argument(
+        "-o",
+        "--output-folder",
+        default="dump_models",
+        help="Folders where to put the results.",
+        action=BooleanOptionalAction,
+    )
     return parser
 
 
@@ -301,5 +406,6 @@ if __name__ == "__main__":
         exporter=args.exporter,
         pretrained=args.pretrained,
         second_input=args.second_input,
-        zip=args.zip,
+        make_zip=args.zip,
+        output_folder=args.output_folder,
     )
