@@ -18,7 +18,7 @@ class TestCommandLines(ExtTestCase):
         )
 
     def test_a_parser_print(self):
-        for fmt in ["raw", "text", "pretty", "printer"]:
+        for fmt in ["raw", "text", "pretty", "printer", "shape", "dot"]:
             with self.subTest(format=fmt):
                 st = StringIO()
                 with redirect_stdout(st):
@@ -199,7 +199,9 @@ class TestCommandLines(ExtTestCase):
         with redirect_stdout(st):
             main(args)
         text = st.getvalue()
-        print(text)
+        if text:
+            # text is empty is dot is not installed
+            self.assertIn("converts into dot", text)
 
 
 if __name__ == "__main__":
