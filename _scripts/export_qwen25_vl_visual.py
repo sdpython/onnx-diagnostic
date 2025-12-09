@@ -255,7 +255,7 @@ def main(
             print(f"-- dump inputs into {input_filename!r}")
             torch.save(data, input_filename)
     else:
-        raise NotImplementedError(f"part={part!r} not implemnted yet")
+        raise NotImplementedError(f"part={part!r} not implemented yet")
 
     print(f"-- export_inputs={string_type(export_inputs, with_shape=True, with_device=True)}")
     print(f"-- other_inputs={string_type(other_inputs, with_shape=True, with_device=True)}")
@@ -550,7 +550,7 @@ def get_parser() -> ArgumentParser:
         "-x",
         "--existing-onnx",
         default="",
-        help="If an onnx file exists, only measures the disrepancies.",
+        help="If an onnx file exists, only measures the discrepancies.",
     )
     parser.add_argument(
         "-p",
