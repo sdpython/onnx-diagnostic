@@ -4,6 +4,7 @@ Change Logs
 0.8.5
 +++++
 
+* :pr:`349`: fixes function max_diff (parameter hist)
 * :pr:`348`: add format dot, shape to command line print
 * :pr:`346`: fix patch for sdpa_mask_recent_torch even if it was removed in transformers>=5.0
 
