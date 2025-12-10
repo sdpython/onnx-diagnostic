@@ -8,6 +8,6 @@ onnx_diagnostic.ci_models
     ci_helpers
     export_qwen25_vl
 
-.. automodule:: onnx_diagnostic.torch_onnx
+.. automodule:: onnx_diagnostic.ci_models
     :members:
     :no-undoc-members:

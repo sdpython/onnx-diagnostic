@@ -269,6 +269,24 @@ def main(
         print("-- EXPORT")
         print("-- ######")
 
+        if exporter != "custom":
+            import packaging.version as pv
+
+            try:
+                import onnxscript
+
+                v_onnxscript = onnxscript.__version__
+                if pv.Version(v_onnxscript) <= pv.Version("0.5.6"):
+                    print(f"-- onnxscript=={v_onnxscript} not recent enough")
+                    print("-- stop.")
+                    return
+            except AttributeError:
+                pass
+            except ImportError:
+                print("-- missing onnxscript, cannot continue")
+                print("-- stop.")
+                return
+
         dynamic_shapes = dict(
             pixel_values={0: "hidden_width", 1: "hidden_height"},
             image_grid_thw={},  # {0: "n_images"}, # TODO: fix
