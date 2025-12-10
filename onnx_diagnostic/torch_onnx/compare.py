@@ -60,6 +60,12 @@ class ObsCompare:
         ]
         return " ".join(els)
 
+    @classmethod
+    def to_str(cls, obs: Optional["ObsCompare"]) -> str:
+        if obs:
+            return str(obs)
+        return " " * (6 + 8 + 18 + 15 + 35 + 4)
+
     def distance(self, obs: "ObsCompare") -> float:
         """Computes a cost between two observations."""
         if self.kind != obs.kind:
