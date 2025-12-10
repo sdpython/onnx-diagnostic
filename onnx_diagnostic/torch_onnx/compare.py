@@ -138,7 +138,7 @@ class ObsCompare:
 
         # reverse
         way = []
-        last: Optional[Tuple[int, int]] = len(s1) - 1, len(s2) - 1
+        last: Optional[Tuple[Optional[int], Optional[int]]] = len(s1) - 1, len(s2) - 1
         while last is not None:
             way.append(last)
             last = predecessor[last]
