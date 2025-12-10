@@ -109,7 +109,7 @@ class ObsCompare:
         """
         delay = max(50, abs(len(s2) - len(s1)) + 1)
         distance: Dict[Tuple[int, int], Union[int, float]] = {(-1, -1): 0}
-        predecessor: Dict[Tuple[int, int], Tuple[int, int]] = {(-1, -1): None}
+        predecessor: Dict[Tuple[int, int], Optional[Tuple[int, int]]] = {(-1, -1): None}
         insert_cost = 1e3
         for i in range(len(s1)):
             for j in range(max(0, i - delay), min(len(s2), i + delay)):
@@ -143,7 +143,7 @@ class ObsCompare:
             way.append(last)
             last = predecessor[last]
         indices = list(reversed(way))[1:]
-        obs_path = []
+        obs_path: List[Optional[Tuple[int, int]]] = []
         last = -1, -1
         for i, j in indices:
             di = i - last[0]

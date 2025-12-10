@@ -76,13 +76,23 @@ class TestCompare(ExtTestCase):
         ]
         self.assertEqual(expected_path, path)
         self.assertEqual(len(path), len(pair_cmp))
+        n1, n2, n12 = 0, 0, 0
         for o1, o2 in pair_cmp:
             if o1:
                 self.assertIsInstance(o1, ObsCompare)
+            else:
+                n1 += 1
             if o2:
                 self.assertIsInstance(o2, ObsCompare)
+            else:
+                n2 += 1
             if o1 and o2:
                 self.assertEqual(o1, o2)
+            elif not o1 and not o2:
+                n12 += 1
+        self.assertEqual(n1, 1)
+        self.assertEqual(n2, 1)
+        self.assertEqual(n12, 0)
 
 
 if __name__ == "__main__":
