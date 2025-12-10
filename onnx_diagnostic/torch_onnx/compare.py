@@ -170,7 +170,7 @@ class ObsCompare:
                 shapes[info.name] = tuple((d.dim_param or d.dim_value) for d in t.shape.dim)
                 types[info.name] = t.elem_type
 
-        seq = []
+        seq: List[ObsCompare] = []
         for init in graph.initializer:
             obs = ObsCompare(
                 position=len(seq),
