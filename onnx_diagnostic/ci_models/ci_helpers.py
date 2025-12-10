@@ -214,7 +214,7 @@ def compute_expected_outputs(
 def check_for_discrepancies_and_log_everything_into_a_json_file(
     agg_stat_file: str,
     stat_file: str,
-    export_duration: List[float],
+    export_duration: float,
     device: str,
     model_file: str,
     cached_inputs: str,
@@ -224,8 +224,29 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
     mismatch01: float,
 ):
     """
+    Checks discrepancies for a specific model.
 
     Imports are delayed to be faster when running the help of the command line.
+
+    :param agg_stat_file: a file when the discrepancies are collected, this is used to
+        produce a table to make it easier to compare accross types, devices, ...
+    :param stat_file: disrepancies results dumps into that file
+    :param export_duration: export duration
+    :param device: targetted device (to select onnxruntime provider)
+    :param model_file: onnx model file
+    :param cache_inputs: inputs saved with :func:`torch.save` and
+        restored with :func:`torch.load`,
+        needs to contains `export_inputs` (to check the model is valid),
+        and `other_inputs`, other sets of inputs to measure the discrepancies,
+        and speed up (rough estimation)
+    :param cached_expected_outputs: expected outputs saved with :func:`torch.save`
+        and restored with :func:`torch.load`,
+        needs to contains `export_expected` (to check the model is valid),
+        and `other_expected`, other sets of outputs to measure the discrepancies,
+        and speed up (rough estimation)
+    :param main_info: a dictionary with values used to tell which version, device, ...
+    :param atol: assert if tolerance is above this
+    :param mismatch01: assert if the ratio of mismatches is above that threshold
     """
     import tqdm
     import onnxruntime

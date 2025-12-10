@@ -39,6 +39,10 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
+module = ["onnx_diagnostic.ci_models.*"]
+disable_error_code = ["assignment", "index", "name-defined", "operator", "call-overload"]
+
+[[tool.mypy.overrides]]
 module = ["onnx_diagnostic.doc"]
 disable_error_code = ["call-overload", "name-defined", "import-untyped"]
 
