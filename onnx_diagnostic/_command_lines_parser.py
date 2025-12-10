@@ -1545,11 +1545,7 @@ def _cmd_compare(argv: List[Any]):
     dist, _path, pair_cmp = ObsCompare.distance_sequence(seq1, seq2)
     print(f"-- done with distance {dist}")
     for i, (o1, o2) in enumerate(pair_cmp):
-<<<<<<< HEAD
         print(f"{i:04d} {ObsCompare.to_str(o1)} | {ObsCompare.to_str(o2)}")
-=======
-        print(f"{i:04d} {o1} | {o2}")
->>>>>>> 6b27604067df0fda92ba7500b1538e7a3d4292b2
 
 
 #############
