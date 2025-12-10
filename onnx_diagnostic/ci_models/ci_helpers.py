@@ -229,10 +229,10 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
     Imports are delayed to be faster when running the help of the command line.
 
     :param agg_stat_file: a file when the discrepancies are collected, this is used to
-        produce a table to make it easier to compare accross types, devices, ...
-    :param stat_file: disrepancies results dumps into that file
+        produce a table to make it easier to compare across types, devices, ...
+    :param stat_file: discrepancies results dumps into that file
     :param export_duration: export duration
-    :param device: targetted device (to select onnxruntime provider)
+    :param device: targeted device (to select onnxruntime provider)
     :param model_file: onnx model file
     :param cache_inputs: inputs saved with :func:`torch.save` and
         restored with :func:`torch.load`,
