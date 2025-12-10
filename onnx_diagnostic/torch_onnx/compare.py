@@ -92,7 +92,7 @@ class ObsCompare:
         """Computes a cost between two observations."""
         if self.kind != obs.kind:
             return 1e6
-        d = 0
+        d: float = 0
         if self.itype != obs.itype:
             d += 1e5
         if self.kind == ObsType.NODE:
@@ -116,6 +116,12 @@ class ObsCompare:
                     n2 = n2.replace("_", "")
                     if n1 == n2:
                         d += 1
+                    elif (n1.startswith(("val_", "_onx_")) or "::" in n1 or "--" in n1) and (
+                        n2.startswith(("val_", "_onx_")) or "::" in n2 or "--" in n2
+                    ):
+                        # These are name given the exporter
+                        # and not inspired from the model itself.
+                        d += cost / 100
                     else:
                         d += cost
             else:
@@ -211,6 +217,33 @@ class ObsCompare:
             seq.append(obs)
         return seq
 
+
+@dataclass
+class ObsComparePair:
+    """
+    Defines a pair of comparison objects
+
+    :param side1: object from first side
+    :param side2: object from first side
+    :param distance: distance
+    """
+
+    side1: Optional[ObsCompare]
+    side2: Optional[ObsCompare]
+    distance: float
+
+    def __str__(self) -> str:
+        "nice display"
+        return (
+            f"{self.distance:.4e} | "
+            f"{ObsCompare.to_str(self.side1)} | {ObsCompare.to_str(self.side2)}"
+        )
+
+    @classmethod
+    def to_str(cls, seq: List["ObsComparePair"]) -> str:
+        """Displays every pair in text."""
+        return "\n".join([f"{str(pair)}" for pair in seq])
+
     @classmethod
     def distance_sequence(cls, s1: List["ObsCompare"], s2: List["ObsCompare"]) -> Tuple[
         float,
@@ -223,6 +256,52 @@ class ObsCompare:
         :param s1: first sequence
         :param s2: second sequence
         :return: distance and alignment
+
+        An example:
+
+        .. runpython::
+            :showcode:
+
+            import torch
+            from onnx_diagnostic.export.api import to_onnx
+            from onnx_diagnostic.torch_onnx.compare import ObsComparePair, ObsCompare
+
+
+            class Model(torch.nn.Module):
+                def __init__(self):
+                    super().__init__()
+                    self.conv1 = torch.nn.Conv2d(3, 16, 5)
+                    self.fc1 = torch.nn.Linear(144, 64)
+                    self.fc2 = torch.nn.Linear(64, 128)
+                    self.fc3 = torch.nn.Linear(128, 10)
+
+                def forward(self, x):
+                    x = torch.nn.functional.max_pool2d(
+                        torch.nn.functional.relu(self.conv1(x)),
+                        (4, 4),
+                    )
+                    # x = F.max_pool2d(F.relu(self.conv2(x)), 2)
+                    x = torch.flatten(x, 1)
+                    x = torch.nn.functional.relu(self.fc1(x))
+                    x = torch.nn.functional.relu(self.fc2(x))
+                    y = self.fc3(x)
+                    return y
+
+
+            model = Model()
+            x = torch.randn((2, 3, 16, 17), dtype=torch.float32)
+            dynamic_shapes = ({0: "batch", 3: "dim"},)
+            onnx_optimized = to_onnx(
+                model, (x,), dynamic_shapes=dynamic_shapes, exporter="custom", optimize=True
+            ).model_proto
+            onnx_not_optimized = to_onnx(
+                model, (x,), dynamic_shapes=dynamic_shapes, exporter="custom", optimize=False
+            ).model_proto
+            seq1 = ObsCompare.obs_sequence_from_model(onnx_not_optimized)
+            seq2 = ObsCompare.obs_sequence_from_model(onnx_optimized)
+            _dist, _path, pair_cmp = ObsComparePair.distance_sequence(seq1, seq2)
+            text = ObsComparePair.to_str(pair_cmp)
+            print(text)
         """
         delay = max(50, abs(len(s2) - len(s1)) + 1)
         distance: Dict[Tuple[int, int], Union[int, float]] = {(-1, -1): 0}
@@ -260,7 +339,7 @@ class ObsCompare:
             way.append(last)
             last = predecessor[last]
         indices = list(reversed(way))[1:]
-        obs_path: List[Tuple[Optional[ObsCompare], Optional[ObsCompare]]] = []
+        obs_path: List[ObsComparePair] = []
         last = -1, -1
         for i, j in indices:
             di = i - last[0]
@@ -276,30 +355,3 @@ class ObsCompare:
                 raise RuntimeError(f"issue with di={di}, dj={dj}")
             last = i, j
         return distance[len(s1) - 1, len(s2) - 1], indices, obs_path
-
-
-@dataclass
-class ObsComparePair:
-    """
-    Defines a pair of comparison objects
-
-    :param side1: object from first side
-    :param side2: object from first side
-    :param distance: distance
-    """
-
-    side1: Optional[ObsCompare]
-    side2: Optional[ObsCompare]
-    distance: float
-
-    def __str__(self) -> str:
-        "nice dislay"
-        return (
-            f"{self.distance:.4e} | "
-            f"{ObsCompare.to_str(self.side1)} | {ObsCompare.to_str(self.side2)}"
-        )
-
-    @classmethod
-    def to_str(cls, seq: List["ObsComparePair"]) -> str:
-        """Displays every pair in text."""
-        return "\n".join([f"{str(pair)}" for pair in seq])

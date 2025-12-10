@@ -1542,7 +1542,7 @@ def _cmd_compare(argv: List[Any]):
     print(f"-- loading {args.model2!r}")
     seq2 = ObsCompare.obs_sequence_from_model(onnx.load(args.model2, load_external_data=False))
     print("-- starts comparison")
-    dist, _path, pair_cmp = ObsCompare.distance_sequence(seq1, seq2)
+    dist, _path, pair_cmp = ObsComparePair.distance_sequence(seq1, seq2)
     print(f"-- done with distance {dist}")
     print(ObsComparePair.to_str(pair_cmp))
 
