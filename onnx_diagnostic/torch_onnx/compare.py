@@ -73,13 +73,26 @@ class ObsCompare:
         if self.itype != obs.itype:
             return 1e5
         if self.kind == ObsType.NODE:
+            d = 0
             if self.op_type != obs.op_type:
-                return 1e4
-            if len(self.name_or_outputs) == 1:
-                return 0 if self.name_or_outputs == obs.name_or_outputs else 1e2
-            a = set(self.name_or_outputs) & set(obs.name_or_outputs)
-            b = set(self.name_or_outputs) | set(obs.name_or_outputs)
-            return 1e2 * (len(b) - len(a))
+                is_gemm1 = self.op_type in {"Gemm", "MatMul"}
+                is_gemm2 = obs.op_type in {"Gemm", "MatMul"}
+                d += 1e2 if is_gemm1 and is_gemm2 else (1e4 if not is_gemm1 and not is_gemm2 else 1e5)
+            if len(self.name_or_outputs) == 1 and len(obs.name_or_outputs) == 1:
+                if self.name_or_outputs[0] != obs.name_or_outputs[0]:
+                    n1 = self.name_or_outputs[0]
+                    n2 = obs.name_or_outputs[0]
+                    n1 = n1.replace("_", "")
+                    n2 = n2.replace("_", "")
+                    if n1 == n2:
+                        d += 1
+                    else:
+                        d += 1e4
+            else:
+                a = set(self.name_or_outputs) & set(obs.name_or_outputs)
+                b = set(self.name_or_outputs) | set(obs.name_or_outputs)
+                d += 1e4 * (len(b) - len(a))
+            return d
         if self.kind == ObsType.INPUT:
             return (
                 999.7
