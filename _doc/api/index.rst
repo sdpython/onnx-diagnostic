@@ -7,6 +7,7 @@ API of onnx_diagnostic
     :maxdepth: 1
     :caption: submodules
 
+    ci_models/index
     export/index
     helpers/index
     reference/index

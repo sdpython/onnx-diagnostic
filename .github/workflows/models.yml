@@ -61,5 +61,9 @@ jobs:
         run: python -m pip freeze
 
       - name: qwen2.5_vl_instruct
-        run: PYTHONPATH=. UNITTEST_GOING=1 NEVERTEST=1 TESTDTYPE=float16 TESTDEVICE=cpu python _unittests/ut_tasks/try_export.py -f -k test_qwen25_vli_visual
+        run: |
+          PYTHONPATH=. python -m onnx_diagnostic.ci_models.export_qwen25_vl -m Qwen/Qwen2.5-VL-7B-Instruct --device cpu --dtype float16 --exporter custom --no-pretrained --no-second-input --atol 0.01
+          rm dump_models -rf
+
+        
         
