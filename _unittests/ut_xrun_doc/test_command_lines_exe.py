@@ -208,7 +208,6 @@ class TestCommandLines(ExtTestCase):
         with redirect_stdout(st):
             main(["compare", self.dummy_path, self.dummy_path])
         text = st.getvalue()
-        print(text)
         self.assertIn("done with distance 0", text)
 
 

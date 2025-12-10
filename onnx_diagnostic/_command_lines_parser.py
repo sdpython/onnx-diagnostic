@@ -1533,7 +1533,7 @@ def get_parser_compare() -> ArgumentParser:
 
 def _cmd_compare(argv: List[Any]):
     import onnx
-    from .torch_onnx.compare import ObsCompare
+    from .torch_onnx.compare import ObsCompare, ObsComparePair
 
     parser = get_parser_compare()
     args = parser.parse_args(argv[1:])
@@ -1542,10 +1542,9 @@ def _cmd_compare(argv: List[Any]):
     print(f"-- loading {args.model2!r}")
     seq2 = ObsCompare.obs_sequence_from_model(onnx.load(args.model2, load_external_data=False))
     print("-- starts comparison")
-    dist, _path, pair_cmp = ObsCompare.distance_sequence(seq1, seq2)
+    dist, _path, pair_cmp = ObsComparePair.distance_sequence(seq1, seq2)
     print(f"-- done with distance {dist}")
-    for i, (o1, o2) in enumerate(pair_cmp):
-        print(f"{i:04d} {o1} | {o2}")
+    print(ObsComparePair.to_str(pair_cmp))
 
 
 #############
