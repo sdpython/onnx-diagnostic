@@ -4,6 +4,8 @@ Change Logs
 0.8.6
 +++++
 
+* :pr:`353`: add command line to compare two onnx models
+
 0.8.5
 +++++
 

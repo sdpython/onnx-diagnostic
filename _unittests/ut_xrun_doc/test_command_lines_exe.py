@@ -203,6 +203,14 @@ class TestCommandLines(ExtTestCase):
             # text is empty is dot is not installed
             self.assertIn("converts into dot", text)
 
+    def test_j_parser_compare(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            main(["compare", self.dummy_path, self.dummy_path])
+        text = st.getvalue()
+        print(text)
+        self.assertIn("done with distance 0", text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -8,6 +8,7 @@ Command Lines
 .. toctree::
     :maxdepth: 1
 
+    compare
     config
     sbs
     validate
