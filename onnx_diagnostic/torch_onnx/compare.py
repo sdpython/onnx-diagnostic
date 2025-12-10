@@ -138,12 +138,12 @@ class ObsCompare:
 
         # reverse
         way = []
-        last: Optional[Tuple[Optional[int], Optional[int]]] = len(s1) - 1, len(s2) - 1
+        last: Optional[Tuple[int, int]] = len(s1) - 1, len(s2) - 1
         while last is not None:
             way.append(last)
             last = predecessor[last]
         indices = list(reversed(way))[1:]
-        obs_path: List[Optional[Tuple[int, int]]] = []
+        obs_path: List[Tuple[Optional[ObsCompare], Optional[ObsCompare]]] = []
         last = -1, -1
         for i, j in indices:
             di = i - last[0]
