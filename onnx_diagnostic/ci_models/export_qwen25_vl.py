@@ -348,7 +348,7 @@ def main(
                 if inputs_embeds is None:
                     inputs_embeds = self.model.get_input_embeddings()(input_ids)
 
-                if image_features is not None:
+                def process_image(inputs_embeds, image_features):
                     image_embeds = image_features
                     image_embeds = torch.cat((image_embeds,), dim=0).to(
                         inputs_embeds.device, inputs_embeds.dtype
@@ -357,7 +357,14 @@ def main(
                         input_ids, inputs_embeds=inputs_embeds, image_features=image_embeds
                     )
                     inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
-                return inputs_embeds
+                    return inputs_embeds
+
+                return torch.cond(
+                    image_features.shape[0] == 0,
+                    (lambda embs, _imgf: embs.clone()),
+                    process_image,
+                    [inputs_embeds, image_features],
+                )
 
         assert hasattr(
             model, "get_image_features"

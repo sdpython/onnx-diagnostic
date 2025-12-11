@@ -15,6 +15,7 @@ class TestCiExport(ExtTestCase):
             part="",
             output_folder=self.get_dump_folder("test_main_qwen25_tiny_llm"),
         )
+        self.clean_dump()
 
     @hide_stdout()
     @requires_transformers("4.57")
@@ -30,6 +31,7 @@ class TestCiExport(ExtTestCase):
             part="embedding",
             second_input=True,
         )
+        self.clean_dump()
 
 
 if __name__ == "__main__":
