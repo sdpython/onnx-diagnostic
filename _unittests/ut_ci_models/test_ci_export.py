@@ -1,9 +1,10 @@
 import unittest
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.ci_models.export_qwen25_vl import main as main_qwen25
 
 
 class TestCiExport(ExtTestCase):
+    @hide_stdout()
     def test_main_qwen25(self):
         main_qwen25(
             model_id="arnir0/Tiny-LLM",
