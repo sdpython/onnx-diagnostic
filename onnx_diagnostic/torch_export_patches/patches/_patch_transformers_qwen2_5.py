@@ -256,8 +256,12 @@ if patch_qwen2_5:
         return attn_output
 
     def qwen_version_selector(opset: int, *args: torch.Tensor) -> Tuple[str, torch.dtype]:
-        first_tensor = next(a for a in args if a is not None)
-        dtype = first_tensor.dtype
+        first_float_tensor = next(
+            a
+            for a in args
+            if a is not None and a.dtype in {torch.float16, torch.float32, torch.bfloat16}
+        )
+        dtype = first_float_tensor.dtype
         strategy = patched_Qwen2_5_VLVisionAttention.STRATEGY_FOR_ATTENTION()
         itype = torch_dtype_to_onnx_dtype(dtype)
         if strategy is not None:
@@ -269,7 +273,7 @@ if patch_qwen2_5:
         if dtype == torch.float16 or itype == onnx.TensorProto.FLOAT16:
             # first_tensor may be a SymbolicTensor (onnx).
             # is_cuda is not available.
-            if hasattr(first_tensor, "is_cuda") and first_tensor.is_cuda:
+            if hasattr(first_float_tensor, "is_cuda") and first_float_tensor.is_cuda:
                 return "PACKED", itype
             return "LOOPMHA", itype
         raise AssertionError(
@@ -766,36 +770,38 @@ if patch_qwen2_5:
                 special_image_mask = input_ids == self.config.image_token_id
                 special_video_mask = input_ids == self.config.video_token_id
 
-            n_image_tokens = special_image_mask.sum()
             special_image_mask = (
                 special_image_mask.unsqueeze(-1)
                 .expand_as(inputs_embeds)
                 .to(inputs_embeds.device)
             )
-            # PATCHED: use torch._check
-            torch._check(
-                image_features is None
-                or inputs_embeds[special_image_mask].numel() == image_features.numel(),
-                lambda: (
-                    f"Image features and image tokens do not match: tokens: "
-                    f"{n_image_tokens}, features {image_features.shape[0]}"
-                ),
-            )
 
-            n_video_tokens = special_video_mask.sum()
+            # PATCHED: we should use torch._check
+            # but this fails for compilation. It cannot be verified with FakeTensors
+            # torch._check(
+            #    image_features is None
+            #    or inputs_embeds[special_image_mask].numel() == image_features.numel(),
+            #    lambda: (
+            #        f"Image features and image tokens do not match: tokens: "
+            #        f"{special_image_mask.sum()}, features {image_features.shape[0]}"
+            #    ),
+            # )
+
             special_video_mask = (
                 special_video_mask.unsqueeze(-1)
                 .expand_as(inputs_embeds)
                 .to(inputs_embeds.device)
             )
-            # PATCHED: use torch._check
-            torch._check(
-                video_features is None
-                or inputs_embeds[special_video_mask].numel() == video_features.numel(),
-                lambda: (
-                    f"Videos features and video tokens do not match: tokens: "
-                    f"{n_video_tokens}, features {video_features.shape[0]}"
-                ),
-            )
+
+            # PATCHED: we should use torch._check
+            # but this fails for compilation. It cannot be verified with FakeTensors
+            # torch._check(
+            #    video_features is None
+            #    or inputs_embeds[special_video_mask].numel() == video_features.numel(),
+            #    lambda: (
+            #        f"Videos features and video tokens do not match: tokens: "
+            #        f"{special_video_mask.sum()}, features {video_features.shape[0]}"
+            #    ),
+            # )
 
             return special_image_mask, special_video_mask
