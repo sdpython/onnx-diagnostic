@@ -55,11 +55,28 @@ Automatically generated:
 import base64
 import json
 import textwrap
+from typing import Any
 import transformers
 
 null = None
 true = True
 false = False
+
+
+def _enforce_default(config_type: type, **kwargs) -> Any:
+    config = config_type(**kwargs)
+    for name in [
+        *[k for k in kwargs if k.endswith("_token_id")],
+        "attention_dropout",
+        "hidden_size",
+        "hidden_act",
+        "intermediate_size",
+        "max_position_embeddings",
+        "vocab_size",
+    ]:
+        if name in kwargs and (not hasattr(config, name) or getattr(config, name) is None):
+            setattr(config, name, kwargs[name])
+    return config
 
 
 def _ccached_arnir0_tiny_LLM():
@@ -4691,7 +4708,8 @@ def _ccached_zai_glm_45():
 
 def _ccached_microsoft_phi3_mini_128k_instruct():
     "microsoft/Phi-3-mini-128k-instruct"
-    return transformers.Phi3Config(
+    return _enforce_default(
+        transformers.Phi3Config,
         **{
             "_name_or_path": "Phi-3-mini-128k-instruct",
             "architectures": ["Phi3ForCausalLM"],
@@ -4827,13 +4845,14 @@ def _ccached_microsoft_phi3_mini_128k_instruct():
             "use_cache": true,
             "attention_bias": false,
             "vocab_size": 32064,
-        }
+        },
     )
 
 
 def _ccached_google_gemma_3_4b_it_like():
     "google/gemma-3-4b-it"
-    return transformers.Gemma3Config(
+    return _enforce_default(
+        transformers.Gemma3Config,
         **{
             "architectures": ["Gemma3ForConditionalGeneration"],
             "boi_token_index": 255999,
@@ -4863,13 +4882,14 @@ def _ccached_google_gemma_3_4b_it_like():
                 "patch_size": 14,
                 "vision_use_head": false,
             },
-        }
+        },
     )
 
 
 def _ccached_hf_internal_testing_tiny_random_gemma3_for_causal_lm():
     "hf-internal-testing/tiny-random-Gemma3ForCausalLM"
-    return transformers.Gemma3TextConfig(
+    return _enforce_default(
+        transformers.Gemma3TextConfig,
         **{
             "architectures": ["Gemma3ForCausalLM"],
             "attention_bias": false,
@@ -4901,13 +4921,14 @@ def _ccached_hf_internal_testing_tiny_random_gemma3_for_causal_lm():
             "transformers_version": "4.52.0.dev0",
             "use_cache": true,
             "vocab_size": 262144,
-        }
+        },
     )
 
 
 def _ccached_qwen_qwen2_5_vl_7b_instruct():
     "Qwen/Qwen2.5-VL-7B-Instruct"
-    return transformers.Qwen2_5_VLConfig(
+    return _enforce_default(
+        transformers.Qwen2_5_VLConfig,
         **{
             "architectures": ["Qwen2_5_VLForConditionalGeneration"],
             "attention_dropout": 0.0,
@@ -4954,5 +4975,5 @@ def _ccached_qwen_qwen2_5_vl_7b_instruct():
             },
             "rope_scaling": {"type": "mrope", "mrope_section": [16, 24, 24]},
             "vocab_size": 152064,
-        }
+        },
     )

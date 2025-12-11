@@ -818,6 +818,7 @@ def torch_export_patches(
     rewrite: Optional[List[Callable]] = None,
     dump_rewriting: Optional[str] = None,
     patch_details: Optional[PatchDetails] = None,
+    profile: Optional[str] = None,
 ) -> Callable:
     """
     Tries to bypass some situations :func:`torch.export.export` does not support.
@@ -850,6 +851,8 @@ def torch_export_patches(
     :param dump_rewriting: dumps rewriting information in file beginning with that prefix
     :param patch_details: if specified, this class is used to stored every rewritten done.
     :param verbose: to show which patches is applied
+    :param profile: starts profiling whatever is called inside the context manager,
+        output the profiling into a text file
 
     The list of available patches.
 
@@ -1017,9 +1020,22 @@ def torch_export_patches(
         if verbose:
             print("[torch_export_patches] done patching")
 
+        if profile:
+            from pyinstrument import Profiler
+
+            profiler = Profiler()
+            profiler.start()
+        else:
+            profiler = None
+
         try:
             yield fct_callable
         finally:
+
+            if profiler:
+                profiler.stop()
+                with open(profile, "w") as f:
+                    f.write(profiler.output_html())
 
             # unpatch
 
