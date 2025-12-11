@@ -248,6 +248,7 @@ def main(
 
     export_inputs, other_inputs = None, None
     if not part:
+        # used to unit test
         from ..helpers.torch_helper import to_any
 
         assert "inputs" in data, f"key 'inputs' is missing from data (availabel {set(data)})"
