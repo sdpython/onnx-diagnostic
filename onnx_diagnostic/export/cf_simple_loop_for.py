@@ -1,10 +1,9 @@
-from typing import Any, Callable, Union
+import contextlib
+from typing import Any, Callable, Optional, Tuple, Union
 import torch
 from torch._C import DispatchKey
-
-# from torch._higher_order_ops import BaseHOP
 from torch._ops import HigherOrderOperator
-from torch._functorch.utils import exposed_in
+from torch._subclasses.fake_tensor import FakeTensorMode
 import torch.utils._pytree as pytree
 from torch._higher_order_ops.utils import (
     check_input_alias_and_mutation_return_outputs,
@@ -14,7 +13,70 @@ from torch._higher_order_ops.utils import (
 )
 from torch.fx.experimental.proxy_tensor import ProxyTorchDispatchMode, track_tensor_tree
 from torch.utils._python_dispatch import _get_current_dispatch_mode
-from .control_flow_onnx import _loop_for_onnx_fn
+
+
+def _simple_loop_for_fn(
+    n_iter: torch.Tensor,
+    body_fn: Callable,
+    operands: Tuple[torch.Tensor, ...],
+    reduction_dim: Optional[int] = None,
+) -> Tuple[torch.Tensor]:
+    """
+    Python implementation of the loop.
+
+    :param n_iter: number of iteration
+    :param body_fn: function implementing the body
+    :param reduction_dim: dimension used to reduce the list produced by the loop
+    :param operands: arguments to the loop body
+    :return: results
+    """
+    torch._check(
+        isinstance(n_iter, torch.Tensor), lambda: f"Unexpected type {type(n_iter)} for n_iter"
+    )
+    torch._check(callable(body_fn), lambda: f"Unexpected type {type(body_fn)} for body_fn")
+    torch._check(
+        reduction_dim is None or isinstance(reduction_dim, int),
+        lambda: f"Unexpected type {type(reduction_dim)} for reduction_dim",
+    )
+    torch._check(
+        isinstance(operands, tuple), lambda: f"Unexpected type {type(operands)} for operands"
+    )
+    res = []
+    for i in torch.arange(n_iter, dtype=n_iter.dtype):
+        r = body_fn(i, *operands)
+        if isinstance(r, tuple):
+            assert not res or len(r) == len(res[-1]), (
+                f"Unexpected number of results {len(r)} for function {body_fn}, "
+                f"expected {len(res[-1])}"
+            )
+            res.append(r)
+        else:
+            assert isinstance(r, torch.Tensor), (
+                f"Unexpected type {r} for function {body_fn}, "
+                f"it must be a tuple or a Tensor."
+            )
+            assert not res or len(res[-1]) == 1, (
+                f"Unexpected number of results {len(r)} for function {body_fn}, "
+                f"expected {len(res[-1])}"
+            )
+            res.append((r,))
+
+    if not res:
+        return torch.empty(tuple(), dtype=torch.float32, device=operands[0].device)
+    if len(res) == 1:
+        final = res[0]
+    else:
+        n_res = len(res[0])
+        final = [
+            torch.cat(
+                [r[i] for r in res],
+                dim=(
+                    0 if reduction_dim is None or i >= len(reduction_dim) else reduction_dim[i]
+                ),
+            )
+            for i in range(n_res)
+        ]
+    return tuple(final) if len(final) > 1 else final[0]
 
 
 class SimpleLoopForOp(HigherOrderOperator):
@@ -56,17 +118,33 @@ class SimpleLoopForOp(HigherOrderOperator):
 simple_loop_for_op = SimpleLoopForOp()
 
 
-@exposed_in("torch")
+# from torch._functorch.utils import exposed_in
+# @exposed_in("torch")
 def simple_loop_for(
     n_iter: Union[int, torch.Tensor],
     body_fn: Callable,
     operands: Union[tuple, list] = (),
 ) -> Any:
+    """
+    Implements a simple loop for, the body is defined by a function which takes the
+    iteration number stored in a tensor, and other tensors.
+    It results one or several tensors in a tuple. All of them
+    are finally concatenated along the first dimension.
+
+    :param n_iter: iteration number
+    :param body: function
+    :param operands: bidy  arguments
+    :return: contenated outputs
+    """
     if torch.compiler.is_dynamo_compiling():
         return simple_loop_for_op(n_iter, body_fn, (n_iter, *operands))
 
     if isinstance(n_iter, (bool, int, float)):
-        return _loop_for_onnx_fn(body_fn, n_iter, None, *operands)
+        torch._check(
+            isinstance(n_iter, int),
+            lambda: f"n_iter must be an integer or a tensor not {type(n_iter)}",
+        )
+        return _simple_loop_for_fn(body_fn, n_iter, operands, reduction_dim=None)
 
     def _validate_input(n_iter, body_fn, operands):
         assert isinstance(
@@ -85,24 +163,27 @@ def simple_loop_for(
 
     _validate_input(n_iter, body_fn, operands)
 
-    assert torch._dynamo.is_dynamo_supported(), "torch.cond requires dynamo support."
+    assert torch._dynamo.is_dynamo_supported(), "simple_loop_for requires dynamo support."
 
-    def _loop_for_op_wrapper(*args, **kwargs):
-        return simple_loop_for_op(*args, **kwargs)
+    def _loop_for_op_wrapper(n_iter, body_fn, operands):
+        return simple_loop_for_op(n_iter, body_fn, operands)
 
     from torch._higher_order_ops.utils import setup_compilation_env
 
     with setup_compilation_env() as _backend:
-        return _loop_for_op_wrapper(n_iter, body_fn, *operands)
+        return _loop_for_op_wrapper(n_iter, body_fn, operands)
         # return torch.compile(_loop_for_op_wrapper, backend=backend, fullgraph=True)(
         #    n_iter, body_fn, operands
         # )
 
 
-def trace_loop_for(proxy_mode, func_overload, n_iter, body_fn, operands):
+def trace_simple_loop_for(proxy_mode, func_overload, n_iter, body_fn, operands):
+    """
+    See function ``simple_loop_for``.
+    """
     assert isinstance(
         operands, (list, tuple)
-    ), f"Cond operands must be a list or tuple of tensors and SymInts {operands}"
+    ), f"simple_loop_for operands must be a list or tuple of tensors and SymInts {operands}"
 
     body_graph = reenter_make_fx(body_fn)(n_iter, *operands)
 
@@ -114,7 +195,7 @@ def trace_loop_for(proxy_mode, func_overload, n_iter, body_fn, operands):
     # flat_body_outs = pytree.arg_tree_leaves(*body_outs)
     _i, body_name = unique_graph_id(proxy_mode, prefix="body_graph")
     proxy_mode.tracer.root.register_module(body_name, body_graph)
-    args = (n_iter, body_graph, body_graph, operands)
+    args = (n_iter, body_graph, operands)
     proxy_args = pytree.tree_map(proxy_mode.tracer.unwrap_proxy, args)
     out_proxy = proxy_mode.tracer.create_proxy("call_function", func_overload, proxy_args, {})
     out = func_overload(n_iter, body_graph, operands)
@@ -123,18 +204,34 @@ def trace_loop_for(proxy_mode, func_overload, n_iter, body_fn, operands):
 
 @simple_loop_for_op.py_impl(DispatchKey.CompositeExplicitAutograd)
 def loop_for_op_dense(n_iter, body_fn, operands):
+    """Registered eager mode implementation."""
     assert all(
         isinstance(o, (torch.Tensor, int)) for o in operands
     ), f"Dense implementation operands must be a list of tensors and ints {operands}"
     mode = _get_current_dispatch_mode()
     assert mode is None, "Mode should never be enabled for CPU/CUDA key"
-    return _loop_for_onnx_fn(body_fn, n_iter, None, operands)
+    return _simple_loop_for_fn(n_iter, body_fn, operands, reduction_dim=None)
 
 
 @simple_loop_for_op.py_impl(ProxyTorchDispatchMode)
 def inner(mode, n_iter, body_fn, operands):
-    return trace_loop_for(mode, simple_loop_for_op, n_iter, body_fn, operands)
+    """Registered tracing implementation."""
+    return trace_simple_loop_for(mode, simple_loop_for_op, n_iter, body_fn, operands)
 
 
+@simple_loop_for_op.py_impl(FakeTensorMode)
+def simple_loop_for_fake_tensor_mode(mode, n_iter, body_fn, operands):
+    """Registered FakeMode implementation."""
+    ignore_fresh_unbacked = contextlib.nullcontext()
+    if mode.shape_env:
+        ignore_fresh_unbacked = mode.shape_env.ignore_fresh_unbacked_symbols()
+
+    with mode, ignore_fresh_unbacked:
+        flat_body_outs, true_body_spec = pytree.tree_flatten(body_fn(n_iter, *operands))
+
+    return pytree.tree_unflatten(flat_body_outs, true_body_spec)
+
+
+# Registration for autograd.
 simple_loop_for_op.fallthrough(torch._C.DispatchKey.AutogradCPU)
 simple_loop_for_op.fallthrough(torch._C.DispatchKey.AutogradCUDA)

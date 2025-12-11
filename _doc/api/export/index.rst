@@ -12,6 +12,13 @@ onnx_diagnostic.export
     shape_helper
     validate
 
+.. toctree::
+    :maxdepth: 1
+    :caption: higher order ops
+
+    cf_simple_loop_for
+
+
 CoupleInputsDynamicShapes
 +++++++++++++++++++++++++
 
