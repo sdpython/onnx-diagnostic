@@ -1,5 +1,10 @@
 import unittest
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, requires_transformers
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    hide_stdout,
+    requires_transformers,
+    never_test,
+)
 from onnx_diagnostic.ci_models.export_qwen25_vl import main as main_qwen25
 
 
@@ -15,7 +20,9 @@ class TestCiExport(ExtTestCase):
             part="",
             output_folder=self.get_dump_folder("test_main_qwen25_tiny_llm"),
         )
+        self.clean_dump()
 
+    @never_test()
     @hide_stdout()
     @requires_transformers("4.57")
     def test_main_qwen25_embedding(self):
@@ -30,6 +37,7 @@ class TestCiExport(ExtTestCase):
             part="embedding",
             second_input=True,
         )
+        self.clean_dump()
 
 
 if __name__ == "__main__":
