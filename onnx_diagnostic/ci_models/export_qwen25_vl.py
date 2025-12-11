@@ -90,6 +90,7 @@ def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict
         def _config_reduction(config, task):
             return {
                 # "num_hidden_layers": 2,
+                "vision_config": {"depth": 2},
                 "text_config": {
                     "num_hidden_layers": 2,
                     "layer_types": ["full_attention", "full_attention"],
