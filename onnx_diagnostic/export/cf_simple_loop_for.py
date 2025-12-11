@@ -83,6 +83,8 @@ def _simple_loop_for_fn(
 
 
 class SimpleLoopForOp(HigherOrderOperator):
+    """Higher order op for :func:`simple_loop_for`."""
+
     def __init__(self):
         super().__init__("simple_loop_for")
 
@@ -138,6 +140,31 @@ def simple_loop_for(
     :param body: function
     :param operands: bidy  arguments
     :return: contenated outputs
+
+    An example with one output:
+
+    .. runpython::
+        :showcode:
+
+        import torch
+        from onnx_diagnostic.export.cf_simple_loop_for import simple_loop_for
+
+
+        class Model(torch.nn.Module):
+            def forward(self, n_iter, x):
+                def body(i, x):
+                    return (x[: i.item() + 1].unsqueeze(1),)
+
+                return simple_loop_for(n_iter, body, (x,))
+
+
+        model = Model()
+        n_iter = torch.tensor(4, dtype=torch.int64)
+        x = torch.arange(10, dtype=torch.float32)
+        ep = torch.export.export(
+            model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
+        )
+        print(ep)
     """
     if torch.compiler.is_dynamo_compiling():
         return simple_loop_for_op(n_iter, body_fn, (n_iter, *operands))
