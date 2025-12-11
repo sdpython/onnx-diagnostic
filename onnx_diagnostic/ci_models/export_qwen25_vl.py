@@ -73,7 +73,7 @@ from .ci_helpers import (
 
 def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict[str, Any]:
     """
-    Returns an untrained mdoel.
+    Returns an untrained model.
 
     :param model_id: model id
     :param second_input: second input set
@@ -252,14 +252,14 @@ def main(
         # used to unit test
         from ..helpers.torch_helper import to_any
 
-        assert "inputs" in data, f"key 'inputs' is missing from data (availabel {set(data)})"
+        assert "inputs" in data, f"key 'inputs' is missing from data (available {set(data)})"
         model_to_export = data["model"]
         export_inputs = to_any(to_any(data["inputs"], device), torch_dtype)
         other_inputs = [
             v for k, v in data.items() if k.startswith("inputs_") if k != "inputs_prompt"
         ]
         dynamic_shapes = data["dynamic_shapes"]
-        assert other_inputs, f"No other inputs was found from data (availabel {set(data)})"
+        assert other_inputs, f"No other inputs was found from data (available {set(data)})"
 
     elif part == "visual":
 
