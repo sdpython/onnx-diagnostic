@@ -25,6 +25,32 @@ class TestCiHelpers(ExtTestCase):
     def test_simplify_model_id_for_a_filename(self):
         self.assertEqual(simplify_model_id_for_a_filename("m/n"), "m.n")
 
+    def test_torch_load(self):
+        import torch
+
+        filename = self.get_dump_file("test_torch_load.test.pt")
+
+        def save():
+            from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
+
+            n_layers = 2
+            bsize, nheads, slen, dim = 2, 4, 3, 7
+            cache = make_dynamic_cache(
+                [
+                    (
+                        torch.randn(bsize + 1, nheads, slen + 1, dim + 1),
+                        torch.randn(bsize + 1, nheads, slen + 1, dim + 1),
+                    )
+                    for i in range(n_layers)
+                ]
+            )
+            torch.save(dict(cache=cache), filename)
+
+        save()
+        restored = torch.load(filename, weights_only=False)
+        self.assertIsInstance(restored, dict)
+        self.assertEqual(restored["cache"].__class__.__name__, "DynamicCache")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

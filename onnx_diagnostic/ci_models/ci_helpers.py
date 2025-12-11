@@ -164,13 +164,13 @@ def compute_expected_outputs(
     import torch
     from ..helpers import string_type
 
-    inputs = torch.load(input_filename)
+    inputs = torch.load(input_filename, weights_only=False)
     export_inputs = inputs["export_inputs"]
     other_inputs = inputs["other_inputs"]
 
     if os.path.exists(output_filename):
         print(f"-- restore expected outputs from {output_filename!r}")
-        expected = torch.load(output_filename)
+        expected = torch.load(output_filename, weights_only=False)
         export_expected = expected["export_expected"]
         other_expected = expected["other_expected"]
         durations = expected["durations"]
@@ -251,9 +251,12 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
     import tqdm
     import onnxruntime
     import torch
-    from ..helpers import max_diff, string_type, string_diff
+    from ..helpers import flatten_object, max_diff, string_type, string_diff
 
-    cached = (torch.load(cached_inputs), torch.load(cached_expected_outputs))
+    cached = (
+        torch.load(cached_inputs, weights_only=False),
+        torch.load(cached_expected_outputs, weights_only=False),
+    )
     durations = cached[0].get("durations", [])
     export_inputs = cached[0]["export_inputs"]
     other_inputs = cached[0]["other_inputs"]
@@ -288,9 +291,18 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
             f"-- export_expected "
             f"{string_type(export_expected, with_shape=True, with_device=True)}"
         )
-        feeds = {k: v.detach().cpu().numpy() for k, v in export_inputs.items()}
+        feeds = dict(
+            zip(
+                [i.name for i in sess.get_inputs()],
+                [
+                    v.detach().cpu().numpy()
+                    for v in flatten_object(export_inputs, drop_keys=True)
+                ],
+            )
+        )
         small = sess.run(None, feeds)
-        diff = max_diff(export_expected, small[0], hist=[0.1, 0.01])
+        flat_export_expected = flatten_object(export_expected, drop_keys=True)
+        diff = max_diff(flat_export_expected, small, hist=[0.1, 0.01])
         fprint(f"-- discrepancies={diff}")
         assert diff["abs"] <= atol and diff["rep"][">0.1"] / diff["n"] <= mismatch01, (
             f"absolution tolerance is above {atol} or number of mismatches is above "
@@ -299,7 +311,15 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
 
         if other_inputs and other_expected:
             feeds = [
-                {k: v.detach().cpu().numpy() for k, v in inputs.items()}
+                dict(
+                    zip(
+                        [i.name for i in sess.get_inputs()],
+                        [
+                            v.detach().cpu().numpy()
+                            for v in flatten_object(inputs, drop_keys=True)
+                        ],
+                    )
+                )
                 for inputs in other_inputs
             ]
             fprint("")
@@ -310,7 +330,7 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
             begin = time.perf_counter()
             gots = []
             for feed in tqdm.tqdm(feeds):
-                gots.append(sess.run(None, feed)[0])
+                gots.append(sess.run(None, feed))
             oduration = time.perf_counter() - begin
             fprint(
                 f"-- torch duration={sum(durations[:len(gots)])}, onnx duration={oduration}, "
@@ -325,13 +345,14 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
                 "latency_ort": oduration,
                 "speedup": sum(durations[: len(gots)]) / oduration,
                 "latency_ort_n": len(gots),
-                "target_opset": opset,
+                "opset": opset,
                 **get_versions(),
             }
             with open(agg_stat_file, "a") as fs:
                 for fe, e, b in zip(feeds, other_expected, gots):
+                    flat_e = flatten_object(e, drop_keys=True)
                     se = string_type(fe, with_shape=True)
-                    diff = max_diff(e, b, hist=[0.1, 0.01])
+                    diff = max_diff(flat_e, b, hist=[0.1, 0.01])
                     assert (
                         diff["abs"] <= atol and diff["rep"][">0.1"] / diff["n"] <= mismatch01
                     ), (

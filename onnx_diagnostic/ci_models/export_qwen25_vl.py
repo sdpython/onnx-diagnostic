@@ -59,7 +59,7 @@ It is possible to overwrite this by by setting environment variable
 import os
 import sys
 import time
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 from .ci_helpers import (
     check_for_discrepancies_and_log_everything_into_a_json_file,
     compute_expected_outputs,
@@ -71,7 +71,45 @@ from .ci_helpers import (
 )
 
 
-def get_inputs_for_visual_part(
+def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict[str, Any]:
+    """
+    Returns an untrained mdoel.
+
+    :param model_id: model id
+    :param second_input: second input set
+    :param verbose: verbosity
+    :return: model and data
+    """
+    from ..torch_models.hghub.model_inputs import get_untrained_model_with_inputs
+
+    if model_id == "arnir0/Tiny-LLM":
+        # used to run a unit test
+        _config_reduction = None
+    else:
+
+        def _config_reduction(config, task):
+            return {
+                # "num_hidden_layers": 2,
+                "text_config": {
+                    "num_hidden_layers": 2,
+                    "layer_types": ["full_attention", "full_attention"],
+                },
+                # "_attn_implementation": "flash_attention_2",
+                "_attn_implementation": "sdpa",
+                "dtype": "float16",
+            }
+
+    config_reduction = _config_reduction
+    data = get_untrained_model_with_inputs(
+        model_id,
+        verbose=verbose,
+        add_second_input=second_input,
+        config_reduction=config_reduction,
+    )
+    return data
+
+
+def get_inputs_for_part(
     part: str, torch_dtype: "torch.dtype", device: str, second_input: bool  # noqa: F821
 ) -> Tuple[Dict[str, "torch.Tensor"], List[Dict[str, "torch.Tensor"]]]:  # noqa: F821
     import torch
@@ -121,6 +159,24 @@ def main(
     atol: float = 0.01,
     mismatch01: float = 0.1,
 ):
+    """
+    Exports model Qwen/Qwen2.5-VL-7B-Instruct or pieces of it.
+    The script applies as well to other models based on the same architecture.
+
+    :param model_id: model id
+    :param device: device
+    :param dtype: dtype
+    :param exporter: exportor to use
+    :param pretrained: pretrained=False is usually used to test
+    :param second_input: checks discrepancies on more examples
+    :param make_zip: creates a zip at the end
+    :param output_folder: output folder
+    :param part: "" to export the whole model, ``"visual"`` for visual part,
+        ``"embedding"`` for the embedding part
+    :param atol: raises an exception if tolerance is above that threshold
+    :param mismatch01: raises an exception if the ratio of mismatches
+        is above that threshold
+    """
     prefix = simplify_model_id_for_a_filename(model_id)
     if "QWEN25ATTENTION" in os.environ:
         prefix = f"{prefix}.{os.environ['QWEN25ATTENTION']}"
@@ -159,7 +215,6 @@ def main(
         PLUGS,
     )
     from ..torch_export_patches import torch_export_patches
-    from ..torch_models.hghub.model_inputs import get_untrained_model_with_inputs
     from ..export.api import to_onnx
 
     if output_folder and output_folder != ".":
@@ -177,25 +232,10 @@ def main(
         model = AutoModel.from_pretrained(
             model_id, device_map=device, dtype=torch_dtype, attn_implementation="sdpa"
         ).eval()
+        data = dict(model=model)
     else:
         print("-- random model")
-
-        def _config_reduction(config, task):
-            return {
-                # "num_hidden_layers": 2,
-                "text_config": {
-                    "num_hidden_layers": 2,
-                    "layer_types": ["full_attention", "full_attention"],
-                },
-                # "_attn_implementation": "flash_attention_2",
-                "_attn_implementation": "sdpa",
-                "dtype": "float16",
-            }
-
-        config_reduction = _config_reduction
-        data = get_untrained_model_with_inputs(
-            model_id, verbose=1, add_second_input=False, config_reduction=config_reduction
-        )
+        data = get_untrained_model(model_id, second_input=second_input, verbose=1)
         model = data["model"]
 
     model = model.to(device).to(getattr(torch, dtype))
@@ -206,7 +246,20 @@ def main(
     processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
     print(f"-- processor={type(processor)}")
 
-    if part == "visual":
+    export_inputs, other_inputs = None, None
+    if not part:
+        from ..helpers.torch_helper import to_any
+
+        assert "inputs" in data, f"key 'inputs' is missing from data (availabel {set(data)})"
+        model_to_export = data["model"]
+        export_inputs = to_any(to_any(data["inputs"], device), torch_dtype)
+        other_inputs = [
+            v for k, v in data.items() if k.startswith("inputs_") if k != "inputs_prompt"
+        ]
+        dynamic_shapes = data["dynamic_shapes"]
+        assert other_inputs, f"No other inputs was found from data (availabel {set(data)})"
+
+    elif part == "visual":
 
         class VisualPart(torch.nn.Module):
             def __init__(self, model):
@@ -221,11 +274,16 @@ def main(
         ), f"get_image_features not found in class {type(model)}"
         model_to_export = VisualPart(model)
 
-        print(f"-- part={part!r}")
-        print(f"-- model_to_export={type(model_to_export)}")
+        dynamic_shapes = dict(
+            pixel_values={0: "hidden_width", 1: "hidden_height"},
+            image_grid_thw={},  # {0: "n_images"}, # TODO: fix
+        )
     else:
         raise NotImplementedError(f"no export yet for part={part!r}")
 
+    print(f"-- part={part!r}")
+    print(f"-- model_to_export={type(model_to_export)}")
+    print(f"-- dynamic_shapes={dynamic_shapes}")
     print("-- ############")
     print("-- INPUT/OUTPUT")
     print("-- ############")
@@ -233,19 +291,33 @@ def main(
     input_filename = os.path.join(output_folder, f"inputs.{prefix}.{part}.{device}.{dtype}.pt")
     if os.path.exists(input_filename):
         print(f"-- restore inputs from {input_filename!r}")
-        data = torch.load(input_filename)
+        data = torch.load(input_filename, weights_only=False)
         export_inputs = data["export_inputs"]
         other_inputs = data["other_inputs"]
+        dynamic_shapes = data["dynamic_shapes"]
+    elif export_inputs is not None:
+        data = dict(
+            export_inputs=export_inputs,
+            other_inputs=other_inputs,
+            dynamic_shapes=dynamic_shapes,
+        )
+        print(f"-- dump inputs into {input_filename!r}")
+        torch.save(data, input_filename)
     else:
-        export_inputs, other_inputs = get_inputs_for_visual_part(
+        export_inputs, other_inputs = get_inputs_for_part(
             part, torch_dtype, device, second_input
         )
-        data = dict(export_inputs=export_inputs, other_inputs=other_inputs)
+        data = dict(
+            export_inputs=export_inputs,
+            other_inputs=other_inputs,
+            dynamic_shapes=dynamic_shapes,
+        )
         print(f"-- dump inputs into {input_filename!r}")
         torch.save(data, input_filename)
 
     print(f"-- export_inputs={string_type(export_inputs, with_shape=True, with_device=True)}")
     print(f"-- other_inputs={string_type(other_inputs, with_shape=True, with_device=True)}")
+    print(f"-- dynamic_shapes={dynamic_shapes}")
     output_filename = os.path.join(
         output_folder, f"expected.{prefix}.visual.{device}.{dtype}.pt"
     )
@@ -286,11 +358,6 @@ def main(
                 print("-- missing onnxscript, cannot continue")
                 print("-- stop.")
                 return
-
-        dynamic_shapes = dict(
-            pixel_values={0: "hidden_width", 1: "hidden_height"},
-            image_grid_thw={},  # {0: "n_images"}, # TODO: fix
-        )
 
         begin = time.perf_counter()
 
@@ -361,11 +428,10 @@ def main(
         mismatch01=mismatch01,
     )
 
-    print("-- #####")
-    print("-- # ZIP")
-    print("-- #####")
-
     if make_zip:
+        print("-- #####")
+        print("-- # ZIP")
+        print("-- #####")
         zip_model_and_data_into_a_single_file(f"{basename}.zip", filename)
 
 
