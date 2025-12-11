@@ -733,3 +733,69 @@ if patch_qwen2_5:
             attn_output = attn_output.reshape(seq_length, -1).contiguous()
             attn_output = self.proj(attn_output)
             return attn_output
+
+    class patched_Qwen2_5_VLModel:
+        _PATCHES_ = ["get_placeholder_mask"]
+        _PATCHED_CLASS_ = transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLModel
+
+        def get_placeholder_mask(
+            self,
+            input_ids: torch.LongTensor,
+            inputs_embeds: torch.FloatTensor,
+            image_features: Optional[torch.FloatTensor] = None,
+            video_features: Optional[torch.FloatTensor] = None,
+        ):
+            if input_ids is None:
+                special_image_mask = inputs_embeds == self.get_input_embeddings()(
+                    torch.tensor(
+                        self.config.image_token_id,
+                        dtype=torch.long,
+                        device=inputs_embeds.device,
+                    )
+                )
+                special_image_mask = special_image_mask.all(-1)
+                special_video_mask = inputs_embeds == self.get_input_embeddings()(
+                    torch.tensor(
+                        self.config.video_token_id,
+                        dtype=torch.long,
+                        device=inputs_embeds.device,
+                    )
+                )
+                special_video_mask = special_video_mask.all(-1)
+            else:
+                special_image_mask = input_ids == self.config.image_token_id
+                special_video_mask = input_ids == self.config.video_token_id
+
+            n_image_tokens = special_image_mask.sum()
+            special_image_mask = (
+                special_image_mask.unsqueeze(-1)
+                .expand_as(inputs_embeds)
+                .to(inputs_embeds.device)
+            )
+            # PATCHED: use torch._check
+            torch._check(
+                image_features is None
+                or inputs_embeds[special_image_mask].numel() == image_features.numel(),
+                lambda: (
+                    f"Image features and image tokens do not match: tokens: "
+                    f"{n_image_tokens}, features {image_features.shape[0]}"
+                ),
+            )
+
+            n_video_tokens = special_video_mask.sum()
+            special_video_mask = (
+                special_video_mask.unsqueeze(-1)
+                .expand_as(inputs_embeds)
+                .to(inputs_embeds.device)
+            )
+            # PATCHED: use torch._check
+            torch._check(
+                video_features is None
+                or inputs_embeds[special_video_mask].numel() == video_features.numel(),
+                lambda: (
+                    f"Videos features and video tokens do not match: tokens: "
+                    f"{n_video_tokens}, features {video_features.shape[0]}"
+                ),
+            )
+
+            return special_image_mask, special_video_mask

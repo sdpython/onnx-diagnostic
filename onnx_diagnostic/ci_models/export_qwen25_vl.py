@@ -111,12 +111,17 @@ def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict
 
 
 def get_inputs_for_part(
-    part: str, torch_dtype: "torch.dtype", device: str, second_input: bool  # noqa: F821
+    part: str,
+    torch_dtype: "torch.dtype",  # noqa: F821
+    device: str,
+    second_input: bool,
+    image_token_id: int,
+    bos_token_id: int,
+    eos_token_id: int,
 ) -> Tuple[Dict[str, "torch.Tensor"], List[Dict[str, "torch.Tensor"]]]:  # noqa: F821
     import torch
 
     if part == "visual":
-
         export_inputs = dict(
             pixel_values=torch.randn((1292, 1176), dtype=torch_dtype).to(device),
             image_grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
@@ -143,6 +148,40 @@ def get_inputs_for_part(
             ]
         return export_inputs, other_inputs
 
+    if part == "embedding":
+
+        def fix(inputs):
+            img_start_index = 3
+            img_end_index = img_start_index + patches_per_image  # 3 + 3577 = 3580
+
+            # Fill in with image token index
+            inputs["input_ids"][0][2] = bos_token_id  # <start_of_image>
+            inputs["input_ids"][0][img_start_index:img_end_index] = image_token_id  # <image>
+            inputs["input_ids"][0][img_end_index] = eos_token_id  # <end_of_image>
+
+            inputs["input_ids"][1][2] = bos_token_id  # <start_of_image>
+            inputs["input_ids"][1][img_start_index:img_end_index] = image_token_id  # <image>
+            inputs["input_ids"][1][img_end_index] = eos_token_id  # <end_of_image>
+            return inputs
+
+        batch_size, sequence_length, patches_per_image, out_hidden_size = (2, 3606, 3577, 3584)
+        num_logical_patches = batch_size * patches_per_image
+
+        def draw():
+            return {
+                "input_ids": torch.randint(
+                    low=0,
+                    high=image_token_id,
+                    size=(batch_size, sequence_length),
+                    dtype=torch.int64,
+                ).to(device),
+                "image_features": torch.randn(
+                    num_logical_patches, out_hidden_size, dtype=torch_dtype
+                ).to(device),
+            }
+
+        return fix(draw()), ([fix(draw()), fix(draw())] if second_input else [])
+
     raise NotImplementedError(f"No inputs yet implement for part={part!r}")
 
 
@@ -159,10 +198,15 @@ def main(
     part: str = "visual",
     atol: float = 0.01,
     mismatch01: float = 0.1,
+    profile_exporter: bool = False,
 ):
     """
     Exports model Qwen/Qwen2.5-VL-7B-Instruct or pieces of it.
     The script applies as well to other models based on the same architecture.
+
+    The function saves everything on disk. It does not generate new inputs
+    on the second run but reuses the saved ones. Same goes for the expected
+    outputs with are also saved on disk.
 
     :param model_id: model id
     :param device: device
@@ -177,6 +221,7 @@ def main(
     :param atol: raises an exception if tolerance is above that threshold
     :param mismatch01: raises an exception if the ratio of mismatches
         is above that threshold
+    :param profile_exporter: profiles the exporter
     """
     prefix = simplify_model_id_for_a_filename(model_id)
     if "QWEN25ATTENTION" in os.environ:
@@ -199,6 +244,7 @@ def main(
     print(f"-- output_folder={output_folder}")
     print(f"-- atol={atol}")
     print(f"-- mismatch01={mismatch01}")
+    print(f"-- profile_exporter={profile_exporter}")
     print("------------------------------------------------------------------")
     print(f"-- prefix={prefix}")
     print(f"-- export in {filename!r}")
@@ -234,11 +280,19 @@ def main(
             model_id, device_map=device, dtype=torch_dtype, attn_implementation="sdpa"
         ).eval()
         data = dict(model=model)
+        config = model.config
     else:
         print("-- random model")
         data = get_untrained_model(model_id, second_input=second_input, verbose=1)
         model = data["model"]
+        config = data["configuration"]
 
+    assert (
+        hasattr(config, "bos_token_id") and config.bos_token_id
+    ), f"missing 'bos_token_id' from config\n{config}"
+    assert (
+        hasattr(config, "eos_token_id") and config.eos_token_id
+    ), f"missing 'eos_token_id' from config\n{config}"
     model = model.to(device).to(getattr(torch, dtype))
 
     print(f"-- config._attn_implementation={model.config._attn_implementation}")
@@ -280,6 +334,41 @@ def main(
             pixel_values={0: "hidden_width", 1: "hidden_height"},
             image_grid_thw={},  # {0: "n_images"}, # TODO: fix
         )
+
+    elif part == "embedding":
+
+        class EmbeddingPart(torch.nn.Module):
+            def __init__(self, model):
+                super().__init__()
+                self.model = model
+
+            def forward(self, input_ids, image_features):
+                inputs_embeds = None
+
+                if inputs_embeds is None:
+                    inputs_embeds = self.model.get_input_embeddings()(input_ids)
+
+                if image_features is not None:
+                    image_embeds = image_features
+                    image_embeds = torch.cat((image_embeds,), dim=0).to(
+                        inputs_embeds.device, inputs_embeds.dtype
+                    )
+                    image_mask, _ = self.model.model.get_placeholder_mask(
+                        input_ids, inputs_embeds=inputs_embeds, image_features=image_embeds
+                    )
+                    inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
+                return inputs_embeds
+
+        assert hasattr(
+            model, "get_image_features"
+        ), f"get_image_features not found in class {type(model)}"
+        model_to_export = EmbeddingPart(model)
+
+        dynamic_shapes = {
+            "input_ids": {0: "batch_size", 1: "sequence_length"},
+            "image_features": {0: "num_logical_patches"},
+        }
+
     else:
         raise NotImplementedError(f"no export yet for part={part!r}")
 
@@ -307,7 +396,13 @@ def main(
         torch.save(data, input_filename)
     else:
         export_inputs, other_inputs = get_inputs_for_part(
-            part, torch_dtype, device, second_input
+            part,
+            torch_dtype,
+            device,
+            second_input,
+            image_token_id=config.image_token_id,
+            bos_token_id=config.bos_token_id,
+            eos_token_id=config.eos_token_id,
         )
         data = dict(
             export_inputs=export_inputs,
@@ -379,6 +474,7 @@ def main(
             patch_transformers=True,
             verbose=1,
             stop_if_static=2,
+            profile=(f"{basename}.profile.html" if profile_exporter else None),
         ):
             to_onnx(
                 model_to_export,
@@ -453,4 +549,5 @@ if __name__ == "__main__":
         part=args.part,
         atol=args.atol,
         mismatch01=args.mismatch01,
+        profile_exporter=args.profile_exporter,
     )

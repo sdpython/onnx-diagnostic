@@ -1,11 +1,11 @@
 import unittest
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, requires_transformers
 from onnx_diagnostic.ci_models.export_qwen25_vl import main as main_qwen25
 
 
 class TestCiExport(ExtTestCase):
     @hide_stdout()
-    def test_main_qwen25(self):
+    def test_main_qwen25_tiny_llm(self):
         main_qwen25(
             model_id="arnir0/Tiny-LLM",
             device="cpu",
@@ -13,8 +13,22 @@ class TestCiExport(ExtTestCase):
             exporter="custom",
             pretrained=False,
             part="",
-            output_folder=self.get_dump_folder("test_main_qwen25"),
+            output_folder=self.get_dump_folder("test_main_qwen25_tiny_llm"),
+        )
+
+    @hide_stdout()
+    @requires_transformers("4.57")
+    def test_main_qwen25_embedding(self):
+        main_qwen25(
+            model_id="Qwen/Qwen2.5-VL-7B-Instruct",
+            device="cpu",
+            dtype="float32",
+            exporter="custom",
+            pretrained=False,
+            output_folder=self.get_dump_folder("test_main_qwen25_embedding"),
             make_zip=True,
+            part="embedding",
+            second_input=True,
         )
 
 

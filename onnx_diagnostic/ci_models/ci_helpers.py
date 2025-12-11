@@ -116,8 +116,14 @@ def get_parser(name: str) -> ArgumentParser:
     parser.add_argument(
         "--mismatch01",
         type=float,
-        default=0,
+        default=0.1,
         help="fails if the ratio of mismatches at level 0.1 is above that threshold",
+    )
+    parser.add_argument(
+        "--profile-exporter",
+        default=False,
+        help="Profiles the exporter and outputs an html document from pyinstrument",
+        action=BooleanOptionalAction,
     )
     return parser
 
