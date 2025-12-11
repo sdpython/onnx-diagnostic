@@ -4,7 +4,8 @@ Change Logs
 0.8.6
 +++++
 
-* :pr:`353`: add command line to compare two onnx models
+* :pr:`355`: better command line to export models
+* :pr:`353`, :pr:`354`: add command line to compare two onnx models
 
 0.8.5
 +++++
