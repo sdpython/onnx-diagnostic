@@ -18,7 +18,7 @@ from torch.utils._python_dispatch import _get_current_dispatch_mode
 def _simple_loop_for_fn(
     n_iter: torch.Tensor,
     body_fn: Callable,
-    operands: Tuple[torch.Tensor, ...],
+    operands: Tuple[torch.Tensor, ...] = (),
     reduction_dim: Optional[List[int]] = None,
 ) -> Tuple[torch.Tensor]:
     """
@@ -126,7 +126,7 @@ simple_loop_for_op = SimpleLoopForOp()
 def simple_loop_for(
     n_iter: Union[int, torch.Tensor],
     body_fn: Callable,
-    operands: Union[tuple, list] = (),
+    operands: Tuple[torch.Tensor, ...] = (),
 ) -> Any:
     """
     Implements a simple loop for, the body is defined by a function which takes the
