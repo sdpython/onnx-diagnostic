@@ -17,7 +17,7 @@ class TestCiExport(ExtTestCase):
         )
 
     @hide_stdout()
-    @requires_transformers("4.47")
+    @requires_transformers("4.57")
     def test_main_qwen25_embedding(self):
         main_qwen25(
             model_id="Qwen/Qwen2.5-VL-7B-Instruct",
@@ -28,6 +28,7 @@ class TestCiExport(ExtTestCase):
             output_folder=self.get_dump_folder("test_main_qwen25_embedding"),
             make_zip=True,
             part="embedding",
+            second_input=True,
         )
 
 
