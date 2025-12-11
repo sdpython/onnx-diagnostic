@@ -1,7 +1,7 @@
 import unittest
 from typing import Tuple
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
 from onnx_diagnostic.export.control_flow_onnx import (
     enable_code_export_control_flow,
 )
@@ -9,6 +9,7 @@ from onnx_diagnostic.export.cf_simple_loop_for import simple_loop_for, SimpleLoo
 
 
 class TestCfSimpleLoopFor(ExtTestCase):
+    @requires_torch("2.9.99")
     def test_simple_loop_for_int(self):
         class Model(torch.nn.Module):
             def forward(self, x):
@@ -37,6 +38,7 @@ class TestCfSimpleLoopFor(ExtTestCase):
         # Loop should be unrolled.
         self.assertEqual(len(check), 0)
 
+    @requires_torch("2.9.99")
     def test_simple_loop_for_1(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
@@ -65,6 +67,7 @@ class TestCfSimpleLoopFor(ExtTestCase):
                 check.append(node)
         self.assertEqual(len(check), 1)
 
+    @requires_torch("2.9.99")
     def test_simple_loop_for_2(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
