@@ -1,5 +1,5 @@
 import contextlib
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 import torch
 from torch._C import DispatchKey
 from torch._ops import HigherOrderOperator
@@ -19,7 +19,7 @@ def _simple_loop_for_fn(
     n_iter: torch.Tensor,
     body_fn: Callable,
     operands: Tuple[torch.Tensor, ...],
-    reduction_dim: Optional[int] = None,
+    reduction_dim: Optional[List[int]] = None,
 ) -> Tuple[torch.Tensor]:
     """
     Python implementation of the loop.
@@ -31,18 +31,21 @@ def _simple_loop_for_fn(
     :return: results
     """
     torch._check(
-        isinstance(n_iter, torch.Tensor), lambda: f"Unexpected type {type(n_iter)} for n_iter"
+        isinstance(n_iter, (int, torch.Tensor)),
+        lambda: f"Unexpected type {type(n_iter)} for n_iter",
     )
     torch._check(callable(body_fn), lambda: f"Unexpected type {type(body_fn)} for body_fn")
     torch._check(
-        reduction_dim is None or isinstance(reduction_dim, int),
+        reduction_dim is None or isinstance(reduction_dim, list),
         lambda: f"Unexpected type {type(reduction_dim)} for reduction_dim",
     )
     torch._check(
         isinstance(operands, tuple), lambda: f"Unexpected type {type(operands)} for operands"
     )
-    res = []
-    for i in torch.arange(n_iter, dtype=n_iter.dtype):
+    res: List[Union[torch.Tensor, Tuple[torch.Tensor, ...]]] = []
+    for i in torch.arange(
+        n_iter, dtype=torch.int64 if isinstance(n_iter, int) else n_iter.dtype
+    ):
         r = body_fn(i, *operands)
         if isinstance(r, tuple):
             assert not res or len(r) == len(res[-1]), (
@@ -144,7 +147,7 @@ def simple_loop_for(
             isinstance(n_iter, int),
             lambda: f"n_iter must be an integer or a tensor not {type(n_iter)}",
         )
-        return _simple_loop_for_fn(body_fn, n_iter, operands, reduction_dim=None)
+        return _simple_loop_for_fn(n_iter, body_fn, operands, reduction_dim=None)
 
     def _validate_input(n_iter, body_fn, operands):
         assert isinstance(

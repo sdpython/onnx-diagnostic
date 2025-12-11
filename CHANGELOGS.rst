@@ -4,6 +4,7 @@ Change Logs
 0.8.6
 +++++
 
+* :pr:`357`: complete simple_loop_for
 * :pr:`356`: include qwen embedding part
 * :pr:`355`: better command line to export models
 * :pr:`353`, :pr:`354`: add command line to compare two onnx models
