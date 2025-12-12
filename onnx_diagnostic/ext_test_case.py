@@ -700,6 +700,19 @@ def requires_onnx(version: str, msg: str = "") -> Callable:
     return lambda x: x
 
 
+def requires_experimental_experiment(version: str, msg: str = "") -> Callable:
+    """Skips a unit test if :epkg:`onnx-array-api` is not recent enough."""
+    import packaging.version as pv
+    import experimental_experiment
+
+    if pv.Version(experimental_experiment.__version__) < pv.Version(version):
+        msg = (
+            f"onnx-array-api version {experimental_experiment.__version__} < {version}: {msg}"
+        )
+        return unittest.skip(msg)
+    return lambda x: x
+
+
 def requires_onnx_array_api(version: str, msg: str = "") -> Callable:
     """Skips a unit test if :epkg:`onnx-array-api` is not recent enough."""
     import packaging.version as pv
