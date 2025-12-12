@@ -132,7 +132,7 @@ def _simple_loop_for(
     n_iter: Union[int, torch.Tensor],
     body_fn: Callable,
     operands: Tuple[torch.Tensor, ...] = (),
-    concatenation_dims: Optional[Tuple[int, ...]] = None,
+    concatenation_dims: Optional[Sequence[int]] = None,
 ) -> Tuple[torch.Tensor, ...]:
     def _validate_input(n_iter, body_fn, operands, concatenation_dims):
         assert isinstance(
