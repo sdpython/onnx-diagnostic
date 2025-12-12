@@ -64,7 +64,7 @@ def _simple_loop_for_fn(
     n_iter: torch.Tensor,
     body_fn: Callable,
     operands: Tuple[torch.Tensor, ...] = (),
-    concatenation_dims: Optional[List[int]] = None,
+    concatenation_dims: Optional[Sequence[int]] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """
     Python implementation of the loop.
