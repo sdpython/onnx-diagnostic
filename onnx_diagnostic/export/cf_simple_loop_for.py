@@ -346,6 +346,7 @@ def simple_loop_for(
         ),
     )
     torch._check(
-        isinstance(res, tuple), f"Output of the loop should be a tuple not {type(res)}."
+        isinstance(res, tuple),
+        lambda: f"Output of the loop should be a tuple not {type(res)}.",
     )
     return res[0] if len(res) == 1 else res
