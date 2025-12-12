@@ -8,10 +8,10 @@ Requirements
 ::
 
     git+https://github.com/sdpython/experimental-experiment.git  # optional
-    huggingface_hub>=1.2.1
+    huggingface_hub
     onnx-diagnostic>=0.8.6
     onnxruntime>=1.23
-    torch>=2.9  # weekly is better
+    torch>=2.10  # weekly is better
     tqdm
     transformers>=4.57
 
@@ -97,7 +97,6 @@ def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict
                 },
                 # "_attn_implementation": "flash_attention_2",
                 "_attn_implementation": "sdpa",
-                "dtype": "float16",
             }
 
     config_reduction = _config_reduction

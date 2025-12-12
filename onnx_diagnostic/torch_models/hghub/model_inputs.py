@@ -332,13 +332,12 @@ def get_untrained_model_with_inputs(
                         f"[get_untrained_model_with_inputs] "
                         f"instantiate_specific_model(2) {cls_model}"
                     )
-
                 try:
                     if type(config) is dict:
                         model = cls_model(**config)
                     else:
                         model = cls_model(config)
-                except RuntimeError as e:
+                except (RuntimeError, AttributeError, ValueError) as e:
                     raise RuntimeError(
                         f"Unable to instantiate class {cls_model.__name__} with\n{config}"
                     ) from e
