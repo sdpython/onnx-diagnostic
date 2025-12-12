@@ -1,6 +1,6 @@
 r"""
-Export visual and embedding parts of Qwen/Qwen2.5-VL-7B-Instruct
-================================================================
+Export visual and embedding parts of microsoft/Phi-4-multimodal-instruct
+========================================================================
 
 Requirements
 ++++++++++++
@@ -8,9 +8,13 @@ Requirements
 ::
 
     git+https://github.com/sdpython/experimental-experiment.git  # optional
+    backoff
     huggingface_hub
     onnx-diagnostic>=0.8.6
     onnxruntime>=1.23
+    peft
+    Pillow
+    requests
     torch>=2.10  # weekly is better
     tqdm
     transformers>=4.57
@@ -20,40 +24,15 @@ Examples
 
 .. code-block:: bash
 
-    python -m onnx_diagnostic.ci_models.export_qwen25_vl \
-        -m Qwen/Qwen2.5-VL-7B-Instruct \
+    python -m onnx_diagnostic.ci_models.export_phi4_mm \
+        -m microsoft/Phi-4-multimodal-instruct \
         --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input --zip
-
-To choose a specific Attention schema:
-
-.. code-block:: bash
-
-    QWEN25ATTENTION=LOOPMHA python -m onnx_diagnostic.ci_models.export_qwen25_vl \
-        -m Qwen/Qwen2.5-VL-7B-Instruct \
-        --device cpu --dtype float32 --exporter onnx-dynamo --pretrained --second-input --zip
-
-Cheat sheet for tar commands. To make a tar:
-``tar -czvf model.tar.gz model.onnx model.data``
-And to untar:
-``tar -xzvf model.tar.gz``.
 
 Rewritings
 ++++++++++
 
 * `overview <https://sdpython.github.io/doc/onnx-diagnostic/dev/status/patches_diff.html#auto-patch-transformers-qwen2-5-vlforconditionalgeneration-prepare-inputs-for-generation-patched-qwen2-5-vlforconditionalgeneration-prepare-inputs-for-generation>`_
-* code: `_patch_transformers_qwen2_5.py <https://github.com/sdpython/onnx-diagnostic/blob/main/onnx_diagnostic/torch_export_patches/patches/_patch_transformers_qwen2_5.py>`_
-
-Attention
-+++++++++
-
-The attention is either implemented with ``MultiHeadAttention`` in a loop,
-either with ``PackedMultiHeadAttention``. The choice is made based on the device.
-It is possible to overwrite this by by setting environment variable
-``QWEN25ATTENTION`` to:
-
-* ``PACKED``: PackedMultiHeadAttention
-* ``LOOPMHA``: Loop over MultiHeadAttention
-* ``LOOPA23``: Loop over Attention(23), needs opset 23+.
+* code: `_patch_transformers_phi4_mm.py <https://github.com/sdpython/onnx-diagnostic/blob/main/onnx_diagnostic/torch_export_patches/patches/_patch_transformers_phi4_mm.py>`_
 """
 
 import os
@@ -65,7 +44,6 @@ from .ci_helpers import (
     compute_expected_outputs,
     get_parser,
     get_torch_dtype_from_command_line_args,
-    remove_inplace_body_last_input_output_type_for_loop_because_they_might_be_sequences,
     simplify_model_id_for_a_filename,
     zip_model_and_data_into_a_single_file,
 )
@@ -90,11 +68,6 @@ def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict
         def _config_reduction(config, task):
             return {
                 # "num_hidden_layers": 2,
-                "vision_config": {"depth": 2},
-                "text_config": {
-                    "num_hidden_layers": 2,
-                    "layer_types": ["full_attention", "full_attention"],
-                },
                 # "_attn_implementation": "flash_attention_2",
                 "_attn_implementation": "sdpa",
             }
@@ -110,82 +83,73 @@ def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict
 
 
 def get_inputs_for_part(
+    model_id: str,
     part: str,
     torch_dtype: "torch.dtype",  # noqa: F821
     device: str,
     second_input: bool,
-    image_token_id: int,
-    bos_token_id: int,
-    eos_token_id: int,
 ) -> Tuple[Dict[str, "torch.Tensor"], List[Dict[str, "torch.Tensor"]]]:  # noqa: F821
-    import torch
+    if part == "vision":
+        import requests
+        from PIL import Image
+        from transformers import AutoProcessor
 
-    if part == "visual":
-        export_inputs = dict(
-            pixel_values=torch.randn((1292, 1176), dtype=torch_dtype).to(device),
-            image_grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
+        processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+        user_prompt = "<|user|>\n"
+        assistant_prompt = "<|assistant|>\n"
+        prompt_suffix = "<|end|>\n"
+        prompt = (
+            f"{user_prompt}<|image_1|>\n<|image_2|>\n<|image_3|>\n<|image_4|>\n"
+            f"What is shown in these four images?{prompt_suffix}{assistant_prompt}"
         )
+
+        url = "https://www.ilankelman.org/stopsigns/australia.jpg"
+        image_1 = Image.open(requests.get(url, stream=True).raw)
+        url = "https://wallpaper.dog/large/10809054.jpg"
+        image_4 = Image.open(requests.get(url, stream=True).raw)
+
+        images = [image_1, image_4]
+        inputs = processor(prompt, images=images, return_tensors="pt").to(device)
+        inputs["pixel_values"] = inputs["pixel_values"].to(torch_dtype).to(device)
+        inputs["image_attention_mask"] = (
+            inputs["image_attention_mask"].to(torch_dtype).to(device)
+        )
+
+        export_inputs = (
+            inputs["pixel_values"],  # image_embeds: torch.FloatTensor
+            inputs["image_attention_mask"],  # image_attention_mask: torch.FloatTensor
+            inputs["image_sizes"],  # image_sizes: torch.LongTensor
+        )
+
         other_inputs = []
         if second_input:
-            other_inputs = [
-                dict(
-                    pixel_values=torch.randn((1292, 1176), dtype=torch_dtype).to(device),
-                    image_grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
-                ),
-                dict(
-                    pixel_values=torch.rand((1292, 1176), dtype=torch_dtype).to(device),
-                    image_grid_thw=torch.tensor([[1, 34, 38]], dtype=torch.int64).to(device),
-                ),
-                dict(
-                    pixel_values=torch.randn((14308, 1176), dtype=torch_dtype).to(device),
-                    image_grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64).to(device),
-                ),
-                dict(
-                    pixel_values=torch.rand((14308, 1176), dtype=torch_dtype).to(device),
-                    image_grid_thw=torch.tensor([[1, 98, 146]], dtype=torch.int64).to(device),
-                ),
-            ]
+            url = "https://img.freepik.com/free-photo/painting-mountain-lake-with-mountain-background_188544-9126.jpg?w=2000"
+            image_2 = Image.open(requests.get(url, stream=True).raw)
+            url = (
+                "https://th.bing.com/th/id/OIP.gCvQ1vmPVJmrq1nnzM3ZHQHaEo?rs=1&pid=ImgDetMain"
+            )
+            image_3 = Image.open(requests.get(url, stream=True).raw)
+
+            images = [image_1, image_2, image_3, image_4]
+            inputs = processor(prompt, images=images, return_tensors="pt").to(device)
+            inputs["pixel_values"] = inputs["pixel_values"].to(torch_dtype).to(device)
+            inputs["image_attention_mask"] = (
+                inputs["image_attention_mask"].to(torch_dtype).to(device)
+            )
+
+            dummy_inputs = (
+                inputs["pixel_values"],  # image_embeds: torch.FloatTensor
+                inputs["image_attention_mask"],  # image_attention_mask: torch.FloatTensor
+                inputs["image_sizes"],  # image_sizes: torch.LongTensor
+            )
+            other_inputs = [dummy_inputs]
         return export_inputs, other_inputs
-
-    if part == "embedding":
-
-        def fix(inputs):
-            img_start_index = 3
-            img_end_index = img_start_index + patches_per_image  # 3 + 3577 = 3580
-
-            # Fill in with image token index
-            inputs["input_ids"][0][2] = bos_token_id  # <start_of_image>
-            inputs["input_ids"][0][img_start_index:img_end_index] = image_token_id  # <image>
-            inputs["input_ids"][0][img_end_index] = eos_token_id  # <end_of_image>
-
-            inputs["input_ids"][1][2] = bos_token_id  # <start_of_image>
-            inputs["input_ids"][1][img_start_index:img_end_index] = image_token_id  # <image>
-            inputs["input_ids"][1][img_end_index] = eos_token_id  # <end_of_image>
-            return inputs
-
-        batch_size, sequence_length, patches_per_image, out_hidden_size = (2, 3606, 3577, 3584)
-        num_logical_patches = batch_size * patches_per_image
-
-        def draw():
-            return {
-                "input_ids": torch.randint(
-                    low=0,
-                    high=image_token_id,
-                    size=(batch_size, sequence_length),
-                    dtype=torch.int64,
-                ).to(device),
-                "image_features": torch.randn(
-                    num_logical_patches, out_hidden_size, dtype=torch_dtype
-                ).to(device),
-            }
-
-        return fix(draw()), ([fix(draw()), fix(draw())] if second_input else [])
 
     raise NotImplementedError(f"No inputs yet implement for part={part!r}")
 
 
 def main(
-    model_id: str = "Qwen/Qwen2.5-VL-7B-Instruct",
+    model_id: str = "microsoft/Phi-4-multimodal-instruct",
     device: str = "cpu",
     dtype: str = "float32",
     exporter: str = "onnx-dynamo",
@@ -194,7 +158,7 @@ def main(
     make_zip: bool = False,
     output_folder: str = "dump_models",
     existing_onnx: str | None = None,
-    part: str = "visual",
+    part: str = "vision",
     atol: float = 0.01,
     mismatch01: float = 0.1,
     profile_exporter: bool = False,
@@ -215,16 +179,14 @@ def main(
     :param second_input: checks discrepancies on more examples
     :param make_zip: creates a zip at the end
     :param output_folder: output folder
-    :param part: "" to export the whole model, ``"visual"`` for visual part,
-        ``"embedding"`` for the embedding part
+    :param part: "" to export the whole model, ``"vision"`` for vision part,
+        ...
     :param atol: raises an exception if tolerance is above that threshold
     :param mismatch01: raises an exception if the ratio of mismatches
         is above that threshold
     :param profile_exporter: profiles the exporter
     """
     prefix = simplify_model_id_for_a_filename(model_id)
-    if "QWEN25ATTENTION" in os.environ:
-        prefix = f"{prefix}.{os.environ['QWEN25ATTENTION']}"
     basename = os.path.join(
         output_folder, f"model.{prefix}.{part}.{device}.{dtype}.{exporter}"
     )
@@ -255,7 +217,7 @@ def main(
 
     print("-- import torch and others")
     import torch
-    from transformers import AutoModel, AutoProcessor
+    from transformers import AutoModel
     from ..helpers import string_type
     from ..torch_export_patches.patches._patch_transformers_qwen2_5 import (
         PLUGS,
@@ -286,19 +248,11 @@ def main(
         model = data["model"]
         config = data["configuration"]
 
-    assert (
-        hasattr(config, "bos_token_id") and config.bos_token_id
-    ), f"missing 'bos_token_id' from config\n{config}"
-    assert (
-        hasattr(config, "eos_token_id") and config.eos_token_id
-    ), f"missing 'eos_token_id' from config\n{config}"
     model = model.to(device).to(getattr(torch, dtype))
 
     print(f"-- config._attn_implementation={model.config._attn_implementation}")
     print(f"-- model.dtype={model.dtype}")
     print(f"-- model.device={model.device}")
-    processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
-    print(f"-- processor={type(processor)}")
 
     export_inputs, other_inputs = None, None
     if not part:
@@ -316,63 +270,25 @@ def main(
 
     elif part == "visual":
 
-        class VisualPart(torch.nn.Module):
+        class VisionPart(torch.nn.Module):
             def __init__(self, model):
                 super().__init__()
                 self.model = model
 
-            def forward(self, pixel_values, image_grid_thw):
-                return model.get_image_features(pixel_values, image_grid_thw)
-
-        assert hasattr(
-            model, "get_image_features"
-        ), f"get_image_features not found in class {type(model)}"
-        model_to_export = VisualPart(model)
-
-        dynamic_shapes = dict(
-            pixel_values={0: "hidden_width", 1: "hidden_height"},
-            image_grid_thw={},  # {0: "n_images"}, # TODO: fix
-        )
-
-    elif part == "embedding":
-
-        class EmbeddingPart(torch.nn.Module):
-            def __init__(self, model):
-                super().__init__()
-                self.model = model
-
-            def forward(self, input_ids, image_features):
-                inputs_embeds = None
-
-                if inputs_embeds is None:
-                    inputs_embeds = self.model.get_input_embeddings()(input_ids)
-
-                def process_image(inputs_embeds, image_features):
-                    image_embeds = image_features
-                    image_embeds = torch.cat((image_embeds,), dim=0).to(
-                        inputs_embeds.device, inputs_embeds.dtype
-                    )
-                    image_mask, _ = self.model.model.get_placeholder_mask(
-                        input_ids, inputs_embeds=inputs_embeds, image_features=image_embeds
-                    )
-                    inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
-                    return inputs_embeds
-
-                return torch.cond(
-                    image_features.shape[0] == 0,
-                    (lambda embs, _imgf: embs.clone()),
-                    process_image,
-                    [inputs_embeds, image_features],
+            def forward(self, pixel_values, image_attention_mask, image_sizes):
+                return model.model.embed_tokens_extend.image_embed(
+                    pixel_values, image_attention_mask, image_sizes
                 )
 
         assert hasattr(
             model, "get_image_features"
         ), f"get_image_features not found in class {type(model)}"
-        model_to_export = EmbeddingPart(model)
+        model_to_export = VisionPart(model)
 
         dynamic_shapes = {
-            "input_ids": {0: "batch_size", 1: "sequence_length"},
-            "image_features": {0: "num_logical_patches"},
+            "pixel_values": {0: "num_images", 1: "max_num_crops", 3: "height", 4: "width"},
+            "image_attention_mask": {0: "num_images", 1: "max_num_crops"},
+            "image_sizes": {0: "num_images"},
         }
 
     else:
@@ -402,6 +318,7 @@ def main(
         torch.save(data, input_filename)
     else:
         export_inputs, other_inputs = get_inputs_for_part(
+            model_id,
             part,
             torch_dtype,
             device,
@@ -444,35 +361,9 @@ def main(
         print("-- EXPORT")
         print("-- ######")
 
-        if exporter != "custom":
-            import packaging.version as pv
-
-            try:
-                import onnxscript
-
-                v_onnxscript = onnxscript.__version__
-                if pv.Version(v_onnxscript) <= pv.Version("0.5.6"):
-                    print(f"-- onnxscript=={v_onnxscript} not recent enough")
-                    print("-- stop.")
-                    return
-            except AttributeError:
-                pass
-            except ImportError:
-                print("-- missing onnxscript, cannot continue")
-                print("-- stop.")
-                return
-
         begin = time.perf_counter()
 
         target_opset = 22
-        if (
-            exporter == "onnx-dynamo"
-            and device == "cuda"
-            and "QWEN25ATTENTION" not in os.environ
-        ):
-            os.environ["QWEN25ATTENTION"] = "PACKED"
-        elif "QWEN25ATTENTION" in os.environ and os.environ["QWEN25ATTENTION"] == "LOOPA23":
-            target_opset = 23
 
         with torch_export_patches(
             patch_torch=False,
@@ -495,15 +386,6 @@ def main(
                 onnx_plugs=PLUGS,
             )
         export_duration = time.perf_counter() - begin
-
-        if exporter == "onnx-dynamo":
-            # onnx-dynamo fails at producing function body with sequences as input / output.
-            # They are replaced by tensor type one step in the model.
-            print("-- remove_body_last_input_output_for_loop")
-            remove_inplace_body_last_input_output_type_for_loop_because_they_might_be_sequences(
-                filename
-            )
-            print("-- done.")
 
     print("-- ###############")
     print("-- # DISCREPANCIES")
