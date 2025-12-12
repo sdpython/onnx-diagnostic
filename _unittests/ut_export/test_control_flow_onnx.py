@@ -2,7 +2,11 @@ import unittest
 import torch
 from onnxscript import script, FLOAT, INT64
 from onnxscript import opset18 as op
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    requires_torch,
+    requires_experimental_experiment,
+)
 from onnx_diagnostic.export.control_flow_onnx import loop_for_onnx
 from onnx_diagnostic.export.api import to_onnx
 
@@ -127,6 +131,7 @@ class TestControlFlowOnnx(ExtTestCase):
         self.assert_onnx_disc("test_loop_one_custom", onx, model, (n_iter, x))
 
     @requires_torch("2.9.99")
+    @requires_experimental_experiment("0.1.2")
     def test_loop_two_custom_concatenation_dims(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
