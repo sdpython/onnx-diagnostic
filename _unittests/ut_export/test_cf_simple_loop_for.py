@@ -483,7 +483,7 @@ class TestCfSimpleLoopFor(ExtTestCase):
                 hidden_states = new_hidden_states
                 return hidden_states
 
-        class RewrittenModel(torch.nn.Module):
+        class RewrittenModelLoop(torch.nn.Module):
             def __init__(self, model):
                 super().__init__()
                 self.embed_tokens = model.embed_tokens
@@ -533,12 +533,11 @@ class TestCfSimpleLoopFor(ExtTestCase):
                 if isinstance(img_sizes, torch.Tensor):
                     img_sizes = img_sizes.view(-1, 2)
 
-                def body_fn(_bs, img_features, img_sizes, cst_shape_CH):
+                def body_fn(_bs, img_features, img_sizes, image_attention_mask, cst_shape_CH):
                     # oddly, it seems impossible to write img_sizes[_bs.item()]
                     # it needs img_sizes[_bs.item() : (_bs + 1).item()][0]
                     row = img_sizes[_bs.item() : (_bs + 1).item()]
                     row = row[0]
-                    torch._check(row.shape[0] == 2)
                     h, w = row[0], row[1]
                     h = h // base_resolution
                     w = w // base_resolution
@@ -668,12 +667,17 @@ class TestCfSimpleLoopFor(ExtTestCase):
                     # sub_glb
                     _output_img = torch.cat([sub_img, glb_GN, glb_img], dim=1)
                     # output_len.append(temp_len)
-                    return (self.img_projection(_output_img),)
+                    proj = self.img_projection(_output_img)
+                    return (proj,)
 
                 tmp = torch.arange(bs + 1).max()
                 merged_img_set_tensor = simple_loop_for(
-                    tmp, body_fn, (img_features, img_sizes, cst_shape_CH), [1]
+                    tmp,
+                    body_fn,
+                    (img_features, img_sizes, image_attention_mask, cst_shape_CH),
+                    [1],
                 )
+                print("*merged_img_set_tensor", merged_img_set_tensor[0].shape)
                 merged_img_set_tensor = merged_img_set_tensor.squeeze(0)
                 merged_img_set_tensor = merged_img_set_tensor.to(hidden_states.dtype).to(
                     hidden_states.device
@@ -702,9 +706,15 @@ class TestCfSimpleLoopFor(ExtTestCase):
             input_ids, hidden_states, img_features, image_attention_mask, img_embeds, img_sizes
         )
         self.assertEqual(expected.shape, (2, 9246, 3072))
-        rewritten_model = RewrittenModel(model)
+
+        rewritten_model = RewrittenModelLoop(model)
         patched = rewritten_model(
-            input_ids, hidden_states, img_features, image_attention_mask, img_embeds, img_sizes
+            input_ids,
+            hidden_states,
+            img_features,
+            image_attention_mask,
+            img_embeds,
+            img_sizes,
         )
         self.assertEqualArray(expected, patched)
         dynamic_shapes = (
@@ -733,7 +743,12 @@ class TestCfSimpleLoopFor(ExtTestCase):
         # does not work either
         print(ep)
         got = ep.module()(
-            input_ids, hidden_states, img_features, image_attention_mask, img_embeds, img_sizes
+            input_ids,
+            hidden_states,
+            img_features,
+            image_attention_mask,
+            img_embeds,
+            img_sizes,
         )
         self.assertEqualArray(expected, got)
 
