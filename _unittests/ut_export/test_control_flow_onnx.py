@@ -1,43 +1,13 @@
 import unittest
-from typing import Tuple
 import torch
 from onnxscript import script, FLOAT, INT64
 from onnxscript import opset18 as op
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch, never_test
-from onnx_diagnostic.export.control_flow_onnx import (
-    enable_code_export_control_flow,
-    loop_for_onnx,
-)
-from onnx_diagnostic.export.control_flow_research import simple_loop_for as loop_for_r
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
+from onnx_diagnostic.export.control_flow_onnx import loop_for_onnx
 from onnx_diagnostic.export.api import to_onnx
 
 
 class TestControlFlowOnnx(ExtTestCase):
-    @never_test()
-    def test_loop_one_research(self):
-        class Model(torch.nn.Module):
-            def forward(self, n_iter, x):
-                def body(i: torch.Tensor, x: torch.Tensor) -> Tuple[torch.Tensor]:
-                    return (x[: i.item() + 1].unsqueeze(1),)
-
-                return loop_for_r(n_iter, body, (x,))[0]
-
-        model = Model()
-        n_iter = torch.tensor(4, dtype=torch.int64)
-        x = torch.arange(10, dtype=torch.float32)
-        expected = torch.tensor([0, 0, 1, 0, 1, 2, 0, 1, 2, 3], dtype=x.dtype).unsqueeze(1)
-        got = model(n_iter, x)
-        self.assertEqualArray(expected, got)
-
-        with enable_code_export_control_flow():
-            got = model(n_iter, x)
-        self.assertEqualArray(expected, got)
-
-        ep = torch.export.export(
-            model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
-        )
-        print(ep)
-
     def test_onnxscript_loop(self):
         @script()
         def concatenation(N: INT64[1], x: FLOAT[None]) -> FLOAT[None, 1]:

@@ -774,6 +774,7 @@ class ExtTestCase(unittest.TestCase):
     def setUpClass(cls):
         logger = logging.getLogger("onnxscript.optimizer.constant_folding")
         logger.setLevel(logging.ERROR)
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
         unittest.TestCase.setUpClass()
 
     @classmethod
