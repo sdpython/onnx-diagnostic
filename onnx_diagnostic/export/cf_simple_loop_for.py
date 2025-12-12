@@ -321,7 +321,7 @@ def simple_loop_for(
 
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
-                def body(i: torch.Tensor, x: torch.Tensor) -> Tuple[torch.Tensor]:
+                def body(i, x):
                     return (x[: i.item() + 1].unsqueeze(1), x[i.item() + 1 :].unsqueeze(0))
 
                 return simple_loop_for(n_iter, body, (x,), (0, 1))
@@ -346,6 +346,7 @@ def simple_loop_for(
         ),
     )
     torch._check(
-        isinstance(res, tuple), f"Output of the loop should be a tuple not {type(res)}."
+        isinstance(res, tuple),
+        lambda: f"Output of the loop should be a tuple not {type(res)}.",
     )
     return res[0] if len(res) == 1 else res
