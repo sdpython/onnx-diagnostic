@@ -127,13 +127,13 @@ class TestControlFlowOnnx(ExtTestCase):
         self.assert_onnx_disc("test_loop_one_custom", onx, model, (n_iter, x))
 
     @requires_torch("2.9.99")
-    def test_loop_two_custom_reduction_dim(self):
+    def test_loop_two_custom_concatenation_dims(self):
         class Model(torch.nn.Module):
             def forward(self, n_iter, x):
                 def body(i, x):
                     return x[: i.item() + 1].unsqueeze(1), x[: i.item() + 1].unsqueeze(0) + 1
 
-                res = loop_for_onnx(n_iter, body, (x,), reduction_dim=[0, 1])
+                res = loop_for_onnx(n_iter, body, (x,), concatenation_dims=[0, 1])
                 return res[0] + res[1].T
 
         model = Model()
@@ -147,7 +147,7 @@ class TestControlFlowOnnx(ExtTestCase):
             model, (n_iter, x), dynamic_shapes=({}, ({0: torch.export.Dim.DYNAMIC}))
         )
         self.assertIn(
-            "torch.ops.onnx_higher_ops.loop_for_onnx_TestControlFlowOnnx_test_loop_two_custom_reduction_dim_L_Model_forward_L_body_",
+            "torch.ops.onnx_higher_ops.loop_for_onnx_TestControlFlowOnnx_test_loop_two_custom_concatenation_dims_L_Model_forward_L_body_",
             str(ep),
         )
 

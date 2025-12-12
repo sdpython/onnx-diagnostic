@@ -55,13 +55,13 @@ def is_exporting() -> bool:
     return _TEST_EXPORT or torch.compiler.is_exporting() or torch.compiler.is_compiling()
 
 
-def _loop_for_onnx_fn(n_iter, body_fn, reduction_dim, args):
+def _loop_for_onnx_fn(n_iter, body_fn, concatenation_dims, args):
     """
     Python implementation of the loop.
 
     :param n_iter: number of iteration
     :param body_fn: function implementing the body
-    :param reduction_dim: dimension used to reduce the list produced by the loop
+    :param concatenation_dims: dimension used to reduce the list produced by the loop
     :param args: arguments to the loop body
     :return: results
     """
@@ -95,7 +95,9 @@ def _loop_for_onnx_fn(n_iter, body_fn, reduction_dim, args):
             torch.cat(
                 [r[i] for r in res],
                 dim=(
-                    0 if reduction_dim is None or i >= len(reduction_dim) else reduction_dim[i]
+                    0
+                    if concatenation_dims is None or i >= len(concatenation_dims)
+                    else concatenation_dims[i]
                 ),
             )
             for i in range(n_res)
@@ -106,7 +108,7 @@ def _loop_for_onnx_fn(n_iter, body_fn, reduction_dim, args):
 def make_custom_loop_for_onnx(
     n_iter: torch.Tensor,
     body_fn: Callable,
-    reduction_dim: Optional[Sequence[int]],
+    concatenation_dims: Optional[Sequence[int]],
     args: Sequence[torch.Tensor],
     body_gm: Optional[torch.fx.GraphModule] = None,
     body_mutated_inputs: Optional[List[Any]] = None,
@@ -120,7 +122,7 @@ def make_custom_loop_for_onnx(
 
     :param n_iter: number of iterations defined by a tensor of no dimension
     :param body_fn: the loop body defined as a function
-    :param reduction_dim: dimension used to concatenated the results
+    :param concatenation_dims: dimension used to concatenated the results
     :param args: list of tensors, input to the body
     :param body_gm: torch.fx.GraphModule equivalent to *body_gm*
     :param body_mutated_inputs: inputs to *body_gm*
@@ -133,7 +135,7 @@ def make_custom_loop_for_onnx(
     assert body_mutated_inputs is not None, "body_mutated_inputs cannot be None"
     assert body_outputs is not None, "body_outputs cannot be None"
     srank = "_".join("x".join(map(str, s.shape)) for s in body_outputs)
-    sred = "x".join(map(str, reduction_dim)) if reduction_dim else ""
+    sred = "x".join(map(str, concatenation_dims)) if concatenation_dims else ""
     full_name = (
         body_fn.__qualname__.replace("<locals>", "L")
         .replace("<lambda>", "l")
@@ -169,14 +171,14 @@ def make_custom_loop_for_onnx(
         custom_def,
         _make_onx,
         (
-            lambda g, sts, outputs, *args, bc=_make_onx, rd=reduction_dim, name=name: (
+            lambda g, sts, outputs, *args, bc=_make_onx, rd=concatenation_dims, name=name: (
                 convert_custom_loop_into_onnx(
                     g,
                     sts,
                     outputs,
                     *args,
                     body_callable=bc,
-                    reduction_dim=rd,
+                    concatenation_dims=rd,
                     name=name,
                 )
             )
@@ -196,7 +198,7 @@ def convert_custom_loop_into_onnx(
     outputs: List[str],
     *args: str,
     body_callable: Callable[..., onnx.ModelProto],
-    reduction_dim: Optional[Sequence[int]] = None,
+    concatenation_dims: Optional[Sequence[int]] = None,
     name: str = "loop_for_onnx",
 ) -> Union[str, List[str]]:
     """
@@ -207,7 +209,7 @@ def convert_custom_loop_into_onnx(
     :param outputs: output names
     :param args: input argument known at export time
     :param body: GraphProto, the loop body
-    :param reduction_dim: the dimension to follow when aggregating the
+    :param concatenation_dims: the dimension to follow when aggregating the
         list of tensors after the loop ran
     :param name: to give the onnx nodes a name
     :return: output names
@@ -289,7 +291,11 @@ def convert_custom_loop_into_onnx(
             out,
             outputs=[o],
             name=name,
-            axis=0 if not reduction_dim or i >= len(reduction_dim) else reduction_dim[i],
+            axis=(
+                0
+                if not concatenation_dims or i >= len(concatenation_dims)
+                else concatenation_dims[i]
+            ),
         )
         for i, (out, o) in enumerate(zip(outloop, outputs))
     ]
@@ -337,7 +343,7 @@ def loop_for_onnx(
     n_iter: Union[torch.SymInt, torch.Tensor],
     body_fn: Callable[..., Tuple[torch.Tensor]],
     args: Sequence[torch.Tensor],
-    reduction_dim: Optional[Sequence[int]] = None,
+    concatenation_dims: Optional[Sequence[int]] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """
     High operators used to easily export a loop in ONNX.
@@ -353,7 +359,7 @@ def loop_for_onnx(
         in a tensor with no dimension, all the others
         are not changed during the loop
     :param args: the available tensors at every loop
-    :param reduction_dim: the loop aggregated the results into list,
+    :param concatenation_dims: the loop aggregated the results into list,
         one of each output, each of them is concatenated into one
         tensor along one dimension, by default, it is the first
         dimension, but it can be defined otherwise
@@ -449,7 +455,7 @@ def loop_for_onnx(
         )
         print(ep)
 
-    A last example with ``reduction_dim``:
+    A last example with ``concatenation_dims``:
 
     .. runpython::
         :showcode:
@@ -465,7 +471,7 @@ def loop_for_onnx(
                 def body(i, x):
                     return x[: i.item() + 1].unsqueeze(1), x[: i.item() + 1].unsqueeze(0) + 1
 
-                two = loop_for_onnx(n_iter, body, (x,), reduction_dim=[0, 1])
+                two = loop_for_onnx(n_iter, body, (x,), concatenation_dims=[0, 1])
                 return two[0] + two[1].T
 
 
@@ -516,7 +522,7 @@ def loop_for_onnx(
         name, _custom_ops = make_custom_loop_for_onnx(
             n_iter,
             body_fn,
-            reduction_dim,
+            concatenation_dims,
             args,
             body_gm=body_gm,
             body_mutated_inputs=body_mutated_inputs,
@@ -525,4 +531,4 @@ def loop_for_onnx(
         fct = getattr(torch.ops.onnx_higher_ops, name)
         return fct(n_iter, *args)
 
-    return _loop_for_onnx_fn(n_iter, body_fn, reduction_dim, args)
+    return _loop_for_onnx_fn(n_iter, body_fn, concatenation_dims, args)
