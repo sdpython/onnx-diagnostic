@@ -303,6 +303,37 @@ class TestCfSimpleLoopFor(ExtTestCase):
         self.assertEqual(len(check), 1)
 
     @requires_torch("2.9.99")
+    def test_loop_calling_submodule_with_weights(self):
+        class Model(torch.nn.Module):
+            def __init__(self, in_features):
+                super().__init__()
+                self.linear = torch.nn.Linear(in_features, in_features)
+
+            def forward(self, n_iter, x):
+                return simple_loop_for(
+                    n_iter,
+                    (lambda _i, x: self.linear(x)),
+                    (x,),
+                )
+
+        # Example usage
+        model = Model(in_features=4)
+        n = torch.tensor(4, dtype=torch.int64)
+        x = torch.randn(3, 4)
+        expected = model(n, x)
+        ep = torch.export.export(
+            model,
+            (n, x),
+            dynamic_shapes=(
+                {},
+                {0: torch.export.Dim.DYNAMIC},
+            ),
+        )
+        got = ep.module()(n, x)
+        self.assertEqualArray(expected, got)
+        self.assertEqualArray(model(n, -x), ep.module()(n, -x))
+
+    @requires_torch("2.9.99")
     def test_simple_loop_for_phi4(self):
         _IMAGE_SPECIAL_TOKEN_ID = 200010
         vocab_size = 200064
