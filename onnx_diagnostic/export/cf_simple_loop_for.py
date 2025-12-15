@@ -97,14 +97,18 @@ def _simple_loop_for_fn(
                 f"Unexpected number of results {len(r)} for function {body_fn}, "
                 f"expected {len(res[-1])}"
             )
+            assert all(isinstance(t, torch.Tensor) for t in r), (
+                f"Unexpected type {[type(_) for _ in r]} for returned by function {body_fn}, "
+                f"it must be a tuple of Tensor or a Tensor."
+            )
             res.append(r)
         else:
             assert isinstance(r, torch.Tensor), (
-                f"Unexpected type {r} for function {body_fn}, "
-                f"it must be a tuple or a Tensor."
+                f"Unexpected type {type(r)} coming from function {body_fn}, "
+                f"it must be a tuple of Tensor or a Tensor."
             )
             assert not res or len(res[-1]) == 1, (
-                f"Unexpected number of results {len(r)} for function {body_fn}, "
+                f"Unexpected number of results {len(r)} coming from function {body_fn}, "
                 f"expected {len(res[-1])}"
             )
             res.append((r,))
@@ -236,9 +240,15 @@ def loop_for_op_dense(n_iter, body_fn, operands, concatenation_dims=None):
     )
     mode = _get_current_dispatch_mode()
     assert mode is None, "Mode should never be enabled for CPU/CUDA key"
-    return _simple_loop_for_fn(
-        n_iter, body_fn, operands, concatenation_dims=concatenation_dims
+    is_fake = isinstance(n_iter, torch._subclasses.fake_tensor.FakeTensor)
+    res = _simple_loop_for_fn(n_iter, body_fn, operands, concatenation_dims=concatenation_dims)
+    assert is_fake or not any(
+        isinstance(r, torch._subclasses.fake_tensor.FakeTensor) for r in res
+    ), (
+        f"One result is a fake tensor but the inputs were not, type(n_iter)={type(n_iter)}, "
+        f"operands: {[type(_) for _ in operands]}, res: {[type(_) for _ in res]}"
     )
+    return res
 
 
 @simple_loop_for_op.py_impl(ProxyTorchDispatchMode)
