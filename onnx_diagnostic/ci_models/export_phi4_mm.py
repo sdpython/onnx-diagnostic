@@ -80,6 +80,7 @@ def get_patches_transformers():
             elif tied_mapping is None:
                 return {}
             common_case_regex = re.compile(r"^[A-Za-z0-9_\.]+(weight)|(bias)$")
+            # PATCHED
             if tied_mapping == ["lm_head.weight"]:
                 tied_mapping = {"lm_head.weight": "model.embed_tokens.weight"}
             if all(
@@ -122,140 +123,116 @@ def get_patches_transformers():
     return [patched_PreTrainedModel]
 
 
-def get_patches(mod):
+def get_patches(mod, mod_siglip):
     import torch
 
+    _IMAGE_SPECIAL_TOKEN_ID = mod._IMAGE_SPECIAL_TOKEN_ID
+
+    class patched_SiglipVisionEmbeddings(torch.nn.Module):
+        _PATCHES_ = ["forward"]
+        _PATCHED_CLASS_ = mod_siglip.SiglipVisionEmbeddings
+
+        def forward(
+            self, pixel_values: torch.FloatTensor, patch_attention_mask: torch.BoolTensor
+        ) -> torch.Tensor:
+            batch_size = pixel_values.size(0)
+
+            patch_embeds = self.patch_embedding(pixel_values)
+            embeddings = patch_embeds.flatten(2).transpose(1, 2)
+
+            max_im_h, max_im_w = pixel_values.size(2), pixel_values.size(3)
+            max_nb_patches_h, max_nb_patches_w = (
+                max_im_h // self.patch_size,
+                max_im_w // self.patch_size,
+            )
+            boundaries = torch.arange(
+                1 / self.num_patches_per_side, 1.0, 1 / self.num_patches_per_side
+            )
+            position_ids = torch.full(
+                size=(
+                    batch_size,
+                    max_nb_patches_h * max_nb_patches_w,
+                ),
+                fill_value=0,
+            )
+
+            for batch_idx, p_attn_mask in enumerate(patch_attention_mask):
+                nb_patches_h = p_attn_mask[:, 0].sum()
+                nb_patches_w = p_attn_mask[0].sum()
+
+                # PATCHED: add checks
+                torch._check(nb_patches_h.item() > 0)
+                torch._check(nb_patches_w.item() > 0)
+                fractional_coords_h = torch.arange(0, 1 - 1e-6, 1 / nb_patches_h)
+                fractional_coords_w = torch.arange(0, 1 - 1e-6, 1 / nb_patches_w)
+
+                bucket_coords_h = torch.bucketize(fractional_coords_h, boundaries, right=True)
+                bucket_coords_w = torch.bucketize(fractional_coords_w, boundaries, right=True)
+
+                pos_ids = (
+                    bucket_coords_h[:, None] * self.num_patches_per_side + bucket_coords_w
+                ).flatten()
+                position_ids[batch_idx][p_attn_mask.view(-1).cpu()] = pos_ids
+
+            position_ids = position_ids.to(self.position_embedding.weight.device)
+
+            embeddings = embeddings + self.position_embedding(position_ids)
+            return embeddings
+
     class patched_Phi4MMImageEmbedding(torch.nn.Module):
-        _PATCHES_ = ["forward", "get_image_embeddings"]
+        _PATCHES_ = ["forward"]
         _PATCHED_CLASS_ = mod.Phi4MMImageEmbedding
-
-        @classmethod
-        def get_image_embeddings(
-            cls,
-            image_features,  # [bs, max_num_crops, base_feat_height *
-            #                   base_feat_width (24*24), C]
-            attention_mask,  # 4D image attention mask
-            image_sizes,  # [num_images, 2]
-            sub_GN,  # [1, 1, 1, image_dim_out * base_feat_height_reduction**2]
-            glb_GN,  # [1, 1, image_dim_out * base_feat_height_reduction**2]
-            bfht: int,  # base_feat_height_target
-            crop_size: int,  # base_resolution
-            bfhr: int,  # base_feat_height_reduction
-            bfh: int,  # base_feat_height
-            bfw: int,  # base_feat_width
-            C: int,  # Channels
-            H: int,  # Height
-            device: torch.device,  # Target device
-            dtype: torch.dtype,  # Target dtype
-        ):
-            """Compute HD feature transformation."""
-            # Compute common constants used frequently in for-loop
-            H_bfhr = H // bfhr
-            bfhr_2_C = bfhr * bfhr * C
-            bfh_bfhr = bfh // bfhr
-            bfw_bfhr = bfw // bfhr
-
-            all_image_embeddings = torch.empty(0, 1152).to(device)
-            for i, img_size in enumerate(image_sizes):
-                h, w = img_size[0], img_size[1]
-                h = torch.tensor(h // crop_size, dtype=torch.int64)
-                w = torch.tensor(w // crop_size, dtype=torch.int64)
-                B_ = h * w
-
-                # Compute common constants used frequently
-                # that are dependent on values in for-loop
-                h_bfh_bfhr = h * bfh // bfhr  # h * bfh_bfhr
-                w_bfw_bfhr = w * bfw // bfhr  # w * bfw_bfhr
-
-                # 1 x (24x24) x 1024
-                global_img_feature = image_features[i, :1]
-
-                # 1 x 12 x 12 x 4096
-                glb_img = (
-                    global_img_feature.reshape(1, H, H, C)
-                    .reshape(1, H_bfhr, bfhr, H_bfhr, bfhr, C)
-                    .contiguous()
-                    .permute(0, 1, 3, 2, 4, 5)
-                    .reshape(1, H_bfhr, H_bfhr, bfhr_2_C)
-                    .contiguous()
-                )
-                temp_glb_GN = sub_GN.repeat(1, H_bfhr, 1, 1)
-
-                # 1 x 156 x 4096
-                glb_img = torch.cat([glb_img, temp_glb_GN], dim=2).reshape(1, -1, bfhr_2_C)
-
-                # (max_num_crops-1) x (12x12) x C
-                sub_img = image_features[i, 1:]
-                # 16x574x1024
-                # get rid of padding sub_img
-                sub_img = sub_img[:B_]
-
-                # (num_crops, 12, 2, 12, 2, 1024) -> (num_crops, 12, 12, 2, 2, 1024)
-                #                                 -> (num_crops, 12*12, 4*1024)
-                sub_img = (
-                    sub_img.reshape(B_, H, H, C)
-                    .reshape(B_, H_bfhr, bfhr, H_bfhr, bfhr, C)
-                    .contiguous()
-                    .permute(0, 1, 3, 2, 4, 5)
-                    .reshape(B_, -1, bfhr_2_C)
-                    .contiguous()
-                )
-                sub_img = (
-                    sub_img.reshape(1, h, w, bfh_bfhr, bfw_bfhr, -1)
-                    .permute(0, 1, 3, 2, 4, 5)
-                    .reshape(1, h_bfh_bfhr, w_bfw_bfhr, bfhr_2_C)
-                )
-
-                reshaped_attention_mask = (
-                    attention_mask[i, 1 : B_ + 1, 0::2, 0::2]
-                    .reshape(1, h, w, bfh_bfhr, bfw_bfhr)
-                    .permute(0, 1, 3, 2, 4)
-                    .reshape(1, h_bfh_bfhr, w_bfw_bfhr)
-                )
-                useful_height = int(
-                    reshaped_attention_mask[0, :, 0].sum().to(torch.int64).item()
-                )
-                useful_width = int(
-                    reshaped_attention_mask[0, 0, :].sum().to(torch.int64).item()
-                )
-                sub_img = sub_img[:, :useful_height, :useful_width]
-                temp_sub_GN = sub_GN.repeat(1, useful_height, 1, 1)
-
-                sub_img = torch.cat([sub_img, temp_sub_GN], dim=2).reshape(1, -1, bfhr_2_C)
-                # (1, num_img_tokens, 1024*4)
-
-                # Apply hd_transform_order = 'sub_glb'
-                all_image_embeddings = torch.cat(
-                    [
-                        all_image_embeddings,
-                        sub_img.view(-1, 1152),
-                        glb_GN.view(-1, 1152),
-                        glb_img.view(-1, 1152),
-                    ]
-                )
-            return all_image_embeddings
 
         def forward(
             self,
             input_ids: torch.LongTensor,
             input_embeds: torch.FloatTensor,
-            image_attention_mask: torch.FloatTensor,
-            image_sizes: torch.LongTensor,
-            wte=None,
+            image_sizes=None,
+            **kwargs,
         ) -> torch.FloatTensor:
-            # pixel_values: (num_images, max_num_crops, 3, H, W)
-            # image_sizes: (num_images, 2).view(1, -1)
-            pixel_values = input_embeds
-            attention_mask = image_attention_mask
 
-            # input_shape = input_ids.size()
-            # input_ids = input_ids.view(-1, input_shape[-1])
-            # positions = torch.nonzero(
-            #   input_ids == mod._IMAGE_SPECIAL_TOKEN_ID, as_tuple=False)
+            if isinstance(input_ids, tuple):
+                # # pipeline parallel
+                input_ids, input_embeds = input_ids
 
-            # Note:
-            # This function is executed if positions is not empty.
-            # We assume it is always verified and the test is skipped.
+            img_embeds = input_embeds
+            if image_sizes is None and "image_sizes" in kwargs:
+                image_sizes = kwargs["image_sizes"]
+            img_sizes = image_sizes
+
+            if self.img_features is not None:
+                img_embeds = self.img_features.clone()
+                self.img_features = None
+
+            if self.img_sizes is not None:
+                img_sizes = self.img_sizes
+
+            dtype = self.img_processor.embeddings.patch_embedding.weight.dtype
+            if img_embeds is not None:
+                # convert to bf16
+                img_embeds = img_embeds.to(dtype)
+
+            if self.image_attention_mask is not None:
+                image_attention_mask = self.image_attention_mask.clone()
+                self.image_attention_mask = None
+            elif "image_attention_mask" in kwargs:
+                image_attention_mask = kwargs["image_attention_mask"]
+            else:
+                image_attention_mask = None
+            input_shape = input_ids.size()
+            input_ids = input_ids.view(-1, input_shape[-1])
+
+            with torch.no_grad():
+                # positions = torch.nonzero(
+                #   input_ids == _IMAGE_SPECIAL_TOKEN_ID, as_tuple=False)
+                positions_tuple = torch.nonzero(
+                    input_ids == _IMAGE_SPECIAL_TOKEN_ID, as_tuple=True
+                )
+
+            # logger.info(f'position size: {positions.size()} ...')
+            fake_image_forward = False
+            select = False
+            hd_transform = False
 
             if isinstance(self.img_projection, torch.nn.Sequential):
                 target_device = self.img_projection[0].bias.device
@@ -263,62 +240,265 @@ def get_patches(mod):
             else:  # It's a single nn.Linear layer
                 target_device = self.img_projection.bias.device
                 target_dtype = self.img_projection.bias.dtype
-            assert pixel_values.ndim == 5, (
-                f"(branch 1) pixel_values size: {pixel_values.size()}, "
-                f"expect 5D tensor for hd transform"
-            )
 
-            # Compute image features: Nx(HW)xC
-            image_features = self.get_img_features(
-                pixel_values.flatten(0, 1),
-                attention_mask=attention_mask.type(torch.BoolTensor)
-                .flatten(0, 1)
-                .to(target_device),
-            )
+            # Let's assume it is always true.
+            if True:  # len(positions.tolist()) > 0:
+                if self.use_hd_transform and img_sizes is not None and len(img_sizes):
+                    hd_transform = True
+                    # img_embeds: (num_images, max_num_crops, 3, H, W)
+                    # img_sizes: (num_images, 2).view(1, -1)
 
-            # Calculate height and width of base feature
-            base_feat_height = base_feat_width = torch.sym_int(image_features.shape[1] ** 0.5)
-            torch._check(
-                base_feat_height == self.base_feat_height_target
-                and base_feat_width == self.base_feat_height_target,
-                lambda: (
-                    f"base_feat_height: {base_feat_height}, "
-                    f"base_feat_width: {base_feat_width}, "
-                    f"expect {self.base_feat_height_target} features for hd transform"
-                ),
-            )
+                    bs = img_embeds.shape[0]
+                    # Nx(HW)xC
+                    if image_attention_mask is not None and len(image_attention_mask) > 0:
+                        img_features = self.get_img_features(
+                            img_embeds.flatten(0, 1),
+                            attention_mask=image_attention_mask.type(torch.BoolTensor)
+                            .flatten(0, 1)
+                            .to(target_device),
+                        )
+                    else:
+                        img_features = self.get_img_features(img_embeds.flatten(0, 1))
 
-            # bs x max_num_crops x (bfh*bfw) x C
-            bs = pixel_values.shape[0]
-            image_features = image_features.view(
-                bs, -1, base_feat_height * base_feat_width, self.image_dim_out
-            )
+                    # base_feat_height_target = self.base_feat_height_target
+                    base_resolution = self.crop_size
+                    base_feat_height_reduction = self.base_feat_height_reduction
 
-            # all_image_embeddings: (num_img_tokens, 1152)
-            all_image_embeddings = self.get_image_embeddings(
-                image_features,
-                attention_mask,
-                image_sizes,
-                self.sub_GN,
-                self.glb_GN,
-                bfht=self.base_feat_height_target,
-                crop_size=self.crop_size,
-                bfhr=self.base_feat_height_reduction,
-                bfh=base_feat_height,
-                bfw=base_feat_width,
-                C=self.image_dim_out,
-                H=base_feat_height,
-                device=target_device,
-                dtype=target_dtype,
-            )
+                    base_feat_height = base_feat_width = torch.sym_int(
+                        img_features.shape[1] ** 0.5
+                    )
 
-            # image_features_proj: (num_img_tokens, 3072)
-            image_features_proj = self.img_projection(
-                all_image_embeddings.unsqueeze(0).to(device=target_device, dtype=target_dtype)
-            )
-            return image_features_proj.squeeze()
+                    # bs x max_num_crops x (24x24) x C
+                    img_features = img_features.view(
+                        bs, -1, base_feat_height * base_feat_width, self.image_dim_out
+                    )
+                    C = self.image_dim_out
+                    H = base_feat_height
 
-    return [*get_patches_transformers(), patched_Phi4MMImageEmbedding]
+                    output_imgs = []
+                    output_len = []
+
+                    if isinstance(img_sizes, torch.Tensor):
+                        img_sizes = img_sizes.view(-1, 2)
+                    for _bs in range(bs):
+                        h, w = img_sizes[_bs]
+                        h = h // base_resolution
+                        w = w // base_resolution
+                        B_ = h * w
+
+                        global_img_feature = img_features[_bs, :1]
+
+                        glb_img = (
+                            global_img_feature.reshape(1, H, H, C)
+                            .reshape(
+                                1,
+                                H // base_feat_height_reduction,
+                                base_feat_height_reduction,
+                                H // base_feat_height_reduction,
+                                base_feat_height_reduction,
+                                C,
+                            )
+                            .contiguous()
+                            .permute(0, 1, 3, 2, 4, 5)
+                            .reshape(
+                                1,
+                                H // base_feat_height_reduction,
+                                H // base_feat_height_reduction,
+                                base_feat_height_reduction * base_feat_height_reduction * C,
+                            )
+                            .contiguous()
+                        )
+                        temp_glb_GN = self.sub_GN.repeat(
+                            1, H // base_feat_height_reduction, 1, 1
+                        )
+
+                        glb_img = torch.cat([glb_img, temp_glb_GN], dim=2).reshape(
+                            1, -1, base_feat_height_reduction * base_feat_height_reduction * C
+                        )
+
+                        sub_img = img_features[_bs, 1:]
+                        sub_img = sub_img[:B_]
+
+                        sub_img = (
+                            sub_img.reshape(B_, H, H, C)
+                            .reshape(
+                                B_,
+                                H // base_feat_height_reduction,
+                                base_feat_height_reduction,
+                                H // base_feat_height_reduction,
+                                base_feat_height_reduction,
+                                C,
+                            )
+                            .contiguous()
+                            .permute(0, 1, 3, 2, 4, 5)
+                            .reshape(
+                                B_,
+                                -1,
+                                base_feat_height_reduction * base_feat_height_reduction * C,
+                            )
+                            .contiguous()
+                        )
+                        sub_img = (
+                            sub_img.reshape(
+                                1,
+                                h,
+                                w,
+                                base_feat_height // base_feat_height_reduction,
+                                base_feat_width // base_feat_height_reduction,
+                                -1,
+                            )
+                            .permute(0, 1, 3, 2, 4, 5)
+                            .reshape(
+                                1,
+                                h * base_feat_height // base_feat_height_reduction,
+                                w * base_feat_width // base_feat_height_reduction,
+                                base_feat_height_reduction * base_feat_height_reduction * C,
+                            )
+                        )
+
+                        if image_attention_mask is not None and len(image_attention_mask) > 0:
+                            reshaped_image_attention_mask = (
+                                image_attention_mask[_bs, 1 : B_ + 1, 0::2, 0::2]
+                                .reshape(
+                                    1,
+                                    h,
+                                    w,
+                                    base_feat_height // base_feat_height_reduction,
+                                    base_feat_width // base_feat_height_reduction,
+                                )
+                                .permute(0, 1, 3, 2, 4)
+                                .reshape(
+                                    1,
+                                    h * base_feat_height // base_feat_height_reduction,
+                                    w * base_feat_width // base_feat_height_reduction,
+                                )
+                            )
+                            useful_height = torch.sym_int(
+                                reshaped_image_attention_mask[0, :, 0].sum().item()
+                            )
+                            useful_width = torch.sym_int(
+                                reshaped_image_attention_mask[0, 0, :].sum().item()
+                            )
+                            sub_img = sub_img[:, :useful_height, :useful_width]
+                            temp_sub_GN = self.sub_GN.repeat(1, useful_height, 1, 1)
+                            temp_len = (
+                                torch.sym_int(
+                                    image_attention_mask[_bs, : B_ + 1, 0::2, 0::2]
+                                    .sum()
+                                    .item()
+                                )
+                                + (useful_height + 1)
+                                + base_feat_height // base_feat_height_reduction
+                            )
+                        else:
+                            temp_sub_GN = self.sub_GN.repeat(
+                                1, h * base_feat_height // base_feat_height_reduction, 1, 1
+                            )
+                            temp_len = torch.sym_int(
+                                (h * w + 1) * self.num_img_tokens
+                                + 1
+                                + (h + 1) * base_feat_height // base_feat_height_reduction
+                            )
+
+                        sub_img = torch.cat([sub_img, temp_sub_GN], dim=2).reshape(
+                            1, -1, base_feat_height_reduction * base_feat_height_reduction * C
+                        )
+                        # (1, num_img_tokens, 1024*4)
+
+                        # glb + sub
+                        if self.hd_transform_order == "glb_sub":
+                            output_imgs.append(
+                                torch.cat([glb_img, self.glb_GN, sub_img], dim=1)
+                            )
+                        elif self.hd_transform_order == "sub_glb":
+                            output_imgs.append(
+                                torch.cat([sub_img, self.glb_GN, glb_img], dim=1)
+                            )
+                        else:
+                            raise NotImplementedError(
+                                f"hd_transform_order = {self.hd_transform_order}, "
+                                f"not implemented"
+                            )
+
+                        output_len.append(temp_len)
+
+                    img_set_tensor = []
+                    for _output_img in output_imgs:
+                        img_feature_proj = self.img_projection(
+                            _output_img.to(target_device).to(target_dtype)
+                        )
+                        img_set_tensor.append(img_feature_proj)
+
+                else:
+                    raise NotImplementedError
+                select = True
+            else:
+                # # create a fake image tensor
+                # # TODO: need define image size for different vision model
+                if self.training:
+                    img_embeds = torch.zeros(
+                        1,
+                        3,
+                        self.crop_size,
+                        self.crop_size,
+                        dtype=target_dtype,
+                        device=input_ids.device,
+                    )
+
+                    tt = (
+                        self.get_img_features(img_embeds)
+                        .to(target_device)
+                        .to(target_dtype)
+                        .reshape(-1, 1024)
+                    )
+                    if self.use_hd_transform:
+                        img_set_tensor = self.img_projection(
+                            tt.reshape(
+                                -1, self.image_dim_out * self.base_feat_height_reduction**2
+                            )
+                            * self.glb_GN[0]
+                            * self.sub_GN[0, 0]
+                        )
+                    else:
+                        img_set_tensor = self.img_projection(tt)  # adapted visual features.
+                    fake_image_forward = True
+
+            hidden_states = kwargs["wte"](input_ids)
+
+            if select:
+                if hd_transform:
+                    merged_img_set_tensor = torch.cat(img_set_tensor, dim=1).squeeze(0)
+                    merged_img_set_tensor = merged_img_set_tensor.to(hidden_states.dtype).to(
+                        hidden_states.device
+                    )
+                    with torch.autocast(device_type=hidden_states.device.type, enabled=False):
+                        new_hidden_states = hidden_states.index_put(
+                            indices=positions_tuple,
+                            values=merged_img_set_tensor,
+                            accumulate=False,
+                        )
+                    hidden_states = new_hidden_states
+                else:
+                    raise NotImplementedError
+
+            if fake_image_forward and self.training:
+                hidden_states = (
+                    hidden_states
+                    + (
+                        0 * img_set_tensor[0].to(hidden_states.dtype).to(hidden_states.device)
+                    ).sum()
+                )
+
+            if self.drop is not None:
+                hidden_states = self.drop(hidden_states)
+
+            return hidden_states
+
+    return [
+        *get_patches_transformers(),
+        patched_Phi4MMImageEmbedding,
+        patched_SiglipVisionEmbeddings,
+    ]
 
 
 def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict[str, Any]:
@@ -538,6 +718,11 @@ def main(
     ), f"Unable to find {main_mod_name!r} in {pprint.pformat(list(sys.modules))}"
     main_mod = sys.modules[main_mod_name]
     model = model.to(device).to(getattr(torch, dtype))
+    mod_siglip_name = model.model.embed_tokens_extend.image_embed.img_processor.__module__
+    assert (
+        mod_siglip_name in sys.modules
+    ), f"Unable to find {mod_siglip_name!r} in {pprint.pformat(list(sys.modules))}"
+    mod_siglip = sys.modules[mod_siglip_name]
 
     print(f"-- config._attn_implementation={model.config._attn_implementation}")
     print(f"-- model.dtype={model.dtype}")
@@ -658,7 +843,7 @@ def main(
         print("-- EXPORT")
         print("-- ######")
 
-        additional_patches = get_patches(main_mod)
+        additional_patches = get_patches(main_mod, mod_siglip)
 
         begin = time.perf_counter()
 

@@ -53,6 +53,7 @@ class TestPatchModule(ExtTestCase):
             hasattr(node, "parent") for node in ast.walk(tree)
         ), f"Missing parent in {ast.dump(tree, indent=2)}"
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_rewrite_test_in_forward_return1(self):
 
         class Model(torch.nn.Module):
@@ -80,6 +81,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
     @hide_stdout()
+    @ignore_warnings(FutureWarning)
     def test_rewrite_test_in_forward_return2(self):
 
         class Model(torch.nn.Module):
@@ -106,6 +108,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_rewrite_test_in_forward_assign1(self):
 
         class Model(torch.nn.Module):
@@ -133,6 +136,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualArray(expected_, ep.module()(-x, y))
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_rewrite_test_in_forward_assign2(self):
 
         class Model(torch.nn.Module):
@@ -160,6 +164,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_check_syntax_assign_noelse(self):
 
         class Model(torch.nn.Module):
@@ -184,6 +189,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_rewrite_test_in_forward_assign_noelse(self):
 
         class Model(torch.nn.Module):
@@ -209,6 +215,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_rewrite_test_in_forward_return_noelse(self):
 
         class Model(torch.nn.Module):
@@ -221,6 +228,7 @@ class TestPatchModule(ExtTestCase):
             lambda: transform_method(Model.forward, verbose=self.verbose), NotImplementedError
         )
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_rewrite_test_in_forward_assign2_in_2(self):
 
         class Model(torch.nn.Module):
@@ -250,6 +258,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_rewrite_test_in_forward_assign2_in_3(self):
 
         class Model(torch.nn.Module):
@@ -282,6 +291,7 @@ class TestPatchModule(ExtTestCase):
         self.assertEqualAny(expected, ep.module()(x, y))
         self.assertEqualAny(expected_, ep.module()(-x, y))
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_assign_nested_check(self):
 
         torch_cond = torch.cond
@@ -462,6 +472,7 @@ class TestPatchModule(ExtTestCase):
             got = ep.module()(x, y)
             self.assertEqualArray(expected, got)
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_torch_export_rewrite_method_only(self):
         model = _ModelForATest()
         x, y = torch.rand((4, 5)), torch.rand((4, 5))
@@ -618,6 +629,7 @@ class TestPatchModule(ExtTestCase):
             )
         """
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_broadcast_in_dim_1(self):
         class BadBroadcast(torch.nn.Module):
             def forward(self, x):
@@ -643,6 +655,7 @@ class TestPatchModule(ExtTestCase):
                     got = ep.module()(x)
                     self.assertEqualArray(expected, got)
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_broadcast_in_dim_2(self):
         class BadBroadcast(torch.nn.Module):
             def forward(self, x):
@@ -652,7 +665,6 @@ class TestPatchModule(ExtTestCase):
 
         x = torch.rand((3, 1), dtype=torch.float32)
         expected = BadBroadcast()(x)
-        print(expected.shape, expected)
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN},)
         for strict in [False, True]:
@@ -664,6 +676,7 @@ class TestPatchModule(ExtTestCase):
                     got = ep.module()(x)
                     self.assertEqualArray(expected, got)
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_broadcast_in_dim_3(self):
         class BadBroadcast(torch.nn.Module):
             def forward(self, x):
@@ -673,7 +686,6 @@ class TestPatchModule(ExtTestCase):
 
         x = torch.rand((1, 3), dtype=torch.float32)
         expected = BadBroadcast()(x)
-        print(expected.shape, expected)
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN},)
         for strict in [False, True]:
@@ -685,6 +697,7 @@ class TestPatchModule(ExtTestCase):
                     got = ep.module()(x)
                     self.assertEqualArray(expected, got)
 
+    @ignore_warnings((FutureWarning, UserWarning))
     def test_broadcast_in_dim_5(self):
         class BadBroadcast(torch.nn.Module):
             def forward(self, x):
@@ -694,7 +707,6 @@ class TestPatchModule(ExtTestCase):
 
         x = torch.rand((1, 3), dtype=torch.float32)
         expected = BadBroadcast()(x)
-        print(expected.shape, expected)
         DYN = torch.export.Dim.DYNAMIC
         ds = ({0: DYN, 1: DYN},)
         for strict in [False, True]:
