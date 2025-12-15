@@ -48,6 +48,80 @@ from .ci_helpers import (
 )
 
 
+def get_patches_transformers():
+    import re
+    from itertools import cycle
+    import torch
+    import transformers
+
+    class patched_PreTrainedModel(torch.nn.Module):
+        _PATCHES_ = ["get_expanded_tied_weights_keys"]
+        _PATCHED_CLASS_ = transformers.modeling_utils.PreTrainedModel
+
+        def get_expanded_tied_weights_keys(self, all_submodels: bool = False) -> dict:
+            if all_submodels:
+                expanded_tied_weights = {}
+                for prefix, submodule in self.named_modules(remove_duplicate=False):
+                    if isinstance(submodule, transformers.modeling_utils.PreTrainedModel):
+                        submodel_tied_weights = submodule.get_expanded_tied_weights_keys(
+                            all_submodels=False
+                        )
+                        if prefix != "":
+                            submodel_tied_weights = {
+                                f"{prefix}.{k}": f"{prefix}.{v}"
+                                for k, v in submodel_tied_weights.items()
+                            }
+                        expanded_tied_weights.update(submodel_tied_weights)
+                return expanded_tied_weights
+
+            tied_mapping = self._tied_weights_keys
+            if not self.config.tie_word_embeddings and not self.config.tie_encoder_decoder:
+                return {}
+            elif tied_mapping is None:
+                return {}
+            common_case_regex = re.compile(r"^[A-Za-z0-9_\.]+(weight)|(bias)$")
+            if tied_mapping == ["lm_head.weight"]:
+                tied_mapping = {"lm_head.weight": "model.embed_tokens.weight"}
+            if all(
+                common_case_regex.match(k) for k in tied_mapping.keys() | tied_mapping.values()
+            ):
+                return tied_mapping.copy()
+
+            expanded_tied_weights = {}
+            all_param_names = {k for k, _ in self.named_parameters(remove_duplicate=False)} | {
+                k for k, _ in self.named_buffers(remove_duplicate=False)
+            }
+            for target_name, source_name in tied_mapping.items():
+                target_name = "^" + target_name
+                source_name = "^" + source_name
+
+                source_params = sorted(
+                    filter(lambda x: re.search(source_name, x), all_param_names)
+                )
+                target_params = sorted(
+                    filter(lambda x: re.search(target_name, x), all_param_names)
+                )
+                if (
+                    not len(source_params) > 0
+                    or not len(target_params) > 0
+                    or len(target_params) % len(source_params) != 0
+                ):
+                    raise ValueError(
+                        f"There is an issue with your definition of "
+                        f"`tie_weights_keys` for {source_name}:{target_name}. "
+                        f"We found {source_params} to tie into {target_params}"
+                    )
+                for target_n, source_n in zip(target_params, cycle(source_params)):
+                    if source_n in expanded_tied_weights.keys():
+                        expanded_tied_weights[target_n] = expanded_tied_weights[source_n]
+                    else:
+                        expanded_tied_weights[target_n] = source_n
+
+            return expanded_tied_weights
+
+    return [patched_PreTrainedModel]
+
+
 def get_patches(mod):
     import torch
 
@@ -244,7 +318,7 @@ def get_patches(mod):
             )
             return image_features_proj.squeeze()
 
-    return [patched_Phi4MMImageEmbedding]
+    return [*get_patches_transformers(), patched_Phi4MMImageEmbedding]
 
 
 def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict[str, Any]:
@@ -429,25 +503,34 @@ def main(
     )
     torch_dtype = get_torch_dtype_from_command_line_args(dtype)
 
-    if pretrained:
-        print("-- pretrained model")
-        config = AutoConfig.from_pretrained(
-            model_id, trust_remote_code=True, attn_implementation="sdpa"
-        )
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            config=config,
-            trust_remote_code=True,
-            torch_dtype=torch_dtype,
-            device_map=device,
-            attn_implementation="sdpa",
-        ).eval()
-        data = dict(model=model)
-    else:
-        print("-- random model")
-        data = get_untrained_model(model_id, second_input=second_input, verbose=1)
-        model = data["model"]
-        _config = data["configuration"]
+    with torch_export_patches(
+        patch_torch=False,
+        patch_sympy=False,
+        patch_transformers=True,
+        verbose=1,
+        stop_if_static=2,
+        profile=(f"{basename}.profile.html" if profile_exporter else None),
+        custom_patches=get_patches_transformers(),
+    ):
+        if pretrained:
+            print("-- pretrained model")
+            config = AutoConfig.from_pretrained(
+                model_id, trust_remote_code=True, attn_implementation="sdpa"
+            )
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                config=config,
+                trust_remote_code=True,
+                torch_dtype=torch_dtype,
+                device_map=device,
+                attn_implementation="sdpa",
+            ).eval()
+            data = dict(model=model)
+        else:
+            print("-- random model")
+            data = get_untrained_model(model_id, second_input=second_input, verbose=1)
+            model = data["model"]
+            _config = data["configuration"]
 
     main_mod_name = model.__module__
     assert (

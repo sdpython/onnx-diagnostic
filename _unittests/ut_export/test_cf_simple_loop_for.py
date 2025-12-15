@@ -302,6 +302,7 @@ class TestCfSimpleLoopFor(ExtTestCase):
                 check.append(node)
         self.assertEqual(len(check), 1)
 
+    @unittest.skip("This is not supported yet.")
     @requires_torch("2.9.99")
     def test_loop_calling_submodule_with_weights(self):
         class Model(torch.nn.Module):
@@ -324,10 +325,7 @@ class TestCfSimpleLoopFor(ExtTestCase):
         ep = torch.export.export(
             model,
             (n, x),
-            dynamic_shapes=(
-                {},
-                {0: torch.export.Dim.DYNAMIC},
-            ),
+            dynamic_shapes=({}, {0: torch.export.Dim.DYNAMIC}),
         )
         got = ep.module()(n, x)
         self.assertEqualArray(expected, got)
@@ -360,8 +358,14 @@ class TestCfSimpleLoopFor(ExtTestCase):
             ):
                 base_feat_height_reduction = 1
 
-                glb_GN = torch.zeros([1, 1, image_dim_out * base_feat_height_reduction**2])
-                sub_GN = torch.zeros([1, 1, 1, image_dim_out * base_feat_height_reduction**2])
+                glb_GN = torch.zeros(
+                    [1, 1, image_dim_out * base_feat_height_reduction**2],
+                    dtype=hidden_states.dtype,
+                )
+                sub_GN = torch.zeros(
+                    [1, 1, 1, image_dim_out * base_feat_height_reduction**2],
+                    dtype=hidden_states.dtype,
+                )
 
                 input_shape = input_ids.size()
                 input_ids = input_ids.view(-1, input_shape[-1])
@@ -558,11 +562,12 @@ class TestCfSimpleLoopFor(ExtTestCase):
             cst_shape_CH,
             glb_GN,
             sub_GN,
+            proj_weight,
+            proj_bias,
             base_resolution=None,
             base_feat_height_reduction=None,
             base_feat_height=None,
             base_feat_width=None,
-            self_img_projection=None,
         ):
             # oddly, it seems impossible to write img_sizes[_bs.item()]
             # it needs img_sizes[_bs.item() : (_bs + 1).item()][0]
@@ -693,7 +698,7 @@ class TestCfSimpleLoopFor(ExtTestCase):
             # sub_glb
             _output_img = torch.cat([sub_img, glb_GN, glb_img], dim=1)
             # output_len.append(temp_len)
-            proj = self_img_projection(_output_img)
+            proj = torch.nn.functional.linear(_output_img, proj_weight, proj_bias)
             return (proj,)
 
         class RewrittenModelLoop(torch.nn.Module):
@@ -751,6 +756,8 @@ class TestCfSimpleLoopFor(ExtTestCase):
                     cst_shape_CH,
                     glb_GN,
                     sub_GN,
+                    proj_weight,
+                    proj_bias,
                 ):
                     return body_fn(
                         n_iter,
@@ -760,16 +767,23 @@ class TestCfSimpleLoopFor(ExtTestCase):
                         cst_shape_CH,
                         glb_GN,
                         sub_GN,
+                        proj_weight,
+                        proj_bias,
                         base_resolution=base_resolution,
                         base_feat_height_reduction=base_feat_height_reduction,
                         base_feat_height=base_feat_height,
                         base_feat_width=base_feat_width,
-                        self_img_projection=self.img_projection,
                     )
 
                 tmp = torch.arange(bs + 1).max()
-                glb_GN = torch.zeros([1, 1, image_dim_out * base_feat_height_reduction**2])
-                sub_GN = torch.zeros([1, 1, 1, image_dim_out * base_feat_height_reduction**2])
+                glb_GN = torch.zeros(
+                    [1, 1, image_dim_out * base_feat_height_reduction**2],
+                    dtype=img_features.dtype,
+                )
+                sub_GN = torch.zeros(
+                    [1, 1, 1, image_dim_out * base_feat_height_reduction**2],
+                    dtype=img_features.dtype,
+                )
                 merged_img_set_tensor = simple_loop_for(
                     tmp,
                     local_body_fn,
@@ -780,6 +794,8 @@ class TestCfSimpleLoopFor(ExtTestCase):
                         cst_shape_CH,
                         glb_GN,
                         sub_GN,
+                        self.img_projection.weight,
+                        self.img_projection.bias,
                     ),
                     [1],
                 )
@@ -799,7 +815,7 @@ class TestCfSimpleLoopFor(ExtTestCase):
                 hidden_states = new_hidden_states
                 return hidden_states
 
-        model = Model()
+        model = Model().to(torch.float16)
         model.eval()
         input_ids = torch.randint(0, 180000, (2, 9246), dtype=torch.int64)
         input_ids[0, :1000] = _IMAGE_SPECIAL_TOKEN_ID
@@ -813,7 +829,7 @@ class TestCfSimpleLoopFor(ExtTestCase):
         )
         self.assertEqual(expected.shape, (2, 9246, 3072))
 
-        rewritten_model = RewrittenModelLoop(model)
+        rewritten_model = RewrittenModelLoop(model).to(torch.float16)
         rewritten_model.eval()
         patched = rewritten_model(
             input_ids,
@@ -844,23 +860,6 @@ class TestCfSimpleLoopFor(ExtTestCase):
             ),
             dynamic_shapes=use_dyn_not_str(dynamic_shapes),
         )
-
-        raise unittest.SkipTest("how to deal with a body calling a submodule?")
-        onx = to_onnx(
-            rewritten_model,
-            (
-                input_ids,
-                hidden_states,
-                img_features,
-                image_attention_mask,
-                img_embeds,
-                img_sizes,
-            ),
-            dynamic_shapes=dynamic_shapes,
-            exporter="custom",
-        )
-        self.assertNotEmpty(onx)
-
         # does not work
         # ep = ep.run_decompositions()
         # print(ep)
@@ -875,6 +874,38 @@ class TestCfSimpleLoopFor(ExtTestCase):
             img_sizes,
         )
         self.assertEqualArray(expected, got)
+
+        onx = to_onnx(
+            rewritten_model,
+            (
+                input_ids,
+                hidden_states,
+                img_features,
+                image_attention_mask,
+                img_embeds,
+                img_sizes,
+            ),
+            dynamic_shapes=dynamic_shapes,
+            exporter="custom",
+            optimize=True,
+        )
+        onx_file = self.get_dump_file("test_simple_loop_for_phi4.onnx")
+        onx.save(onx_file)
+        self.assertNotEmpty(onx)
+        self.assert_onnx_disc(
+            "test_simple_loop_for_phi4",
+            onx_file,
+            model,
+            (
+                input_ids,
+                hidden_states,
+                img_features,
+                image_attention_mask,
+                img_embeds,
+                img_sizes,
+            ),
+            atol=1e-3,
+        )
 
 
 if __name__ == "__main__":

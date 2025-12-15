@@ -182,10 +182,12 @@ def _simple_loop_for(
     # This requires torch>=2.10.
     from torch._higher_order_ops.utils import setup_compilation_env
 
-    with setup_compilation_env() as backend:
-        # return _loop_for_op_wrapper(n_iter, body_fn, operands, concatenation_dims)
-        cpl = torch.compile(_loop_for_op_wrapper, backend=backend, fullgraph=True)
-        return cpl(n_iter, body_fn, operands, concatenation_dims)
+    with setup_compilation_env() as _backend:
+        return _loop_for_op_wrapper(n_iter, body_fn, operands, concatenation_dims)
+        # This is needed to support function body using module weights or function body
+        # defined as a class method. This is yet to be implemented.
+        # cpl = torch.compile(_loop_for_op_wrapper, backend=_backend, fullgraph=True)
+        # return cpl(n_iter, body_fn, operands, concatenation_dims)
 
 
 def trace_simple_loop_for(
@@ -296,8 +298,6 @@ class SimpleLoopForHigherOrderVariable(hop.TorchHigherOrderOperatorVariable):
                 assert i == len(args), "did not provide the right number of non-keyword args"
                 args.append(v)
 
-        # TODO: Support fake tensor dispatch for recursive
-        # ops - see torch/dispatch/_dispatcher.py
         if len(args) != 4 or kwargs:
             hop.unimplemented(
                 gb_type="simple_loop_for: improper args/kwargs",
