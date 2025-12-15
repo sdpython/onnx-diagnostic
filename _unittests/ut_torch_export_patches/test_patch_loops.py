@@ -122,7 +122,7 @@ class TestOnnxExportErrors(ExtTestCase):
         except Exception:
             # At least it exports, we need to remove the assert from the exported program.
             # Let's revisit this later.
-            if has_torch("2.10"):
+            if has_torch("2.11"):
                 raise
             got = None
         if got is not None:

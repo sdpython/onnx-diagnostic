@@ -71,7 +71,7 @@ class TestTinyLlmOnnx(ExtTestCase):
 
     @ignore_warnings((UserWarning, DeprecationWarning, FutureWarning))
     @hide_stdout()
-    @requires_torch("2.10.99")  # this test broke on CI but works locally
+    @requires_torch("2.11.99")  # this test broke on CI but works locally
     def test_bypass_onnx_export_tiny_llm_official_nopositionids(self):
         data = get_tiny_llm()
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]

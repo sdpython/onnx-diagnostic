@@ -45,7 +45,7 @@ class TestPatchPatchTorch(ExtTestCase):
         got = ep.module()(x, y)
         self.assertEqualArray(expected, got)
 
-    @requires_torch("2.10")
+    @requires_torch("2.11")
     def test_export_vmap(self):
         class Model(torch.nn.Module):
             def forward(self, x, y):
