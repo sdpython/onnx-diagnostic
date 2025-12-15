@@ -567,8 +567,7 @@ class TestPatchModule(ExtTestCase):
         class RewrittenModelLoop(torch.nn.Module):
             def forward(self, z, iv, x, y):
                 z = z.clone()
-                i = iv.item()
-                z[i, :] = ((x[i, :] - y) ** 2).sum(dim=-1)
+                z[iv, :] = ((x[iv, :] - y) ** 2).sum(dim=-1)
                 return (z, iv)
 
         inputs = (
@@ -594,15 +593,14 @@ class TestPatchModule(ExtTestCase):
             def forward(self, x, y):
                 def loop_body_1(z, iv, x, y):
                     z = z.clone()
-                    i = iv.item()
-                    z[i, :] = ((x[i, :] - y) ** 2).sum(dim=-1)
+                    z[iv, :] = ((x[iv, :] - y) ** 2).sum(dim=-1)
                     return (z, iv)
 
                 z = torch.empty((x.shape[0], y.shape[0]))
                 r = torch.ops.higher_order.scan(
                     loop_body_1,
                     [z],
-                    [torch.arange(x.shape[0], dtype=torch.int64).reshape((-1, 1))],
+                    [torch.arange(x.shape[0], dtype=torch.int64).unsqueeze(1)],
                     [x, y],
                 )
                 return r[0]
@@ -618,7 +616,8 @@ class TestPatchModule(ExtTestCase):
         if not has_torch("2.10"):
             raise unittest.SkipTest("skipped export, torch must be >= 2.10")
 
-        torch.export.export(RewrittenModel2(), (x, y), dynamic_shapes=ds, strict=False)
+        ep = torch.export.export(RewrittenModel2(), (x, y), dynamic_shapes=ds, strict=False)
+        self.assertEqualAny(expected, ep.module()(x, y))
         ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds, strict=False)
         self.assertEqualAny(expected, ep.module()(x, y))
 
