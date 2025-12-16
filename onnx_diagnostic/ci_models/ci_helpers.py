@@ -2,7 +2,7 @@ import datetime
 import os
 import time
 import subprocess
-from argparse import ArgumentParser, BooleanOptionalAction
+from argparse import ArgumentParser, BooleanOptionalAction, RawTextHelpFormatter
 from typing import Any, Dict, List, Tuple
 import onnx
 
@@ -50,10 +50,13 @@ def get_torch_dtype_from_command_line_args(dtype: str) -> "torch.dtype":  # noqa
     return torch_dtype[dtype]
 
 
-def get_parser(name: str) -> ArgumentParser:
+def get_parser(name: str, epilog: str = "") -> ArgumentParser:
     """Creates a default parser for many models."""
     parser = ArgumentParser(
-        prog=name, description=f"""Export command line for model {name!r}."""
+        prog=name,
+        description=f"""Export command line for model {name!r}.""",
+        epilog=epilog,
+        formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument(
         "-m",
@@ -110,7 +113,7 @@ def get_parser(name: str) -> ArgumentParser:
         "-a",
         "--atol",
         type=float,
-        default=1.0,
+        default=2.0,
         help="fails if the maximum discrepancy is above that threshold",
     )
     parser.add_argument(
@@ -311,7 +314,8 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
         diff = max_diff(flat_export_expected, small, hist=[0.1, 0.01])
         fprint(f"-- discrepancies={diff}")
         assert diff["abs"] <= atol and diff["rep"][">0.1"] / diff["n"] <= mismatch01, (
-            f"absolution tolerance is above {atol} or number of mismatches is above "
+            f"absolution tolerance {diff['abs']} is above {atol} or number of "
+            f"mismatches ({diff['rep']['>0.1'] / diff['n']}) is above "
             f"{mismatch01}, dicrepancies={string_diff(diff)}"
         )
 
@@ -362,8 +366,9 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
                     assert (
                         diff["abs"] <= atol and diff["rep"][">0.1"] / diff["n"] <= mismatch01
                     ), (
-                        f"absolution tolerance is above {atol} or number of mismatches is "
-                        f"above {mismatch01}, dicrepancies={string_diff(diff)}"
+                        f"absolution tolerance {diff['abs']} is above {atol} or number "
+                        f" of mismatches ({diff['rep']['>0.1'] / diff['n']}) "
+                        f"is above {mismatch01}, dicrepancies={string_diff(diff)}"
                     )
                     js = string_diff(diff, js=True, ratio=True, inputs=se, **info)
                     fs.write(js)

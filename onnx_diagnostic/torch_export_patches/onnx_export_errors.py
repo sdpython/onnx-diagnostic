@@ -871,8 +871,9 @@ def torch_export_patches(
         this is done by function :func:`transform_method
         <onnx_diagnostic.torch_export_patches.patch_module.transform_method>`,
         its documentation provides possible values
-    :param dump_rewriting: dumps rewriting information in file beginning with that prefix
-    :param patch_details: if specified, this class is used to stored every rewritten done.
+    :param dump_rewriting: dumps rewriting information in file beginning with that prefix,
+        this only applied on the automated rewritings
+    :param patch_details: if specified, this class is used to stored every applied rewriting.
     :param verbose: to show which patches is applied
     :param profile: starts profiling whatever is called inside the context manager,
         output the profiling into a text file

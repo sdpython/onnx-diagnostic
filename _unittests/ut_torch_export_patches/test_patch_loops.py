@@ -65,18 +65,18 @@ class TestOnnxExportErrors(ExtTestCase):
         ):
 
             def body(p_attn_mask, position_ids_row):
-                h_len = torch.tensor(1, dtype=p_attn_mask.dtype) / p_attn_mask[:, 0].sum()
-                w_len = torch.tensor(1, dtype=p_attn_mask.dtype) / p_attn_mask[0].sum()
+                h_len = torch.tensor(1, dtype=boundaries.dtype) / p_attn_mask[:, 0].sum()
+                w_len = torch.tensor(1, dtype=boundaries.dtype) / p_attn_mask[0].sum()
                 torch._check(h_len.item() > 0)
                 fractional_coords_h = torch.arange(
-                    torch.tensor(0.0, dtype=p_attn_mask.dtype),
-                    torch.tensor(1 - 1e-6, dtype=p_attn_mask.dtype),
+                    torch.tensor(0.0, dtype=boundaries.dtype),
+                    torch.tensor(1 - 1e-6, dtype=boundaries.dtype),
                     h_len,
                 )
                 torch._check(w_len.item() > 0)
                 fractional_coords_w = torch.arange(
-                    torch.tensor(0.0, dtype=p_attn_mask.dtype),
-                    torch.tensor(1 - 1e-6, dtype=p_attn_mask.dtype),
+                    torch.tensor(0.0, dtype=boundaries.dtype),
+                    torch.tensor(1 - 1e-6, dtype=boundaries.dtype),
                     w_len,
                 )
 
