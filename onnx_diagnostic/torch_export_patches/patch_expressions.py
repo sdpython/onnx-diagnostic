@@ -101,7 +101,10 @@ def patched_selector(fct: Callable, patched_fct: Callable) -> Callable:
 
 
 def patched_float_arange(start, end, step):
-    """Patched arange when start, end, step are floats."""
+    """
+    Patched arange when start, end, step are floats.
+    This patch should not be needed after 2.10.
+    """
     if is_torchdynamo_exporting():
         return torch.ops.patched.float_arange(start, end, step)
     else:

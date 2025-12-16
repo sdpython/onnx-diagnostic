@@ -235,6 +235,7 @@ def _patch_torch(
         patched__broadcast_in_dim_meta,
         patched__broadcast_in_dim_meta_level_2,
         patched__maybe_broadcast,
+        patched_DynamicDimConstraintPrinter,
         patched_ShapeEnv,
     )
 
@@ -258,6 +259,14 @@ def _patch_torch(
         print(f"[torch_export_patches] torch.__version__={torch.__version__!r}")
         print(f"[torch_export_patches] stop_if_static={stop_if_static!r}")
         print("[torch_export_patches] patch pytorch")
+
+    # torch.tx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol
+    f__print_symbol = (
+        torch.fx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol
+    )
+    torch.fx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol = (
+        patched_DynamicDimConstraintPrinter._print_Symbol
+    )
 
     # torch.vmap
     f_vmap = torch.vmap
@@ -392,6 +401,7 @@ def _patch_torch(
         f_shape_env__log_guard,
         f_shape_env__set_replacement,
         f_vmap,
+        f__print_symbol,
     )
 
 
@@ -416,6 +426,7 @@ def _unpatch_torch(
     f_shape_env__log_guard: Optional[Callable],
     f_shape_env__set_replacement: Optional[Callable],
     f_vmap: Optional[Callable],
+    f__print_symbol: Optional[Callable],
 ):
     import torch
     import torch.jit
@@ -423,6 +434,10 @@ def _unpatch_torch(
     from torch.fx.experimental.symbolic_shapes import ShapeEnv
 
     # this should disappear when torch.jit is removed
+    assert f__print_symbol
+    torch.fx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol = (
+        f__print_symbol
+    )
     torch.vmap = f_vmap
     torch.jit.isinstance = f_jit_isinstance
     torch._dynamo.mark_static_address = f_mark_static_address
@@ -992,6 +1007,7 @@ def torch_export_patches(
                 f_shape_env__log_guard,
                 f_shape_env__set_replacement,
                 f_vmap,
+                f__print_Symbol,
             ) = _patch_torch(
                 verbose, patch_details, patch_torch, catch_constraints, stop_if_static
             )
@@ -1067,6 +1083,7 @@ def torch_export_patches(
                     f_shape_env__log_guard,
                     f_shape_env__set_replacement,
                     f_vmap,
+                    f__print_Symbol,
                 )
 
             if patch_transformers:
