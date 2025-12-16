@@ -279,6 +279,11 @@ simple_loop_for_op.fallthrough(torch._C.DispatchKey.AutogradCUDA)
 
 
 class SimpleLoopForHigherOrderVariable(hop.TorchHigherOrderOperatorVariable):
+    """
+    Replicates the same pattern found for other higher order operators.
+    This enables recursive compilation and the use of modules inside a function.
+    """
+
     _HOP_NAME = "simple_loop_for"
     _ALLOW_FALLBACK_TO_EAGER = False
     supports_input_mutation = False
@@ -290,7 +295,7 @@ class SimpleLoopForHigherOrderVariable(hop.TorchHigherOrderOperatorVariable):
         args: list[hop.VariableTracker],
         kwargs: dict[str, hop.VariableTracker],
     ) -> hop.VariableTracker:
-
+        """Main function."""
         args, kwargs = hop.LazyVariableTracker.realize_all((args, kwargs))
 
         for i, k in enumerate(["n_iter", "body_fn", "operands", "concatenated_dims"]):

@@ -55,7 +55,7 @@ module = ["onnx_diagnostic.export.shape_helper"]
 disable_error_code = ["name-defined"]
 
 [[tool.mypy.overrides]]
-module = ["onnx_diagnostic.ci_models.*"]
+module = ["onnx_diagnostic.ci_models.export_phi4_mm", "onnx_diagnostic.ci_models.export_qwen25_vl"]
 disable_error_code = ["has-type", "import-untyped"]
 
 [[tool.mypy.overrides]]
