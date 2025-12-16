@@ -55,6 +55,10 @@ module = ["onnx_diagnostic.export.shape_helper"]
 disable_error_code = ["name-defined"]
 
 [[tool.mypy.overrides]]
+module = ["onnx_diagnostic.ci_models.export_phi4_mm", "onnx_diagnostic.ci_models.export_qwen25_vl"]
+disable_error_code = ["has-type", "import-untyped"]
+
+[[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.args_helper"]
 disable_error_code = ["arg-type", "call-overload", "index"]
 
@@ -178,6 +182,7 @@ select = [
 "_doc/technical/plot_*.py" = ["E402", "B018", "PIE808", "RUF015", "SIM105", "SIM117"]
 "_unittests/*/test*.py" = ["B008", "B904", "PIE808", "SIM117", "SIM105", "UP008"]
 "_unittests/ut_helpers/test_dot_helper.py" = ["E501"]
+"onnx_diagnostic/ci_models/*.py" = ["C419", "SIM118"]
 "onnx_diagnostic/export/__init__.py" = ["F401"]
 "onnx_diagnostic/helpers/__init__.py" = ["F401"]
 "onnx_diagnostic/reference/__init__.py" = ["F401"]

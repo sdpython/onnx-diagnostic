@@ -11,6 +11,7 @@ from torch._higher_order_ops.utils import (
     unique_graph_id,
     validate_subgraph_args_types,
 )
+import torch._dynamo.variables.higher_order_ops as hop
 from torch.fx.experimental.proxy_tensor import ProxyTorchDispatchMode, track_tensor_tree
 from torch.utils._python_dispatch import _get_current_dispatch_mode
 
@@ -97,14 +98,18 @@ def _simple_loop_for_fn(
                 f"Unexpected number of results {len(r)} for function {body_fn}, "
                 f"expected {len(res[-1])}"
             )
+            assert all(isinstance(t, torch.Tensor) for t in r), (
+                f"Unexpected type {[type(_) for _ in r]} for returned by function {body_fn}, "
+                f"it must be a tuple of Tensor or a Tensor."
+            )
             res.append(r)
         else:
             assert isinstance(r, torch.Tensor), (
-                f"Unexpected type {r} for function {body_fn}, "
-                f"it must be a tuple or a Tensor."
+                f"Unexpected type {type(r)} coming from function {body_fn}, "
+                f"it must be a tuple of Tensor or a Tensor."
             )
             assert not res or len(res[-1]) == 1, (
-                f"Unexpected number of results {len(r)} for function {body_fn}, "
+                f"Unexpected number of results {len(r)} coming from function {body_fn}, "
                 f"expected {len(res[-1])}"
             )
             res.append((r,))
@@ -126,8 +131,6 @@ def _simple_loop_for_fn(
     )
 
 
-# from torch._functorch.utils import exposed_in
-# @exposed_in("torch")
 def _simple_loop_for(
     n_iter: Union[int, torch.Tensor],
     body_fn: Callable,
@@ -159,7 +162,7 @@ def _simple_loop_for(
 
     if torch.compiler.is_dynamo_compiling():
         return simple_loop_for_op(
-            n_iter, body_fn, (n_iter, *operands), concatenation_dims=concatenation_dims
+            n_iter, body_fn, operands, concatenation_dims=concatenation_dims
         )
 
     if isinstance(n_iter, (bool, int, float)):
@@ -181,8 +184,10 @@ def _simple_loop_for(
 
     with setup_compilation_env() as _backend:
         return _loop_for_op_wrapper(n_iter, body_fn, operands, concatenation_dims)
-        # return torch.compile(_loop_for_op_wrapper, backend=backend, fullgraph=True)(
-        #    n_iter, body_fn, operands, concatenation_dims)
+        # This is needed to support function body using module weights or function body
+        # defined as a class method. This is yet to be implemented.
+        # cpl = torch.compile(_loop_for_op_wrapper, backend=_backend, fullgraph=True)
+        # return cpl(n_iter, body_fn, operands, concatenation_dims)
 
 
 def trace_simple_loop_for(
@@ -236,9 +241,15 @@ def loop_for_op_dense(n_iter, body_fn, operands, concatenation_dims=None):
     )
     mode = _get_current_dispatch_mode()
     assert mode is None, "Mode should never be enabled for CPU/CUDA key"
-    return _simple_loop_for_fn(
-        n_iter, body_fn, operands, concatenation_dims=concatenation_dims
+    is_fake = isinstance(n_iter, torch._subclasses.fake_tensor.FakeTensor)
+    res = _simple_loop_for_fn(n_iter, body_fn, operands, concatenation_dims=concatenation_dims)
+    assert is_fake or not any(
+        isinstance(r, torch._subclasses.fake_tensor.FakeTensor) for r in res
+    ), (
+        f"One result is a fake tensor but the inputs were not, type(n_iter)={type(n_iter)}, "
+        f"operands: {[type(_) for _ in operands]}, res: {[type(_) for _ in res]}"
     )
+    return res
 
 
 @simple_loop_for_op.py_impl(ProxyTorchDispatchMode)
@@ -267,6 +278,180 @@ simple_loop_for_op.fallthrough(torch._C.DispatchKey.AutogradCPU)
 simple_loop_for_op.fallthrough(torch._C.DispatchKey.AutogradCUDA)
 
 
+class SimpleLoopForHigherOrderVariable(hop.TorchHigherOrderOperatorVariable):
+    """
+    Replicates the same pattern found for other higher order operators.
+    This enables recursive compilation and the use of modules inside a function.
+    """
+
+    _HOP_NAME = "simple_loop_for"
+    _ALLOW_FALLBACK_TO_EAGER = False
+    supports_input_mutation = False
+    supports_aliasing = False
+
+    def _call_function(
+        self,
+        tx: torch._dynamo.symbolic_convert.InstructionTranslator,
+        args: list[hop.VariableTracker],
+        kwargs: dict[str, hop.VariableTracker],
+    ) -> hop.VariableTracker:
+        """Main function."""
+        args, kwargs = hop.LazyVariableTracker.realize_all((args, kwargs))
+
+        for i, k in enumerate(["n_iter", "body_fn", "operands", "concatenated_dims"]):
+            if v := kwargs.pop(k, None):
+                assert i == len(args), "did not provide the right number of non-keyword args"
+                args.append(v)
+
+        if len(args) != 4 or kwargs:
+            hop.unimplemented(
+                gb_type="simple_loop_for: improper args/kwargs",
+                context=f"args: {args}, kwargs: {kwargs}",
+                explanation=f"torch.cond expects 4 positional arguments (got {len(args)}) "
+                f"and no keyword arguments (got {len(kwargs)})",
+                hints=[*hop.graph_break_hints.USER_ERROR],
+            )
+
+        # Specialize into one of the branches since pred is constant
+        n_iter, body_fn, operands, _concatenated_dims = args
+        assert type(n_iter) is not hop.ConstantVariable, (
+            f"n_iter is a {type(n_iter)}. When used simple_loop_for, "
+            f"it unrolls the loop. A SymInt should be used."
+        )
+
+        # predicate
+        if type(n_iter.realize()) not in (
+            hop.ConstantVariable,
+            hop.TensorVariable,
+            hop.SymNodeVariable,
+        ):
+            hop.unimplemented(
+                gb_type="simple_loop_for: improper predicate",
+                context=str(n_iter),
+                explanation=(
+                    f"Expected `n_iter` to be an int or a integer "
+                    f"tensor with a single item "
+                    f"but got {str(type(n_iter))} with original python type "
+                    f"{str(n_iter.python_type())}."
+                ),
+                hints=[*hop.graph_break_hints.USER_ERROR],
+            )
+
+        # operands
+        if not isinstance(operands, (hop.ListVariable, hop.TupleVariable)):
+            hop.unimplemented(
+                gb_type="simple_loop_for: improper operands",
+                context=str(operands),
+                explanation="Expected `operands` to be a list/tuple "
+                f"but got {operands.python_type()}.",
+                hints=[*hop.graph_break_hints.USER_ERROR],
+            )
+
+        operands_seq = operands.unpack_var_sequence(tx)
+        if not hop.only_consist_of(
+            operands, (hop.TensorVariable, hop.ConstantVariable, hop.SymNodeVariable)
+        ):
+            hop.unimplemented(
+                gb_type="simple_loop_for: improper operands contents",
+                context=str(operands),
+                explanation=(
+                    "Expected `operands` to be a list/tuple of pytrees "
+                    "that only consists of tensor leaves."
+                ),
+                hints=[*hop.graph_break_hints.USER_ERROR],
+            )
+
+        # branches
+        hop._check_supported_callable_arg(tx, body_fn, "body_fn")
+
+        def speculate_body():
+            (
+                (ret_val, ret_spec),
+                ret_graph,
+                ret_lifted_freevars,
+            ) = hop.speculate_subgraph(
+                tx,
+                args[1],
+                (args[0], *operands_seq),
+                {},
+                self._HOP_NAME,
+                source_target=self.value,
+                should_flatten_outputs=True,
+                # TODO - removing consts from control flow ops need more work
+                remove_consts_from_outputs=False,
+                supports_input_mutation=self.supports_input_mutation,
+                supports_aliasing=self.supports_aliasing,
+            )
+
+            # need to ensure we increase epoch so we don't memoize unbacked bindings
+            # across different subgraphs which can interfere with runtime assertion
+            # generation.
+            tx.fake_mode.epoch += 1
+
+            if not hop.only_consist_of(ret_val, (hop.TensorVariable, hop.ConstantVariable)):
+                hop.unimplemented(
+                    gb_type="simple_loop_for: unsupported branch return type",
+                    context=str(ret_val),
+                    explanation=(
+                        "Expected branches to return a possibly nested "
+                        "pytree of tensors or constant ints."
+                    ),
+                    hints=[*hop.graph_break_hints.USER_ERROR],
+                )
+            for ret in ret_val.unpack_var_sequence(tx):
+                if ret.is_python_constant() and not isinstance(ret.as_python_constant(), int):
+                    hop.unimplemented(
+                        gb_type=(
+                            "simple_loop_for: unsupported branch return type "
+                            "(constant non-int)"
+                        ),
+                        context=str(ret_val),
+                        explanation="Constants returned from branches must be ints.",
+                        hints=[*hop.graph_break_hints.USER_ERROR],
+                    )
+            return ret_val, ret_spec, ret_graph, ret_lifted_freevars
+
+        body_r, body_spec, body_graph, body_lifted_freevars = speculate_body()
+        body_nn_modules = dict(tx.output.nn_modules)
+
+        same_spec = body_spec.treespec.as_python_constant()
+        if same_spec is not NotImplemented and not same_spec:
+            hop.unimplemented(
+                gb_type="simple_loop_for: differing branch outputs",
+                context=(
+                    f"body_spec: {body_spec.treespec}, false_spec: "
+                    f"{body_spec.treespec}, same_spec: {same_spec}"
+                ),
+                explanation="Expected branches to return the same pytree structure.",
+                hints=[*hop.graph_break_hints.USER_ERROR],
+            )
+
+        body_name = tx.output.install_subgraph(
+            "loop_body", torch.fx.GraphModule(body_nn_modules, body_graph)
+        )
+        body_node = hop.make_attr(tx, body_name)
+        p_args = (
+            n_iter.as_proxy(),
+            body_node,
+            # We pick true_shared but it shouldn't matter
+            operands.as_proxy() + tuple(body_lifted_freevars.keys()),
+        )
+
+        return hop._call_function_and_unflatten_output(
+            tx,
+            simple_loop_for,
+            p_args,
+            {},
+            None,
+            body_spec,
+            body_r,
+        )
+
+
+hop._hop_name_to_variable_class["simple_loop_for"] = SimpleLoopForHigherOrderVariable
+
+
+# @torch._functorch.utils.exposed_in("torch")
 def simple_loop_for(
     n_iter: Union[int, torch.Tensor],
     body_fn: Callable,

@@ -154,6 +154,7 @@ def to_onnx(
             options=options,
             inline=inline,
             dispatcher=main_dispatcher,
+            optimize=optimize,
             **(exporter_kwargs or {}),
         )
 

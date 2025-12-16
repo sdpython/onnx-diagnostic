@@ -4,7 +4,7 @@ from onnx_diagnostic.ext_test_case import ExtTestCase
 from onnx_diagnostic.reference import ExtendedReferenceEvaluator
 
 
-class TestDynamicShapes(ExtTestCase):
+class TestSimpleCases(ExtTestCase):
     def test_getitem_index_put1(self):
         class Model(torch.nn.Module):
             def forward(self, x, value):
@@ -27,6 +27,61 @@ class TestDynamicShapes(ExtTestCase):
         )
         got = sess.run(None, feeds)[0]
         self.assertEqualArray(expected, got, atol=1e-5)
+
+    def test_cond_calling_submodule_with_weights1(self):
+        class Model(torch.nn.Module):
+            def __init__(self, in_features, out_features):
+                super().__init__()
+                self.linear1 = torch.nn.Linear(in_features, out_features)
+                self.linear2 = torch.nn.Linear(in_features, out_features)
+
+            def forward(self, x):
+                return torch.cond(
+                    x.sum().item() > 0,
+                    lambda x: self.linear1(x),
+                    lambda x: self.linear2(x),
+                    [x],
+                )
+
+        # Example usage
+        model = Model(in_features=4, out_features=2)
+        x = torch.randn(3, 4)
+        expected = model(x)
+        ep = torch.export.export(model, (x,), dynamic_shapes=({0: torch.export.Dim.DYNAMIC},))
+        got = ep.module()(x)
+        self.assertEqualArray(expected, got)
+        self.assertEqualArray(model(-x), ep.module()(-x))
+
+    def test_cond_calling_submodule_with_weights2(self):
+
+        def branch1(x, fn):
+            return fn(x)
+
+        def branch2(x, fn):
+            return fn(x)
+
+        class Model(torch.nn.Module):
+            def __init__(self, in_features, out_features):
+                super().__init__()
+                self.linear1 = torch.nn.Linear(in_features, out_features)
+                self.linear2 = torch.nn.Linear(in_features, out_features)
+
+            def forward(self, x):
+                return torch.cond(
+                    x.sum().item() > 0,
+                    lambda x: branch1(x, fn=self.linear1),
+                    lambda x: branch2(x, fn=self.linear2),
+                    [x],
+                )
+
+        # Example usage
+        model = Model(in_features=4, out_features=2)
+        x = torch.randn(3, 4)
+        expected = model(x)
+        ep = torch.export.export(model, (x,), dynamic_shapes=({0: torch.export.Dim.DYNAMIC},))
+        got = ep.module()(x)
+        self.assertEqualArray(expected, got)
+        self.assertEqualArray(model(-x), ep.module()(-x))
 
 
 if __name__ == "__main__":

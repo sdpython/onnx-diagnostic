@@ -596,33 +596,41 @@ class RewriteControlFlow(ast.NodeTransformer):
                     elts=[
                         *[
                             ast.Call(
-                                ast.Attribute(
-                                    value=ast.Name(id="torch", ctx=ast.Load()),
-                                    attr="arange",
-                                    ctx=ast.Load(),
-                                ),
-                                args=[
-                                    ast.Subscript(
-                                        value=ast.Attribute(
-                                            value=ast.Name(id=v, ctx=ast.Load()),
-                                            attr="shape",
+                                func=ast.Attribute(
+                                    value=ast.Call(
+                                        ast.Attribute(
+                                            value=ast.Name(id="torch", ctx=ast.Load()),
+                                            attr="arange",
                                             ctx=ast.Load(),
                                         ),
-                                        slice=ast.Constant(value=0, ctx=ast.Load()),
+                                        args=[
+                                            ast.Subscript(
+                                                value=ast.Attribute(
+                                                    value=ast.Name(id=v, ctx=ast.Load()),
+                                                    attr="shape",
+                                                    ctx=ast.Load(),
+                                                ),
+                                                slice=ast.Constant(value=0, ctx=ast.Load()),
+                                                ctx=ast.Load(),
+                                            ),
+                                        ],
+                                        keywords=[
+                                            ast.keyword(
+                                                arg="dtype",
+                                                value=ast.Attribute(
+                                                    value=ast.Name(id="torch", ctx=ast.Load()),
+                                                    attr="int64",
+                                                    ctx=ast.Load(),
+                                                ),
+                                            )
+                                        ],
                                         ctx=ast.Load(),
                                     ),
-                                ],
-                                keywords=[
-                                    ast.keyword(
-                                        arg="dtype",
-                                        value=ast.Attribute(
-                                            value=ast.Name(id="torch", ctx=ast.Load()),
-                                            attr="int64",
-                                            ctx=ast.Load(),
-                                        ),
-                                    )
-                                ],
-                                ctx=ast.Load(),
+                                    attr="unsqueeze",
+                                    ctx=ast.Load(),
+                                ),
+                                args=[ast.Constant(value=1)],
+                                keywords=[],
                             )
                             for v in scan_shape_vars
                         ],

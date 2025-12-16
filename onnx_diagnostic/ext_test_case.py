@@ -1267,6 +1267,7 @@ class ExtTestCase(unittest.TestCase):
             :class:`onnx_diagnostic.helpers.ort_session.InferenceSessionForTorch`
         """
         from .helpers import string_type, string_diff, max_diff
+        from .helpers.torch_helper import torch_deepcopy
         from .helpers.rt_helper import make_feeds
         from .helpers.ort_session import InferenceSessionForTorch
 
@@ -1283,6 +1284,12 @@ class ExtTestCase(unittest.TestCase):
                 model_file = proto
                 name = proto
                 proto = onnx.load(name)
+            elif hasattr(proto, "save"):
+                name = f"{test_name}.onnx"
+                proto.save(name)
+                proto = onnx.load(name)
+            elif hasattr(proto, "model_proto"):
+                proto = proto.model_proto
             elif not self.unit_test_going():
                 assert isinstance(
                     proto, onnx.ModelProto
@@ -1341,9 +1348,9 @@ class ExtTestCase(unittest.TestCase):
             if copy_inputs:
                 expected = [
                     (
-                        model(*copy.deepcopy(inp))
+                        model(*torch_deepcopy(inp))
                         if isinstance(inp, tuple)
-                        else model(**copy.deepcopy(inp))
+                        else model(**torch_deepcopy(inp))
                     )
                     for inp in inputs
                 ]
