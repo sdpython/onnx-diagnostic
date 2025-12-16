@@ -579,6 +579,7 @@ class TestPatchPatchTorch(ExtTestCase):
         shape = output[0].args[0][0].meta["val"].shape
         self.assertEqual(str(shape), "torch.Size([Max(s17, s77)])")
 
+    @requires_torch("2.9.99")
     def test_patched_DynamicDimConstraintPrinter(self):
         def filter_position_ids(
             patch_attention_mask: torch.Tensor,

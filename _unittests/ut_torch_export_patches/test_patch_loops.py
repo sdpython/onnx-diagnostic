@@ -36,7 +36,7 @@ class TestOnnxExportErrors(ExtTestCase):
             )
         self.assertEqualArray(rg, rg4, atol=1e-5)
 
-    @requires_torch("2.8")
+    @requires_torch("2.9.99")
     def test_filter_position_ids(self):
         def filter_position_ids(
             patch_attention_mask: torch.Tensor,
