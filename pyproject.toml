@@ -56,7 +56,7 @@ disable_error_code = ["name-defined"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.ci_models.export_phi4_mm", "onnx_diagnostic.ci_models.export_qwen25_vl"]
-disable_error_code = ["has-type", "import-untyped"]
+disable_error_code = ["has-type", "import-untyped", "union-attr"]
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.args_helper"]

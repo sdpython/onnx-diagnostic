@@ -64,6 +64,7 @@ def get_untrained_model_with_inputs(
     use_only_preinstalled: bool = False,
     config_reduction: Optional[Callable[[Any, str], Dict]] = None,
     submodule: Optional[str] = None,
+    skip_inputs: bool = False,
 ) -> Dict[str, Any]:
     """
     Gets a non initialized model similar to the original model
@@ -93,6 +94,7 @@ def get_untrained_model_with_inputs(
         this function takes a configuration and a task (string)
         as arguments
     :param submodule: use a submodule instead of the main model
+    :param skip_inputs: do not generate the inputs
     :return: dictionary with a model, inputs, dynamic shapes, and the configuration,
         some necessary rewriting as well
 
@@ -349,23 +351,27 @@ def get_untrained_model_with_inputs(
                     )
 
     # input kwargs
-    seed = int(os.environ.get("SEED", "17")) + 1
-    torch.manual_seed(seed)
-    kwargs, fct = random_input_kwargs(config, task)  # type: ignore[arg-type]
-    if verbose:
-        print(f"[get_untrained_model_with_inputs] use fct={fct}")
-        if os.environ.get("PRINT_CONFIG") in (1, "1"):
-            print(f"-- input kwargs for task {task!r}")
-            pprint.pprint(kwargs)
-    if inputs_kwargs:
-        kwargs.update(inputs_kwargs)
+    if not skip_inputs:
+        seed = int(os.environ.get("SEED", "17")) + 1
+        torch.manual_seed(seed)
+        kwargs, fct = random_input_kwargs(config, task)  # type: ignore[arg-type]
+        if verbose:
+            print(f"[get_untrained_model_with_inputs] use fct={fct}")
+            if os.environ.get("PRINT_CONFIG") in (1, "1"):
+                print(f"-- input kwargs for task {task!r}")
+                pprint.pprint(kwargs)
+        if inputs_kwargs:
+            kwargs.update(inputs_kwargs)
 
-    # This line is important. Some models may produce different
-    # outputs even with the same inputs in training mode.
-    model.eval()  # type: ignore[union-attr]
-    res = fct(model, config, add_second_input=add_second_input, **kwargs)
+        # This line is important. Some models may produce different
+        # outputs even with the same inputs in training mode.
+        model.eval()  # type: ignore[union-attr]
+        res = fct(model, config, add_second_input=add_second_input, **kwargs)
 
-    res["input_kwargs"] = kwargs
+        res["input_kwargs"] = kwargs
+    else:
+        res = {}
+
     res["model_kwargs"] = mkwargs
     if diff_config is not None:
         res["dump_info"] = dict(config_diff=diff_config)

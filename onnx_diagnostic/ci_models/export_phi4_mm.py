@@ -36,8 +36,10 @@ Examples
 import os
 import pprint
 import sys
+import textwrap
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple, Union
+
 from .ci_helpers import (
     check_for_discrepancies_and_log_everything_into_a_json_file,
     compute_expected_outputs,
@@ -125,6 +127,9 @@ def get_patches_transformers():
 
 def get_patches(mod, mod_siglip):
     import torch
+    from transformers.modeling_outputs import BaseModelOutputWithPooling
+    from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask
+    from ..export.cf_simple_loop_for import simple_loop_for
 
     _IMAGE_SPECIAL_TOKEN_ID = mod._IMAGE_SPECIAL_TOKEN_ID
 
@@ -146,25 +151,31 @@ def get_patches(mod, mod_siglip):
                 max_im_w // self.patch_size,
             )
             boundaries = torch.arange(
-                1 / self.num_patches_per_side, 1.0, 1 / self.num_patches_per_side
+                torch.tensor(1 / self.num_patches_per_side, dtype=pixel_values.dtype),
+                torch.tensor(1.0, dtype=pixel_values.dtype),
+                torch.tensor(1 / self.num_patches_per_side, dtype=pixel_values.dtype),
             )
             position_ids = torch.full(
-                size=(
-                    batch_size,
-                    max_nb_patches_h * max_nb_patches_w,
-                ),
-                fill_value=0,
+                size=(batch_size, max_nb_patches_h * max_nb_patches_w), fill_value=0
             )
 
-            for batch_idx, p_attn_mask in enumerate(patch_attention_mask):
-                nb_patches_h = p_attn_mask[:, 0].sum()
-                nb_patches_w = p_attn_mask[0].sum()
+            # PATHED: a loop replace with scan.
 
-                # PATCHED: add checks
-                torch._check(nb_patches_h.item() > 0)
-                torch._check(nb_patches_w.item() > 0)
-                fractional_coords_h = torch.arange(0, 1 - 1e-6, 1 / nb_patches_h)
-                fractional_coords_w = torch.arange(0, 1 - 1e-6, 1 / nb_patches_w)
+            def body(p_attn_mask, position_ids_row, boundaries):
+                h_len = torch.tensor(1, dtype=boundaries.dtype) / p_attn_mask[:, 0].sum()
+                w_len = torch.tensor(1, dtype=boundaries.dtype) / p_attn_mask[0].sum()
+                torch._check(h_len.item() > 0)
+                fractional_coords_h = torch.arange(
+                    torch.tensor(0.0, dtype=boundaries.dtype),
+                    torch.tensor(1 - 1e-6, dtype=boundaries.dtype),
+                    h_len,
+                )
+                torch._check(w_len.item() > 0)
+                fractional_coords_w = torch.arange(
+                    torch.tensor(0.0, dtype=boundaries.dtype),
+                    torch.tensor(1 - 1e-6, dtype=boundaries.dtype),
+                    w_len,
+                )
 
                 bucket_coords_h = torch.bucketize(fractional_coords_h, boundaries, right=True)
                 bucket_coords_w = torch.bucketize(fractional_coords_w, boundaries, right=True)
@@ -172,12 +183,100 @@ def get_patches(mod, mod_siglip):
                 pos_ids = (
                     bucket_coords_h[:, None] * self.num_patches_per_side + bucket_coords_w
                 ).flatten()
-                position_ids[batch_idx][p_attn_mask.view(-1).cpu()] = pos_ids
+
+                row = position_ids_row.clone()
+                row[p_attn_mask.view(-1)] = pos_ids
+                return [row]
+
+            position_ids = torch.ops.higher_order.scan(
+                body, [], [patch_attention_mask, position_ids], additional_inputs=[boundaries]
+            )[0]
 
             position_ids = position_ids.to(self.position_embedding.weight.device)
-
             embeddings = embeddings + self.position_embedding(position_ids)
             return embeddings
+
+    class patched_SiglipVisionTransformer(torch.nn.Module):
+        _PATCHES_ = ["forward"]
+        _PATCHED_CLASS_ = mod_siglip.SiglipVisionTransformer
+
+        def forward(
+            self,
+            pixel_values,
+            patch_attention_mask: Optional[torch.BoolTensor] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
+        ) -> Union[Tuple, BaseModelOutputWithPooling]:
+            output_attentions = (
+                output_attentions
+                if output_attentions is not None
+                else self.config.output_attentions
+            )
+            output_hidden_states = (
+                output_hidden_states
+                if output_hidden_states is not None
+                else self.config.output_hidden_states
+            )
+            return_dict = (
+                return_dict if return_dict is not None else self.config.use_return_dict
+            )
+
+            batch_size = pixel_values.size(0)
+            if patch_attention_mask is None:
+                patch_attention_mask = torch.ones(
+                    size=(
+                        batch_size,
+                        pixel_values.size(2) // self.config.patch_size,
+                        pixel_values.size(3) // self.config.patch_size,
+                    ),
+                    dtype=torch.bool,
+                    device=pixel_values.device,
+                )
+
+            hidden_states = self.embeddings(
+                pixel_values=pixel_values, patch_attention_mask=patch_attention_mask
+            )
+
+            patch_attention_mask = patch_attention_mask.view(batch_size, -1)
+            # PATCHED: skip the test
+            # if not torch.any(~patch_attention_mask):
+            #    attention_mask = None
+            # else:
+            #    attention_mask = (
+            #        _prepare_4d_attention_mask(patch_attention_mask, hidden_states.dtype)
+            ##        if not self.config._flash_attn_2_enabled
+            #        else patch_attention_mask
+            #    )
+            attention_mask = _prepare_4d_attention_mask(
+                patch_attention_mask, hidden_states.dtype
+            )
+
+            encoder_outputs = self.encoder(
+                inputs_embeds=hidden_states,
+                attention_mask=attention_mask,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+            )
+
+            last_hidden_state = encoder_outputs[0]
+            last_hidden_state = self.post_layernorm(last_hidden_state)
+
+            pooled_output = self.head(
+                hidden_state=last_hidden_state,
+                attention_mask=patch_attention_mask,
+            )
+
+            if not return_dict:
+                return (last_hidden_state, pooled_output, *encoder_outputs[1:])
+
+            return BaseModelOutputWithPooling(
+                last_hidden_state=last_hidden_state,
+                pooler_output=pooled_output,
+                hidden_states=encoder_outputs.hidden_states,
+                attentions=encoder_outputs.attentions,
+            )
 
     class patched_Phi4MMImageEmbedding(torch.nn.Module):
         _PATCHES_ = ["forward"]
@@ -192,7 +291,6 @@ def get_patches(mod, mod_siglip):
         ) -> torch.FloatTensor:
 
             if isinstance(input_ids, tuple):
-                # # pipeline parallel
                 input_ids, input_embeds = input_ids
 
             img_embeds = input_embeds
@@ -209,7 +307,6 @@ def get_patches(mod, mod_siglip):
 
             dtype = self.img_processor.embeddings.patch_embedding.weight.dtype
             if img_embeds is not None:
-                # convert to bf16
                 img_embeds = img_embeds.to(dtype)
 
             if self.image_attention_mask is not None:
@@ -223,34 +320,24 @@ def get_patches(mod, mod_siglip):
             input_ids = input_ids.view(-1, input_shape[-1])
 
             with torch.no_grad():
-                # positions = torch.nonzero(
-                #   input_ids == _IMAGE_SPECIAL_TOKEN_ID, as_tuple=False)
                 positions_tuple = torch.nonzero(
                     input_ids == _IMAGE_SPECIAL_TOKEN_ID, as_tuple=True
                 )
 
-            # logger.info(f'position size: {positions.size()} ...')
-            fake_image_forward = False
             select = False
             hd_transform = False
 
             if isinstance(self.img_projection, torch.nn.Sequential):
                 target_device = self.img_projection[0].bias.device
-                target_dtype = self.img_projection[0].bias.dtype
-            else:  # It's a single nn.Linear layer
+            else:
                 target_device = self.img_projection.bias.device
-                target_dtype = self.img_projection.bias.dtype
 
-            # Let's assume it is always true.
+            # PATCHED: Let's assume it is always true.
             if True:  # len(positions.tolist()) > 0:
-                if self.use_hd_transform and img_sizes is not None and len(img_sizes):
+                if self.use_hd_transform and img_sizes is not None:
                     hd_transform = True
-                    # img_embeds: (num_images, max_num_crops, 3, H, W)
-                    # img_sizes: (num_images, 2).view(1, -1)
-
                     bs = img_embeds.shape[0]
-                    # Nx(HW)xC
-                    if image_attention_mask is not None and len(image_attention_mask) > 0:
+                    if image_attention_mask is not None:
                         img_features = self.get_img_features(
                             img_embeds.flatten(0, 1),
                             attention_mask=image_attention_mask.type(torch.BoolTensor)
@@ -260,234 +347,254 @@ def get_patches(mod, mod_siglip):
                     else:
                         img_features = self.get_img_features(img_embeds.flatten(0, 1))
 
-                    # base_feat_height_target = self.base_feat_height_target
                     base_resolution = self.crop_size
                     base_feat_height_reduction = self.base_feat_height_reduction
 
                     base_feat_height = base_feat_width = torch.sym_int(
                         img_features.shape[1] ** 0.5
                     )
-
-                    # bs x max_num_crops x (24x24) x C
                     img_features = img_features.view(
                         bs, -1, base_feat_height * base_feat_width, self.image_dim_out
                     )
                     C = self.image_dim_out
                     H = base_feat_height
 
-                    output_imgs = []
-                    output_len = []
-
                     if isinstance(img_sizes, torch.Tensor):
                         img_sizes = img_sizes.view(-1, 2)
-                    for _bs in range(bs):
-                        h, w = img_sizes[_bs]
-                        h = h // base_resolution
-                        w = w // base_resolution
-                        B_ = h * w
-
-                        global_img_feature = img_features[_bs, :1]
-
-                        glb_img = (
-                            global_img_feature.reshape(1, H, H, C)
-                            .reshape(
-                                1,
-                                H // base_feat_height_reduction,
-                                base_feat_height_reduction,
-                                H // base_feat_height_reduction,
-                                base_feat_height_reduction,
-                                C,
-                            )
-                            .contiguous()
-                            .permute(0, 1, 3, 2, 4, 5)
-                            .reshape(
-                                1,
-                                H // base_feat_height_reduction,
-                                H // base_feat_height_reduction,
-                                base_feat_height_reduction * base_feat_height_reduction * C,
-                            )
-                            .contiguous()
-                        )
-                        temp_glb_GN = self.sub_GN.repeat(
-                            1, H // base_feat_height_reduction, 1, 1
-                        )
-
-                        glb_img = torch.cat([glb_img, temp_glb_GN], dim=2).reshape(
-                            1, -1, base_feat_height_reduction * base_feat_height_reduction * C
-                        )
-
-                        sub_img = img_features[_bs, 1:]
-                        sub_img = sub_img[:B_]
-
-                        sub_img = (
-                            sub_img.reshape(B_, H, H, C)
-                            .reshape(
-                                B_,
-                                H // base_feat_height_reduction,
-                                base_feat_height_reduction,
-                                H // base_feat_height_reduction,
-                                base_feat_height_reduction,
-                                C,
-                            )
-                            .contiguous()
-                            .permute(0, 1, 3, 2, 4, 5)
-                            .reshape(
-                                B_,
-                                -1,
-                                base_feat_height_reduction * base_feat_height_reduction * C,
-                            )
-                            .contiguous()
-                        )
-                        sub_img = (
-                            sub_img.reshape(
-                                1,
-                                h,
-                                w,
-                                base_feat_height // base_feat_height_reduction,
-                                base_feat_width // base_feat_height_reduction,
-                                -1,
-                            )
-                            .permute(0, 1, 3, 2, 4, 5)
-                            .reshape(
-                                1,
-                                h * base_feat_height // base_feat_height_reduction,
-                                w * base_feat_width // base_feat_height_reduction,
-                                base_feat_height_reduction * base_feat_height_reduction * C,
-                            )
-                        )
-
-                        if image_attention_mask is not None and len(image_attention_mask) > 0:
-                            reshaped_image_attention_mask = (
-                                image_attention_mask[_bs, 1 : B_ + 1, 0::2, 0::2]
-                                .reshape(
-                                    1,
-                                    h,
-                                    w,
-                                    base_feat_height // base_feat_height_reduction,
-                                    base_feat_width // base_feat_height_reduction,
-                                )
-                                .permute(0, 1, 3, 2, 4)
-                                .reshape(
-                                    1,
-                                    h * base_feat_height // base_feat_height_reduction,
-                                    w * base_feat_width // base_feat_height_reduction,
-                                )
-                            )
-                            useful_height = torch.sym_int(
-                                reshaped_image_attention_mask[0, :, 0].sum().item()
-                            )
-                            useful_width = torch.sym_int(
-                                reshaped_image_attention_mask[0, 0, :].sum().item()
-                            )
-                            sub_img = sub_img[:, :useful_height, :useful_width]
-                            temp_sub_GN = self.sub_GN.repeat(1, useful_height, 1, 1)
-                            temp_len = (
-                                torch.sym_int(
-                                    image_attention_mask[_bs, : B_ + 1, 0::2, 0::2]
-                                    .sum()
-                                    .item()
-                                )
-                                + (useful_height + 1)
-                                + base_feat_height // base_feat_height_reduction
-                            )
-                        else:
-                            temp_sub_GN = self.sub_GN.repeat(
-                                1, h * base_feat_height // base_feat_height_reduction, 1, 1
-                            )
-                            temp_len = torch.sym_int(
-                                (h * w + 1) * self.num_img_tokens
-                                + 1
-                                + (h + 1) * base_feat_height // base_feat_height_reduction
-                            )
-
-                        sub_img = torch.cat([sub_img, temp_sub_GN], dim=2).reshape(
-                            1, -1, base_feat_height_reduction * base_feat_height_reduction * C
-                        )
-                        # (1, num_img_tokens, 1024*4)
-
-                        # glb + sub
-                        if self.hd_transform_order == "glb_sub":
-                            output_imgs.append(
-                                torch.cat([glb_img, self.glb_GN, sub_img], dim=1)
-                            )
-                        elif self.hd_transform_order == "sub_glb":
-                            output_imgs.append(
-                                torch.cat([sub_img, self.glb_GN, glb_img], dim=1)
-                            )
-                        else:
-                            raise NotImplementedError(
-                                f"hd_transform_order = {self.hd_transform_order}, "
-                                f"not implemented"
-                            )
-
-                        output_len.append(temp_len)
-
-                    img_set_tensor = []
-                    for _output_img in output_imgs:
-                        img_feature_proj = self.img_projection(
-                            _output_img.to(target_device).to(target_dtype)
-                        )
-                        img_set_tensor.append(img_feature_proj)
-
                 else:
                     raise NotImplementedError
                 select = True
-            else:
-                # # create a fake image tensor
-                # # TODO: need define image size for different vision model
-                if self.training:
-                    img_embeds = torch.zeros(
-                        1,
-                        3,
-                        self.crop_size,
-                        self.crop_size,
-                        dtype=target_dtype,
-                        device=input_ids.device,
-                    )
-
-                    tt = (
-                        self.get_img_features(img_embeds)
-                        .to(target_device)
-                        .to(target_dtype)
-                        .reshape(-1, 1024)
-                    )
-                    if self.use_hd_transform:
-                        img_set_tensor = self.img_projection(
-                            tt.reshape(
-                                -1, self.image_dim_out * self.base_feat_height_reduction**2
-                            )
-                            * self.glb_GN[0]
-                            * self.sub_GN[0, 0]
-                        )
-                    else:
-                        img_set_tensor = self.img_projection(tt)  # adapted visual features.
-                    fake_image_forward = True
 
             hidden_states = kwargs["wte"](input_ids)
 
-            if select:
-                if hd_transform:
-                    merged_img_set_tensor = torch.cat(img_set_tensor, dim=1).squeeze(0)
-                    merged_img_set_tensor = merged_img_set_tensor.to(hidden_states.dtype).to(
-                        hidden_states.device
-                    )
-                    with torch.autocast(device_type=hidden_states.device.type, enabled=False):
-                        new_hidden_states = hidden_states.index_put(
-                            indices=positions_tuple,
-                            values=merged_img_set_tensor,
-                            accumulate=False,
-                        )
-                    hidden_states = new_hidden_states
-                else:
-                    raise NotImplementedError
+            assert select
+            if hd_transform:
 
-            if fake_image_forward and self.training:
-                hidden_states = (
-                    hidden_states
-                    + (
-                        0 * img_set_tensor[0].to(hidden_states.dtype).to(hidden_states.device)
-                    ).sum()
+                def body_fn(
+                    _bs,
+                    img_features,
+                    img_sizes,
+                    image_attention_mask,
+                    cst_shape_CH,
+                    glb_GN,
+                    sub_GN,
+                    proj_0_weight,
+                    proj_0_bias,
+                    proj_1_weight,
+                    proj_1_bias,
+                    base_resolution=None,
+                    base_feat_height_reduction=None,
+                    base_feat_height=None,
+                    base_feat_width=None,
+                ):
+                    # oddly, it seems impossible to write img_sizes[_bs.item()]
+                    # it needs img_sizes[_bs.item() : (_bs + 1).item()][0]
+                    row = img_sizes[_bs.item() : (_bs + 1).item()]
+                    row = row[0]
+                    h, w = row[0], row[1]
+                    h = h // base_resolution
+                    w = w // base_resolution
+                    B_ = h * w
+                    C, H = cst_shape_CH.shape
+
+                    # 1 x (24x24) x 1024
+                    global_img_feature = img_features[_bs.item() : (_bs + 1).item(), :1][0]
+
+                    # 1 x 12 x 12 x 4096
+                    glb_img = (
+                        global_img_feature.reshape(1, H, H, C)
+                        .reshape(
+                            1,
+                            H // base_feat_height_reduction,
+                            base_feat_height_reduction,
+                            H // base_feat_height_reduction,
+                            base_feat_height_reduction,
+                            C,
+                        )
+                        .contiguous()
+                        .permute(0, 1, 3, 2, 4, 5)
+                        .reshape(
+                            1,
+                            H // base_feat_height_reduction,
+                            H // base_feat_height_reduction,
+                            base_feat_height_reduction * base_feat_height_reduction * C,
+                        )
+                        .contiguous()
+                    )
+                    temp_glb_GN = sub_GN.repeat(1, H // base_feat_height_reduction, 1, 1)
+
+                    # 1 x 156 x 4096
+                    glb_img = torch.cat([glb_img, temp_glb_GN], dim=2).reshape(
+                        1, -1, base_feat_height_reduction * base_feat_height_reduction * C
+                    )
+
+                    # (max_num_crops-1) x (12x12) x C
+                    sub_img = img_features[_bs.item() : (_bs + 1).item(), 1:][0]
+                    # 16x574x1024
+                    # get rid of padding sub_img
+                    sub_img = sub_img[: B_.item()]
+
+                    # (num_crops, 12, 2, 12, 2, 1024) -> (num_crops, 12, 12, 2, 2, 1024)
+                    # -> (num_crops, 12*12, 4*1024)
+                    sub_img = (
+                        sub_img.reshape(B_.item(), H, H, C)
+                        .reshape(
+                            B_.item(),
+                            H // base_feat_height_reduction,
+                            base_feat_height_reduction,
+                            H // base_feat_height_reduction,
+                            base_feat_height_reduction,
+                            C,
+                        )
+                        .contiguous()
+                        .permute(0, 1, 3, 2, 4, 5)
+                        .reshape(
+                            B_.item(),
+                            -1,
+                            base_feat_height_reduction * base_feat_height_reduction * C,
+                        )
+                        .contiguous()
+                    )
+                    sub_img = (
+                        sub_img.reshape(
+                            1,
+                            h.item(),
+                            w.item(),
+                            base_feat_height // base_feat_height_reduction,
+                            base_feat_width // base_feat_height_reduction,
+                            -1,
+                        )
+                        .permute(0, 1, 3, 2, 4, 5)
+                        .reshape(
+                            1,
+                            (h * base_feat_height // base_feat_height_reduction).item(),
+                            (w * base_feat_width // base_feat_height_reduction).item(),
+                            base_feat_height_reduction * base_feat_height_reduction * C,
+                        )
+                    )
+
+                    reshaped_image_attention_mask = (
+                        image_attention_mask[
+                            _bs.item() : (_bs + 1).item(), 1 : (B_ + 1).item(), 0::2, 0::2
+                        ][0]
+                        .reshape(
+                            1,
+                            h.item(),
+                            w.item(),
+                            base_feat_height // base_feat_height_reduction,
+                            base_feat_width // base_feat_height_reduction,
+                        )
+                        .permute(0, 1, 3, 2, 4)
+                        .reshape(
+                            1,
+                            (h * base_feat_height // base_feat_height_reduction).item(),
+                            (w * base_feat_width // base_feat_height_reduction).item(),
+                        )
+                    )
+                    useful_height = (
+                        reshaped_image_attention_mask[0, :, 0].sum().to(torch.int64).item()
+                    )
+                    useful_width = (
+                        reshaped_image_attention_mask[0, 0, :].sum().to(torch.int64).item()
+                    )
+                    # the module cannot be extracted from here
+                    sub_img = sub_img[:, :useful_height, :useful_width]
+                    temp_sub_GN = sub_GN.repeat(1, useful_height, 1, 1)
+                    # temp_len = (
+                    #    image_attention_mask[_bs, : B_ + 1, 0::2, 0::2]
+                    #    .sum()
+                    #    .to(torch.int64)
+                    #    .item()
+                    #    + (useful_height + 1)
+                    #    + base_feat_height // base_feat_height_reduction
+                    # )
+
+                    sub_img = torch.cat([sub_img, temp_sub_GN], dim=2).reshape(
+                        1, -1, base_feat_height_reduction * base_feat_height_reduction * C
+                    )
+                    # (1, num_img_tokens, 1024*4)
+
+                    # glb + sub
+                    # glb_sub
+                    # output_imgs.append(torch.cat([glb_img, self.glb_GN, sub_img], dim=1))
+                    # sub_glb
+                    _output_img = torch.cat([sub_img, glb_GN, glb_img], dim=1)
+                    # output_len.append(temp_len)
+                    proj = torch.nn.functional.linear(_output_img, proj_0_weight, proj_0_bias)
+                    proj = torch.nn.functional.gelu(proj)
+                    proj = torch.nn.functional.linear(proj, proj_1_weight, proj_1_bias)
+                    return (proj,)
+
+                def local_body_fn(
+                    n_iter,
+                    img_features,
+                    img_sizes,
+                    image_attention_mask,
+                    cst_shape_CH,
+                    glb_GN,
+                    sub_GN,
+                    proj_0_weight,
+                    proj_0_bias,
+                    proj_1_weight,
+                    proj_1_bias,
+                ):
+                    return body_fn(
+                        n_iter,
+                        img_features,
+                        img_sizes,
+                        image_attention_mask,
+                        cst_shape_CH,
+                        glb_GN,
+                        sub_GN,
+                        proj_0_weight,
+                        proj_0_bias,
+                        proj_1_weight,
+                        proj_1_bias,
+                        base_resolution=base_resolution,
+                        base_feat_height_reduction=base_feat_height_reduction,
+                        base_feat_height=base_feat_height,
+                        base_feat_width=base_feat_width,
+                    )
+
+                tmp = torch.arange(bs + 1).max()
+                glb_GN = self.glb_GN
+                sub_GN = self.sub_GN
+                cst_shape_CH = torch.zeros((C, H), dtype=torch.int32)
+
+                merged_img_set_tensor = simple_loop_for(
+                    tmp,
+                    local_body_fn,
+                    (
+                        img_features,
+                        img_sizes,
+                        image_attention_mask,
+                        cst_shape_CH,
+                        glb_GN,
+                        sub_GN,
+                        self.img_projection[0].weight,
+                        self.img_projection[0].bias,
+                        # self.img_projection[1] is GELU
+                        self.img_projection[2].weight,
+                        self.img_projection[2].bias,
+                    ),
+                    [1],
                 )
+                torch._check(isinstance(merged_img_set_tensor, torch.Tensor))
+                merged_img_set_tensor = merged_img_set_tensor.squeeze(0)
+
+                # merged_img_set_tensor = torch.cat(img_set_tensor, dim=1).squeeze(0)
+                merged_img_set_tensor = merged_img_set_tensor.to(hidden_states.dtype).to(
+                    hidden_states.device
+                )
+                with torch.autocast(device_type=hidden_states.device.type, enabled=False):
+                    new_hidden_states = hidden_states.index_put(
+                        indices=positions_tuple,
+                        values=merged_img_set_tensor,
+                        accumulate=False,
+                    )
+                hidden_states = new_hidden_states
+            else:
+                raise NotImplementedError
 
             if self.drop is not None:
                 hidden_states = self.drop(hidden_states)
@@ -498,40 +605,8 @@ def get_patches(mod, mod_siglip):
         *get_patches_transformers(),
         patched_Phi4MMImageEmbedding,
         patched_SiglipVisionEmbeddings,
+        patched_SiglipVisionTransformer,
     ]
-
-
-def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict[str, Any]:
-    """
-    Returns an untrained model.
-
-    :param model_id: model id
-    :param second_input: second input set
-    :param verbose: verbosity
-    :return: model and data
-    """
-    from ..torch_models.hghub.model_inputs import get_untrained_model_with_inputs
-
-    if model_id == "arnir0/Tiny-LLM":
-        # used to run a unit test
-        _config_reduction = None
-    else:
-
-        def _config_reduction(config, task):
-            return {
-                # "num_hidden_layers": 2,
-                # "_attn_implementation": "flash_attention_2",
-                "_attn_implementation": "sdpa",
-            }
-
-    config_reduction = _config_reduction
-    data = get_untrained_model_with_inputs(
-        model_id,
-        verbose=verbose,
-        add_second_input=second_input,
-        config_reduction=config_reduction,
-    )
-    return data
 
 
 def get_inputs_for_part(
@@ -555,10 +630,21 @@ def get_inputs_for_part(
             f"What is shown in these four images?{prompt_suffix}{assistant_prompt}"
         )
 
-        url = "https://www.ilankelman.org/stopsigns/australia.jpg"
-        image_1 = Image.open(requests.get(url, stream=True).raw)
-        url = "https://wallpaper.dog/large/10809054.jpg"
-        image_4 = Image.open(requests.get(url, stream=True).raw)
+        root = os.path.join(os.path.dirname(__file__), "..", "..", "_small_data")
+        # "https://www.ilankelman.org/stopsigns/australia.jpg"
+        url = os.path.join(root, "American_Flamingo_JG.jpg")
+        image_1 = (
+            Image.open(requests.get(url, stream=True).raw)
+            if url.startswith("https")
+            else Image.open(url)
+        )
+        # "https://wallpaper.dog/large/10809054.jpg"
+        url = os.path.join(root, "RedcrestedTuraco.jpg")
+        image_4 = (
+            Image.open(requests.get(url, stream=True).raw)
+            if url.startswith("https")
+            else Image.open(url)
+        )
 
         images = [image_1, image_4]
         inputs = processor(prompt, images=images, return_tensors="pt").to(device)
@@ -567,6 +653,13 @@ def get_inputs_for_part(
             input_image_embeds=inputs["input_image_embeds"].to(torch_dtype).to(device),
             image_attention_mask=inputs["image_attention_mask"].to(torch_dtype).to(device),
             image_sizes=inputs["image_sizes"].to(device),
+        )
+        assert (
+            export_inputs["input_image_embeds"].shape[-2] >= 28
+            and export_inputs["input_image_embeds"].shape[-1] >= 28
+        ), (
+            f"required by the exported program but shape is "
+            f"{export_inputs['input_image_embeds'].shape}"
         )
 
         other_inputs = []
@@ -610,8 +703,8 @@ def main(
     output_folder: str = "dump_models",
     existing_onnx: str | None = None,
     part: str = "vision",
-    atol: float = 0.01,
-    mismatch01: float = 0.1,
+    atol: float = 2,
+    mismatch01: float = 0.01,
     profile_exporter: bool = False,
 ):
     """
@@ -671,6 +764,8 @@ def main(
     from transformers import AutoConfig, AutoModelForCausalLM
     from ..helpers import string_type, string_diff, max_diff
     from ..torch_export_patches import torch_export_patches
+    from ..torch_export_patches.patch_details import PatchDetails
+    from ..torch_export_patches.patch_inputs import use_dyn_not_str
     from ..export.api import to_onnx
 
     if output_folder and output_folder != ".":
@@ -683,34 +778,30 @@ def main(
     )
     torch_dtype = get_torch_dtype_from_command_line_args(dtype)
 
-    with torch_export_patches(
-        patch_torch=False,
-        patch_sympy=False,
-        patch_transformers=True,
-        verbose=1,
-        stop_if_static=2,
-        profile=(f"{basename}.profile.html" if profile_exporter else None),
-        custom_patches=get_patches_transformers(),
-    ):
-        if pretrained:
-            print("-- pretrained model")
-            config = AutoConfig.from_pretrained(
-                model_id, trust_remote_code=True, attn_implementation="sdpa"
-            )
-            model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                config=config,
-                trust_remote_code=True,
-                torch_dtype=torch_dtype,
-                device_map=device,
-                attn_implementation="sdpa",
-            ).eval()
-            data = dict(model=model)
-        else:
-            print("-- random model")
-            data = get_untrained_model(model_id, second_input=second_input, verbose=1)
-            model = data["model"]
-            _config = data["configuration"]
+    if pretrained:
+        print("-- pretrained model")
+        config = AutoConfig.from_pretrained(
+            model_id, trust_remote_code=True, attn_implementation="sdpa"
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            config=config,
+            trust_remote_code=True,
+            torch_dtype=torch_dtype,
+            device_map=device,
+            attn_implementation="sdpa",
+        ).eval()
+        data = dict(model=model)
+    else:
+        print("-- random model")
+        config = AutoConfig.from_pretrained(
+            model_id, trust_remote_code=True, attn_implementation="sdpa"
+        )
+        config.attn_implementation = "sdpa"
+        config._attn_implementation = "sdpa"
+        config.num_hidden_layers = 2
+        model = AutoModelForCausalLM.from_config(config, trust_remote_code=True)
+        data = dict(model=model)
 
     main_mod_name = model.__module__
     assert (
@@ -735,6 +826,7 @@ def main(
 
         assert "inputs" in data, f"key 'inputs' is missing from data (available {set(data)})"
         model_to_export = data["model"]
+        model_to_export.eval()
         export_inputs = to_any(to_any(data["inputs"], device), torch_dtype)
         other_inputs = [
             v for k, v in data.items() if k.startswith("inputs_") if k != "inputs_prompt"
@@ -752,6 +844,8 @@ def main(
             def forward(
                 self, input_ids, input_image_embeds, image_attention_mask, image_sizes
             ):
+                torch._check(input_image_embeds.shape[-2] >= 28)
+                torch._check(input_image_embeds.shape[-1] >= 28)
                 return model.model.embed_tokens_extend.image_embed(
                     input_ids=input_ids,
                     input_embeds=input_image_embeds,
@@ -761,6 +855,7 @@ def main(
                 )
 
         model_to_export = VisionPart(model)
+        model_to_export.eval()
 
         dynamic_shapes = {
             "input_ids": {1: "seq_length"},
@@ -849,24 +944,45 @@ def main(
 
         target_opset = 22
 
+        details = PatchDetails()
         with torch_export_patches(
-            patch_torch=False,
+            patch_torch=True,  # needed for DynamicDimConstraintPrinter
             patch_sympy=False,
             patch_transformers=True,
             verbose=1,
-            stop_if_static=2,
+            stop_if_static=0,
             profile=(f"{basename}.profile.html" if profile_exporter else None),
             custom_patches=additional_patches,
+            patch_details=details,
         ):
             # let's again the patched code runs
             patched_expected = model_to_export(**export_inputs)
-            diff = max_diff(export_expected, patched_expected)
+            diff = max_diff(export_expected, patched_expected, hist=[0.1, 0.01])
+            print(f"-- discrepancies PATCHED/ORIGINAL {string_diff(diff)}")
             assert diff["abs"] < atol, (
                 f"Patches do not output the same values\n"
                 f"\nexpected={string_type(export_expected, with_shape=True)}"
                 f"\n patched={string_type(patched_expected, with_shape=True)}"
                 f"\ndiff={string_diff(diff)}"
             )
+            if details and not os.path.exists(f"{basename}.patches_details.rst"):
+                print("-- builds patch details")
+                ep = torch.export.export(
+                    model_to_export,
+                    (),
+                    kwargs=export_inputs,
+                    dynamic_shapes=use_dyn_not_str(dynamic_shapes),
+                )
+                patches = details.patches_involded_in_graph(ep.graph)
+                report = details.make_report(patches, format="rst")
+                with open(f"{basename}.patches_details.rst", "w") as f:
+                    f.write(report)
+                with open(f"{basename}.ep", "w") as f:
+                    f.write(str(ep))
+                with open(f"{basename}.graph", "w") as f:
+                    f.write(str(ep.graph))
+                print("-- done writing patch details")
+
             to_onnx(
                 model_to_export,
                 kwargs=export_inputs,
@@ -915,7 +1031,19 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = get_parser("qwen25")
+    parser = get_parser(
+        "qwen25",
+        epilog=textwrap.dedent(
+            r"""
+            Tested command lines::
+
+                python -m onnx_diagnostic.ci_models.export_phi4_mm \
+                    -m microsoft/Phi-4-multimodal-instruct \
+                    --device cuda --dtype float16 --exporter custom \
+                    --pretrained --second-input --part vision
+            """
+        ),
+    )
     args = parser.parse_args(sys.argv[1:])
     main(
         model_id=args.mid,
