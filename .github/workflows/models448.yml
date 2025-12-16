@@ -48,6 +48,9 @@ jobs:
             pip install transformers==${{ matrix.transformers }}
           fi
 
+      - name: Install peft==0.17.1
+        run: pip install peft==0.17.1
+
       - name: Install requirements
         run: python -m pip install -r requirements.txt
 
