@@ -314,7 +314,7 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
         diff = max_diff(flat_export_expected, small, hist=[0.1, 0.01])
         fprint(f"-- discrepancies={diff}")
         assert diff["abs"] <= atol and diff["rep"][">0.1"] / diff["n"] <= mismatch01, (
-            f"absolution tolerance {diff['abs']} is above {atol} or number of "
+            f"absolute error {diff['abs']} is above {atol} or number of "
             f"mismatches ({diff['rep']['>0.1'] / diff['n']}) is above "
             f"{mismatch01}, dicrepancies={string_diff(diff)}"
         )
@@ -366,7 +366,7 @@ def check_for_discrepancies_and_log_everything_into_a_json_file(
                     assert (
                         diff["abs"] <= atol and diff["rep"][">0.1"] / diff["n"] <= mismatch01
                     ), (
-                        f"absolution tolerance {diff['abs']} is above {atol} or number "
+                        f"absolute error {diff['abs']} is above {atol} or number "
                         f" of mismatches ({diff['rep']['>0.1'] / diff['n']}) "
                         f"is above {mismatch01}, dicrepancies={string_diff(diff)}"
                     )

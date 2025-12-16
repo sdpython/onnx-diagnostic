@@ -38,7 +38,7 @@ import pprint
 import sys
 import textwrap
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from .ci_helpers import (
     check_for_discrepancies_and_log_everything_into_a_json_file,
@@ -609,36 +609,6 @@ def get_patches(mod, mod_siglip):
     ]
 
 
-def get_untrained_model(model_id: str, second_input: bool, verbose: int) -> Dict[str, Any]:
-    """
-    Returns an untrained model.
-
-    :param model_id: model id
-    :param second_input: second input set
-    :param verbose: verbosity
-    :return: model and data
-    """
-    from ..torch_models.hghub.model_inputs import get_untrained_model_with_inputs
-
-    if model_id == "arnir0/Tiny-LLM":
-        # used to run a unit test
-        _config_reduction = None
-    else:
-
-        def _config_reduction(config, task):
-            return {"_attn_implementation": "sdpa"}
-
-    config_reduction = _config_reduction
-    data = get_untrained_model_with_inputs(
-        model_id,
-        verbose=verbose,
-        add_second_input=second_input,
-        config_reduction=config_reduction,
-        skip_inputs=True,
-    )
-    return data
-
-
 def get_inputs_for_part(
     model_id: str,
     part: str,
@@ -808,35 +778,30 @@ def main(
     )
     torch_dtype = get_torch_dtype_from_command_line_args(dtype)
 
-    # with torch_export_patches(
-    #    patch_torch=False,
-    #    patch_sympy=False,
-    #    patch_transformers=True,
-    #    verbose=1,
-    #    stop_if_static=2,
-    ##    profile=(f"{basename}.profile.html" if profile_exporter else None),
-    #    custom_patches=get_patches_transformers(),
-    # ):
-    if 1:
-        if pretrained:
-            print("-- pretrained model")
-            config = AutoConfig.from_pretrained(
-                model_id, trust_remote_code=True, attn_implementation="sdpa"
-            )
-            model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                config=config,
-                trust_remote_code=True,
-                torch_dtype=torch_dtype,
-                device_map=device,
-                attn_implementation="sdpa",
-            ).eval()
-            data = dict(model=model)
-        else:
-            print("-- random model")
-            data = get_untrained_model(model_id, second_input=second_input, verbose=1)
-            model = data["model"]
-            _config = data["configuration"]
+    if pretrained:
+        print("-- pretrained model")
+        config = AutoConfig.from_pretrained(
+            model_id, trust_remote_code=True, attn_implementation="sdpa"
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            config=config,
+            trust_remote_code=True,
+            torch_dtype=torch_dtype,
+            device_map=device,
+            attn_implementation="sdpa",
+        ).eval()
+        data = dict(model=model)
+    else:
+        print("-- random model")
+        config = AutoConfig.from_pretrained(
+            model_id, trust_remote_code=True, attn_implementation="sdpa"
+        )
+        config.attn_implementation = "sdpa"
+        config._attn_implementation = "sdpa"
+        config.num_hidden_layers = 2
+        model = AutoModelForCausalLM.from_config(config, trust_remote_code=True)
+        data = dict(model=model)
 
     main_mod_name = model.__module__
     assert (
