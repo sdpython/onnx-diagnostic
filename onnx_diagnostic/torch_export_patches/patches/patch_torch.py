@@ -5,6 +5,7 @@ import os
 import traceback
 from functools import reduce
 from typing import Any, Callable, cast, Dict, List, Optional, Sequence, Tuple, Union
+import sympy
 import torch
 from torch._subclasses.fake_tensor import FakeTensorMode
 
@@ -1091,3 +1092,17 @@ def patched__broadcast_in_dim_meta_level_2(
                 new_strides.append(a.stride()[original_idx] * a.size()[original_idx])
 
     return a.as_strided(shape, new_strides, a.storage_offset())
+
+
+class patched_DynamicDimConstraintPrinter:
+    """
+    Patches
+    ``torch.tx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol``.
+    Valid for ``torch>=2.10``.
+    """
+
+    def _print_Symbol(self, expr: sympy.Symbol) -> str:
+        assert isinstance(expr, sympy.Symbol), str(type(expr))
+        if self.symbol_to_source.get(expr):
+            return self.symbol_to_source[expr][0].name
+        return str(expr)

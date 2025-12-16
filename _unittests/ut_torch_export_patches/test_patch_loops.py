@@ -1,6 +1,6 @@
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch, has_torch
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
 from onnx_diagnostic.helpers.torch_helper import (
     is_torchdynamo_exporting,
     fake_torchdynamo_exporting,
@@ -11,6 +11,7 @@ from onnx_diagnostic.torch_export_patches.patch_expressions import (
     register_patched_expressions,
     patched_float_arange,
 )
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestOnnxExportErrors(ExtTestCase):
@@ -20,9 +21,23 @@ class TestOnnxExportErrors(ExtTestCase):
         names = {_[0] for _ in res}
         self.assertIn("float_arange", names)
 
-    @requires_torch("2.8")
-    def test_filter_position_ids(self):
+    def test_float_arange(self):
+        register_patched_expressions()
+        rg = torch.arange(0.0, 0.99, 0.1)
+        rg2 = torch.ops.patched.float_arange(
+            torch.tensor(0.0), torch.tensor(0.99), torch.tensor(0.1)
+        )
+        rg3 = patched_float_arange(torch.tensor(0.0), torch.tensor(0.99), torch.tensor(0.1))
+        self.assertEqualArray(rg, rg2, atol=1e-5)
+        self.assertEqualArray(rg, rg3, atol=1e-5)
+        with fake_torchdynamo_exporting():
+            rg4 = patched_float_arange(
+                torch.tensor(0.0), torch.tensor(0.99), torch.tensor(0.1)
+            )
+        self.assertEqualArray(rg, rg4, atol=1e-5)
 
+    @requires_torch("2.9.99")
+    def test_filter_position_ids(self):
         def filter_position_ids(
             patch_attention_mask: torch.Tensor,
             position_ids: torch.Tensor,
@@ -42,15 +57,6 @@ class TestOnnxExportErrors(ExtTestCase):
                 position_ids[batch_idx][p_attn_mask.view(-1)] = pos_ids
             return position_ids
 
-        def float_arange(start, end, step):
-            length = torch.sym_int((end - start) / step + (step * (1 - 1e-6)))
-            torch._check(length > 0)
-            res = torch.arange(0, length)
-            torch._check(res.is_contiguous())
-            fres = res.to(torch.float32)
-            fstart = torch.tensor(start, dtype=torch.float32)
-            return fres + fstart
-
         def scan_filter_position_ids(
             patch_attention_mask: torch.Tensor,
             position_ids: torch.Tensor,
@@ -59,17 +65,20 @@ class TestOnnxExportErrors(ExtTestCase):
         ):
 
             def body(p_attn_mask, position_ids_row):
-                h_len = torch.tensor(1) / p_attn_mask[:, 0].sum()
-                w_len = torch.tensor(1) / p_attn_mask[0].sum()
-                fractional_coords_h = patched_float_arange(
-                    torch.tensor(0.0), torch.tensor(1 - 1e-6), h_len
+                h_len = torch.tensor(1, dtype=p_attn_mask.dtype) / p_attn_mask[:, 0].sum()
+                w_len = torch.tensor(1, dtype=p_attn_mask.dtype) / p_attn_mask[0].sum()
+                torch._check(h_len.item() > 0)
+                fractional_coords_h = torch.arange(
+                    torch.tensor(0.0, dtype=p_attn_mask.dtype),
+                    torch.tensor(1 - 1e-6, dtype=p_attn_mask.dtype),
+                    h_len,
                 )
-                fractional_coords_w = patched_float_arange(
-                    torch.tensor(0.0), torch.tensor(1 - 1e-6), w_len
+                torch._check(w_len.item() > 0)
+                fractional_coords_w = torch.arange(
+                    torch.tensor(0.0, dtype=p_attn_mask.dtype),
+                    torch.tensor(1 - 1e-6, dtype=p_attn_mask.dtype),
+                    w_len,
                 )
-
-                # torch.arange(0, 1 - 1e-6, 1 / p_attn_mask[:, 0].sum().item())
-                # torch.arange(0, 1 - 1e-6, 1 / p_attn_mask[0].sum().item())
 
                 bucket_coords_h = torch.bucketize(fractional_coords_h, boundaries, right=True)
                 bucket_coords_w = torch.bucketize(fractional_coords_w, boundaries, right=True)
@@ -116,17 +125,12 @@ class TestOnnxExportErrors(ExtTestCase):
         self.assertEqualArray(expected, got)
 
         DYN = torch.export.Dim.DYNAMIC
-        ep = torch.export.export(model, inputs, dynamic_shapes=({0: DYN}, {0: DYN}, {0: DYN}))
-        try:
-            got = ep.module()(*inputs)
-        except Exception:
-            # At least it exports, we need to remove the assert from the exported program.
-            # Let's revisit this later.
-            if has_torch("2.11"):
-                raise
-            got = None
-        if got is not None:
-            self.assertEqualArray(expected, got)
+        with torch_export_patches(patch_torch=True):
+            ep = torch.export.export(
+                model, inputs, dynamic_shapes=({0: DYN}, {0: DYN}, {0: DYN})
+            )
+        got = ep.module()(*inputs)
+        self.assertEqualArray(expected, got)
 
 
 if __name__ == "__main__":
