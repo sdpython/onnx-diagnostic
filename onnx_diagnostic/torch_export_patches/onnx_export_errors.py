@@ -221,6 +221,7 @@ def _patch_torch(
     catch_constraints: bool,
     stop_if_static: int,
 ) -> Tuple[Optional[Callable], ...]:
+    import packaging.version as pv
     import torch
     import torch.jit
     import torch._export.non_strict_utils  # produce_guards_and_solve_constraints
@@ -235,9 +236,13 @@ def _patch_torch(
         patched__broadcast_in_dim_meta,
         patched__broadcast_in_dim_meta_level_2,
         patched__maybe_broadcast,
-        patched_DynamicDimConstraintPrinter,
         patched_ShapeEnv,
     )
+
+    if pv.Version(torch.__version__) >= pv.Version("2.9.99"):
+        from .patches.patch_torch import patched_DynamicDimConstraintPrinter
+    else:
+        patched_DynamicDimConstraintPrinter = None
 
     f___constrain_user_specified_dimhint_range = None
     f__broadcast_in_dim_meta = None
@@ -261,12 +266,15 @@ def _patch_torch(
         print("[torch_export_patches] patch pytorch")
 
     # torch.tx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol
-    f__print_symbol = (
-        torch.fx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol
-    )
-    torch.fx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol = (
-        patched_DynamicDimConstraintPrinter._print_Symbol
-    )
+    if patched_DynamicDimConstraintPrinter is not None:
+        f__print_symbol = (
+            torch.fx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol
+        )
+        torch.fx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol = (
+            patched_DynamicDimConstraintPrinter._print_Symbol
+        )
+    else:
+        f__print_symbol = None
 
     # torch.vmap
     f_vmap = torch.vmap
@@ -434,10 +442,10 @@ def _unpatch_torch(
     from torch.fx.experimental.symbolic_shapes import ShapeEnv
 
     # this should disappear when torch.jit is removed
-    assert f__print_symbol
-    torch.fx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol = (
-        f__print_symbol
-    )
+    if f__print_symbol is not None:
+        torch.fx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol = (
+            f__print_symbol
+        )
     torch.vmap = f_vmap
     torch.jit.isinstance = f_jit_isinstance
     torch._dynamo.mark_static_address = f_mark_static_address

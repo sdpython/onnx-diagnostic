@@ -4,6 +4,9 @@ Change Logs
 0.8.7
 +++++
 
+* :pr:`363`: patch for DynamicDimConstraintPrinter
+* :pr:`360`: preliminary work for phi4
+
 0.8.6
 +++++
 

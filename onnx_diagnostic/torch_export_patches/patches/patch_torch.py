@@ -1098,6 +1098,7 @@ class patched_DynamicDimConstraintPrinter:
     """
     Patches
     ``torch.tx.experimental.symbolic_shapes.DynamicDimConstraintPrinter._print_Symbol``.
+    Valid for ``torch>=2.10``.
     """
 
     def _print_Symbol(self, expr: sympy.Symbol) -> str:
