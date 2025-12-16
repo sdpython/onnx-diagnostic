@@ -579,6 +579,7 @@ def get_patches(mod, mod_siglip):
                     ),
                     [1],
                 )
+                torch._check(isinstance(merged_img_set_tensor, torch.Tensor))
                 merged_img_set_tensor = merged_img_set_tensor.squeeze(0)
 
                 # merged_img_set_tensor = torch.cat(img_set_tensor, dim=1).squeeze(0)
@@ -807,15 +808,16 @@ def main(
     )
     torch_dtype = get_torch_dtype_from_command_line_args(dtype)
 
-    with torch_export_patches(
-        patch_torch=False,
-        patch_sympy=False,
-        patch_transformers=True,
-        verbose=1,
-        stop_if_static=2,
-        profile=(f"{basename}.profile.html" if profile_exporter else None),
-        custom_patches=get_patches_transformers(),
-    ):
+    # with torch_export_patches(
+    #    patch_torch=False,
+    #    patch_sympy=False,
+    #    patch_transformers=True,
+    #    verbose=1,
+    #    stop_if_static=2,
+    ##    profile=(f"{basename}.profile.html" if profile_exporter else None),
+    #    custom_patches=get_patches_transformers(),
+    # ):
+    if 1:
         if pretrained:
             print("-- pretrained model")
             config = AutoConfig.from_pretrained(
