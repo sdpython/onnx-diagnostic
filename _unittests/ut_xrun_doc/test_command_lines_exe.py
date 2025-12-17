@@ -210,6 +210,15 @@ class TestCommandLines(ExtTestCase):
         text = st.getvalue()
         self.assertIn("done with distance 0", text)
 
+    def test_l_parser_optimize(self):
+        output = self.get_dump_file("test_parser_optimize.onnx")
+        st = StringIO()
+        with redirect_stdout(st):
+            main(["optimize", "default", self.dummy_path, "-o", output, "-v", "1"])
+        text = st.getvalue()
+        self.assertIn("default", text)
+        self.assertExists(output)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

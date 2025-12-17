@@ -1547,6 +1547,107 @@ def _cmd_compare(argv: List[Any]):
     print(ObsComparePair.to_str(pair_cmp))
 
 
+def get_parser_optimize() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="optimize",
+        formatter_class=RawTextHelpFormatter,
+        description=textwrap.dedent(
+            """
+            Optimizes an onnx model by fusing nodes. It looks for patterns in the graphs
+            and replaces them by the corresponding nodes. It also does basic optimization
+            such as removing identity nodes or unused nodes.
+            """
+        ),
+        epilog=textwrap.dedent(
+            """
+            The goal is to make the model faster.
+            Argument patterns defines the patterns to apply or the set of patterns.
+            It is possible to show statistics or to remove a particular pattern.
+            Here are some environment variables which can be used to trigger
+            these displays.
+
+            Available options algorithms, default and default+runtime:
+
+            - DROPPATTERN=<pattern1,patterns2,...>: do not apply
+              those patterns when optimizing a model
+            - DUMPPATTERNS=<folder>: dumps all matched and applied
+              nodes when a pattern is applied
+            - PATTERN=<pattern1,pattern2,...>: increase verbosity for specific
+                patterns to understand why one pattern was not applied,
+                this shows which line is rejecting a pattern if it seems one pattern was missed
+            """
+        ),
+    )
+    parser.add_argument(
+        "algorithm",
+        choices=["ir", "os_ort", "slim", "default", "default+onnxruntime"],
+        help="algorithm or patterns optimization to apply",
+    )
+    parser.add_argument("input", type=str, help="onnx model to optimize")
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        required=False,
+        help="onnx model to output, if empty, if adds .opt-{algorithm}.onnx to the name",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        default=0,
+        required=False,
+        type=int,
+        help="verbosity",
+    )
+    parser.add_argument(
+        "--infer-shapes",
+        default=True,
+        action=BooleanOptionalAction,
+        help="infer shapes before optimizing the model",
+    )
+    parser.add_argument(
+        "--processor",
+        default="",
+        help=textwrap.dedent(
+            """
+            optimization for a specific processor, CPU, CUDA or both CPU,CUDA,
+            some operators are only available in one processor, it might be not used
+            with all
+            """
+        ).strip("\n"),
+    )
+    parser.add_argument(
+        "--remove-shape-info",
+        default=True,
+        action=BooleanOptionalAction,
+        help="remove shape information before outputting the model",
+    )
+    return parser
+
+
+def _cmd_optimize(argv: List[Any]):
+    parser = get_parser_optimize()
+    args = parser.parse_args(argv[1:])
+
+    from .helpers.optim_helper import optimize_model
+
+    output = (
+        args.output
+        if args.output
+        else f"{os.path.splitext(args.input)[0]}.o-{args.algorithm}.onnx"
+    )
+
+    optimize_model(
+        args.algorithm,
+        args.input,
+        output=output,
+        verbose=args.verbose,
+        processor=args.processor,
+        infer_shapes=args.infer_shapes,
+        remove_shape_info=args.remove_shape_info,
+    )
+
+
 #############
 # main parser
 #############
@@ -1563,16 +1664,17 @@ def get_main_parser() -> ArgumentParser:
             to get help for a specific command.
 
             agg          - aggregates statistics from multiple files
-            config       - prints a configuration for a model id
+            config       - prints a configuration for a model id (on HuggingFace Hub)
             dot          - converts an onnx model into dot format
             exportsample - produces a code to export a model
             find         - find node consuming or producing a result
-            lighten      - makes an onnx model lighter by removing the weights,
+            lighten      - makes an onnx model lighter by removing the weights
+            optimize     - optimizes an onnx model
             print        - prints the model on standard output
             sbs          - compares an exported program and a onnx model
             stats        - produces statistics on a model
             unlighten    - restores an onnx model produces by the previous experiment
-            validate     - validate a model
+            validate     - validate a model (knowning its model id on HuggginFace Hub)
             """
         ),
     )
@@ -1585,6 +1687,7 @@ def get_main_parser() -> ArgumentParser:
             "exportsample",
             "find",
             "lighten",
+            "optimize",
             "print",
             "sbs",
             "stats",
@@ -1605,6 +1708,7 @@ def main(argv: Optional[List[Any]] = None):
         exportsample=_cmd_export_sample,
         find=_cmd_find,
         lighten=_cmd_lighten,
+        optimize=_cmd_optimize,
         print=_cmd_print,
         sbs=_cmd_sbs,
         stats=_cmd_stats,
@@ -1631,6 +1735,7 @@ def main(argv: Optional[List[Any]] = None):
                 exportsample=lambda: get_parser_validate("exportsample"),  # type: ignore[operator]
                 find=get_parser_find,
                 lighten=get_parser_lighten,
+                optimize=get_parser_optimize,
                 print=get_parser_print,
                 sbs=get_parser_sbs,
                 stats=get_parser_stats,
