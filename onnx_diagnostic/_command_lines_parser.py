@@ -1674,7 +1674,7 @@ def get_main_parser() -> ArgumentParser:
             sbs          - compares an exported program and a onnx model
             stats        - produces statistics on a model
             unlighten    - restores an onnx model produces by the previous experiment
-            validate     - validate a model (knowning its model id on HuggginFace Hub)
+            validate     - validate a model (knowing its model id on HuggginFace Hub)
             """
         ),
     )

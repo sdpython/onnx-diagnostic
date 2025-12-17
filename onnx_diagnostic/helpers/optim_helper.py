@@ -1,4 +1,5 @@
 from typing import Optional, Union
+import pprint
 import onnx
 
 
@@ -22,7 +23,7 @@ def optimize_model(
     :param processor: optimization are done for the processor
     :param infer_shapes: infer shapes before optimizing, this might not be
         available for all algorithm
-    :param remove_shape_info: rmeove shape information before saving the model
+    :param remove_shape_info: remove shape information before saving the model
     :param verbose: verbosity level
     :return: optimized model
 
@@ -74,7 +75,12 @@ def optimize_model(
         if verbose:
             print(f"[optimize_model] starts optimizing with {len(pats)} patterns")
             print(f"[optimize_model] model has {len(proto.graph.node)} nodes")
-        opt_onx = gr.to_onnx(optimize=True)
+        opt_onx, report = gr.to_onnx(optimize=True, return_optimize_report=True)
+        if verbose:
+            print("[optimize_model] optimization report")
+            pprint.print(report)
+            print("[optimize_model] done")
+
     elif algorithm == "slim":
         import onnxslim
 
