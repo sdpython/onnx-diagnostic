@@ -4,6 +4,7 @@ Change Logs
 0.8.7
 +++++
 
+* :pr:`366`: add command line to optimize a model
 * :pr:`363`: patch for DynamicDimConstraintPrinter
 * :pr:`360`, :pr:`364`: preliminary work for phi4
 
