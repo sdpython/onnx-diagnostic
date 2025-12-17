@@ -280,6 +280,10 @@ def main(
         ).eval()
         data = dict(model=model)
         config = model.config
+        if not hasattr(config, "bos_token_id") or not config.bos_token_id:
+            config.bos_token_id = 151643
+        if not hasattr(config, "eos_token_id") or not config.eos_token_id:
+            config.eos_token_id = 151645
     else:
         print("-- random model")
         data = get_untrained_model(model_id, second_input=second_input, verbose=1)

@@ -1921,9 +1921,7 @@ class CubeLogsPerformance(CubeLogs):
             return lambdas[formula]
 
         if formula == "onnx_n_nodes_no_cst":
-            return lambda df: gdf(df, "onnx_n_nodes", 0) - gdf(
-                df, "op_onnx__Constant", 0
-            ).fillna(0)
+            return lambda df: gdf(df, "onnx_n_nodes", 0) - gdf(df, "op_onnx__Constant", 0)
         if formula == "peak_gpu_torch":
             return lambda df: gdf(df, "mema_gpu_5_after_export") - gdf(df, "mema_gpu_4_reset")
         if formula == "peak_gpu_nvidia":
