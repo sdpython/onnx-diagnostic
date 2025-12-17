@@ -256,10 +256,21 @@ if patch_qwen2_5:
         return attn_output
 
     def qwen_version_selector(opset: int, *args: torch.Tensor) -> Tuple[str, torch.dtype]:
+        import onnx_ir
+
         first_float_tensor = next(
             a
             for a in args
-            if a is not None and a.dtype in {torch.float16, torch.float32, torch.bfloat16}
+            if a is not None
+            and a.dtype
+            in {
+                torch.float16,
+                torch.float32,
+                torch.bfloat16,
+                onnx_ir.DataType.BFLOAT16,
+                onnx_ir.DataType.FLOAT16,
+                onnx_ir.DataType.FLOAT,
+            }
         )
         dtype = first_float_tensor.dtype
         strategy = patched_Qwen2_5_VLVisionAttention.STRATEGY_FOR_ATTENTION()
