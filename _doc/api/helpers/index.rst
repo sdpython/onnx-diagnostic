@@ -21,6 +21,7 @@ onnx_diagnostic.helpers
     mini_onnx_builder
     model_builder_helper
     onnx_helper
+    optim_helper
     ort_session
     rt_helper
     torch_fx_graph_helper

@@ -10,5 +10,6 @@ Command Lines
 
     compare
     config
+    optimize
     sbs
     validate

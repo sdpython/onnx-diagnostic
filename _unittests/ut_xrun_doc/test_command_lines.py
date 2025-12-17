@@ -10,6 +10,7 @@ from onnx_diagnostic._command_lines_parser import (
     get_parser_dot,
     get_parser_find,
     get_parser_lighten,
+    get_parser_optimize,
     get_parser_print,
     get_parser_sbs,
     get_parser_stats,
@@ -177,6 +178,13 @@ class TestCommandLines(ExtTestCase):
             get_parser_compare().print_help()
         text = st.getvalue()
         self.assertIn("compare", text)
+
+    def test_parser_optimize(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            get_parser_optimize().print_help()
+        text = st.getvalue()
+        self.assertIn("default", text)
 
 
 if __name__ == "__main__":
