@@ -78,7 +78,7 @@ def optimize_model(
         opt_onx, report = gr.to_onnx(optimize=True, return_optimize_report=True)
         if verbose:
             print("[optimize_model] optimization report")
-            pprint.print(report)
+            pprint.pprint(report)
             print("[optimize_model] done")
 
     elif algorithm == "slim":
