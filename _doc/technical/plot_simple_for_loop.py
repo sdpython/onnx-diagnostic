@@ -133,4 +133,4 @@ print(ep)
 
 # %%
 
-doc.plot_legend("export a loop\nreturning\ndifferent shapes", "dynamic shapes", "green")
+doc.plot_legend("export a loop\nreturning\ndifferent shapes", "loops", "green")
