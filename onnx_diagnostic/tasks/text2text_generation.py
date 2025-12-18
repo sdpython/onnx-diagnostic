@@ -18,6 +18,22 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
         config.num_decoder_layers = min(config.num_decoder_layers, 2)
     if hasattr(config, "num_hidden_layers"):
         config.num_hidden_layers = min(config.num_hidden_layers, nhl())
+    if hasattr(config, "encoder") and hasattr(config.encoder, "layer_types"):
+        default_layer_types = [
+            "sliding_attention",
+            "full_attention",
+            "sliding_attention",
+            "full_attention",
+        ]
+        config.encoder.num_hidden_layers = 4
+        config.encoder.layer_types = (
+            default_layer_types if config is None else config.encoder.layer_types[:4]
+        )
+        config.decoder.num_hidden_layers = 4
+        config.decoder.layer_types = (
+            default_layer_types if config is None else config.decoder.layer_types[:4]
+        )
+
     update_config(config, kwargs)
     return kwargs
 
@@ -177,55 +193,75 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
 
     If the configuration is None, the function selects typical dimensions.
     """
+    path = 1
     if config is not None:
-        check_hasattr(
-            config,
-            "vocab_size",
-            "hidden_size",
-            "num_attention_heads",
-            ("num_hidden_layers", "num_layers"),
-            ("n_positions", "d_model"),
-            (
-                "num_key_value_heads",
-                "num_heads",
-                ("decoder_attention_heads", "encoder_attention_heads"),
+        if hasattr(config, "num_attention_heads"):
+            check_hasattr(
+                config,
+                "vocab_size",
+                "hidden_size",
+                "num_attention_heads",
+                ("num_hidden_layers", "num_layers"),
+                ("n_positions", "d_model"),
+                (
+                    "num_key_value_heads",
+                    "num_heads",
+                    ("decoder_attention_heads", "encoder_attention_heads"),
+                ),
+            )
+        else:
+            check_hasattr(config, "encoder", "decoder")
+            path = 2
+
+    if path == 1:
+        kwargs = dict(
+            batch_size=2,
+            sequence_length=30,
+            sequence_length2=3,
+            head_dim_encoder=(
+                16 if config is None else _pick(config, "d_kv", "encoder_ffn_dim")
             ),
+            head_dim_decoder=(
+                16 if config is None else _pick(config, "d_kv", "decoder_ffn_dim")
+            ),
+            dummy_max_token_id=31999 if config is None else config.vocab_size - 1,
+            num_hidden_layers=(
+                8 if config is None else _pick(config, "num_hidden_layers", "num_layers")
+            ),
+            num_key_value_heads_encoder=(
+                16
+                if config is None
+                else _pick(
+                    config,
+                    "encoder_attention_heads",
+                    "num_key_value_heads",
+                    "num_heads",
+                )
+            ),
+            num_key_value_heads_decoder=(
+                16
+                if config is None
+                else _pick(
+                    config,
+                    "decoder_attention_heads",
+                    "num_key_value_heads",
+                    "num_heads",
+                )
+            ),
+            encoder_dim=512 if config is None else _pick(config, "n_positions", "d_model"),
         )
-    # exceptions = {
-    #     "PLBartForConditionalGeneration": (
-    #         lambda c: c.encoder_attention_heads + c.decoder_attention_heads
-    #    )
-    # }
-    kwargs = dict(
-        batch_size=2,
-        sequence_length=30,
-        sequence_length2=3,
-        head_dim_encoder=16 if config is None else _pick(config, "d_kv", "encoder_ffn_dim"),
-        head_dim_decoder=16 if config is None else _pick(config, "d_kv", "decoder_ffn_dim"),
-        dummy_max_token_id=31999 if config is None else config.vocab_size - 1,
-        num_hidden_layers=(
-            8 if config is None else _pick(config, "num_hidden_layers", "num_layers")
-        ),
-        num_key_value_heads_encoder=(
-            16
-            if config is None
-            else _pick(
-                config,
-                "encoder_attention_heads",
-                "num_key_value_heads",
-                "num_heads",
-            )
-        ),
-        num_key_value_heads_decoder=(
-            16
-            if config is None
-            else _pick(
-                config,
-                "decoder_attention_heads",
-                "num_key_value_heads",
-                "num_heads",
-            )
-        ),
-        encoder_dim=512 if config is None else _pick(config, "n_positions", "d_model"),
-    )
+    else:
+        kwargs = dict(
+            batch_size=2,
+            sequence_length=30,
+            sequence_length2=3,
+            dummy_max_token_id=config.encoder.vocab_size - 1,
+            num_key_value_heads_encoder=config.encoder.num_key_value_heads,
+            num_key_value_heads_decoder=config.decoder.num_key_value_heads,
+            num_hidden_layers=len(config.encoder.layer_types),
+            head_dim_encoder=config.encoder.head_dim,
+            head_dim_decoder=config.decoder.head_dim,
+            encoder_dim=256,
+        )
+
     return kwargs, get_inputs

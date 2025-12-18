@@ -18,7 +18,10 @@ from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimension
 from onnx_diagnostic.torch_models.hghub.hub_api import get_cached_configuration
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
-from onnx_diagnostic.torch_export_patches.patches.patch_transformers import patch_qwen2_5
+from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+    patch_qwen2_5,
+    patch_funnel,
+)
 from onnx_diagnostic.export.api import to_onnx
 
 
@@ -786,6 +789,42 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqual(len(results.eager_outputs), len(results.diffs))
         self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=1e-5)
         self.assertLess(results.diffs[0]["abs"], 1e-5)
+
+    @unittest.skipIf(not patch_funnel, "Funnel not part of this transformers")
+    def test_model_funnel(self):
+        from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
+            patched_FunnelAttentionStructure,
+            patched_FunnelRelMultiheadAttention,
+        )
+
+        pos = torch.tensor([0, 4, 5, 8], dtype=torch.long)
+        stride = 2
+        config = transformers.models.funnel.modeling_funnel.FunnelConfig()
+        original = transformers.models.funnel.modeling_funnel.FunnelAttentionStructure(config)
+        patched = patched_FunnelAttentionStructure()
+        self.assertEqualArray(
+            original.relative_pos(pos, stride=stride), patched.relative_pos(pos, stride=stride)
+        )
+
+        rmha = transformers.models.funnel.modeling_funnel.FunnelRelMultiheadAttention(
+            config, 2
+        )
+        patched = patched_FunnelRelMultiheadAttention()
+        patched.config = config
+        for att in ["block_index", "r_r_bias", "scale", "r_kernel"]:
+            setattr(patched, att, getattr(rmha, att))
+        inputs = dict(
+            position_embeds=[
+                [torch.rand((24, 768)), None],
+                [torch.rand((12, 768)), torch.rand((24, 768))],
+                [torch.rand((6, 768)), torch.rand((12, 768))],
+            ],
+            q_head=torch.rand((2, 12, 12, 64)),
+            context_len=12,
+        )
+        expected = rmha.relative_positional_attention(**inputs)
+        got = patched.relative_positional_attention(**inputs)
+        self.assertEqualArray(expected, got)
 
 
 if __name__ == "__main__":
