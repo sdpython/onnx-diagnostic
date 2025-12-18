@@ -40,6 +40,9 @@ def reduce_model_config(config: Any) -> Dict[str, Any]:
             state_size=8 if config is None else getattr(config, "state_size", None),
             conv_kernel=4 if config is None else getattr(config, "conv_kernel", None),
         )
+    elif config.__class__.__name__ == "FunnelConfig":
+        # does not support num_hidden_layers
+        kwargs = dict()
     else:
         kwargs = dict(
             head_dim=getattr(

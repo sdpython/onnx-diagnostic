@@ -184,7 +184,18 @@ def _trygetattr(config, attname):
         return None
 
 
+def rewrite_architecture_name(name: Optional[str]) -> Optional[str]:
+    if name == "ConditionalDETRForObjectDetection":
+        return "ConditionalDetrForObjectDetection"
+    return name
+
+
 def architecture_from_config(config) -> Optional[str]:
+    """Guesses the architecture (class) of the model described by this config."""
+    return rewrite_architecture_name(_architecture_from_config(config))
+
+
+def _architecture_from_config(config) -> Optional[str]:
     """Guesses the architecture (class) of the model described by this config."""
     if isinstance(config, dict):
         if "_class_name" in config:

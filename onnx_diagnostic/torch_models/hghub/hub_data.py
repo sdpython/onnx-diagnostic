@@ -5,7 +5,10 @@ from typing import Dict, List
 
 __date__ = "2025-06-21"
 
-__data_arch_values__ = {"ResNetForImageClassification": dict(image_size=224)}
+__data_arch_values__ = {
+    "ConditionalDETRForObjectDetection": dict(image_size=224),
+    "ResNetForImageClassification": dict(image_size=224),
+}
 
 __data_arch__ = textwrap.dedent(
     """
@@ -32,6 +35,7 @@ __data_arch__ = textwrap.dedent(
     ConvNextV2Model,image-feature-extraction
     CosmosTransformer3DModel,image-to-video
     CvtModel,feature-extraction
+    ClvpModelForConditionalGeneration,audio-feature-extraction
     DPTModel,image-feature-extraction
     Data2VecAudioModel,feature-extraction
     Data2VecTextModel,feature-extraction
@@ -49,6 +53,8 @@ __data_arch__ = textwrap.dedent(
     ElectraModel,feature-extraction
     EsmModel,feature-extraction
     FalconMambaForCausalLM,text-generation
+    FunnelBaseModel,feature-extraction
+    FuyuForCausalLM,image-text-to-text
     GLPNModel,image-feature-extraction
     GPT2LMHeadModel,text-generation
     GPTBigCodeModel,feature-extraction
@@ -63,6 +69,7 @@ __data_arch__ = textwrap.dedent(
     Glm4vMoeForConditionalGeneration,image-text-to-text
     GraniteForCausalLM,text-generation
     GroupViTModel,feature-extraction
+    HeliumForCausalLM,text-generation
     HieraForImageClassification,image-classification
     HubertModel,feature-extraction
     IBertModel,feature-extraction
@@ -136,6 +143,7 @@ __data_arch__ = textwrap.dedent(
     SwinModel,image-feature-extraction
     Swinv2Model,image-feature-extraction
     T5ForConditionalGeneration,text2text-generation
+    T5GemmaForConditionalGeneration,text2text-generation
     TableTransformerModel,image-feature-extraction
     TableTransformerForObjectDetection,object-detection
     UNet2DConditionModel,text-to-image
