@@ -32,6 +32,7 @@ __data_arch__ = textwrap.dedent(
     ConvNextV2Model,image-feature-extraction
     CosmosTransformer3DModel,image-to-video
     CvtModel,feature-extraction
+    ClvpModelForConditionalGeneration,audio-feature-extraction
     DPTModel,image-feature-extraction
     Data2VecAudioModel,feature-extraction
     Data2VecTextModel,feature-extraction
@@ -49,6 +50,7 @@ __data_arch__ = textwrap.dedent(
     ElectraModel,feature-extraction
     EsmModel,feature-extraction
     FalconMambaForCausalLM,text-generation
+    FunnelBaseModel,feature-extraction
     GLPNModel,image-feature-extraction
     GPT2LMHeadModel,text-generation
     GPTBigCodeModel,feature-extraction
@@ -63,6 +65,7 @@ __data_arch__ = textwrap.dedent(
     Glm4vMoeForConditionalGeneration,image-text-to-text
     GraniteForCausalLM,text-generation
     GroupViTModel,feature-extraction
+    HeliumForCausalLM,text-generation
     HieraForImageClassification,image-classification
     HubertModel,feature-extraction
     IBertModel,feature-extraction
