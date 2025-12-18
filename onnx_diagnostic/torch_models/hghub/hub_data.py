@@ -5,7 +5,10 @@ from typing import Dict, List
 
 __date__ = "2025-06-21"
 
-__data_arch_values__ = {"ResNetForImageClassification": dict(image_size=224)}
+__data_arch_values__ = {
+    "ConditionalDETRForObjectDetection": dict(image_size=224),
+    "ResNetForImageClassification": dict(image_size=224),
+}
 
 __data_arch__ = textwrap.dedent(
     """
