@@ -140,6 +140,7 @@ __data_arch__ = textwrap.dedent(
     SwinModel,image-feature-extraction
     Swinv2Model,image-feature-extraction
     T5ForConditionalGeneration,text2text-generation
+    T5GemmaForConditionalGeneration,text2text-generation
     TableTransformerModel,image-feature-extraction
     TableTransformerForObjectDetection,object-detection
     UNet2DConditionModel,text-to-image

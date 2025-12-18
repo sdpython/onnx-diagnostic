@@ -13,6 +13,10 @@ from .data import get_data
 __TASK__ = "image-text-to-text"
 
 
+def should_have_vision_config(config):
+    return config.architectures != ["FuyuForCausalLM"]
+
+
 def reduce_model_config(config: Any) -> Dict[str, Any]:
     """Reduces a model size."""
     kwargs: Dict[str, Any] = {}
@@ -477,7 +481,8 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 "hidden_size",
                 "pad_token_id",
             )
-            check_hasattr(config, "vision_config", ("image_token_index", "image_token_id"))
+            if should_have_vision_config(config):
+                check_hasattr(config, "vision_config", ("image_token_index", "image_token_id"))
             text_config = True
         else:
             check_hasattr(
@@ -491,7 +496,8 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                 "vision_config",
             )
             text_config = False
-        check_hasattr(config.vision_config, ("num_channels", "in_chans", "in_channels"))
+        if should_have_vision_config(config):
+            check_hasattr(config.vision_config, ("num_channels", "in_chans", "in_channels"))
     kwargs = dict(
         head_dim=(
             16
@@ -552,17 +558,21 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
         ),
         width=(
             224
-            if config is None or not hasattr(config.vision_config, "image_size")
+            if config is None
+            or not should_have_vision_config(config)
+            or not hasattr(config.vision_config, "image_size")
             else config.vision_config.image_size
         ),
         height=(
             224
-            if config is None or not hasattr(config.vision_config, "image_size")
+            if config is None
+            or not should_have_vision_config(config)
+            or not hasattr(config.vision_config, "image_size")
             else config.vision_config.image_size
         ),
         num_channels=(
             3
-            if config is None
+            if config is None or not should_have_vision_config(config)
             else _pick(config.vision_config, "num_channels", "in_chans", "in_channels")
         ),
         pad_token_id=(
