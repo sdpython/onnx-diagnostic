@@ -20,7 +20,7 @@ from ._patch_transformers_rotary_embedding import (
 from ._patch_transformers_idefics import patched_IdeficsEmbedding, patched_IdeficsAttention
 from ._patch_transformers_sam_mask_decoder import patched_SamMaskDecoder
 
-# transformers dependant patches
+# transformers dependent patches
 
 from ._patch_transformers_cache_utils import patch_parse_processor_args
 
@@ -41,7 +41,7 @@ if patch_masking_utils:
         patched_sdpa_mask_recent_torch,
     )
 
-# transformers models dependant patches
+# transformers models dependent patches
 
 if _has_transformers("4.51"):
     from ._patch_transformers_rotary_embedding import patched_Phi3RotaryEmbedding

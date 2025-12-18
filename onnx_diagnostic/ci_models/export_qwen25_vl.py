@@ -59,6 +59,7 @@ It is possible to overwrite this by by setting environment variable
 import os
 import sys
 import time
+import warnings
 from typing import Any, Dict, List, Tuple
 from .ci_helpers import (
     check_for_discrepancies_and_log_everything_into_a_json_file,
@@ -301,7 +302,11 @@ def main(
     print(f"-- config._attn_implementation={model.config._attn_implementation}")
     print(f"-- model.dtype={model.dtype}")
     print(f"-- model.device={model.device}")
-    processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
+    try:
+        processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
+    except OSError as e:
+        warnings.warn(f"Unable to access internet due to {e!r}", ResourceWarning, stacklevel=0)
+        return
     print(f"-- processor={type(processor)}")
 
     export_inputs, other_inputs = None, None

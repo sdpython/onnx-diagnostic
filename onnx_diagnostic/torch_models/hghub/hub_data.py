@@ -51,6 +51,7 @@ __data_arch__ = textwrap.dedent(
     EsmModel,feature-extraction
     FalconMambaForCausalLM,text-generation
     FunnelBaseModel,feature-extraction
+    FuyuForCausalLM,image-text-to-text
     GLPNModel,image-feature-extraction
     GPT2LMHeadModel,text-generation
     GPTBigCodeModel,feature-extraction
