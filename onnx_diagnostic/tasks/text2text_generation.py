@@ -193,6 +193,7 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
 
     If the configuration is None, the function selects typical dimensions.
     """
+    path = 1
     if config is not None:
         if hasattr(config, "num_attention_heads"):
             check_hasattr(
@@ -208,7 +209,6 @@ def random_input_kwargs(config: Any) -> Tuple[Dict[str, Any], Callable]:
                     ("decoder_attention_heads", "encoder_attention_heads"),
                 ),
             )
-            path = 1
         else:
             check_hasattr(config, "encoder", "decoder")
             path = 2
