@@ -159,7 +159,7 @@ def to_onnx(
             return_optimize_report=True,
             **(exporter_kwargs or {}),
         )
-        if opt_stats and os.path.exists(filename):
+        if opt_stats and filename and os.path.exists(filename):
             import pandas
 
             stat_filename = f"{os.path.splitext(filename)[0]}.opt.xlsx"
