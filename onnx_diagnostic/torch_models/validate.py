@@ -2449,6 +2449,34 @@ def call_torch_export_custom(
             )
         ),
     )
+    if "optimization" in opt_stats:
+        import pandas
+
+        pattern_stats = []
+        for k, v in opt_stats.items():
+            if "time" in k:
+                pattern_stats.append(dict(level="main", pattern=k, time_in=v))
+        pattern_stats.extend(
+            [{**obs, "level": "detailed"} for obs in opt_stats["optimization"]]
+        )
+        stat_filename = os.path.join(dump_folder, "optimization_stats.xlsx")
+        df = pandas.DataFrame(pattern_stats)
+        df.to_excel(stat_filename, index=False)
+        cols = [
+            "level",
+            "pattern",
+            "time_in",
+            "iteration",
+            "inlined",
+            "removed",
+            "added",
+            "instances",
+        ]
+        agg = {k: "sum" for k in cols if k not in ("level", "pattern")}
+        agg.update(dict(iteration="max", instances="mean"))
+        stat_filename = os.path.join(dump_folder, "optimization_stats.agg.xlsx")
+        df[cols].groupby(["level", "pattern"]).agg(agg).to_excel(stat_filename)
+
     if "ERR_export_onnx_c" in summary:
         return summary, data
 
