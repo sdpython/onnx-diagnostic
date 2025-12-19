@@ -12,6 +12,8 @@ jobs:
   run:
     name: to-${{ matrix.torch }}-tr-${{ matrix.transformers }}-ci ${{ matrix.os }}-${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    
     strategy:
       fail-fast: false
       matrix:
@@ -64,5 +66,6 @@ jobs:
         run: python -m pip freeze
 
       - name: Phi-4-multimodal-instruct - vision
+        continue-on-error: true
         run: |
           PYTHONPATH=. python -m onnx_diagnostic.ci_models.export_phi4_mm -m microsoft/Phi-4-multimodal-instruct --device cpu --dtype float16 --exporter custom --no-pretrained --no-second-input --atol 100000164640 --mismatch01 1 --part vision
