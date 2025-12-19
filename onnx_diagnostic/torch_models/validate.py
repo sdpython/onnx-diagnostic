@@ -2449,7 +2449,7 @@ def call_torch_export_custom(
             )
         ),
     )
-    if "optimization" in opt_stats:
+    if "optimization" in opt_stats and dump_folder:
         import pandas
 
         pattern_stats = []
