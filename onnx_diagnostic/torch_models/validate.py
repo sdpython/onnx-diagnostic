@@ -1773,7 +1773,7 @@ def validate_onnx_model(
             opts.optimized_model_filepath = f"{data['onnx_filename']}.rtopt.onnx"
             opts.add_session_config_entry(
                 "session.optimized_model_external_initializers_file_name",
-                f"{data['onnx_filename']}.rtopt.data",
+                f"{os.path.split(data['onnx_filename'])[0]}.rtopt.data",
             )
             if verbose:
                 print(

@@ -11,6 +11,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     requires_onnxruntime_training,
     requires_cuda,
+    requires_experimental_experiment,
 )
 from onnx_diagnostic.helpers.onnx_helper import from_array_extended, onnx_dtype_to_np_dtype
 from onnx_diagnostic.helpers.torch_helper import onnx_dtype_to_torch_dtype
@@ -295,6 +296,7 @@ class TestOrtSession(ExtTestCase):
         self.assertIsInstance(got[0], torch.Tensor)
         self.assertEqualArray(expected[0], got[0])
 
+    @requires_experimental_experiment("0.1.3")
     def test_profiling(self):
         model, feeds, expected = self._get_model_init(onnx.TensorProto.BFLOAT16)
         wrap = InferenceSessionForTorch(
