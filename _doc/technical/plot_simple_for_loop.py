@@ -36,7 +36,7 @@ model = Model(4)
 args = (torch.rand((2, 22)), torch.tensor([0, 5, 15, 20, 22], dtype=torch.int64))
 
 expected = model(*args)
-print(f"-- exected shape: {expected.shape}")
+print(f"-- expected shape: {expected.shape}")
 
 
 # %%
