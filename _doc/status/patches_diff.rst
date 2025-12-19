@@ -33,7 +33,7 @@ helps fixing some issues for many models.
 
 Class :class:`PatchDetails <onnx_diagnostic.torch_export_patches.patch_details.PatchDetails>`
 gives an example on how to retrieve the list of involded patches for a specific model.
-Those patches belong to the following list which depends on :epkg:`transformers`` and
+Those patches belong to the following list which depends on :epkg:`transformers` and
 :epkg:`pytorch` versions.
 
 .. runpython::
