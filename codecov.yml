@@ -1,2 +1,3 @@
 ignore:
   - onnx_diagnostic/big_models/*
+  - onnx_diagnostic/ci_models/export*
