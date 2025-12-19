@@ -2463,14 +2463,20 @@ def call_torch_export_custom(
         df = pandas.DataFrame(pattern_stats)
         df.to_excel(stat_filename, index=False)
         cols = [
-            "level",
-            "pattern",
-            "time_in",
-            "iteration",
-            "inlined",
-            "removed",
-            "added",
-            "instances",
+            c
+            for c in [
+                "level",
+                "pattern",
+                "time_in",
+                "iteration",
+                "inlined",
+                "removed",
+                "added",
+                "instances",
+                "changed",
+                "scale",
+            ]
+            if c in df.columns
         ]
         agg = {k: "sum" for k in cols if k not in ("level", "pattern")}
         agg.update(dict(iteration="max", instances="mean"))
