@@ -62,7 +62,7 @@ Those two versions leads to the following list of patches.
     ):
         pass
     for patch in details.patched:
-        print(f""* {patch.family} - {patch.function_to_patch}")
+        print(f"* {patch.family} - {patch.function_to_patch}")
     print()
     print()
     for patch in details.patched:
