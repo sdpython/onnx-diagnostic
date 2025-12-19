@@ -69,7 +69,7 @@ class TestPatchDetails(ExtTestCase):
             ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
             )
-        patches = details.patches_involded_in_graph(ep.graph)
+        patches = details.patches_involved_in_graph(ep.graph)
         self.assertNotEmpty(patches)
         report = details.make_report(patches, format="rst")
         if has_transformers("4.51"):

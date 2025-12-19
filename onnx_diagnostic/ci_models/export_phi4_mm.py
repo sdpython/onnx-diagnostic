@@ -973,7 +973,7 @@ def main(
                     kwargs=export_inputs,
                     dynamic_shapes=use_dyn_not_str(dynamic_shapes),
                 )
-                patches = details.patches_involded_in_graph(ep.graph)
+                patches = details.patches_involved_in_graph(ep.graph)
                 report = details.make_report(patches, format="rst")
                 with open(f"{basename}.patches_details.rst", "w") as f:
                     f.write(report)

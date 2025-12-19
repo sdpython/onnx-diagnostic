@@ -1771,6 +1771,9 @@ def validate_onnx_model(
         if os.environ.get("DUMPORTOPT", "") in ("1", "true", "True"):
             opts = onnxruntime.SessionOptions()
             opts.optimized_model_filepath = f"{data['onnx_filename']}.rtopt.onnx"
+            opts.optimized_model_external_initializers_file_name = (
+                f"{data['onnx_filename']}.rtopt.data"
+            )
             if verbose:
                 print(
                     f"[validate_onnx_model] saved optimized onnxruntime "
