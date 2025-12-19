@@ -36,7 +36,7 @@ model = Model(4)
 args = (torch.rand((2, 22)), torch.tensor([0, 5, 15, 20, 22], dtype=torch.int64))
 
 expected = model(*args)
-print(f"-- exected shape: {expected.shape}")
+print(f"-- expected shape: {expected.shape}")
 
 
 # %%
@@ -70,7 +70,7 @@ rewritten_model_with_scan = ModelWithScan(4)
 print(f"-- max discrepancies with scan: { torch.abs(expected - results).max()}")
 
 # %%
-# This approach has one flows, the variable carried grows at every
+# This approach has one flaw, the variable carried grows at every
 # iteration and the cost of the copy is quadratic when the same operation
 # in the first model is linear.
 # We cannot simply return variable ``cropped`` because its shape

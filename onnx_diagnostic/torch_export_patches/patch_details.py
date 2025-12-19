@@ -191,7 +191,7 @@ class PatchDetails:
             ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds)
             )
-        patches = details.patches_involded_in_graph(ep.graph)
+        patches = details.patches_involved_in_graph(ep.graph)
         report = details.make_report(patches, format="rst")
         print(report)
     """
@@ -235,7 +235,7 @@ class PatchDetails:
         """Returns the data for a dataframe."""
         return [p.to_dict() for p in self.patched]
 
-    def patches_involded_in_graph(
+    def patches_involved_in_graph(
         self, graph: "torch.fx.Graph"  # noqa: F821
     ) -> List[Tuple[PatchInfo, List["torch.fx.Node"]]]:  # noqa: F821
         """
@@ -322,7 +322,7 @@ class PatchDetails:
         """
         Creates a report based on the involved patches.
 
-        :param patches: from method :meth:`patches_involded_in_graph`
+        :param patches: from method :meth:`patches_involved_in_graph`
         :param format: format of the report
         :return: report
         """

@@ -1,6 +1,6 @@
 [project]
 name = "onnx-diagnostic"
-version = "0.8.7"
+version = "0.8.8"
 description = "Tools to help converting pytorch models into ONNX."
 readme = "README.rst"
 authors = [
