@@ -2480,6 +2480,7 @@ def call_torch_export_custom(
         ]
         agg = {k: "sum" for k in cols if k not in ("level", "pattern")}
         agg.update(dict(iteration="max", instances="mean"))
+        agg = {k: v for k, v in agg.items() if k in df.columns}
         stat_filename = os.path.join(dump_folder, "optimization_stats.agg.xlsx")
         df[cols].groupby(["level", "pattern"]).agg(agg).to_excel(stat_filename)
 
