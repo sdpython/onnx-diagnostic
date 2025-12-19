@@ -235,7 +235,7 @@ class PatchDetails:
         """Returns the data for a dataframe."""
         return [p.to_dict() for p in self.patched]
 
-    def patches_involded_in_graph(
+    def patches_involved_in_graph(
         self, graph: "torch.fx.Graph"  # noqa: F821
     ) -> List[Tuple[PatchInfo, List["torch.fx.Node"]]]:  # noqa: F821
         """
