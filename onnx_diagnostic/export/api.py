@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import torch
 from .onnx_plug import EagerDirectReplacementWithOnnx
@@ -138,7 +139,7 @@ def to_onnx(
             else None
         )
 
-        return _to_onnx(
+        proto, opt_stats = _to_onnx(
             mod,
             args=args,
             kwargs=kwargs,
@@ -155,11 +156,47 @@ def to_onnx(
             inline=inline,
             dispatcher=main_dispatcher,
             optimize=optimize,
+            return_optimize_report=True,
             **(exporter_kwargs or {}),
         )
+        if opt_stats and filename and os.path.exists(filename):
+            import pandas
+
+            stat_filename = f"{os.path.splitext(filename)[0]}.opt.xlsx"
+            pattern_stats = []
+            for k, v in opt_stats.items():
+                if "time" in k:
+                    pattern_stats.append(dict(level="main", pattern=k, time_in=v))
+            pattern_stats.extend(
+                [{**obs, "level": "detailed"} for obs in opt_stats["optimization"]]
+            )
+            df = pandas.DataFrame(pattern_stats)
+            df.to_excel(stat_filename, index=False)
+            cols = [
+                c
+                for c in [
+                    "level",
+                    "pattern",
+                    "time_in",
+                    "iteration",
+                    "inlined",
+                    "removed",
+                    "added",
+                    "instances",
+                    "changed",
+                    "scale",
+                ]
+                if c in df.columns
+            ]
+            agg = {k: "sum" for k in cols if k not in ("level", "pattern")}
+            agg.update(dict(iteration="max", instances="mean"))
+            agg = {k: v for k, v in agg.items() if k in df.columns}
+            stat_filename = f"{os.path.splitext(filename)[0]}.opt.agg.xlsx"
+            df[cols].groupby(["level", "pattern"]).agg(agg).to_excel(stat_filename)
+
+        return proto
 
     if exporter in ("dynamo", "onnx-dynamo"):
-        import os
         from ..helpers import flatten_object
         import onnxscript.rewriter.ort_fusions as ort_fusions
 
@@ -226,7 +263,6 @@ def to_onnx(
         return epo
 
     if exporter == "modelbuilder":
-        import os
         from ..helpers import flatten_object, string_type
         from ..helpers.model_builder_helper import create_model_builder, save_model_builder
 
