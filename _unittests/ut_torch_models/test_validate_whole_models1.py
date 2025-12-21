@@ -225,6 +225,21 @@ class TestValidateWholeModels1(ExtTestCase):
         self.assertIn("If", op_types)
         self.clean_dump()
 
+    @hide_stdout()
+    def test_o_validate_model_export_fake(self):
+        mid = "arnir0/Tiny-LLM"
+        summary, data = validate_model(
+            mid,
+            do_run=True,
+            verbose=10,
+            exporter="custom-fake",
+            dump_folder="dump_test/validate_model_export_fake",
+            patch=True,
+        )
+        self.assertIsInstance(summary, dict)
+        self.assertIsInstance(data, dict)
+        self.clean_dump()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
