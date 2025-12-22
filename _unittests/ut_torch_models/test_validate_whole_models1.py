@@ -226,6 +226,7 @@ class TestValidateWholeModels1(ExtTestCase):
         self.clean_dump()
 
     @hide_stdout()
+    @requires_transformers("4.57")
     def test_o_validate_model_export_fake(self):
         mid = "arnir0/Tiny-LLM"
         summary, data = validate_model(
