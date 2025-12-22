@@ -209,9 +209,11 @@ class FakeTensorContext:
             for idim, dim in enumerate(x.shape):
                 if dynamic_shapes is not None and idim in dynamic_shapes:
                     s = dynamic_shapes[idim]
+                    if s.__class__.__name__ == "Dim":
+                        s = s.__name__
                     assert isinstance(s, str), (
                         f"Unexpected type {type(s)} in dynamic_shapes={dynamic_shapes} "
-                        f"at index {idim}"
+                        f"at index {idim}, self._mapping_str={self._mapping_str}"
                     )
                     if s in self._mapping_str:
                         dim = self._mapping_str[s]
@@ -233,6 +235,9 @@ class FakeTensorContext:
             assert t.device == x.device, f"device mismatch {x.device} -> {t.device}"
             assert t.dtype == x.dtype, f"dtype mismatch {x.dtype} -> {t.dtype}"
             return t
+        if isinstance(x, (int, bool, float)):
+            # It is a constant, we don't change that.
+            return x
         from ..helpers import string_type
 
         raise TypeError(
