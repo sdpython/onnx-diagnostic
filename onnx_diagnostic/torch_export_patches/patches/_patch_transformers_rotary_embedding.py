@@ -214,7 +214,7 @@ def patched_dynamic_rope_update(rope_forward):
             cond,
             (lambda x, y: x.clone()),
             (lambda x, y: y.clone()),
-            [long_inv_freq, original_inv_freq],
+            [long_inv_freq.to(original_inv_freq.dtype), original_inv_freq],
         )
         setattr(self, f"{prefix}inv_freq", inv_freq)
         # if seq_len > original_max_position_embeddings:
@@ -293,7 +293,7 @@ def patched_dynamic_rope_update(rope_forward):
             cond,
             (lambda x, y: x.clone()),
             (lambda x, y: y.clone()),
-            [long_inv_freq, original_inv_freq],
+            [long_inv_freq.to(original_inv_freq.dtype), original_inv_freq],
         )
         setattr(self, f"{prefix}inv_freq", inv_freq)
 

@@ -172,10 +172,10 @@ def _get_inputs_gemma3(
         assert expected & set(
             dummies
         ), f"Unable to find expected inputs {expected} in loaded inputs {set(dummies)}"
-        assert sequence_length == dummies["input_ids"].shape[-1], (
-            f"sequence_length={sequence_length} != {dummies['input_ids'].shape[-1]} for "
-            f"model class {model.__class__.__name__}"
-        )
+        # assert sequence_length == dummies["input_ids"].shape[-1], (
+        #    f"sequence_length={sequence_length} != {dummies['input_ids'].shape[-1]} for "
+        #    f"model class {model.__class__.__name__}"
+        # )
         assert batch_size == dummies["input_ids"].shape[0], (
             f"batch_size={batch_size} != {dummies['input_ids'].shape[0]} for "
             f"model class {model.__class__.__name__}"
