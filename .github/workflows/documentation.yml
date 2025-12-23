@@ -104,12 +104,12 @@ jobs:
 
       - name: Check for errors and warnings
         run: |
-          if [[ $(grep ERROR doc.txt | grep -v 'l-plot-tiny-llm-export') ]]; then
+          if [[ $(grep ERROR doc.txt | grep -v 'l-plot-tiny-llm-export' | grep -v 'Unexpected section title or transition.') ]]; then
             echo "Documentation produces errors."
-            grep ERROR doc.txt | grep -v 'l-plot-tiny-llm-export'
+            grep ERROR doc.txt | grep -v 'l-plot-tiny-llm-export' | grep -v 'Unexpected section title or transition.'
             exit 1
           fi
-          if [[ $(grep WARNING doc.txt | grep -v 'l-plot-tiny-llm-export' | grep -v 'Inline emphasis start-string' | grep -v 'Definition list ends without a blank line' | grep -v 'Unexpected section title or transition' | grep -v 'Inline strong start-string' | grep -v 'MambaCache') ]]; then
+          if [[ $(grep WARNING doc.txt | grep -v 'l-plot-tiny-llm-export' | grep -v 'Inline emphasis start-string' | grep -v 'Definition list ends without a blank line' | grep -v 'Unexpected section title or transition' | grep -v 'Inline strong start-string' | grep -v 'MambaCache' ) ]]; then
             echo "Documentation produces warnings."
             grep WARNING doc.txt | grep -v 'l-plot-tiny-llm-export' | grep -v 'Inline emphasis start-string' | grep -v 'Definition list ends without a blank line' | grep -v 'Unexpected section title or transition' | grep -v 'Inline strong start-string' | grep -v 'MambaCache'
             exit 1

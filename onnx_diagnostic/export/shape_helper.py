@@ -210,6 +210,7 @@ def make_fake_with_dynamic_dimensions(
     This uses function :func:`onnx_diagnostic.helpers.fake_tensor_helper.make_fake`.
     Parameter ``existing`` is used to reused the same object when the dynamic
     dimension is given the same name as another one.
+    This function works with caches only if ``transformers>=4.57``.
 
     A simple tensor:
 

@@ -2330,6 +2330,7 @@ def call_torch_export_custom(
         "custom-dec",
         "custom-decall",
         "custom-fake",
+        "custom-tracing",
     }
     assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
     assert "model" in data, f"model is missing from data: {sorted(data)}"
@@ -2342,11 +2343,16 @@ def call_torch_export_custom(
         f"Options strict cannot be specified in the exporter name {exporter!r} "
         f"and in the options {exporter_options}"
     )
+    assert ("-tracing" not in exporter) or ("tracing" not in exporter_options), (
+        f"Options tracing cannot be specified in the exporter name {exporter!r} "
+        f"and in the options {exporter_options}"
+    )
     summary: Dict[str, Union[str, int, float]] = {}
     strict = "-strict" in exporter or exporter_options.pop("strict", False)
     args, kwargs = split_args_kwargs(data["inputs_export"])
     ds = data.get("dynamic_shapes", None)
     fake = "-fake" in exporter or exporter_options.pop("fake", False)
+    tracing = "-tracing" in exporter or exporter_options.pop("tracing", False)
     if fake:
         from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
 
@@ -2370,6 +2376,7 @@ def call_torch_export_custom(
     summary["export_exporter"] = exporter
     summary["export_optimization"] = optimization or ""
     summary["export_strict"] = strict
+    summary["export_tracing"] = tracing
     summary["export_fake"] = fake
     summary["export_args"] = string_type(args, with_shape=True)
     summary["export_kwargs"] = string_type(kwargs, with_shape=True)
@@ -2392,6 +2399,7 @@ def call_torch_export_custom(
         )
     )
     large_model = bool(exporter_options.pop("large_model", True))
+    exporter_options.pop("tracing", False)
     return_optimize_report = bool(exporter_options.pop("return_optimize_report", True))
     export_modules_as_functions = bool(
         exporter_options.pop("export_modules_as_functions", False)
@@ -2405,6 +2413,7 @@ def call_torch_export_custom(
     summary["export_external_threshold"] = str(external_threshold)
 
     export_options = ExportOptions(
+        tracing=tracing,
         strict=strict,
         decomposition_table=decomposition_table,
         save_ep=(

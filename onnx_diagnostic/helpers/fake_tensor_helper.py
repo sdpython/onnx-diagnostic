@@ -144,17 +144,18 @@ class FakeTensorContext:
         """
         See
         :func:`onnx_diagnostic.export.shape_helper.make_fake_with_dynamic_dimensions`.
+        If caches are used, it requires ``transformers>=4.57``.
         """
         if x is None:
             return None, None
-        if isinstance(x, (list, tuple)):
+        if type(x) in (list, tuple):
             return x.__class__(
                 [
                     self.make_fake_with_dynamic_dimensions(i, dynamic_shapes=ds)
                     for i, ds in zip(x, dynamic_shapes)
                 ]
             )
-        if isinstance(x, dict):
+        if type(x) is dict:
             return {
                 k: self.make_fake_with_dynamic_dimensions(v, dynamic_shapes=dynamic_shapes[k])
                 for k, v in x.items()
@@ -187,6 +188,17 @@ class FakeTensorContext:
                 x.cross_attention_cache, dynamic_shapes=dynamic_shapes[1]
             )
             return x
+        if x.__class__.__name__ == "BaseModelOutput":
+            assert (
+                list(x.keys()) == ["last_hidden_state"] and x.last_hidden_state is not None
+            ), (
+                f"Field 'last_hidden_state' is empty for {type(x)} or other fields "
+                f"{list(x.keys())} are used."
+            )
+            x.last_hidden_state = self.make_fake_with_dynamic_dimensions(
+                x.last_hidden_state, dynamic_shapes=dynamic_shapes[0]
+            )
+            return x
         if hasattr(x, "shape"):
             assert dynamic_shapes is None or isinstance(dynamic_shapes, dict), (
                 f"dynamic_shapes must be a dictionary at this stage but "
@@ -197,9 +209,11 @@ class FakeTensorContext:
             for idim, dim in enumerate(x.shape):
                 if dynamic_shapes is not None and idim in dynamic_shapes:
                     s = dynamic_shapes[idim]
+                    if s.__class__.__name__ == "Dim":
+                        s = s.__name__
                     assert isinstance(s, str), (
                         f"Unexpected type {type(s)} in dynamic_shapes={dynamic_shapes} "
-                        f"at index {idim}"
+                        f"at index {idim}, self._mapping_str={self._mapping_str}"
                     )
                     if s in self._mapping_str:
                         dim = self._mapping_str[s]
@@ -221,6 +235,9 @@ class FakeTensorContext:
             assert t.device == x.device, f"device mismatch {x.device} -> {t.device}"
             assert t.dtype == x.dtype, f"dtype mismatch {x.dtype} -> {t.dtype}"
             return t
+        if isinstance(x, (int, bool, float)):
+            # It is a constant, we don't change that.
+            return x
         from ..helpers import string_type
 
         raise TypeError(
