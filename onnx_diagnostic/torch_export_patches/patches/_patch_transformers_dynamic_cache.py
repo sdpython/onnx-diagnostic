@@ -27,8 +27,13 @@ if patch_DynamicLayer:
             new_shape = list(key_states.shape)
             new_shape[-2] = 0
             # PATCHED: used a tensor with an empty shape and not en empty list to initialize
-            self.keys = torch.empty(new_shape, dtype=self.dtype, device=self.device)
-            self.values = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+            if isinstance(key_states, torch._subclasses.fake_tensor.FakeTensor):
+                with key_states.fake_mode:
+                    self.keys = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+                    self.values = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+            else:
+                self.keys = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+                self.values = torch.empty(new_shape, dtype=self.dtype, device=self.device)
             if patch_is_initialized:
                 self.is_initialized = True
 

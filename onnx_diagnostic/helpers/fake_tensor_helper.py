@@ -105,6 +105,8 @@ class FakeTensorContext:
         reduced_tensor = self.from_tensor(true_tensor, static_shapes=True).sum(
             axis=tuple(sorted(sh)), keepdim=True
         )
+        if len(reduced_tensor.shape) == 0 == len(new_shape):
+            return reduced_tensor
         return reduced_tensor.expand(*new_shape)
 
     def make_fake(self, x: Any) -> Optional["FakeTensor"]:  # noqa: F821
@@ -157,7 +159,9 @@ class FakeTensorContext:
             )
         if type(x) is dict:
             return {
-                k: self.make_fake_with_dynamic_dimensions(v, dynamic_shapes=dynamic_shapes[k])
+                k: self.make_fake_with_dynamic_dimensions(
+                    v, dynamic_shapes=dynamic_shapes[k] if dynamic_shapes else None
+                )
                 for k, v in x.items()
             }
         if x.__class__.__name__ in {"DynamicCache", "StaticCache", "HybridCache"}:
@@ -231,7 +235,7 @@ class FakeTensorContext:
 
                 x = torch.empty(tuple(new_shape), dtype=x.dtype, device=x.device)
 
-            t = self.fake_reshape(x, dynamic_shapes)  # type: ignore[arg-type]
+            t = self.fake_reshape(x, dynamic_shapes) if dynamic_shapes else x  # type: ignore[arg-type]
             assert t.device == x.device, f"device mismatch {x.device} -> {t.device}"
             assert t.dtype == x.dtype, f"dtype mismatch {x.dtype} -> {t.dtype}"
             return t
