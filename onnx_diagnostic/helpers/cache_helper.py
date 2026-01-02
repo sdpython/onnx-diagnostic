@@ -28,14 +28,6 @@ class CacheKeyValue:
             ]
             self.key_cache = [layer.keys for layer in layers]
             self.value_cache = [layer.values for layer in layers]
-            if None in self.key_cache or None in self.value_cache:
-                from .helper import string_type
-
-                raise AssertionError(
-                    f"issue with key_cache={string_type(self.key_cache)}, "
-                    f"or value_cache={string_type(self.value_cache)}, "
-                    f"cache.layers={string_type(cache.layers)}"
-                )
         elif cache is not None and hasattr(cache, "key_cache"):
             self.key_cache = cache.key_cache
             self.value_cache = cache.value_cache

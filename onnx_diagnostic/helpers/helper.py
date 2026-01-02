@@ -801,6 +801,9 @@ def string_type(
             print(f"[string_type] TT8:{type(obj)}")
         return repr(obj).replace(" ", "").replace("\n", " ")
 
+    if isinstance(obj, torch.fx.proxy.Proxy):
+        return repr(obj)
+
     if ignore:
         if verbose:
             print(f"[string_type] CACHE4:{type(obj)}")

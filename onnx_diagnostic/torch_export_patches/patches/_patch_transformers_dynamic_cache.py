@@ -24,11 +24,18 @@ if patch_DynamicLayer:
 
         def lazy_initialization(self, key_states: torch.Tensor):
             self.dtype, self.device = key_states.dtype, key_states.device
-            new_shape = list(key_states.shape)
-            new_shape[-2] = 0
+            assert (
+                hasattr(key_states, "shape") and key_states is not None
+            ), f"Attribute 'shape' is wrong for type {type(key_states)}"
+            like = torch.narrow(key_states, dim=-2, start=0, length=0)
             # PATCHED: used a tensor with an empty shape and not en empty list to initialize
-            self.keys = torch.empty(new_shape, dtype=self.dtype, device=self.device)
-            self.values = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+            if isinstance(key_states, torch._subclasses.fake_tensor.FakeTensor):
+                with key_states.fake_mode:
+                    self.keys = torch.empty_like(like, dtype=self.dtype, device=self.device)
+                    self.values = torch.empty_like(like, dtype=self.dtype, device=self.device)
+            else:
+                self.keys = torch.empty_like(like, dtype=self.dtype, device=self.device)
+                self.values = torch.empty_like(like, dtype=self.dtype, device=self.device)
             if patch_is_initialized:
                 self.is_initialized = True
 
