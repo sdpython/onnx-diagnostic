@@ -27,7 +27,7 @@ if patch_DynamicLayer:
             assert (
                 hasattr(key_states, "shape") and key_states is not None
             ), f"Attribute 'shape' is wrong for type {type(key_states)}"
-            like = key_states[:, :, :0]
+            like = torch.narrow(key_states, dim=-2, start=0, length=0)
             # PATCHED: used a tensor with an empty shape and not en empty list to initialize
             if isinstance(key_states, torch._subclasses.fake_tensor.FakeTensor):
                 with key_states.fake_mode:
