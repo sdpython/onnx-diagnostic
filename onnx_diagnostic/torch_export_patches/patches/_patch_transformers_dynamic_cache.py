@@ -27,20 +27,15 @@ if patch_DynamicLayer:
             assert (
                 hasattr(key_states, "shape") and key_states is not None
             ), f"Attribute 'shape' is wrong for type {type(key_states)}"
-            assert isinstance(key_states.shape, tuple), (
-                f"Unxpected type {type(key_states.shape)} for key_states.shape, "
-                f"__dict__={key_states.shape.__dict__}"
-            )
-            new_shape = list(key_states.shape)
-            new_shape[-2] = 0
+            like = key_states[:, :0]
             # PATCHED: used a tensor with an empty shape and not en empty list to initialize
             if isinstance(key_states, torch._subclasses.fake_tensor.FakeTensor):
                 with key_states.fake_mode:
-                    self.keys = torch.empty(new_shape, dtype=self.dtype, device=self.device)
-                    self.values = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+                    self.keys = torch.empty_like(like, dtype=self.dtype, device=self.device)
+                    self.values = torch.empty_like(like, dtype=self.dtype, device=self.device)
             else:
-                self.keys = torch.empty(new_shape, dtype=self.dtype, device=self.device)
-                self.values = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+                self.keys = torch.empty_like(like, dtype=self.dtype, device=self.device)
+                self.values = torch.empty_like(like, dtype=self.dtype, device=self.device)
             if patch_is_initialized:
                 self.is_initialized = True
 
