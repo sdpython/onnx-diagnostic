@@ -1,7 +1,11 @@
+import inspect
 import os
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+import textwrap
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import torch
+from .dynamic_shapes import ModelInputs
 from .onnx_plug import EagerDirectReplacementWithOnnx
+from ..helpers import string_type
 
 
 def get_main_dispatcher(
@@ -71,6 +75,7 @@ def to_onnx(
     inline: bool = True,
 ) -> Any:
     """
+    Exports one model into ONNX.
     Common API for exporters. By default, the models are optimized to use the
     most efficient kernels implemented in :epkg:`onnxruntime`.
 
@@ -127,8 +132,12 @@ def to_onnx(
         from experimental_experiment.xbuilder import OptimizationOptions
 
         options = None
+        export_options = None
         if exporter_kwargs is not None:
             options = exporter_kwargs.pop("options", None)
+            export_options = exporter_kwargs.pop("export_options", None)
+        if export_options is None:
+            export_options = ExportOptions(save_ep=save_ep)
         if options is None and optimize:
             options = OptimizationOptions(
                 patterns="default+onnxruntime" if optimizer_for_ort else "default"
@@ -151,7 +160,7 @@ def to_onnx(
             dynamic_shapes=dynamic_shapes,
             large_model=True,
             output_dynamic_shapes=output_dynamic_shapes,
-            export_options=ExportOptions(save_ep=save_ep),
+            export_options=export_options,
             options=options,
             inline=inline,
             dispatcher=main_dispatcher,
@@ -303,3 +312,196 @@ def to_onnx(
         return onx
 
     raise ValueError(f"Unknown exporter={exporter!r}")
+
+
+class _WrapperToExportMethodToOnnx(torch.nn.Module):
+    """
+    Wraps an existing models in order to spy on inputs.
+    This is used by :func:`onnx_diagnostic.export.api.method_to_onnx`.
+    """
+
+    def __init__(
+        self,
+        mod: "torch.nn.Module",
+        method_name: str = "forward",
+        input_names: Optional[Sequence[str]] = None,
+        target_opset: Optional[Union[int, Dict[str, int]]] = None,
+        verbose: int = 0,
+        filename: Optional[str] = None,
+        output_names: Optional[List[str]] = None,
+        output_dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
+        exporter: str = "onnx-dynamo",
+        exporter_kwargs: Optional[Dict[str, Any]] = None,
+        save_ep: Optional[str] = None,
+        optimize: bool = True,
+        optimizer_for_ort: bool = True,
+        use_control_flow_dispatcher: bool = False,
+        onnx_plugs: Optional[List[EagerDirectReplacementWithOnnx]] = None,
+        inline: bool = True,
+        convert_after_n_calls: int = 2,
+        patch_kwargs: Optional[Dict[str, Any]] = None,
+    ):
+        super().__init__()
+        self._model_to_call = mod
+        self._method_name = method_name
+        self._call = (
+            self._model_to_call if method_name == "forward" else getattr(mod, method_name)
+        )
+        self._inputs = []
+        self._convert_after_n_calls = convert_after_n_calls
+        self._patch_kwargs = patch_kwargs
+        self._method_src = None
+        self.verbose = verbose
+        self._to_onnx_kwargs = dict(
+            input_names=input_names,
+            target_opset=target_opset,
+            verbose=verbose,
+            filename=filename,
+            output_names=output_names,
+            output_dynamic_shapes=output_dynamic_shapes,
+            exporter=exporter,
+            exporter_kwargs=exporter_kwargs,
+            save_ep=save_ep,
+            optimize=optimize,
+            optimizer_for_ort=optimizer_for_ort,
+            use_control_flow_dispatcher=use_control_flow_dispatcher,
+            onnx_plugs=onnx_plugs,
+            inline=inline,
+        )
+
+    def forward(self, *args, **kwargs):
+        self._inputs.append((args, kwargs))
+        if self.verbose:
+            print(
+                f"[method_to_onnx] input{len(self._inputs)}: "
+                f"{string_type((args, kwargs), with_shape=True)}"
+            )
+        if len(self._inputs) >= self._convert_after_n_calls:
+            self._convert_method_to_onnx()
+        return self._call(*args, **kwargs)
+
+    def _convert_method_to_onnx(self):
+
+        def make_method(self):
+            sig = inspect.signature(getattr(self._model_to_call, self._method_name))
+            args = str(sig)[1:-1]
+            calls_args = ", ".join(f"{p}={p}" for p in sig.parameters)
+            src = textwrap.dedent(
+                f"""
+                def f(self, {args}):
+                    return self._call({calls_args})
+                """
+            )
+            self._method_src = src
+            ns = {}
+            exec(src, ns)
+            return ns["f"]
+
+        class WrapWithExactSignature(torch.nn.Module):
+            def __init__(self, parent):
+                super().__init__()
+                self._model_to_call = parent._model_to_call
+                self._call = parent._call
+
+            forward = make_method(self)
+
+        compiled_model = WrapWithExactSignature(self)
+        mi = ModelInputs(compiled_model, self._inputs)
+        ds = mi.guess_dynamic_shapes()
+        if self.verbose:
+            print(f"[method_to_onnx] guess_dynamic_shapes={string_type(ds)}")
+        a, kw, nds = mi.move_to_kwargs(*self._inputs[-1], ds)
+        if self.verbose:
+            print(f"[method_to_onnx] export args={string_type(a, with_shape=True)}")
+            print(f"[method_to_onnx] export kwargs={string_type(kw, with_shape=True)}")
+            print(f"[method_to_onnx] dynamic_shapes={string_type(nds)}")
+        if self._patch_kwargs is None:
+            to_onnx(
+                compiled_model,
+                args=a,
+                kwargs=kw,
+                dynamic_shapes=nds[-1],
+                **self._to_onnx_kwargs,
+            )
+            return
+        from ..torch_export_patches import torch_export_patches
+
+        with torch_export_patches(**self._patch_kwargs):
+            to_onnx(
+                compiled_model,
+                args=a,
+                kwargs=kw,
+                dynamic_shapes=nds[-1],
+                **self._to_onnx_kwargs,
+            )
+
+
+def method_to_onnx(
+    mod: "torch.nn.Module",
+    method_name: str = "forward",
+    input_names: Optional[Sequence[str]] = None,
+    target_opset: Optional[Union[int, Dict[str, int]]] = None,
+    verbose: int = 0,
+    filename: Optional[str] = None,
+    output_names: Optional[List[str]] = None,
+    output_dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
+    exporter: str = "onnx-dynamo",
+    exporter_kwargs: Optional[Dict[str, Any]] = None,
+    save_ep: Optional[str] = None,
+    optimize: bool = True,
+    optimizer_for_ort: bool = True,
+    use_control_flow_dispatcher: bool = False,
+    onnx_plugs: Optional[List[EagerDirectReplacementWithOnnx]] = None,
+    inline: bool = True,
+    convert_after_n_calls: int = 2,
+    patch_kwargs: Optional[Dict[str, Any]] = None,
+) -> Callable:
+    """
+    Exports one method into ONNX for a module into ONNX.
+    It returns a new method which must be called by the user
+    at least twice with different values for the dynamic dimension
+    between triggering the conversion into ONNX.
+
+    :param mod_meth: function to export into ONNX
+    :param input_names: input names for the onnx model (optional)
+    :param target_opset: opset to target, if not specified, each converter
+        keeps its default value
+    :param verbose: verbosity level
+    :param filename: output filename, mandatory, the onnx model is saved on disk
+    :param output_names: to change the output of the onnx model
+    :param output_dynamic_shapes: to overwrite the dynamic shapes names
+    :param exporter: exporter to use (``onnx-dynamo``, ``modelbuilder``, ``custom``)
+    :param exporter_kwargs: additional parameters sent to the exporter
+    :param save_ep: saves the exported program
+    :param optimize: optimizes the model
+    :param optimizer_for_ort: optimizes the model for onnxruntime
+    :param use_control_flow_dispatcher: use the dispatcher created to supported
+        custom loops (see :func:`onnx_diagnostic.export.control_flow_onnx.loop_for_onnx`)
+    :param onnx_plugs: the code was modified to replace some parts with onnx translation
+    :param inline: inline local functions
+    :param convert_after_n_calls: convets the model after this number of calls.
+    :param patch_kwargs: patch arguments
+    :return: the output of the selected exporter, usually a structure including
+        an onnx model
+    """
+    wrapped_model = _WrapperToExportMethodToOnnx(
+        mod=mod,
+        method_name=method_name,
+        input_names=input_names,
+        target_opset=target_opset,
+        verbose=verbose,
+        filename=filename,
+        output_names=output_names,
+        output_dynamic_shapes=output_dynamic_shapes,
+        exporter=exporter,
+        exporter_kwargs=exporter_kwargs,
+        save_ep=save_ep,
+        optimize=optimize,
+        optimizer_for_ort=optimizer_for_ort,
+        use_control_flow_dispatcher=use_control_flow_dispatcher,
+        onnx_plugs=onnx_plugs,
+        inline=inline,
+        convert_after_n_calls=convert_after_n_calls,
+        patch_kwargs=patch_kwargs,
+    )
+    return wrapped_model

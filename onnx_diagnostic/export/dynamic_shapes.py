@@ -999,6 +999,8 @@ class ModelInputs:
                 auto=auto if isinstance(auto, bool) else f"{auto}_{i}I",
                 msg=lambda name=name: f" failing input {name!r}",
             )
+        # reordering
+        kwargs = {p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs}
         return tuple(args), kwargs
 
     def move_to_kwargs(
@@ -1061,6 +1063,8 @@ class ModelInputs:
                 f"and kwargs={set(kwargs)}, "
                 f"forward_ordered_parameter_names={self.forward_ordered_parameter_names}"
             )
+        kwargs = {p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs}
+        kw_dyn = {p: kw_dyn[p] for p in self.forward_ordered_parameter_names if p in kw_dyn}
         return args, kwargs, (tuple(), kw_dyn)
 
     def validate_inputs_for_export(
