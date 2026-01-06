@@ -479,7 +479,7 @@ def method_to_onnx(
         custom loops (see :func:`onnx_diagnostic.export.control_flow_onnx.loop_for_onnx`)
     :param onnx_plugs: the code was modified to replace some parts with onnx translation
     :param inline: inline local functions
-    :param convert_after_n_calls: convets the model after this number of calls.
+    :param convert_after_n_calls: converts the model after this number of calls.
     :param patch_kwargs: patch arguments
     :return: the output of the selected exporter, usually a structure including
         an onnx model

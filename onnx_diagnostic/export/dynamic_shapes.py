@@ -1000,7 +1000,7 @@ class ModelInputs:
                 msg=lambda name=name: f" failing input {name!r}",
             )
         # reordering
-        if kwargs is not None:
+        if kwargs is not None and self.forward_ordered_parameter_names:
             kwargs = {
                 p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs
             }
@@ -1066,11 +1066,11 @@ class ModelInputs:
                 f"and kwargs={set(kwargs)}, "
                 f"forward_ordered_parameter_names={self.forward_ordered_parameter_names}"
             )
-        if kwargs is not None:
+        if kwargs is not None and self.forward_ordered_parameter_names:
             kwargs = {
                 p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs
             }
-        if kw_dyn is not None:
+        if kw_dyn is not None and self.forward_ordered_parameter_names:
             kw_dyn = {
                 p: kw_dyn[p] for p in self.forward_ordered_parameter_names if p in kw_dyn
             }
