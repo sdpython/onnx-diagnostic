@@ -188,7 +188,7 @@ class TestDynamicShapes(ExtTestCase):
         expected = "#2[((),dict(x:T1s5x6)),((),dict(x:T1s6x6))]"
         self.assertEqual(expected, string_type(mi.inputs, with_shape=True))
         ds = mi.guess_dynamic_shapes()
-        self.assertEqual(ds, (tuple(), {"x": {0: torch.export.Dim.DYNAMIC}}))
+        self.assertEqual((tuple(), {"x": {0: torch.export.Dim.DYNAMIC}}), ds)
         _a, _kw, ds = mi.move_to_kwargs(*mi.inputs[0], ds)
         self.assertEqual(ds, (tuple(), {"kwargs": {"x": {0: torch.export.Dim.DYNAMIC}}}))
         self.assertEqual(

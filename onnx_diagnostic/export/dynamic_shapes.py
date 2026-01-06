@@ -1001,9 +1001,10 @@ class ModelInputs:
             )
         # reordering
         if kwargs is not None and self.forward_ordered_parameter_names:
-            kwargs = {
+            kwargs1 = {
                 p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs
             }
+            kwargs = {**kwargs1, **{k: v for k, v in kwargs.items() if k not in kwargs1}}
         return tuple(args), kwargs
 
     def move_to_kwargs(
@@ -1067,13 +1068,15 @@ class ModelInputs:
                 f"forward_ordered_parameter_names={self.forward_ordered_parameter_names}"
             )
         if kwargs is not None and self.forward_ordered_parameter_names:
-            kwargs = {
+            kwargs1 = {
                 p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs
             }
+            kwargs = {**kwargs1, **{k: v for k, v in kwargs.items() if k not in kwargs1}}
         if kw_dyn is not None and self.forward_ordered_parameter_names:
-            kw_dyn = {
+            kw_dyn1 = {
                 p: kw_dyn[p] for p in self.forward_ordered_parameter_names if p in kw_dyn
             }
+            kw_dyn = {**kw_dyn1, **{k: v for k, v in kw_dyn.items() if k not in kw_dyn1}}
         return args, kwargs, (tuple(), kw_dyn)
 
     def validate_inputs_for_export(
