@@ -347,7 +347,7 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
         self._call = (
             self._model_to_call if method_name == "forward" else getattr(mod, method_name)
         )
-        self._inputs = []
+        self._inputs: List[Tuple[Tuple[Any, ...], Dict[str, Any]]] = []
         self._convert_after_n_calls = convert_after_n_calls
         self._patch_kwargs = patch_kwargs
         self._method_src = None

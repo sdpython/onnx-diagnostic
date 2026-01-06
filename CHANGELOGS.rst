@@ -4,6 +4,7 @@ Change Logs
 0.8.8
 +++++
 
+* :pr:`375`: export a method to onnx in order to export using method generate
 * :pr:`372`: fix patch on rotary embedding
 * :pr:`371`: fix make_fake_with_dynamic_dimensions
 

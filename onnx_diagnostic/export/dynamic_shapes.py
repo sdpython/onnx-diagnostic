@@ -1000,7 +1000,10 @@ class ModelInputs:
                 msg=lambda name=name: f" failing input {name!r}",
             )
         # reordering
-        kwargs = {p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs}
+        if kwargs is not None:
+            kwargs = {
+                p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs
+            }
         return tuple(args), kwargs
 
     def move_to_kwargs(
@@ -1063,8 +1066,14 @@ class ModelInputs:
                 f"and kwargs={set(kwargs)}, "
                 f"forward_ordered_parameter_names={self.forward_ordered_parameter_names}"
             )
-        kwargs = {p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs}
-        kw_dyn = {p: kw_dyn[p] for p in self.forward_ordered_parameter_names if p in kw_dyn}
+        if kwargs is not None:
+            kwargs = {
+                p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs
+            }
+        if kw_dyn is not None:
+            kw_dyn = {
+                p: kw_dyn[p] for p in self.forward_ordered_parameter_names if p in kw_dyn
+            }
         return args, kwargs, (tuple(), kw_dyn)
 
     def validate_inputs_for_export(
