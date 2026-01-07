@@ -77,14 +77,14 @@ forward_replacement = method_to_onnx(
     verbose=1,
     # triggers the ONNX conversion after 3 calls to forward method,
     # the onnx version is triggered with the last one,
-    # the others are used to infer the dynamic shape if they are not
+    # the others are used to infer the dynamic shapes if they are not
     # specified below
     convert_after_n_calls=3,
     # skips the following inputs even though they are captured,
     # these ones are filled with default values we don't want in
     # the onnx model
     skip_kwargs_names={"kwargs", "use_cache", "return_dict", "inputs_embeds"},
-    # dynamic shape can be inferred from at least two calls to the forward method,
+    # dynamic shapes can be inferred from at least two calls to the forward method,
     # 3 is better for LLMs, you can see the inference results with ``verbose=1``,
     # this parameter is used to overwrite the inferred values,
     # this is usually needed because the inferred dynamic shapes contains
