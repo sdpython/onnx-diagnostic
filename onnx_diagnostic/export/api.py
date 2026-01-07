@@ -344,8 +344,10 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
         super().__init__()
         self._model_to_call = mod
         self._method_name = method_name
-        self._call = (
-            self._model_to_call if method_name == "forward" else getattr(mod, method_name)
+        self._method_call = (
+            self._model_to_call.forward
+            if method_name == "forward"
+            else getattr(mod, method_name)
         )
         self._inputs: List[Tuple[Tuple[Any, ...], Dict[str, Any]]] = []
         self._convert_after_n_calls = convert_after_n_calls
@@ -369,39 +371,55 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
             inline=inline,
         )
 
+    def __str__(self) -> str:
+        return self.__repr__()
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}({self._model_to_call.__class__.__name__}."
+            f"{self._method_name})"
+        )
+
     def forward(self, *args, **kwargs):
         self._inputs.append((args, kwargs))
         if self.verbose:
             print(
-                f"[method_to_onnx] input{len(self._inputs)}: "
+                f"[method_to_onnx] input[{len(self._inputs)-1}]: "
                 f"{string_type((args, kwargs), with_shape=True)}"
             )
         if len(self._inputs) >= self._convert_after_n_calls:
             self._convert_method_to_onnx()
-        return self._call(*args, **kwargs)
+        return self._method_call(*args, **kwargs)
 
     def _convert_method_to_onnx(self):
 
         def make_method(self):
-            sig = inspect.signature(getattr(self._model_to_call, self._method_name))
-            args = str(sig)[1:-1]
-            calls_args = ", ".join(f"{p}={p}" for p in sig.parameters)
+            inner_sig = inspect.signature(self._method_call)
+            params = [
+                p.replace(annotation=inspect._empty) for p in inner_sig.parameters.values()
+            ]
+            simple_sig = inspect.Signature(params, return_annotation=inspect._empty)
+            args = str(simple_sig)[1:-1]
+            calls_args = ", ".join(f"{p}={p}" for p in simple_sig.parameters)
             src = textwrap.dedent(
                 f"""
                 def f(self, {args}):
-                    return self._call({calls_args})
+                    return self._method_call({calls_args})
                 """
             )
             self._method_src = src
             ns = {}
-            exec(src, ns)
+            try:
+                exec(src, ns)
+            except NameError as e:
+                raise NameError(f"Unable to compile due to {e}\n{src}") from e
             return ns["f"]
 
         class WrapWithExactSignature(torch.nn.Module):
             def __init__(self, parent):
                 super().__init__()
                 self._model_to_call = parent._model_to_call
-                self._call = parent._call
+                self._method_call = parent._method_call
 
             forward = make_method(self)
 
