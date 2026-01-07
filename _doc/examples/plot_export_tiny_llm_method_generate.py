@@ -115,4 +115,4 @@ print(generated_text)
 
 # %%
 
-doc.plot_legend("Tiny-LLM\nforward inputs\through generate", "onnx export", "tomato")
+doc.plot_legend("Tiny-LLM\nforward inputs\nthrough generate", "onnx export", "tomato")
