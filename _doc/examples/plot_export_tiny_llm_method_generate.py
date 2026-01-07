@@ -69,6 +69,14 @@ forward_replacement = method_to_onnx(
     verbose=1,
     convert_after_n_calls=3,
     skip_kwargs_names={"kwargs", "use_cache", "return_dict"},
+    dynamic_shapes={
+        "input_ids": {0: "batch_size", 1: "sequence_length"},
+        "past_key_values": [
+            {0: "batch_size", 2: "past_sequence_length"},
+            {0: "batch_size", 2: "past_sequence_length"},
+        ],
+        "cache_position": {0: "total_sequence_length"},
+    },
 )
 
 # %%

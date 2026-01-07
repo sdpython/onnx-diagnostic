@@ -341,6 +341,7 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
         convert_after_n_calls: int = 2,
         patch_kwargs: Optional[Dict[str, Any]] = None,
         skip_kwargs_names: Optional[Set[str]] = None,
+        dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
     ):
         super().__init__()
         self._model_to_call = mod
@@ -356,6 +357,7 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
         self._method_src = None
         self.verbose = verbose
         self.skip_kwargs_names = skip_kwargs_names
+        self.dynamic_shapes = dynamic_shapes
         self._to_onnx_kwargs = dict(
             input_names=input_names,
             target_opset=target_opset,
@@ -441,11 +443,16 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
             forward = make_method(self)
 
         compiled_model = WrapWithExactSignature(self)
-        mi = ModelInputs(compiled_model, self._inputs)
-        ds = mi.guess_dynamic_shapes()
-        if self.verbose:
-            print(f"[method_to_onnx] guess_dynamic_shapes={string_type(ds)}")
-        a, kw, nds = mi.move_to_kwargs(*self._inputs[-1], ds)
+
+        if self.dynamic_shapes is None:
+            mi = ModelInputs(compiled_model, self._inputs)
+            ds = mi.guess_dynamic_shapes()
+            if self.verbose:
+                print(f"[method_to_onnx] guess_dynamic_shapes={string_type(ds)}")
+            a, kw, nds = mi.move_to_kwargs(*self._inputs[-1], ds)
+        else:
+            a, kw = self._inputs[-1]
+            nds = [self.dynamic_shapes]
         if self.verbose:
             print(f"[method_to_onnx] export args={string_type(a, with_shape=True)}")
             print(f"[method_to_onnx] export kwargs={string_type(kw, with_shape=True)}")
@@ -491,6 +498,7 @@ def method_to_onnx(
     convert_after_n_calls: int = 2,
     patch_kwargs: Optional[Dict[str, Any]] = None,
     skip_kwargs_names: Optional[Set[str]] = None,
+    dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
 ) -> Callable:
     """
     Exports one method into ONNX for a module into ONNX.
@@ -519,6 +527,7 @@ def method_to_onnx(
     :param patch_kwargs: patch arguments
     :param skip_kwargs_names: use default values for these parameters part of
         the signature of the method to export
+    :param dynamic_shapes: dynamic shapes to use if the guessed ones are not right
     :return: the output of the selected exporter, usually a structure including
         an onnx model
 
@@ -544,5 +553,6 @@ def method_to_onnx(
         convert_after_n_calls=convert_after_n_calls,
         patch_kwargs=patch_kwargs,
         skip_kwargs_names=skip_kwargs_names,
+        dynamic_shapes=dynamic_shapes,
     )
     return wrapped_model
