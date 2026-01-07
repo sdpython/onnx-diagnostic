@@ -1,7 +1,7 @@
 """
 .. _l-plot-tiny-llm-export-method-generate:
 
-Export a model through a dummy example (with Tiny-LLM)
+Export a model through method generate (with Tiny-LLM)
 ======================================================
 
 The main issue when exporting a LLM is the example on HuggingFace is
