@@ -85,6 +85,7 @@ Enlightening Examples
 **Where to start to export a model**
 
 * :ref:`l-plot-export_tiny_phi2`
+* :ref:`l-plot-tiny-llm-export-method-generate`
 
 **Exporter Recipes**
 

@@ -188,7 +188,7 @@ class TestDynamicShapes(ExtTestCase):
         expected = "#2[((),dict(x:T1s5x6)),((),dict(x:T1s6x6))]"
         self.assertEqual(expected, string_type(mi.inputs, with_shape=True))
         ds = mi.guess_dynamic_shapes()
-        self.assertEqual(ds, (tuple(), {"x": {0: torch.export.Dim.DYNAMIC}}))
+        self.assertEqual((tuple(), {"x": {0: torch.export.Dim.DYNAMIC}}), ds)
         _a, _kw, ds = mi.move_to_kwargs(*mi.inputs[0], ds)
         self.assertEqual(ds, (tuple(), {"kwargs": {"x": {0: torch.export.Dim.DYNAMIC}}}))
         self.assertEqual(
@@ -936,6 +936,31 @@ class TestDynamicShapes(ExtTestCase):
             cpl = CoupleInputsDynamicShapes(ags, kws, ds)
             backed_size_oblivious = cpl.invalid_dimensions_for_export()
             self.assertFalse(backed_size_oblivious)
+
+    def test_guess_dynamic_shapes_missing(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y=None):
+                if y is None:
+                    return x.abs()
+                return x.abs() + y
+
+        model = Model()
+        x = torch.randn((5, 6))
+        y = model(x=x)
+        self.assertNotEmpty(y)
+
+        inputs = [
+            (tuple(), {"x": x}),
+            (tuple(), {"x": torch.randn((6, 6)), "y": torch.randn((6, 6))}),
+            (tuple(), {"x": torch.randn((7, 6)), "y": torch.randn((7, 6))}),
+        ]
+
+        mi = ModelInputs(model, inputs)
+        ds = mi.guess_dynamic_shapes()
+        DYN = torch.export.Dim.DYNAMIC
+        self.assertEqual(ds, ((), {"x": {0: DYN}, "y": {0: DYN}}))
+        _a, _kw, ds = mi.move_to_kwargs(*mi.inputs[-1], ds)
+        self.assertEqual(ds, (tuple(), {"x": {0: DYN}, "y": {0: DYN}}))
 
 
 if __name__ == "__main__":
