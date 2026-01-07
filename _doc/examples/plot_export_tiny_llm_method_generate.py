@@ -48,11 +48,10 @@ def generate_text(
 
 
 prompt = "Continue: it rains..."
-if False:
-    generated_text = generate_text(prompt, model, tokenizer)
-    print("-----------------")
-    print(generated_text)
-    print("-----------------")
+generated_text = generate_text(prompt, model, tokenizer)
+print("-----------------")
+print(generated_text)
+print("-----------------")
 
 # %%
 # Replace forward method
@@ -68,14 +67,14 @@ forward_replacement = method_to_onnx(
     patch_kwargs=dict(patch_transformers=True),
     verbose=1,
     convert_after_n_calls=3,
-    skip_kwargs_names={"kwargs", "use_cache", "return_dict"},
+    skip_kwargs_names={"kwargs", "use_cache", "return_dict", "inputs_embeds"},
     dynamic_shapes={
-        "input_ids": {0: "batch_size", 1: "sequence_length"},
+        "cache_position": {0: "total_sequence_length"},
         "past_key_values": [
             {0: "batch_size", 2: "past_sequence_length"},
             {0: "batch_size", 2: "past_sequence_length"},
         ],
-        "cache_position": {0: "total_sequence_length"},
+        "input_ids": {0: "batch_size", 1: "sequence_length"},
     },
 )
 

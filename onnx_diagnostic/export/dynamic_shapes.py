@@ -682,9 +682,11 @@ class ModelInputs:
             if self.signature
             else None
         )
-        self.forward_parameters_kinds = {
-            p.name: p.kind for p in self.signature.parameters.values()
-        }
+        self.forward_parameters_kinds = (
+            {p.name: p.kind for p in self.signature.parameters.values()}
+            if self.signature
+            else None
+        )
         self.forward_ordered_parameter_names = (
             list(self.signature.parameters) if self.signature else None
         )
