@@ -1073,23 +1073,6 @@ class ModelInputs:
             _kw_dyn = kw_dyn
             kw_dyn = {}
             for name in self.forward_ordered_parameter_names:
-                if (
-                    self.forward_parameters_kinds[name] == inspect.Parameter.VAR_KEYWORD
-                    and name not in _kwargs
-                    and name in _kw_dyn
-                ):
-                    f = _kw_dyn[name]
-                    assert isinstance(
-                        f, dict
-                    ), f"Unexpected type for name={name!r}, _kw_dyn={_kw_dyn}"
-                    for _k, _w in f.items():
-                        assert (
-                            _k in _kwargs
-                        ), f"Parameter {_k!r} not in found in kwargs: {set(_kwargs)}"
-                        kwargs[_k] = _kwargs[_k]
-                        kw_dyn[_k] = f[_k]
-                    continue
-
                 if name in _kwargs:
                     kwargs[name] = _kwargs[name]
                 if name in _kw_dyn:
