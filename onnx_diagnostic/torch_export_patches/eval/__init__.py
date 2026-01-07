@@ -521,7 +521,7 @@ def run_exporter(
     :param exporter: exporter
     :param cls_model: model class to create
     :param inputs: list of inputs to try
-    :param dynamic: use dynamic shape or not
+    :param dynamic: use dynamic shapes or not
     :param quiet: raise exception or not
     :param verbose: verbosity
     :return: results

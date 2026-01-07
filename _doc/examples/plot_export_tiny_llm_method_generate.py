@@ -58,16 +58,37 @@ print("-----------------")
 # ++++++++++++++++++++++
 #
 # We now modify the model to export the model by replacing the forward method.
+# We still call method ``generate`` but this one will call a different function
+# created by :func:`onnx_diagnostic.export.api.method_to_onnx`.
+# This one captured the inputs of the forward method, 2 calls are needed or
+# at least, 3 are recommended for LLMs as the first call does not contain any cache.
+# If the default settings do not work, ``skip_kwargs_names`` and ``dynamic_shapes``
+# can be changed to remove some undesired inputs or add more dynamic dimensions.
+
 filename = "plot_export_tiny_llm_method_generate.onnx"
 forward_replacement = method_to_onnx(
     model,
-    method_name="forward",
-    exporter="custom",
-    filename=filename,
-    patch_kwargs=dict(patch_transformers=True),
+    method_name="forward",  # default value
+    exporter="custom",  # onnx-dynamo to use the official exporter
+    filename=filename,  # onnx file to create
+    patch_kwargs=dict(patch_transformers=True),  # patches before eporting
+    # to see the progress, it is recommended on the first try to see
+    # how to set ``skip_kwargs_names`` and ``dynamic_shapes`` if it is needed
     verbose=1,
+    # triggers the ONNX conversion after 3 calls to forward method,
+    # the onnx version is triggered with the last one,
+    # the others are used to infer the dynamic shapes if they are not
+    # specified below
     convert_after_n_calls=3,
+    # skips the following inputs even though they are captured,
+    # these ones are filled with default values we don't want in
+    # the onnx model
     skip_kwargs_names={"kwargs", "use_cache", "return_dict", "inputs_embeds"},
+    # dynamic shapes can be inferred from at least two calls to the forward method,
+    # 3 is better for LLMs, you can see the inference results with ``verbose=1``,
+    # this parameter is used to overwrite the inferred values,
+    # this is usually needed because the inferred dynamic shapes contains
+    # less dynamic dimension than requested.
     dynamic_shapes={
         "cache_position": {0: "total_sequence_length"},
         "past_key_values": [
@@ -94,4 +115,4 @@ print(generated_text)
 
 # %%
 
-doc.plot_legend("Tiny-LLM\nforward inputs\through generate", "torch.export.export", "tomato")
+doc.plot_legend("Tiny-LLM\nforward inputs\nthrough generate", "onnx export", "tomato")

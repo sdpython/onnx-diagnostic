@@ -329,7 +329,7 @@ class CoupleInputsDynamicShapes:
         if type(inputs) in (tuple, list, dict):
             # Type must be strict, some custom classes can inherit from those.
             assert type(inputs) is type(ds), (
-                f"Input type and dynamic shape type mush match but "
+                f"Input type and dynamic shapes type mush match but "
                 f"type(inputs)={type(inputs)}, type(ds)={type(ds)}, "
                 f"inputs={string_type(inputs, with_shape=True)}, ds={ds}"
             )
