@@ -1,7 +1,7 @@
 import inspect
 import os
 import textwrap
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 import torch
 from .dynamic_shapes import ModelInputs
 from .onnx_plug import EagerDirectReplacementWithOnnx
@@ -340,6 +340,7 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
         inline: bool = True,
         convert_after_n_calls: int = 2,
         patch_kwargs: Optional[Dict[str, Any]] = None,
+        skip_kwargs_names: Optional[Set[str]] = None,
     ):
         super().__init__()
         self._model_to_call = mod
@@ -354,6 +355,7 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
         self._patch_kwargs = patch_kwargs
         self._method_src = None
         self.verbose = verbose
+        self.skip_kwargs_names = skip_kwargs_names
         self._to_onnx_kwargs = dict(
             input_names=input_names,
             target_opset=target_opset,
@@ -370,6 +372,7 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
             onnx_plugs=onnx_plugs,
             inline=inline,
         )
+        self._export_done = False
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -381,14 +384,28 @@ class _WrapperToExportMethodToOnnx(torch.nn.Module):
         )
 
     def forward(self, *args, **kwargs):
-        self._inputs.append((args, kwargs))
-        if self.verbose:
-            print(
-                f"[method_to_onnx] input[{len(self._inputs)-1}]: "
-                f"{string_type((args, kwargs), with_shape=True)}"
+        if not self._export_done:
+            self._inputs.append(
+                (
+                    args,
+                    (
+                        kwargs
+                        if not kwargs or not self.skip_kwargs_names
+                        else {
+                            k: v for k, v in kwargs.items() if k not in self.skip_kwargs_names
+                        }
+                    ),
+                )
             )
-        if len(self._inputs) >= self._convert_after_n_calls:
-            self._convert_method_to_onnx()
+            if self.verbose:
+                print(
+                    f"[method_to_onnx] input[{len(self._inputs)-1}]: "
+                    f"{string_type(self._inputs[-1], with_shape=True)}"
+                )
+            if len(self._inputs) >= self._convert_after_n_calls:
+                self._convert_method_to_onnx()
+                del self._inputs[:]
+                self._export_done = True
         return self._method_call(*args, **kwargs)
 
     def _convert_method_to_onnx(self):
@@ -473,6 +490,7 @@ def method_to_onnx(
     inline: bool = True,
     convert_after_n_calls: int = 2,
     patch_kwargs: Optional[Dict[str, Any]] = None,
+    skip_kwargs_names: Optional[Set[str]] = None,
 ) -> Callable:
     """
     Exports one method into ONNX for a module into ONNX.
@@ -499,8 +517,12 @@ def method_to_onnx(
     :param inline: inline local functions
     :param convert_after_n_calls: converts the model after this number of calls.
     :param patch_kwargs: patch arguments
+    :param skip_kwargs_names: use default values for these parameters part of
+        the signature of the method to export
     :return: the output of the selected exporter, usually a structure including
         an onnx model
+
+    See :ref:`l-plot-tiny-llm-export-method-generate` for an example.
     """
     wrapped_model = _WrapperToExportMethodToOnnx(
         mod=mod,
@@ -521,5 +543,6 @@ def method_to_onnx(
         inline=inline,
         convert_after_n_calls=convert_after_n_calls,
         patch_kwargs=patch_kwargs,
+        skip_kwargs_names=skip_kwargs_names,
     )
     return wrapped_model

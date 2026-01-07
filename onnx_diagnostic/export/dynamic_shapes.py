@@ -352,6 +352,19 @@ class CoupleInputsDynamicShapes:
                     else None
                 )
             assert type(inputs) is dict, f"Unexpected type for inputs {type(inputs)}"
+            if set(inputs) != set(ds):
+                not_in_ds = {k for k in inputs if k not in ds}
+                not_in_inputs = {k for k in ds if k not in inputs}
+                assert not_in_inputs == {"kwargs"} and set(ds["kwargs"]) == not_in_ds, (
+                    f"Keys mismatch between inputs {set(inputs)} and ds={set(ds)}, "
+                    f"inputs={string_type(inputs, with_shape=True)}, ds={ds}, "
+                    f"not_in_ds={not_in_ds}, not_in_inputs={not_in_inputs}"
+                )
+                # Tweak...
+                kws = ds["kwargs"]
+                del ds["kwargs"]
+                ds.update(kws)
+
             assert set(inputs) == set(ds), (
                 f"Keys mismatch between inputs {set(inputs)} and ds={set(ds)}, "
                 f"inputs={string_type(inputs, with_shape=True)}, ds={ds}"
@@ -366,13 +379,15 @@ class CoupleInputsDynamicShapes:
             return dvalue if dvalue else None
 
         # A custom class.
-        assert inputs.__class__ in torch.utils._pytree.SUPPORTED_NODES, (
+        assert inputs is None or inputs.__class__ in torch.utils._pytree.SUPPORTED_NODES, (
             f"Class {inputs.__class__.__name__!r} was not registered using "
             f"torch.utils._pytree.register_pytree_node, it is not possible to "
             f"map this class with the given dynamic shapes."
         )
         if flatten_unflatten:
             flatunflat = flatten_unflatten_for_dynamic_shapes(inputs)
+            if isinstance(flatunflat, (list, tuple, dict)) and len(flatunflat) == 0:
+                return flatunflat
             res = cls._generic_walker_step(
                 processor, flatunflat, ds, flatten_unflatten=flatten_unflatten
             )
@@ -667,6 +682,9 @@ class ModelInputs:
             if self.signature
             else None
         )
+        self.forward_parameters_kinds = {
+            p.name: p.kind for p in self.signature.parameters.values()
+        }
         self.forward_ordered_parameter_names = (
             list(self.signature.parameters) if self.signature else None
         )
@@ -973,7 +991,13 @@ class ModelInputs:
             len(s1) == 1
         ), f"Different numbers of positional arguments {s1} for {self.full_name}"
         s2 = set(tuple(sorted(set(i[1]))) for i in self.inputs)
-        assert len(s2) == 1, f"Different named arguments {s2} for {self.full_name}"
+        assert len(s2) > 0, f"empty {s2} for {self.full_name}"
+        if len(s2) > 1:
+            # We need to keep the largest set of inputs, the one including all the others.
+            sum_s2 = set()
+            for s in s2:
+                sum_s2 |= set(s)
+            s2 = {tuple(sum_s2)}
         args = []
         kwargs = {}
         for i in range(s1.pop()):
@@ -993,7 +1017,7 @@ class ModelInputs:
                 f"\ninputs[1]={string_type(self.inputs[1], with_shape=True)}"
             )
 
-            objs = [_[1][name] for _ in self.inputs]
+            objs = [_[1][name] for _ in self.inputs if name in _[1]]
             kwargs[name] = self.guess_dynamic_shape_object(
                 *objs,
                 auto=auto if isinstance(auto, bool) else f"{auto}_{i}I",
@@ -1049,6 +1073,23 @@ class ModelInputs:
             _kw_dyn = kw_dyn
             kw_dyn = {}
             for name in self.forward_ordered_parameter_names:
+                if (
+                    self.forward_parameters_kinds[name] == inspect.Parameter.VAR_KEYWORD
+                    and name not in _kwargs
+                    and name in _kw_dyn
+                ):
+                    f = _kw_dyn[name]
+                    assert isinstance(
+                        f, dict
+                    ), f"Unexpected type for name={name!r}, _kw_dyn={_kw_dyn}"
+                    for _k, _w in f.items():
+                        assert (
+                            _k in _kwargs
+                        ), f"Parameter {_k!r} not in found in kwargs: {set(_kwargs)}"
+                        kwargs[_k] = _kwargs[_k]
+                        kw_dyn[_k] = f[_k]
+                    continue
+
                 if name in _kwargs:
                     kwargs[name] = _kwargs[name]
                 if name in _kw_dyn:

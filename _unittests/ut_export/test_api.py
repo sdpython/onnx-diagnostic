@@ -134,7 +134,7 @@ class TestValidate(ExtTestCase):
         self.assertExists(filename)
         src = method_to_call._method_src
         self.assertIn("f(self, x, y):", src)
-        self.assertIn("return self._call(x=x, y=y)", src)
+        self.assertIn("return self._method_call(x=x, y=y)", src)
         self.assertEqual(len(list(method_to_call.named_modules())), 2)
         sess = self.check_ort(filename)
         input_names = [i.name for i in sess.get_inputs()]
@@ -163,7 +163,7 @@ class TestValidate(ExtTestCase):
         self.assertExists(filename)
         src = method_to_call._method_src
         self.assertIn("f(self, x=None, y=None):", src)
-        self.assertIn("return self._call(x=x, y=y)", src)
+        self.assertIn("return self._method_call(x=x, y=y)", src)
         self.assertEqual(len(list(method_to_call.named_modules())), 2)
         sess = self.check_ort(filename)
         input_names = [i.name for i in sess.get_inputs()]
@@ -197,7 +197,7 @@ class TestValidate(ExtTestCase):
         self.assertExists(filename)
         src = method_to_call._method_src
         self.assertIn("f(self, x=None, y=None):", src)
-        self.assertIn("return self._call(x=x, y=y)", src)
+        self.assertIn("return self._method_call(x=x, y=y)", src)
         self.assertEqual(len(list(method_to_call.named_modules())), 2)
         sess = self.check_ort(filename)
         input_names = [i.name for i in sess.get_inputs()]
@@ -235,7 +235,7 @@ class TestValidate(ExtTestCase):
         self.assertExists(filename)
         src = method_to_call._method_src
         self.assertIn("f(self, x, y=None):", src)
-        self.assertIn("return self._call(x=x, y=y)", src)
+        self.assertIn("return self._method_call(x=x, y=y)", src)
         self.assertEqual(len(list(method_to_call.named_modules())), 2)
         sess = self.check_ort(filename)
         input_names = [i.name for i in sess.get_inputs()]

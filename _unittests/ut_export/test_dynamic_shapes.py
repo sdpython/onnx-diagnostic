@@ -937,6 +937,31 @@ class TestDynamicShapes(ExtTestCase):
             backed_size_oblivious = cpl.invalid_dimensions_for_export()
             self.assertFalse(backed_size_oblivious)
 
+    def test_guess_dynamic_shapes_missing(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y=None):
+                if y is None:
+                    return x.abs()
+                return x.abs() + y
+
+        model = Model()
+        x = torch.randn((5, 6))
+        y = model(x=x)
+        self.assertNotEmpty(y)
+
+        inputs = [
+            (tuple(), {"x": x}),
+            (tuple(), {"x": torch.randn((6, 6)), "y": torch.randn((6, 6))}),
+            (tuple(), {"x": torch.randn((7, 6)), "y": torch.randn((7, 6))}),
+        ]
+
+        mi = ModelInputs(model, inputs)
+        ds = mi.guess_dynamic_shapes()
+        DYN = torch.export.Dim.DYNAMIC
+        self.assertEqual(ds, ((), {"x": {0: DYN}, "y": {0: DYN}}))
+        _a, _kw, ds = mi.move_to_kwargs(*mi.inputs[-1], ds)
+        self.assertEqual(ds, (tuple(), {"x": {0: DYN}, "y": {0: DYN}}))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

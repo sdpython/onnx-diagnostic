@@ -68,6 +68,7 @@ forward_replacement = method_to_onnx(
     patch_kwargs=dict(patch_transformers=True),
     verbose=1,
     convert_after_n_calls=3,
+    skip_kwargs_names={"kwargs", "use_cache", "return_dict"},
 )
 
 # %%
