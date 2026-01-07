@@ -5,6 +5,7 @@ Change Logs
 +++++
 
 * :pr:`375`: export a method to onnx in order to export using method generate
+* :pr:`376`: fix patched lazy_initialization for transformers>=5
 * :pr:`372`: fix patch on rotary embedding
 * :pr:`371`: fix make_fake_with_dynamic_dimensions
 

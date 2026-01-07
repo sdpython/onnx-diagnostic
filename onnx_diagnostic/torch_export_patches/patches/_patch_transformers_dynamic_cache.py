@@ -22,7 +22,9 @@ if patch_DynamicLayer:
         _PATCHES_ = ["lazy_initialization"]
         _PATCHED_CLASS_ = DynamicLayer
 
-        def lazy_initialization(self, key_states: torch.Tensor):
+        def lazy_initialization(
+            self, key_states: torch.Tensor, value_states: torch.Tensor = None
+        ):
             self.dtype, self.device = key_states.dtype, key_states.device
             assert (
                 hasattr(key_states, "shape") and key_states is not None
