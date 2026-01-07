@@ -84,7 +84,7 @@ forward_replacement = method_to_onnx(
     # these ones are filled with default values we don't want in
     # the onnx model
     skip_kwargs_names={"kwargs", "use_cache", "return_dict", "inputs_embeds"},
-    # dynamic shape can be infered from at least two calls to the forward method,
+    # dynamic shape can be inferred from at least two calls to the forward method,
     # 3 is better for LLMs, you can see the inference results with ``verbose=1``,
     # this parameter is used to overwrite the inferred values,
     # this is usually needed because the inferred dynamic shapes contains
@@ -115,4 +115,4 @@ print(generated_text)
 
 # %%
 
-doc.plot_legend("Tiny-LLM\nforward inputs\through generate", "torch.export.export", "tomato")
+doc.plot_legend("Tiny-LLM\nforward inputs\through generate", "onnx export", "tomato")
