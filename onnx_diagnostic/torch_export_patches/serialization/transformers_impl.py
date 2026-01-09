@@ -1,19 +1,18 @@
 import itertools
 from typing import Any, Callable, List, Set, Tuple
 import torch
-from transformers.cache_utils import (
-    Cache,
-    DynamicCache,
-    EncoderDecoderCache,
-    HybridCache,
-    StaticCache,
-)
+from transformers.cache_utils import Cache, DynamicCache, EncoderDecoderCache, StaticCache
 
 try:
     from transformers.cache_utils import SlidingWindowCache
 except ImportError:
     SlidingWindowCache = None
 
+
+try:
+    from transformers.cache_utils import HybridCache
+except ImportError:
+    HybridCache = None
 
 try:
     from transformers.models.mamba.modeling_mamba import MambaCache
@@ -99,26 +98,25 @@ def unflatten_dynamic_cache(
 # HybridCache
 #############
 
+if HybridCache:
 
-def flatten_hybrid_cache(
-    cache: HybridCache,
-) -> Tuple[List[Any], torch.utils._pytree.Context]:
-    """Serializes a :class:`transformers.cache_utils.HybridCache` with python objects."""
-    return _flatten_key_value_cache(cache)
+    def flatten_hybrid_cache(
+        cache: HybridCache,
+    ) -> Tuple[List[Any], torch.utils._pytree.Context]:
+        """Serializes a :class:`transformers.cache_utils.HybridCache` with python objects."""
+        return _flatten_key_value_cache(cache)
 
+    def flatten_with_keys_hybrid_cache(
+        cache: HybridCache,
+    ) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
+        """Serializes a :class:`transformers.cache_utils.HybridCache` with python objects."""
+        return _flatten_with_keys_cache(cache)
 
-def flatten_with_keys_hybrid_cache(
-    cache: HybridCache,
-) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
-    """Serializes a :class:`transformers.cache_utils.HybridCache` with python objects."""
-    return _flatten_with_keys_cache(cache)
-
-
-def unflatten_hybrid_cache(
-    values: List[Any], context: torch.utils._pytree.Context, output_type=None
-) -> HybridCache:
-    """Restores a :class:`transformers.cache_utils.HybridCache` from python objects."""
-    return _unflatten_cache(make_hybrid_cache, values, context, output_type=output_type)
+    def unflatten_hybrid_cache(
+        values: List[Any], context: torch.utils._pytree.Context, output_type=None
+    ) -> HybridCache:
+        """Restores a :class:`transformers.cache_utils.HybridCache` from python objects."""
+        return _unflatten_cache(make_hybrid_cache, values, context, output_type=output_type)
 
 
 #############

@@ -7,14 +7,9 @@ import transformers
 from transformers.cache_utils import DynamicCache, StaticCache
 
 try:
-    from transformers.cache_utils import (
-        EncoderDecoderCache,
-        HybridCache,
-        SlidingWindowCache,
-    )
+    from transformers.cache_utils import EncoderDecoderCache, SlidingWindowCache
 except ImportError:
     EncoderDecoderCache = None
-    HybridCache = None
     SlidingWindowCache = None
 from ..helpers import string_type
 from .serialization import _lower_name_with_
@@ -34,6 +29,15 @@ def get_mamba_cache_cls() -> type:
             return MambaCache
         except ImportError:
             return None
+
+
+def get_hybrid_cache_cls() -> type:
+    try:
+        from transformers.cache_utils import HybridCache
+
+        return HybridCache
+    except ImportError:
+        return None
 
 
 def register_class_serialization(
@@ -179,12 +183,6 @@ def serialization_functions(
             flatten_dynamic_cache,
             unflatten_dynamic_cache,
             flatten_with_keys_dynamic_cache,
-            flatten_hybrid_cache,
-            unflatten_hybrid_cache,
-            flatten_with_keys_hybrid_cache,
-            flatten_mamba_cache,
-            unflatten_mamba_cache,
-            flatten_with_keys_mamba_cache,
             flatten_encoder_decoder_cache,
             unflatten_encoder_decoder_cache,
             flatten_with_keys_encoder_decoder_cache,
@@ -205,14 +203,6 @@ def serialization_functions(
                 flatten_dynamic_cache,
                 unflatten_dynamic_cache,
                 flatten_with_keys_dynamic_cache,
-                # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
-                verbose=verbose,
-            ),
-            HybridCache: lambda verbose=verbose: register_class_serialization(
-                HybridCache,
-                flatten_hybrid_cache,
-                unflatten_hybrid_cache,
-                flatten_with_keys_hybrid_cache,
                 # f_check=make_dynamic_cache([(torch.rand((4, 4, 4)), torch.rand((4, 4, 4)))]),
                 verbose=verbose,
             ),
@@ -240,12 +230,35 @@ def serialization_functions(
         }
         MambaCache = get_mamba_cache_cls()
         if MambaCache:
+            from .serialization.transformers_impl import (
+                flatten_mamba_cache,
+                unflatten_mamba_cache,
+                flatten_with_keys_mamba_cache,
+            )
+
             transformers_classes[MambaCache] = (
                 lambda verbose=verbose: register_class_serialization(
                     MambaCache,
                     flatten_mamba_cache,
                     unflatten_mamba_cache,
                     flatten_with_keys_mamba_cache,
+                    verbose=verbose,
+                )
+            )
+        HybridCache = get_hybrid_cache_cls()
+        if HybridCache:
+            from .serialization.transformers_impl import (
+                flatten_hybrid_cache,
+                unflatten_hybrid_cache,
+                flatten_with_keys_hybrid_cache,
+            )
+
+            transformers_classes[HybridCache] = (
+                lambda verbose=verbose: register_class_serialization(
+                    HybridCache,
+                    flatten_hybrid_cache,
+                    unflatten_hybrid_cache,
+                    flatten_with_keys_hybrid_cache,
                     verbose=verbose,
                 )
             )
