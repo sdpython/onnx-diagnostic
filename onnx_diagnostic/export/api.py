@@ -382,7 +382,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             inline=inline,
         )
         self._export_done = False
-        self._serialization_classes = set()
+        self._serialization_classes: Set[type] = set()
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -561,7 +561,9 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             self._output_file
         ), f"output file {self._output_file!r} not found"
         filename = self._to_onnx_kwargs["filename"]
-        assert os.path.exists(filename), f"onnx file {self._output_file!r} not found"
+        assert isinstance(filename, str) and os.path.exists(
+            filename
+        ), f"onnx file {filename!r} not found"
         classes = [
             cls
             for cls in self._serialization_classes
@@ -617,10 +619,15 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             ort_outputs = sess.run(None, feeds)
             duration = time.perf_counter() - begin
             diff = max_diff(output, ort_outputs, hist=hist)
-            if "rep" in diff:
+            if "rep" in diff and isinstance(diff["rep"], dict):
                 diff.update(diff["rep"])
                 del diff["rep"]
-            diff["SUCCESS"] = diff["abs"] < atol and diff["rel"] < rtol
+            diff["SUCCESS"] = (
+                isinstance(diff["abs"], float)
+                and isinstance(diff["ref"], float)
+                and diff["abs"] < atol
+                and diff["rel"] < rtol
+            )
             diff.update(
                 dict(
                     index=i,

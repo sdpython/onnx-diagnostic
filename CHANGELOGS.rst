@@ -4,6 +4,8 @@ Change Logs
 0.8.9
 +++++
 
+* :pr:`378`: implements the computation of discrepancies in ``method_to_onnx``
+
 0.8.8
 +++++
 
