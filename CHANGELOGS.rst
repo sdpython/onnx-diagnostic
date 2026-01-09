@@ -4,7 +4,7 @@ Change Logs
 0.8.9
 +++++
 
-* :pr:`379`: remove hybrid_cache for ``transformers>=5``
+* :pr:`379`: update the handling of cache after the removal of HybridCache, SlidingWindowCache in ``transformers>=5``,
 
 0.8.8
 +++++

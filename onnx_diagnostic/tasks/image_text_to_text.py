@@ -1,7 +1,7 @@
 import itertools
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.cache_helper import make_dynamic_cache, make_hybrid_cache
+from ..helpers.cache_helper import make_dynamic_cache, get_make_hybrid_cache
 from ..helpers.config_helper import (
     update_config,
     check_hasattr,
@@ -200,6 +200,12 @@ def _get_inputs_gemma3(
 
     _check_()
 
+    make_hybrid_cache = get_make_hybrid_cache()
+    if make_hybrid_cache is None:
+        make_hybrid_cache = lambda *args: make_dynamic_cache(  # noqa: E731
+            *args, cls_layers="DynamicSlidingWindowLayer"
+        )
+
     inputs = dict(
         input_ids=dummies["input_ids"],
         token_type_ids=dummies["token_type_ids"],
@@ -211,7 +217,7 @@ def _get_inputs_gemma3(
         ),
         position_ids=torch.arange(0, sequence_length).to(torch.int64).expand((batch_size, -1)),
         cache_position=torch.arange(0, sequence_length).to(torch.int64),
-        past_key_values=(make_hybrid_cache or make_dynamic_cache)(
+        past_key_values=make_hybrid_cache(
             [
                 (
                     torch.randn(
