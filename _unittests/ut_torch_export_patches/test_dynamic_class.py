@@ -374,9 +374,33 @@ class TestOnnxExportErrors(ExtTestCase):
     def test_tiny_llm_export_module(self):
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM")
         model, inputs, dyn_shapes = data["model"], data["inputs"], data["dynamic_shapes"]
+        inputs_copied = torch_deepcopy(inputs)
+        self.assertEqualArray(inputs["input_ids"], inputs_copied["input_ids"])
+        self.assertEqualArray(inputs["position_ids"], inputs_copied["position_ids"])
+        self.assertEqualArray(inputs["attention_mask"], inputs_copied["attention_mask"])
+        self.assertEqualArray(
+            inputs["past_key_values"].layers[0].keys,
+            inputs_copied["past_key_values"].layers[0].keys,
+        )
+        self.assertEqualArray(
+            inputs["past_key_values"].layers[0].values,
+            inputs_copied["past_key_values"].layers[0].values,
+        )
         expected = model(**torch_deepcopy(inputs))
 
         with torch_export_patches(patch_transformers=True):
+            inputs_copied = torch_deepcopy(inputs)
+            self.assertEqualArray(inputs["input_ids"], inputs_copied["input_ids"])
+            self.assertEqualArray(inputs["position_ids"], inputs_copied["position_ids"])
+            self.assertEqualArray(inputs["attention_mask"], inputs_copied["attention_mask"])
+            self.assertEqualArray(
+                inputs["past_key_values"].layers[0].keys,
+                inputs_copied["past_key_values"].layers[0].keys,
+            )
+            self.assertEqualArray(
+                inputs["past_key_values"].layers[0].values,
+                inputs_copied["past_key_values"].layers[0].values,
+            )
             ep = torch.export.export(
                 model,
                 (),
