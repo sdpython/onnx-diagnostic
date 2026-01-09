@@ -624,7 +624,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                 del diff["rep"]
             diff["SUCCESS"] = (
                 isinstance(diff["abs"], float)
-                and isinstance(diff["ref"], float)
+                and isinstance(diff["rel"], float)
                 and diff["abs"] < atol
                 and diff["rel"] < rtol
             )
