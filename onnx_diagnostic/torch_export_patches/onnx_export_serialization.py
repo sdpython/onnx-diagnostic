@@ -7,10 +7,9 @@ import transformers
 from transformers.cache_utils import DynamicCache, StaticCache
 
 try:
-    from transformers.cache_utils import EncoderDecoderCache, SlidingWindowCache
+    from transformers.cache_utils import EncoderDecoderCache
 except ImportError:
     EncoderDecoderCache = None
-    SlidingWindowCache = None
 from ..helpers import string_type
 from .serialization import _lower_name_with_
 
@@ -36,6 +35,15 @@ def get_hybrid_cache_cls() -> type:
         from transformers.cache_utils import HybridCache
 
         return HybridCache
+    except ImportError:
+        return None
+
+
+def get_sliding_window_cache_cls() -> type:
+    try:
+        from transformers.cache_utils import SlidingWindowCache
+
+        return SlidingWindowCache
     except ImportError:
         return None
 
@@ -186,9 +194,6 @@ def serialization_functions(
             flatten_encoder_decoder_cache,
             unflatten_encoder_decoder_cache,
             flatten_with_keys_encoder_decoder_cache,
-            flatten_sliding_window_cache,
-            unflatten_sliding_window_cache,
-            flatten_with_keys_sliding_window_cache,
             flatten_static_cache,
             unflatten_static_cache,
             flatten_with_keys_static_cache,
@@ -211,13 +216,6 @@ def serialization_functions(
                 flatten_encoder_decoder_cache,
                 unflatten_encoder_decoder_cache,
                 flatten_with_keys_encoder_decoder_cache,
-                verbose=verbose,
-            ),
-            SlidingWindowCache: lambda verbose=verbose: register_class_serialization(
-                SlidingWindowCache,
-                flatten_sliding_window_cache,
-                unflatten_sliding_window_cache,
-                flatten_with_keys_sliding_window_cache,
                 verbose=verbose,
             ),
             StaticCache: lambda verbose=verbose: register_class_serialization(
@@ -262,6 +260,25 @@ def serialization_functions(
                     verbose=verbose,
                 )
             )
+
+        SlidingWindowCache = get_sliding_window_cache_cls()
+        if SlidingWindowCache:
+            from .serialization.transformers_impl import (
+                flatten_sliding_window_cache,
+                unflatten_sliding_window_cache,
+                flatten_with_keys_sliding_window_cache,
+            )
+
+            transformers_classes[SlidingWindowCache] = (
+                lambda verbose=verbose: register_class_serialization(
+                    SlidingWindowCache,
+                    flatten_sliding_window_cache,
+                    unflatten_sliding_window_cache,
+                    flatten_with_keys_sliding_window_cache,
+                    verbose=verbose,
+                )
+            )
+
         classes.update(transformers_classes)
 
     if patch_diffusers:
