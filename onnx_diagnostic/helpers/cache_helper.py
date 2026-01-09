@@ -251,16 +251,19 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             return finalize_cache(cache)
 
         cache = transformers.cache_utils.DynamicCache()
-        cache.layers.extend([cls_layer(**cls_kwargs) for _ in key_value_pairs])
-        for i, layer in enumerate(cache.layers):
-            layer.keys, layer.values = key_value_pairs[i][0], key_value_pairs[i][1]
-        if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
-            # The cache constructor contains the two following lines
-            # (in cache_utils.py) which append empty layers when the cache is
-            # initialized. We need to remove them.
-            # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
-            # self.append_new_layers(self.num_hidden_layers - 1)
-            cache.layers[:] = cache.layers[-len(key_value_pairs) :]
+        if hasattr(cache, "layers"):
+            cache.layers.extend([cls_layer(**cls_kwargs) for _ in key_value_pairs])
+            for i, layer in enumerate(cache.layers):
+                layer.keys, layer.values = key_value_pairs[i][0], key_value_pairs[i][1]
+        else:
+            cache = transformers.cache_utils.DynamicCache(key_value_pairs)
+            if len(key_value_pairs) < len(cache.layers):
+                # The cache constructor contains the two following lines
+                # (in cache_utils.py) which append empty layers when the cache is
+                # initialized. We need to remove them.
+                # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
+                # self.append_new_layers(self.num_hidden_layers - 1)
+                cache.layers[:] = cache.layers[-len(key_value_pairs) :]
         assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
             f"Unexpected number of layers in the cache ({len(cache.layers)}), "
             f"{len(key_value_pairs)} expected."
@@ -271,7 +274,7 @@ else:
 
     def make_dynamic_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
-        cls_layers=None,
+        cls_layers: Optional[Union[str, List[type]]] = None,
     ) -> transformers.cache_utils.DynamicCache:
         """
         Creates an instance of :class:`transformers.cache_utils.DynamicCache`.
