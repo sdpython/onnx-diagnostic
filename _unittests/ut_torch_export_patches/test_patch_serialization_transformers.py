@@ -301,8 +301,8 @@ class TestPatchSerialization(ExtTestCase):
     @requires_transformers("4.99")
     def test_dynamic_cache_flatten_unflatten(self):
         values = [
-            (torch.rand((2, 3, 4, 4)), torch.rand((2, 4, 3, 4))),
-            (torch.rand((2, 4, 4, 3)), torch.rand((2, 4, 4, 3))),
+            (torch.rand((2, 4, 4, 4)), torch.rand((2, 4, 4, 4))),
+            (torch.rand((2, 4, 4, 4)), torch.rand((2, 4, 4, 4))),
         ]
         cache = make_dynamic_cache(values)
         flat_cache = flatten_object(cache)
