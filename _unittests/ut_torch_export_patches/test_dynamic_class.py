@@ -388,7 +388,7 @@ class TestOnnxExportErrors(ExtTestCase):
         )
         expected = model(**torch_deepcopy(inputs))
 
-        with torch_export_patches(patch_transformers=True):
+        with torch_export_patches(patch_torch=False, patch_transformers=True):
             inputs_copied = torch_deepcopy(inputs)
             self.assertEqualArray(inputs["input_ids"], inputs_copied["input_ids"])
             self.assertEqualArray(inputs["position_ids"], inputs_copied["position_ids"])

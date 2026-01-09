@@ -777,7 +777,7 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
             ),
             cls_layers=cc.cls_layers,
         )
-    if value.__class__.__name__ in "HybridCache":
+    if value.__class__.__name__ == "HybridCache":
         from .cache_helper import make_hybrid_cache
 
         cc = CacheKeyValue(value)

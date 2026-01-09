@@ -251,10 +251,11 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             return finalize_cache(cache)
 
         cache = transformers.cache_utils.DynamicCache()
-        if hasattr(cache, "layers"):
+        if hasattr(cache, "layers") and cls_layer != transformers.cache_utils.DynamicLayer:
             cache.layers.extend([cls_layer(**cls_kwargs) for _ in key_value_pairs])
             for i, layer in enumerate(cache.layers):
                 layer.keys, layer.values = key_value_pairs[i][0], key_value_pairs[i][1]
+                layer.is_initialized = True
         else:
             cache = transformers.cache_utils.DynamicCache(key_value_pairs)
             if len(key_value_pairs) < len(cache.layers):
