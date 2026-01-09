@@ -201,10 +201,7 @@ def _get_inputs_gemma3(
     _check_()
 
     make_hybrid_cache = get_make_hybrid_cache()
-    if make_hybrid_cache is None:
-        make_hybrid_cache = lambda *args: make_dynamic_cache(  # noqa: E731
-            *args, cls_layers="DynamicSlidingWindowLayer"
-        )
+    assert make_hybrid_cache is not None, "not implemented when make_hybrid_cache is missing"
 
     inputs = dict(
         input_ids=dummies["input_ids"],

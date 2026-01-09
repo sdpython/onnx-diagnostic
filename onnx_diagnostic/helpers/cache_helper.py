@@ -558,9 +558,6 @@ if hasattr(transformers.cache_utils, "SlidingWindowCache"):
 else:
     make_sliding_window_cache = None  # type: ignore[assignment]
 
-    def get_make_hybrid_cache():
-        return None
-
 
 if hasattr(transformers.cache_utils, "HybridCache"):
 
@@ -723,8 +720,14 @@ if hasattr(transformers.cache_utils, "HybridCache"):
         )
         return finalize_cache(cache)
 
+    def get_make_hybrid_cache():
+        return make_hybrid_cache
+
 else:
     make_hybrid_cache = None  # type: ignore[assignment]
+
+    def get_make_hybrid_cache():
+        return None
 
 
 def finalize_cache(cache: transformers.cache_utils.Cache) -> transformers.cache_utils.Cache:
