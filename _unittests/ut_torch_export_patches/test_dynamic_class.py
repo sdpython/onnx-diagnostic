@@ -13,6 +13,7 @@ from onnx_diagnostic.ext_test_case import (
     ignore_warnings,
     hide_stdout,
     requires_torch,
+    requires_transformers,
 )
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyValue
@@ -371,6 +372,7 @@ class TestOnnxExportErrors(ExtTestCase):
 
     @ignore_warnings(UserWarning)
     @requires_torch("2.9")
+    @requires_transformers("4.57")
     def test_tiny_llm_export_module(self):
         data = get_untrained_model_with_inputs("arnir0/Tiny-LLM")
         model, inputs, dyn_shapes = data["model"], data["inputs"], data["dynamic_shapes"]
