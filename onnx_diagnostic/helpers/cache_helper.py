@@ -42,7 +42,9 @@ class CacheKeyValue:
 
     def make_dynamic_cache(self):
         """Does the reverse operation."""
-        return make_dynamic_cache(list(zip(self.key_cache, self.value_cache)))
+        return make_dynamic_cache(
+            list(zip(self.key_cache, self.value_cache)), cls_layers=self.cls_layers
+        )
 
     @property
     def n_layers(self) -> int:
@@ -250,6 +252,8 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
 
         cache = transformers.cache_utils.DynamicCache()
         cache.layers.extend([cls_layer(**cls_kwargs) for _ in key_value_pairs])
+        for i, layer in enumerate(cache.layers):
+            layer.keys, layer.values = key_value_pairs[i][0], key_value_pairs[i][1]
         if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
             # The cache constructor contains the two following lines
             # (in cache_utils.py) which append empty layers when the cache is
@@ -267,6 +271,7 @@ else:
 
     def make_dynamic_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
+        cls_layers=None,
     ) -> transformers.cache_utils.DynamicCache:
         """
         Creates an instance of :class:`transformers.cache_utils.DynamicCache`.
@@ -298,6 +303,7 @@ else:
             )
             print(string_type(past_key_values, with_shape=True))
         """
+        assert not cls_layers, "cls_layers cannot be used for transformers<5."
         key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
         cache = transformers.cache_utils.DynamicCache(len(key_value_pairs))  # type: ignore
         for i, (key, value) in enumerate(key_value_pairs):
