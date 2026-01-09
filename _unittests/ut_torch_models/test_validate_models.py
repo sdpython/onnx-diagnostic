@@ -62,7 +62,7 @@ class TestValidateModel(ExtTestCase):
         self.assertIn("onnx_filename", data)
         self.clean_dump()
 
-    @requires_transformers("4.53")
+    @requires_transformers("4.57")
     @requires_torch("2.8.99")
     @requires_experimental()
     @hide_stdout()

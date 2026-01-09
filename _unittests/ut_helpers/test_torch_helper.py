@@ -344,6 +344,7 @@ class TestTorchTestHelper(ExtTestCase):
         self.assertEqual(hash1, hash2)
         self.assertGreater(torch_tensor_size(bo), 1)
 
+    @unittest.skipIf(make_sliding_window_cache is None, "SlidingWindowCache was removed")
     def test_torch_deepcopy_sliding_windon_cache(self):
         cache = make_sliding_window_cache(
             [
