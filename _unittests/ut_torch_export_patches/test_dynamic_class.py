@@ -16,6 +16,7 @@ from onnx_diagnostic.ext_test_case import (
 )
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyValue
+from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.torch_export_patches.onnx_export_errors import (
     torch_export_patches,
 )
@@ -288,7 +289,7 @@ class TestOnnxExportErrors(ExtTestCase):
         data = get_untrained_model_with_inputs("microsoft/phi-2")
         model, inputs, dyn_shapes = data["model"], data["inputs"], data["dynamic_shapes"]
         str_inputs = string_type(inputs, with_shape=True, with_min_max=True)
-        inputs_copied = copy.deepcopy(inputs)
+        inputs_copied = torch_deepcopy(inputs)
         expected = model(**inputs_copied)
         self.maxDiff = None
         self.assertEqual(str_inputs, string_type(inputs, with_shape=True, with_min_max=True))
@@ -298,7 +299,7 @@ class TestOnnxExportErrors(ExtTestCase):
             string_type(inputs, with_shape=True, with_min_max=True),
             string_type(inputs_copied, with_shape=True, with_min_max=True),
         )
-        inputs_copied = copy.deepcopy(inputs)
+        inputs_copied = torch_deepcopy(inputs)
         self.assertEqual(
             str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
         )
@@ -307,13 +308,13 @@ class TestOnnxExportErrors(ExtTestCase):
             ep = torch.export.export(
                 model,
                 (),
-                kwargs=inputs,
+                kwargs=torch_deepcopy(inputs),
                 dynamic_shapes=use_dyn_not_str(dyn_shapes),
                 strict=False,  # True works but then the it fails during the execution
             )
             # ep = ep.run_decompositions()
             mod = ep.module()
-            inputs_copied = copy.deepcopy(inputs)
+            inputs_copied = torch_deepcopy(inputs)
             self.assertEqual(
                 str_inputs, string_type(inputs_copied, with_shape=True, with_min_max=True)
             )
@@ -366,6 +367,25 @@ class TestOnnxExportErrors(ExtTestCase):
             )
             args, _spec = torch.utils._pytree.tree_flatten(inputs_copied)
             got = MyInterpreter(ep.module()).run(*args)
+            self.assertEqualAny(expected, got)
+
+    @ignore_warnings(UserWarning)
+    @requires_torch("2.9")
+    def test_tiny_llm_export_module(self):
+        data = get_untrained_model_with_inputs("arnir0/Tiny-LLM")
+        model, inputs, dyn_shapes = data["model"], data["inputs"], data["dynamic_shapes"]
+        expected = model(**torch_deepcopy(inputs))
+
+        with torch_export_patches(patch_transformers=True):
+            ep = torch.export.export(
+                model,
+                (),
+                kwargs=torch_deepcopy(inputs),
+                dynamic_shapes=use_dyn_not_str(dyn_shapes),
+                strict=False,
+            )
+            mod = ep.module()
+            got = mod(**torch_deepcopy(inputs))
             self.assertEqualAny(expected, got)
 
 
