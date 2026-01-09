@@ -77,8 +77,10 @@ def flatten_dynamic_cache(
     dynamic_cache: DynamicCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
-    assert not dynamic_cache.layers or all(
-        lay.__class__.__name__ == "DynamicLayer" for lay in dynamic_cache.layers
+    assert (
+        not hasattr(dynamic_cache, "layers")
+        or not dynamic_cache.layers
+        or all(lay.__class__.__name__ == "DynamicLayer" for lay in dynamic_cache.layers)
     ), (
         f"The serialization does not work yet on other layers "
         f"than DynamicLayer, but layers={[lay.__class__ for lay in dynamic_cache.layers]}"
@@ -90,8 +92,10 @@ def flatten_with_keys_dynamic_cache(
     dynamic_cache: DynamicCache,
 ) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
-    assert not dynamic_cache.layers or all(
-        lay.__class__.__name__ == "DynamicLayer" for lay in dynamic_cache.layers
+    assert (
+        not hasattr(dynamic_cache, "layers")
+        or not dynamic_cache.layers
+        or all(lay.__class__.__name__ == "DynamicLayer" for lay in dynamic_cache.layers)
     ), (
         f"The serialization does not work yet on other layers "
         f"than DynamicLayer, but layers={[lay.__class__ for lay in dynamic_cache.layers]}"

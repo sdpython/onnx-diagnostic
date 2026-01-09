@@ -216,7 +216,10 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             unique = set(cls_layers)
             assert len(unique) == 1, f"Not implemented when cls_layers={cls_layers}"
             cls_layer = unique.pop()
-            if cls_layer == transformers.cache_utils.DynamicSlidingWindowLayer:
+            if (
+                hasattr(transformers.cache_utils, "DynamicSlidingWindowLayer")
+                and cls_layer == transformers.cache_utils.DynamicSlidingWindowLayer
+            ):
                 from .helper import string_type
 
                 assert key_value_pairs and key_value_pairs[0], (
@@ -228,7 +231,11 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                     cls_kwargs["sliding_window"], int
                 ), f"sliding_window must be an integer but shape={key_value_pairs[0][0].shape}"
         else:
-            cls_layer = transformers.cache_utils.DynamicLayer
+            cls_layer = (
+                transformers.cache_utils.DynamicLayer
+                if hasattr(transformers.cache_utils, "DynamicLayer")
+                else None
+            )
 
         if (
             key_value_pairs
@@ -258,7 +265,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                 layer.is_initialized = True
         else:
             cache = transformers.cache_utils.DynamicCache(key_value_pairs)
-            if len(key_value_pairs) < len(cache.layers):
+            if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
                 # The cache constructor contains the two following lines
                 # (in cache_utils.py) which append empty layers when the cache is
                 # initialized. We need to remove them.

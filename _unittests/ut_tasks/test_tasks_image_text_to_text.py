@@ -10,6 +10,7 @@ from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
+from onnx_diagnostic.helpers.cache_helper import get_make_hybrid_cache
 
 
 class TestTasksImageTextToText(ExtTestCase):
@@ -58,6 +59,9 @@ class TestTasksImageTextToText(ExtTestCase):
     @requires_transformers("4.56.99")
     @requires_torch("2.8.99")
     def test_image_text_to_text_gemma3_4b_it(self):
+        make_hybrid_cache = get_make_hybrid_cache()
+        if make_hybrid_cache is None:
+            raise unittest.SkipTest("not implemented yet for transformers>=5")
         mid = "google/gemma-3-4b-it"
         data = get_untrained_model_with_inputs(
             mid,
