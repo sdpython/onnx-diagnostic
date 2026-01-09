@@ -333,13 +333,7 @@ def unregister_class_serialization(cls: type, verbose: int = 0):
 
 
 def unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
-    """Undo all registrations."""
-    MambaCache = get_mamba_cache_cls()
-    cls_ensemble = (
-        {DynamicCache, EncoderDecoderCache}
-        | set(undo)
-        | ({MambaCache} if MambaCache else set())
-    )
+    cls_ensemble = {DynamicCache, EncoderDecoderCache} | set(undo)
     for cls in cls_ensemble:
         if undo.get(cls.__name__, False):
             unregister_class_serialization(cls, verbose)
