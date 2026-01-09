@@ -177,6 +177,7 @@ class TestPatchSerialization(ExtTestCase):
             self.assertEqual("#1[T1r3]", self.string_type(unflat))
 
     @ignore_warnings(UserWarning)
+    @unittest.skipIf(not make_sliding_window_cache, "SlidingWindowCache was removed")
     def test_base_sliding_window_cache_unflatten_flatten(self):
         cache = make_sliding_window_cache(
             [(torch.rand((4, 4, 4, 4)), torch.rand((4, 4, 4, 4)))]
@@ -187,6 +188,7 @@ class TestPatchSerialization(ExtTestCase):
 
     @ignore_warnings(UserWarning)
     @requires_torch("2.7.99")
+    @unittest.skipIf(not make_sliding_window_cache, "SlidingWindowCache was removed")
     def test_sliding_window_cache_export(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
@@ -208,6 +210,7 @@ class TestPatchSerialization(ExtTestCase):
             torch.export.export(model, (cache,), dynamic_shapes=(ds,))
 
     @ignore_warnings(UserWarning)
+    @unittest.skipIf(not make_sliding_window_cache, "SlidingWindowCache was removed")
     def test_sliding_window_cache_flatten(self):
         cache = make_sliding_window_cache(
             [(torch.rand((4, 4, 4, 4)), torch.rand((4, 4, 4, 4)))]

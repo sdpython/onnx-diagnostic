@@ -69,12 +69,16 @@ class TestShapeHelper(ExtTestCase):
                 ],
             ),
             (
-                make_sliding_window_cache(
-                    [
-                        (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
-                        (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
-                        (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
-                    ]
+                (
+                    make_sliding_window_cache(
+                        [
+                            (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                            (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                            (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                        ]
+                    )
+                    if make_sliding_window_cache is not None
+                    else None
                 ),
                 [
                     {0: "d_0_0", 1: "d_0_1", 2: "d_0_2", 3: "d_0_3"},
@@ -106,11 +110,15 @@ class TestShapeHelper(ExtTestCase):
         ]
         with torch_export_patches(patch_transformers=True):
             for cache, exds in caches:
+                if cache is None:
+                    continue
                 with self.subTest(cache_name=cache.__class__.__name__, patch=True):
                     ds = all_dynamic_shapes_from_inputs(cache)
                     self.assertEqual(exds, ds)
 
         for cache, exds in caches:
+            if cache is None:
+                continue
             with self.subTest(cache_name=cache.__class__.__name__, patch=False):
                 ds = all_dynamic_shapes_from_inputs(cache)
                 self.assertEqual(exds, ds)
