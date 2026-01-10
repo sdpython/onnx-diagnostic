@@ -1,8 +1,8 @@
 """
 .. _l-plot-tiny-llm-export-method-generate:
 
-Export a model through method generate (with Tiny-LLM)
-======================================================
+Export a LLM through method generate (with Tiny-LLM)
+====================================================
 
 The main issue when exporting a LLM is the example on HuggingFace is
 based on method generate but we only need to export the forward method.
