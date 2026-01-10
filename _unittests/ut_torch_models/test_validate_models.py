@@ -1,6 +1,4 @@
 import unittest
-import packaging.version as pv
-import torch
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     hide_stdout,
@@ -29,7 +27,7 @@ class TestValidateModel(ExtTestCase):
             do_same=True,
             patch=True,
             rewrite=True,
-            stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
+            stop_if_static=2,
             dump_folder="dump_test/validate_tiny_llm",
             dtype="bfloat16",
             device="cuda",
@@ -55,7 +53,8 @@ class TestValidateModel(ExtTestCase):
             do_same=True,
             patch=True,
             rewrite=True,
-            stop_if_static=2 if pv.Version(torch.__version__) > pv.Version("2.6.1") else 0,
+            exporter_options=dict(prefer_deferred_runtime_asserts_over_guards=False),
+            stop_if_static=2,
             dump_folder="dump_test/validate_microsoft_phi4_reasoning",
         )
         self.assertLess(summary["disc_onnx_ort_run_abs"], 2e-5)
