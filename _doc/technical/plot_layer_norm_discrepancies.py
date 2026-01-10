@@ -24,8 +24,7 @@ import onnx
 import onnx.helper as oh
 import onnxruntime
 import torch
-from onnx_array_api.plotting.graphviz_helper import plot_dot
-from onnx_diagnostic.doc import rotate_align, save_fig, plot_histogram, title
+from onnx_diagnostic.doc import rotate_align, save_fig, plot_histogram, title, plot_dot
 from onnx_diagnostic.ext_test_case import unit_test_going
 from onnx_diagnostic.helpers import max_diff, string_diff, string_type
 from onnx_diagnostic.helpers.onnx_helper import onnx_dtype_name, onnx_dtype_to_np_dtype

@@ -133,5 +133,4 @@ print(df)
 
 
 # %%
-
-doc.plot_legend("Tiny-LLM\nforward inputs\nthrough generate", "onnx export", "tomato")
+doc.save_fig(doc.plot_dot(filename), f"{filename}.png", dpi=400)

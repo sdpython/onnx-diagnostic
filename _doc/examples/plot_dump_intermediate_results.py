@@ -26,7 +26,6 @@ import pandas
 import onnx
 import torch
 import onnxruntime
-from onnx_array_api.plotting.graphviz_helper import plot_dot
 from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import max_diff, string_diff, string_type
 from onnx_diagnostic.helpers.torch_helper import dummy_llm, steal_forward
@@ -203,7 +202,7 @@ print(piv.dropna(axis=0, how="all"))
 # ++++++++++++++++++++
 
 onx = onnx.load("plot_dump_intermediate_results.onnx")
-plot_dot(onx)
+doc.plot_dot(onx)
 
 # %%
 doc.plot_legend("steal and dump\nintermediate\nresults", "steal_forward", "blue")

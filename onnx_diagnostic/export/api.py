@@ -8,6 +8,7 @@ import torch
 from .dynamic_shapes import ModelInputs
 from .onnx_plug import EagerDirectReplacementWithOnnx
 from ..helpers import flatten_object, max_diff, string_diff, string_type
+from ..helpers.cache_helper import CacheKeyValue
 from ..helpers.torch_helper import torch_deepcopy
 from ..helpers.rt_helper import make_feeds
 from ..reference import OnnxruntimeEvaluator
@@ -541,6 +542,83 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                 **self._to_onnx_kwargs,
             )
 
+    @classmethod
+    def make_empty_cache_from_others(cls, examples: List["Cache"]) -> "Cache":  # noqa: F821
+        """Builds an empty cache based on existing one."""
+        unique_types = {type(t) for t in examples}
+        assert (
+            len(unique_types) == 1
+        ), f"Unable to guess an empty cache from {string_type(examples, with_shape=True)}"
+        unique_type = unique_types.pop()
+        if unique_type == torch.Tensor:
+            shapes = [t.shape for t in examples]
+            assert len(set(shapes)) > 1, f"Unable to guess an empty shape from shapes {shapes}"
+            ranks = {len(s) for s in shapes}
+            assert len(ranks) == 1, f"Ranks are different in {shapes}"
+            rank = ranks.pop()
+            new_shape = []
+            for i in range(rank):
+                dims = [t.shape[i] for t in examples]
+                if len(set(dims)) == 1:
+                    new_shape.append(dims[0])
+                else:
+                    # The empty shape
+                    new_shape.append(0)
+            example = examples[0]
+            return torch.empty(tuple(new_shape), dtype=example.dtype, device=example.device)
+        assert (
+            unique_type.__name__ == "DynamicCache"
+        ), f"This is not implemented for class {unique_type}"
+        caches = [CacheKeyValue(dc) for dc in examples]
+        caches_list = [dc.aslist() for dc in caches]
+        empty = [
+            cls.make_empty_cache_from_others([caches_list[i][k] for i in range(len(examples))])
+            for k in range(len(caches_list[0]))
+        ]
+        empty_cache = CacheKeyValue(
+            empty, cls_layers=caches[0].cls_layers
+        ).make_dynamic_cache()
+        return empty_cache
+
+    @classmethod
+    def add_empty_cache_if_needed(cls, inputs: List[Any]) -> List[Any]:
+        """
+        Adds empty cache if needed as onnxruntime needs an empty cache,
+        not a missing cache. It only works if inputs are defined as a dictionary.
+        """
+        if all(isinstance(t, tuple) for t in inputs) and all(
+            len(t) == 2 and isinstance(t[0], tuple) and isinstance(t[1], dict) and not t[0]
+            for t in inputs
+        ):
+            dict_part = [t[1] for t in inputs]
+            res = cls.add_empty_cache_if_needed(dict_part)
+            return [(tuple(), d) for d in res]
+        if any(not isinstance(t, dict) for t in inputs):
+            return inputs
+        all_keys = set()
+        for input_set in inputs:
+            all_keys |= set(input_set)
+        # even though the inputs are defined as a dictionary, it is better
+        # to keep the same order
+        ordered = None
+        for input_set in inputs:
+            if set(input_set) == all_keys:
+                ordered = list(input_set)
+                break
+        new_inputs = []
+        for input_set in inputs:
+            if set(input_set) == all_keys:
+                new_inputs.append(input_set)
+                continue
+            missing = {k for k in all_keys if k not in input_set}
+            input_set_copy = input_set.copy()
+            for miss in missing:
+                input_set_copy[miss] = cls.make_empty_cache_from_others(
+                    [sub[miss] for sub in inputs if miss in sub]
+                )
+            new_inputs.append({k: input_set_copy[k] for k in ordered})
+        return new_inputs
+
     def check_discrepancies(
         self, atol: float = 1e-4, rtol: float = 0.1, hist=(0.1, 0.01), verbose: int = 0
     ) -> List[Dict[str, Union[str, int, float]]]:
@@ -555,6 +633,18 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         :param verbose: verbosity
         :return: results, a list of dictionaries, ready to be consumed by a dataframe
         """
+
+        def _missing_classes():
+            try:
+                import transformers
+
+                return [
+                    transformers.modeling_outputs.CausalLMOutputWithPast,
+                    transformers.cache_utils.DynamicCache,
+                ]
+            except ImportError:
+                return []
+
         assert self._export_done, "The onnx export was not done."
         assert os.path.exists(self._input_file), f"input file {self._input_file!r} not found"
         assert os.path.exists(
@@ -565,9 +655,13 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             filename
         ), f"onnx file {filename!r} not found"
         classes = [
-            cls
-            for cls in self._serialization_classes
-            if cls not in {int, float, bool, str, torch.Tensor, list, set, dict, torch.device}
+            *_missing_classes(),
+            *[
+                cls
+                for cls in self._serialization_classes
+                if cls
+                not in {int, float, bool, str, torch.Tensor, list, set, dict, torch.device}
+            ],
         ]
         if verbose:
             print(f"[method_to_onnx.check_discrepancies] register classes {classes}")
@@ -590,7 +684,9 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         if verbose:
             print(f"[method_to_onnx.check_discrepancies] input_names={input_names}")
         data = []
-        for i, (input, (output, latency)) in enumerate(zip(inputs, outputs)):
+        for i, (input, (output, latency)) in enumerate(
+            zip(self.add_empty_cache_if_needed(inputs), outputs)
+        ):
             if verbose:
                 if verbose > 1:
                     print(
@@ -602,7 +698,10 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                         f"{string_type(output, with_shape=True)}"
                     )
                 else:
-                    print(f"[method_to_onnx.check_discrepancies] process input {i}")
+                    print(
+                        f"[method_to_onnx.check_discrepancies] "
+                        f"process input {i} #inputs={len(input)}"
+                    )
 
             flat_inputs = flatten_object(input, drop_keys=True)
             if len(flat_inputs) < len(input_names):
