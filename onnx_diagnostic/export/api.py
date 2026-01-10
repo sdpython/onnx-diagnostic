@@ -699,8 +699,8 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                     )
                 else:
                     print(
-                        f"[method_to_onnx.check_discrepancies] "
-                        f"process input {i} #inputs={len(input)}"
+                        f"[method_to_onnx.check_discrepancies] process input {i} "
+                        f"#args={len(input[0])} #kwargs={len(input[1])}"
                     )
 
             flat_inputs = flatten_object(input, drop_keys=True)
