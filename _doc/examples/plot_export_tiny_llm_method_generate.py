@@ -17,6 +17,7 @@ Let's use the example provided on
 `arnir0/Tiny-LLM <https://huggingface.co/arnir0/Tiny-LLM>`_.
 """
 
+import pandas
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from onnx_diagnostic import doc
 from onnx_diagnostic.export.api import method_to_onnx
@@ -108,9 +109,23 @@ model.forward = lambda *args, **kwargs: forward_replacement(*args, **kwargs)
 
 
 # %%
-# Let's call generate again.
+# Let's call generate again. The conversion is triggered after
+# ``convert_after_n_calls=3`` calls to the method forward,
+# which exactly what the method generate is doing.
 generated_text = generate_text(prompt, model, tokenizer)
 print(generated_text)
+
+# %%
+# We finally need to check the discrepancies.
+# The exports produced an onnx file and dumped the input and output
+# of the torch model. We now run the onnx model to check
+# it produces the same results.
+# It is done after because the model may not hold twice in memory
+# (torch and onnxruntime).
+# verbose=2 shows more information about expected outputs.
+data = forward_replacement.check_discrepancies(verbose=1)
+df = pandas.DataFrame(data)
+print(df)
 
 
 # %%

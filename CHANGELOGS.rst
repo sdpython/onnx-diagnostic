@@ -4,6 +4,7 @@ Change Logs
 0.8.9
 +++++
 
+* :pr:`378`: implements the computation of discrepancies in ``method_to_onnx``
 * :pr:`379`: update the handling of cache after the removal of HybridCache, SlidingWindowCache in ``transformers>=5``,
 
 0.8.8

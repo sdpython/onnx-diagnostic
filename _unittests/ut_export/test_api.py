@@ -19,6 +19,7 @@ from onnx_diagnostic.export.api import to_onnx, method_to_onnx
 
 
 class TestValidate(ExtTestCase):
+    @ignore_warnings(FutureWarning)
     @hide_stdout()
     def test_to_onnx(self):
         class Model(torch.nn.Module):
@@ -142,6 +143,9 @@ class TestValidate(ExtTestCase):
             feeds = make_feeds(input_names, args, use_numpy=True)
             got = sess.run(None, feeds)
             self.assertEqualArray(expected, got[0])
+        df = method_to_call.check_discrepancies()
+        self.assertIsInstance(df, list)
+        self.assertEqual(len(df), 2)
         self.clean_dump()
 
     @requires_experimental_experiment("0.1")
@@ -243,6 +247,7 @@ class TestValidate(ExtTestCase):
             feeds = make_feeds(input_names, (args, kwargs), use_numpy=True)
             got = sess.run(None, feeds)
             self.assertEqualArray(expected, got[0])
+        method_to_call.check_discrepancies(verbose=1)
         self.clean_dump()
 
 
