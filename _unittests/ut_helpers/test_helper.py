@@ -667,12 +667,14 @@ class TestHelpers(ExtTestCase):
             [(torch.rand((1, 1, 3, 4)), torch.rand((1, 1, 3, 4)))], max_cache_len=3
         )
         self.assertEqual(max_diff(cache, cache)["abs"], 0)
-        cache = make_hybrid_cache([(torch.rand((1, 1, 3, 4)), torch.rand((1, 1, 3, 4)))])
-        self.assertEqual(max_diff(cache, cache)["abs"], 0)
-        cache = make_sliding_window_cache(
-            [(torch.rand((1, 1, 3, 4)), torch.rand((1, 1, 3, 4)))]
-        )
-        self.assertEqual(max_diff(cache, cache)["abs"], 0)
+        if make_hybrid_cache is not None:
+            cache = make_hybrid_cache([(torch.rand((1, 1, 3, 4)), torch.rand((1, 1, 3, 4)))])
+            self.assertEqual(max_diff(cache, cache)["abs"], 0)
+        if make_sliding_window_cache is not None:
+            cache = make_sliding_window_cache(
+                [(torch.rand((1, 1, 3, 4)), torch.rand((1, 1, 3, 4)))]
+            )
+            self.assertEqual(max_diff(cache, cache)["abs"], 0)
         cache = make_encoder_decoder_cache(cache, cache)
         self.assertEqual(max_diff(cache, cache)["abs"], 0)
 

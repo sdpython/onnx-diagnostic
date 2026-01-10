@@ -120,6 +120,9 @@ jobs:
       - name: pip freeze
         run: python -m pip freeze
 
+      - name: cache
+        run: PYTHONPATH=. UNITTEST_GOING=1 pytest _unittests/ut_helpers/test_cache_helper.py _unittests/ut_helpers/test_torch_helper.py _unittests/ut_helpers/test_fake_tensor_helper.py _unittests/ut_torch_export_patches/test_patch_serialization_transformers.py _unittests/ut_torch_export_patches/test_patch_transformers.py _unittests/ut_torch_export_patches/test_dynamic_class.py _unittests/ut_torch_export_patches/test_onnx_export_errors.py
+
       - name: tiny-llm torch.export.export
         run: PYTHONPATH=. UNITTEST_GOING=1 python _unittests/ut_torch_models/test_tiny_llms.py
 

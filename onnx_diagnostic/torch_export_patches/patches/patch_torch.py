@@ -541,14 +541,17 @@ class patched_ShapeEnv:
                     # oblivious_var_to_val will be defined iff we have sizes
                     # with DimDynamic.OBLIVIOUS_SIZE type.
                     # See https://github.com/pytorch/pytorch/issues/137100#issuecomment-2495778113
+                    var_to_val = getattr(
+                        self,
+                        "unbacked_var_to_val",
+                        getattr(self, "oblivious_var_to_val", False),
+                    )
                     if (
-                        self.oblivious_var_to_val
-                        and not (
-                            correct_hint := orig_expr.xreplace(self.oblivious_var_to_val)
-                        ).free_symbols
+                        var_to_val
+                        and not (correct_hint := orig_expr.xreplace(var_to_val)).free_symbols
                         and not (
                             counterfactual_hint := orig_expr.xreplace(
-                                {k: max(2, v) for k, v in self.oblivious_var_to_val.items()}
+                                {k: max(2, v) for k, v in var_to_val.items()}
                             )
                         ).free_symbols
                         and correct_hint == counterfactual_hint
@@ -571,11 +574,11 @@ class patched_ShapeEnv:
                     # and if they pass we add a runtime assertions and continue.
                     if (
                         not ok
-                        and self.unbacked_var_to_val
+                        and var_to_val
                         and not (
-                            unsound_result := orig_expr.xreplace(
-                                self.unbacked_var_to_val
-                            ).xreplace(self.var_to_val)
+                            unsound_result := orig_expr.xreplace(var_to_val).xreplace(
+                                var_to_val
+                            )
                         ).free_symbols
                     ):
                         # pyrefly: ignore  # unbound-name

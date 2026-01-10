@@ -1,7 +1,7 @@
 import itertools
 from typing import Any, Callable, Dict, Optional, Tuple
 import torch
-from ..helpers.cache_helper import make_dynamic_cache, make_hybrid_cache
+from ..helpers.cache_helper import make_dynamic_cache, get_make_hybrid_cache
 from ..helpers.config_helper import (
     update_config,
     check_hasattr,
@@ -199,6 +199,9 @@ def _get_inputs_gemma3(
         )
 
     _check_()
+
+    make_hybrid_cache = get_make_hybrid_cache()
+    assert make_hybrid_cache is not None, "not implemented when make_hybrid_cache is missing"
 
     inputs = dict(
         input_ids=dummies["input_ids"],

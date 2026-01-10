@@ -167,6 +167,9 @@ class TestCacheHelpers(ExtTestCase):
         )
         self.assertEqual(0, max_diff(cache, cache)["abs"])
 
+    @unittest.skipIf(
+        not make_sliding_window_cache, "SlidingWindowCache removed in transformers>=5"
+    )
     def test_make_sliding_window_cache(self):
         cache = make_sliding_window_cache(
             [
@@ -223,6 +226,7 @@ class TestCacheHelpers(ExtTestCase):
                 self.string_type(unflat, with_shape=True),
             )
 
+    @unittest.skipIf(not make_hybrid_cache, "HybridCache removed in transformers>=5")
     def test_make_hybrid_cache(self):
         cache = make_hybrid_cache(
             [
@@ -240,6 +244,7 @@ class TestCacheHelpers(ExtTestCase):
         self.assertEqual(0, max_diff(cache, cache)["abs"])
         self.assertEqual(0, max_diff(cache, torch_deepcopy(cache))["abs"])
 
+    @unittest.skipIf(not make_hybrid_cache, "HybridCache removed in transformers>=5")
     def test_unflatten_flatten_hybrid_cache(self):
         with torch_export_patches(patch_transformers=True):
             c2 = make_hybrid_cache(

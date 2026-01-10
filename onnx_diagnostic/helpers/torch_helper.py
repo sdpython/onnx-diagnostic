@@ -15,9 +15,6 @@ from .helper import string_type, size_type
 from .cache_helper import (
     make_dynamic_cache,
     make_encoder_decoder_cache,
-    make_hybrid_cache,
-    make_sliding_window_cache,
-    make_mamba_cache,
     make_static_cache,
     CacheKeyValue,
 )
@@ -769,10 +766,22 @@ def to_any(value: Any, to_value: Union[torch.dtype, torch.device, str]) -> Any:
         return {to_any(t, to_value) for t in value}
     if type(value) is dict:
         return {k: to_any(t, to_value) for k, t in value.items()}
-    if value.__class__.__name__ in {"DynamicCache", "HybridCache"}:
-        make = dict(DynamicCache=make_dynamic_cache, HybridCache=make_hybrid_cache)
+    if value.__class__.__name__ == "DynamicCache":
         cc = CacheKeyValue(value)
-        return make[value.__class__.__name__](  # type: ignore[operator]
+        return make_dynamic_cache(
+            list(
+                zip(
+                    [t.to(to_value) if t is not None else t for t in cc.key_cache],
+                    [t.to(to_value) if t is not None else t for t in cc.value_cache],
+                )
+            ),
+            cls_layers=cc.cls_layers,
+        )
+    if value.__class__.__name__ == "HybridCache":
+        from .cache_helper import make_hybrid_cache
+
+        cc = CacheKeyValue(value)
+        return make_hybrid_cache(
             list(
                 zip(
                     [t.to(to_value) if t is not None else t for t in cc.key_cache],
@@ -843,7 +852,9 @@ def torch_deepcopy(value: Any) -> Any:
         from .cache_helper import CacheKeyValue
 
         ca = CacheKeyValue(value)
-        return make_dynamic_cache(torch_deepcopy(list(zip(ca.key_cache, ca.value_cache))))
+        return make_dynamic_cache(
+            torch_deepcopy(list(zip(ca.key_cache, ca.value_cache))), cls_layers=ca.cls_layers
+        )
     if value.__class__.__name__ == "StaticCache":
         from .cache_helper import CacheKeyValue
 
@@ -858,12 +869,12 @@ def torch_deepcopy(value: Any) -> Any:
             max_cache_len=max([value.max_cache_len, *[t.shape[2] for t in ca.key_cache]]),
         )
     if value.__class__.__name__ == "HybridCache":
-        from .cache_helper import CacheKeyValue
+        from .cache_helper import CacheKeyValue, make_hybrid_cache
 
         ca = CacheKeyValue(value)
         return make_hybrid_cache(torch_deepcopy(list(zip(ca.key_cache, ca.value_cache))))
     if value.__class__.__name__ == "SlidingWindowCache":
-        from .cache_helper import CacheKeyValue
+        from .cache_helper import CacheKeyValue, make_sliding_window_cache
 
         ca = CacheKeyValue(value)
         return make_sliding_window_cache(
@@ -875,6 +886,8 @@ def torch_deepcopy(value: Any) -> Any:
             torch_deepcopy(value.cross_attention_cache),
         )
     if value.__class__.__name__ == "MambaCache":
+        from .cache_helper import make_mamba_cache
+
         return make_mamba_cache(list(zip(value.conv_states, value.ssm_states)))
 
     if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:

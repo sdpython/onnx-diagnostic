@@ -28,18 +28,23 @@ class CacheKeyValue:
             ]
             self.key_cache = [layer.keys for layer in layers]
             self.value_cache = [layer.values for layer in layers]
+            self.cls_layers = [type(lay) for lay in cache.layers]
         elif cache is not None and hasattr(cache, "key_cache"):
             self.key_cache = cache.key_cache
             self.value_cache = cache.value_cache
+            self.cls_layers = None
         elif cache is None:
             self.key_cache = None
             self.value_cache = None
+            self.cls_layers = None
         else:
             raise NotImplementedError(f"type(cache)={type(cache)}")
 
     def make_dynamic_cache(self):
         """Does the reverse operation."""
-        return make_dynamic_cache(list(zip(self.key_cache, self.value_cache)))
+        return make_dynamic_cache(
+            list(zip(self.key_cache, self.value_cache)), cls_layers=self.cls_layers
+        )
 
     @property
     def n_layers(self) -> int:
@@ -156,12 +161,16 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
 
     def make_dynamic_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
+        cls_layers: Optional[Union[str, List[type]]] = None,
     ) -> transformers.cache_utils.DynamicCache:
         """
         Creates an instance of :class:`transformers.cache_utils.DynamicCache`.
         This version is valid for ``transformers >= 4.50``.
 
         :param key_value_pairs: list of pairs of (key, values)
+        :param cls_layers: to select the appropriate class to use on each layer,
+            if specified, sliding_window is ignored, it can be a string
+            if all layers are expected to follow the same class
         :return: :class:`transformers.cache_utils.DynamicCache`
 
         Example:
@@ -192,15 +201,49 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         are supported.
         """
         key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
+        cls_kwargs = {}
+        if isinstance(cls_layers, str):
+            assert hasattr(
+                transformers.cache_utils, cls_layers
+            ), f"Unable to find class {cls_layers!r} in transformers.cache_utils"
+            cls_layer = getattr(transformers.cache_utils, cls_layers)
+            if cls_layers == "DynamicSlidingWindowLayer":
+                cls_kwargs["sliding_window"] = key_value_pairs[0][0].shape[2]
+                assert isinstance(
+                    cls_kwargs["sliding_window"], int
+                ), f"sliding_window must be an integer but shape={key_value_pairs[0][0].shape}"
+        elif cls_layers is not None:
+            unique = set(cls_layers)
+            assert len(unique) == 1, f"Not implemented when cls_layers={cls_layers}"
+            cls_layer = unique.pop()
+            if (
+                hasattr(transformers.cache_utils, "DynamicSlidingWindowLayer")
+                and cls_layer == transformers.cache_utils.DynamicSlidingWindowLayer
+            ):
+                from .helper import string_type
+
+                assert key_value_pairs and key_value_pairs[0], (
+                    f"not implemented for key_value_pairs="
+                    f"{string_type(key_value_pairs, with_shape=True)}"
+                )
+                cls_kwargs["sliding_window"] = key_value_pairs[0][0].shape[2]
+                assert isinstance(
+                    cls_kwargs["sliding_window"], int
+                ), f"sliding_window must be an integer but shape={key_value_pairs[0][0].shape}"
+        else:
+            cls_layer = (
+                transformers.cache_utils.DynamicLayer
+                if hasattr(transformers.cache_utils, "DynamicLayer")
+                else None
+            )
+
         if (
             key_value_pairs
             and isinstance(key_value_pairs[0][0], torch._subclasses.fake_tensor.FakeTensor)
             and pv.Version(transformers.__version__) >= pv.Version("4.56")
         ):
             cache = transformers.cache_utils.DynamicCache()
-            cache.layers.extend(
-                [transformers.cache_utils.DynamicLayer() for _ in key_value_pairs]
-            )
+            cache.layers.extend([cls_layer(**cls_kwargs) for _ in key_value_pairs])
             for i, layer in enumerate(cache.layers):
                 k, v = key_value_pairs[i][0], key_value_pairs[i][1]
                 layer.dtype = k.dtype
@@ -214,14 +257,21 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             )
             return finalize_cache(cache)
 
-        cache = transformers.cache_utils.DynamicCache(key_value_pairs)
-        if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
-            # The cache constructor contains the two following lines
-            # (in cache_utils.py) which append empty layers when the cache is
-            # initialized. We need to remove them.
-            # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
-            # self.append_new_layers(self.num_hidden_layers - 1)
-            cache.layers[:] = cache.layers[-len(key_value_pairs) :]
+        cache = transformers.cache_utils.DynamicCache()
+        if hasattr(cache, "layers") and cls_layer != transformers.cache_utils.DynamicLayer:
+            cache.layers.extend([cls_layer(**cls_kwargs) for _ in key_value_pairs])
+            for i, layer in enumerate(cache.layers):
+                layer.keys, layer.values = key_value_pairs[i][0], key_value_pairs[i][1]
+                layer.is_initialized = True
+        else:
+            cache = transformers.cache_utils.DynamicCache(key_value_pairs)
+            if hasattr(cache, "layers") and len(key_value_pairs) < len(cache.layers):
+                # The cache constructor contains the two following lines
+                # (in cache_utils.py) which append empty layers when the cache is
+                # initialized. We need to remove them.
+                # self.num_hidden_layers = getattr(config, "num_hidden_layers", 1)
+                # self.append_new_layers(self.num_hidden_layers - 1)
+                cache.layers[:] = cache.layers[-len(key_value_pairs) :]
         assert not hasattr(cache, "layers") or len(key_value_pairs) == len(cache.layers), (
             f"Unexpected number of layers in the cache ({len(cache.layers)}), "
             f"{len(key_value_pairs)} expected."
@@ -232,6 +282,7 @@ else:
 
     def make_dynamic_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
+        cls_layers: Optional[Union[str, List[type]]] = None,
     ) -> transformers.cache_utils.DynamicCache:
         """
         Creates an instance of :class:`transformers.cache_utils.DynamicCache`.
@@ -263,6 +314,7 @@ else:
             )
             print(string_type(past_key_values, with_shape=True))
         """
+        assert not cls_layers, "cls_layers cannot be used for transformers<5."
         key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
         cache = transformers.cache_utils.DynamicCache(len(key_value_pairs))  # type: ignore
         for i, (key, value) in enumerate(key_value_pairs):
@@ -508,8 +560,12 @@ if hasattr(transformers.cache_utils, "SlidingWindowCache"):
         )
         return finalize_cache(cache)
 
+    def get_make_hybrid_cache():
+        return make_sliding_window_cache
+
 else:
     make_sliding_window_cache = None  # type: ignore[assignment]
+
 
 if hasattr(transformers.cache_utils, "HybridCache"):
 
@@ -672,8 +728,14 @@ if hasattr(transformers.cache_utils, "HybridCache"):
         )
         return finalize_cache(cache)
 
+    def get_make_hybrid_cache():
+        return make_hybrid_cache
+
 else:
     make_hybrid_cache = None  # type: ignore[assignment]
+
+    def get_make_hybrid_cache():
+        return None
 
 
 def finalize_cache(cache: transformers.cache_utils.Cache) -> transformers.cache_utils.Cache:
