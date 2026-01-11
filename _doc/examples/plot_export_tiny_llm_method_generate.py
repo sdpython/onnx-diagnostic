@@ -93,15 +93,15 @@ forward_replacement = method_to_onnx(
     # this parameter is used to overwrite the inferred values,
     # this is usually needed because the inferred dynamic shapes contains
     # less dynamic dimension than requested.
-    dynamic_shapes={
-        "cache_position": {0: "total_sequence_length"},
-        "past_key_values": [
-            {0: "batch_size", 2: "past_sequence_length"},
-            {0: "batch_size", 2: "past_sequence_length"},
-        ],
-        "input_ids": {0: "batch_size", 1: "sequence_length"},
-        "attention_mask": {0: "batch_size", 1: "sequence_length"},
-    },
+    # dynamic_shapes={
+    #    "cache_position": {0: "total_sequence_length"},
+    #    "past_key_values": [
+    #        {0: "batch_size", 2: "past_sequence_length"},
+    #        {0: "batch_size", 2: "past_sequence_length"},
+    #    ],
+    #    "input_ids": {0: "batch_size", 1: "sequence_length"},
+    #    "attention_mask": {0: "batch_size", 1: "sequence_length"},
+    # },
 )
 
 # %%
@@ -127,7 +127,7 @@ print(generated_text)
 # It is done after because the model may not hold twice in memory
 # (torch and onnxruntime).
 # verbose=2 shows more information about expected outputs.
-data = forward_replacement.check_discrepancies(verbose=1)
+data = forward_replacement.check_discrepancies(verbose=2)
 df = pandas.DataFrame(data)
 print(df)
 

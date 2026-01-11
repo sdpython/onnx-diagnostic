@@ -995,6 +995,59 @@ class TestDynamicShapes(ExtTestCase):
         expected = ((), {"cache": [{2: DYN}, {2: DYN}, {2: DYN}, {2: DYN}]})
         self.assertEqual(expected, ds)
 
+    def test_dynamic_shape_order(self):
+        inputs = [
+            (
+                tuple(),
+                dict(
+                    cache_position=torch.arange(8),
+                    input_ids=torch.randint(10, size=(1, 8)),
+                    attention_mask=torch.ones((1, 8), dtype=torch.int64),
+                ),
+            ),
+            (
+                tuple(),
+                dict(
+                    cache_position=torch.arange(1),
+                    input_ids=torch.randint(10, size=(1, 1)),
+                    past_key_values=make_dynamic_cache(
+                        [(torch.rand((1, 1, 8, 96)), torch.rand((1, 1, 8, 96)))]
+                    ),
+                    attention_mask=torch.ones((1, 9), dtype=torch.int64),
+                ),
+            ),
+            (
+                tuple(),
+                dict(
+                    cache_position=torch.arange(1),
+                    input_ids=torch.randint(10, size=(1, 1)),
+                    past_key_values=make_dynamic_cache(
+                        [(torch.rand((1, 1, 9, 96)), torch.rand((1, 1, 9, 96)))]
+                    ),
+                    attention_mask=torch.ones((1, 10), dtype=torch.int64),
+                ),
+            ),
+        ]
+        mi = ModelInputs(None, inputs)
+        ds = mi.guess_dynamic_shapes()
+        DYN = torch.export.Dim.DYNAMIC
+        self.assertEqual(
+            (
+                (),
+                {
+                    "attention_mask": {1: DYN},
+                    "past_key_values": [{2: DYN}, {2: DYN}],
+                    "input_ids": {1: DYN},
+                    "cache_position": {0: DYN},
+                },
+            ),
+            ds,
+        )
+        ordered = list(ds[1])
+        self.assertEqual(
+            ["cache_position", "input_ids", "past_key_values", "attention_mask"], ordered
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
