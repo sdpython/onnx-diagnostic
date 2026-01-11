@@ -306,6 +306,84 @@ class TestValidate(ExtTestCase):
             self.string_type(with_empty[0][1], with_shape=True),
         )
 
+    @requires_experimental_experiment("0.1")
+    def test_method_to_onnx_expand_batch_dimension(self):
+        class Model(torch.nn.Module):
+            def forward(self, x=None, y=None):
+                return x + y
+
+        filename = self.get_dump_file("test_method_to_onnx_kwargs.onnx")
+        inputs = [
+            dict(x=torch.randn((1, 5, 6)), y=torch.randn((1, 1, 6))),
+            dict(x=torch.randn((1, 7, 7)), y=torch.randn((1, 1, 7))),
+        ]
+        model = Model()
+        method_to_call = method_to_onnx(
+            model, exporter="custom", filename=filename, expand_batch_for={"x", "y"}
+        )
+        expecteds = []
+        for kwargs in inputs:
+            expecteds.append(method_to_call(**kwargs))
+        self.assertExists(filename)
+        sess = self.check_ort(filename)
+        input_names = [i.name for i in sess.get_inputs()]
+        self.assertEqual(["x", "y"], input_names)
+        input_shapes = [i.shape for i in sess.get_inputs()]
+        self.assertEqual([[2, "channel", "D0"], [2, 1, "D0_1"]], input_shapes)
+        self.clean_dump()
+
+    @requires_experimental_experiment("0.1")
+    @requires_transformers("4.57")
+    def test_method_to_onnx_expand_batch_dimension_dynamic_cache(self):
+        class Model(torch.nn.Module):
+            def forward(self, x=None, cache=None):
+                return x + cache.layers[0].keys
+
+        filename = self.get_dump_file("test_method_to_onnx_kwargs.onnx")
+        inputs = [
+            dict(
+                x=torch.randn((1, 1, 3, 4)),
+                cache=make_dynamic_cache(
+                    [(torch.randn(1, 2, 3, 4), torch.randn(1, 2, 3, 4)) for i in range(2)]
+                ),
+            ),
+            dict(
+                x=torch.randn((1, 1, 5, 4)),
+                cache=make_dynamic_cache(
+                    [(torch.randn(1, 2, 5, 4), torch.randn(1, 2, 5, 4)) for i in range(2)]
+                ),
+            ),
+        ]
+        model = Model()
+        method_to_call = method_to_onnx(
+            model,
+            exporter="custom",
+            filename=filename,
+            expand_batch_for={"x", "cache"},
+            patch_kwargs=dict(patch_transformers=True),
+        )
+        expecteds = []
+        for kwargs in inputs:
+            expecteds.append(method_to_call(**kwargs))
+        self.assertExists(filename)
+        sess = self.check_ort(filename)
+        input_names = [i.name for i in sess.get_inputs()]
+        self.assertEqual(
+            ["x", "cache_key_0", "cache_value_0", "cache_key_1", "cache_value_1"], input_names
+        )
+        input_shapes = [i.shape for i in sess.get_inputs()]
+        self.assertEqual(
+            [
+                [2, 1, "D0", 4],
+                [2, 2, "D0_1", 4],
+                [2, 2, "D0_2", 4],
+                [2, 2, "D0_3", 4],
+                [2, 2, "D0_4", 4],
+            ],
+            input_shapes,
+        )
+        self.clean_dump()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

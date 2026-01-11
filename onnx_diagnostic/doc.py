@@ -178,7 +178,7 @@ def _run_subprocess(args: List[str], cwd: Optional[str] = None):
     raise_exception = False
     output = ""
     while True:
-        output = p.stdout.readline().decode(errors="ignore")
+        output = p.stdout.readline().decode(errors="ignore")  # type: ignore[union-attr]
         if output == "" and p.poll() is not None:
             break
         if output:
@@ -191,8 +191,9 @@ def _run_subprocess(args: List[str], cwd: Optional[str] = None):
             ):
                 raise_exception = True
     p.poll()
-    error = p.stderr.readline().decode(errors="ignore")
-    p.stdout.close()
+    error = p.stderr.readline().decode(errors="ignore")  # type: ignore[union-attr]
+    p.stdout.close()  # type: ignore[union-attr]
+    p.stderr.close()  # type: ignore[union-attr]
     if error and raise_exception:
         raise RuntimeError(
             f"An error was found in the output. The build is stopped."
