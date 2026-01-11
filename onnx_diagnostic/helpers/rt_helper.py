@@ -43,7 +43,7 @@ def make_feeds(
     # because it's fued into rotary embedding in GQA.
     if is_modelbuilder and isinstance(inputs, dict) and "positions_ids" in inputs:
         position_ids = input["position_ids"]
-        assert (
+        assert isinstance(position_ids, torch.Tensor) and (
             (position_ids == torch.tensor(list(range(position_ids.shape[-1]))).unsqueeze(0))
             .max()
             .item()
