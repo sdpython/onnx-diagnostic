@@ -349,6 +349,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         patch_kwargs: Optional[Dict[str, Any]] = None,
         skip_kwargs_names: Optional[Set[str]] = None,
         dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
+        expand_batch_for: Optional[Sequence[Union[int, str]]] = None,
     ):
         super().__init__()
         self._model_to_call = mod
@@ -384,11 +385,14 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         )
         self._export_done = False
         self._serialization_classes: Set[type] = set()
+        self._expand_batch_for = expand_batch_for
 
     def __str__(self) -> str:
+        "usual"
         return self.__repr__()
 
     def __repr__(self) -> str:
+        "usual"
         return (
             f"{self.__class__.__name__}({self._model_to_call.__class__.__name__}."
             f"{self._method_name})"
@@ -415,22 +419,17 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
 
     def forward(self, *args, **kwargs):
         if not self._export_done:
-            self._inputs.append(
-                torch_deepcopy(
-                    (
-                        args,
-                        (
-                            kwargs
-                            if not kwargs or not self.skip_kwargs_names
-                            else {
-                                k: v
-                                for k, v in kwargs.items()
-                                if k not in self.skip_kwargs_names
-                            }
-                        ),
-                    )
-                )
+            inp_args = args
+            inp_kwargs = (
+                kwargs
+                if not kwargs
+                else {k: v for k, v in kwargs.items() if k not in self.skip_kwargs_names}
             )
+            if self._expand_batch_for:
+                inp_args = self._expand_batch_dimension(inp_args, self._expand_batch_for)
+                inp_kwargs = self._expand_batch_dimension(inp_kwargs, self._expand_batch_for)
+            inp_args, inp_kwargs = torch_deepcopy((inp_args, inp_kwargs))
+            self._inputs.append((inp_args, inp_kwargs))
             if self.verbose:
                 print(
                     f"[method_to_onnx] input[{len(self._inputs)-1}]: "
@@ -753,6 +752,7 @@ def method_to_onnx(
     patch_kwargs: Optional[Dict[str, Any]] = None,
     skip_kwargs_names: Optional[Set[str]] = None,
     dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
+    expand_batch_for: Optional[Sequence[Union[int, str]]] = None,
 ) -> Callable:
     """
     Exports one method into ONNX for a module into ONNX.
@@ -782,6 +782,10 @@ def method_to_onnx(
     :param skip_kwargs_names: use default values for these parameters part of
         the signature of the method to export
     :param dynamic_shapes: dynamic shapes to use if the guessed ones are not right
+    :param expand_batch_for: LLM are usually called with a batch size equal to 1,
+        but the export may benefit from having another value for the batch size,
+        this parameter forces the input specified in this set to be expanded
+        to 2 if the batch size is one
     :return: the output of the selected exporter, usually a structure including
         an onnx model
 
@@ -808,5 +812,6 @@ def method_to_onnx(
         patch_kwargs=patch_kwargs,
         skip_kwargs_names=skip_kwargs_names,
         dynamic_shapes=dynamic_shapes,
+        expand_batch_for=expand_batch_for,
     )
     return wrapped_model

@@ -306,6 +306,35 @@ class TestValidate(ExtTestCase):
             self.string_type(with_empty[0][1], with_shape=True),
         )
 
+    @requires_experimental_experiment("0.1")
+    def test_method_to_onnx_expand_batch(self):
+        class Model(torch.nn.Module):
+            def forward(self, x=None, y=None):
+                return x + y
+
+        filename = self.get_dump_file("test_method_to_onnx_kwargs.onnx")
+        inputs = [
+            dict(x=torch.randn((1, 5, 6)), y=torch.randn((1, 1, 6))),
+            dict(x=torch.randn((1, 7, 7)), y=torch.randn((1, 1, 7))),
+        ]
+        model = Model()
+        method_to_call = method_to_onnx(
+            model, exporter="custom", filename=filename, expand_batch_for={"x", "y"}
+        )
+        expecteds = []
+        for kwargs in inputs:
+            expecteds.append(method_to_call(**kwargs))
+        self.assertExists(filename)
+        sess = self.check_ort(filename)
+        input_names = [i.name for i in sess.get_inputs()]
+        input_shapes = [i.shape for i in sess.get_inputs()]
+        print("***", input_shapes)
+        for expected, kwargs in zip(expecteds, inputs):
+            feeds = make_feeds(input_names, kwargs, use_numpy=True)
+            got = sess.run(None, feeds)
+            self.assertEqualArray(expected, got[0])
+        self.clean_dump()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
