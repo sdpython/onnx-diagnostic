@@ -542,7 +542,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             )
 
     @classmethod
-    def make_empty_cache_from_others(cls, examples: List["Cache"]) -> "Cache":  # noqa: F821
+    def make_empty_cache_from_others(cls, examples: List[Any]) -> Any:
         """Builds an empty cache based on existing one."""
         unique_types = {type(t) for t in examples}
         assert (
@@ -615,7 +615,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                 input_set_copy[miss] = cls.make_empty_cache_from_others(
                     [sub[miss] for sub in inputs if miss in sub]
                 )
-            new_inputs.append({k: input_set_copy[k] for k in ordered})
+            new_inputs.append({k: input_set_copy[k] for k in ordered})  # type: ignore[union-attr]
         return new_inputs
 
     @classmethod
@@ -634,7 +634,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         }
 
     @classmethod
-    def _expand_batch_dimension_input(cls, obj: Any, msg: str) -> Any:
+    def _expand_batch_dimension_input(cls, obj: Any, msg: Union[str, int]) -> Any:
         if isinstance(obj, torch.Tensor):
             assert obj.shape[0] == 1, (
                 f"Are you sure to expoand input {msg!r}, "
