@@ -88,25 +88,32 @@ forward_replacement = method_to_onnx(
     # these ones are filled with default values we don't want in
     # the onnx model
     skip_kwargs_names={"kwargs", "use_cache", "return_dict", "inputs_embeds"},
-    # dynamic shapes can be inferred from at least two calls to the forward method,
-    # 3 is better for LLMs, you can see the inference results with ``verbose=1``,
-    # this parameter is used to overwrite the inferred values,
-    # this is usually needed because the inferred dynamic shapes contains
-    # less dynamic dimension than requested.
-    # dynamic_shapes={
-    #    "cache_position": {0: "total_sequence_length"},
-    #    "past_key_values": [
-    #        {0: "batch_size", 2: "past_sequence_length"},
-    #        {0: "batch_size", 2: "past_sequence_length"},
-    #    ],
-    #    "input_ids": {0: "batch_size", 1: "sequence_length"},
-    #    "attention_mask": {0: "batch_size", 1: "sequence_length"},
-    # },
 )
 
 # %%
-# The lambda function cannot be skipped as
-# forward_replacement is a module.
+# dynamic shapes can be inferred from at least two calls to the forward method,
+# 3 is better for LLMs (first call is prefill, cache is missing),
+# you can see the inference results with ``verbose=1``.
+# If the value is not the expected one (to change the names for example),
+# They can be overwritten.
+#
+# .. code-block:: python
+#
+#   dynamic_shapes={
+#       "cache_position": {0: "total_sequence_length"},
+#       "past_key_values": [
+#           {0: "batch_size", 2: "past_sequence_length"},
+#           {0: "batch_size", 2: "past_sequence_length"},
+#       ],
+#       "input_ids": {0: "batch_size", 1: "sequence_length"},
+#       "attention_mask": {0: "batch_size", 1: "sequence_length"},
+#   }
+#
+# Finally, we need to replace the forward method.
+# As ``forward_replacement`` is a module of type
+# :class:`onnx_diagnostic.export.api.WrapperToExportMethodToOnnx`,
+# a lambda function must be used to avoid this one to be
+# included as a submodule (and an infinite loop).
 
 print(f"type(forward_replacement)={type(forward_replacement)}")
 model.forward = lambda *args, **kwargs: forward_replacement(*args, **kwargs)
