@@ -1,8 +1,8 @@
 """
 .. _l-plot-tiny-llm-export-method-generate:
 
-Export a model through method generate (with Tiny-LLM)
-======================================================
+Export a LLM through method generate (with Tiny-LLM)
+====================================================
 
 The main issue when exporting a LLM is the example on HuggingFace is
 based on method generate but we only need to export the forward method.
@@ -31,10 +31,13 @@ model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 def generate_text(
     prompt, model, tokenizer, max_length=50, temperature=1, top_k=50, top_p=0.95
 ):
-    inputs = tokenizer.encode(prompt, return_tensors="pt")
+    inputs = tokenizer(prompt, return_tensors="pt")
+    input_ids = inputs["input_ids"]
+    attention_mask = inputs["attention_mask"]
 
     outputs = model.generate(
-        inputs,
+        input_ids=input_ids,
+        attention_mask=attention_mask,
         max_length=max_length,
         temperature=temperature,
         top_k=top_k,
@@ -97,6 +100,7 @@ forward_replacement = method_to_onnx(
             {0: "batch_size", 2: "past_sequence_length"},
         ],
         "input_ids": {0: "batch_size", 1: "sequence_length"},
+        "attention_mask": {0: "batch_size", 1: "sequence_length"},
     },
 )
 
@@ -129,5 +133,4 @@ print(df)
 
 
 # %%
-
-doc.plot_legend("Tiny-LLM\nforward inputs\nthrough generate", "onnx export", "tomato")
+doc.save_fig(doc.plot_dot(filename), f"{filename}.png", dpi=400)

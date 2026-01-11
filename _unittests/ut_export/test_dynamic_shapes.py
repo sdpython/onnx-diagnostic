@@ -962,6 +962,39 @@ class TestDynamicShapes(ExtTestCase):
         _a, _kw, ds = mi.move_to_kwargs(*mi.inputs[-1], ds)
         self.assertEqual(ds, (tuple(), {"x": {0: DYN}, "y": {0: DYN}}))
 
+    def test_guess_dynamic_shapes_with_none(self):
+        class Model(torch.nn.Module):
+            def forward(self, cache=None):
+                return cache
+
+        cache = make_dynamic_cache(
+            [(torch.randn(2, 3, 5, 6), torch.randn((2, 3, 5, 6))) for i in range(2)]
+        )
+        cache2 = make_dynamic_cache(
+            [(torch.randn(2, 3, 1, 6), torch.randn((2, 3, 6, 6))) for i in range(2)]
+        )
+
+        inputs = [dict(cache=cache), dict(cache=cache2)]
+        mi = ModelInputs(Model(), inputs)
+        ds = mi.guess_dynamic_shapes()
+        DYN = torch.export.Dim.DYNAMIC
+        expected = ((), {"cache": [{2: DYN}, {2: DYN}, {2: DYN}, {2: DYN}]})
+        self.assertEqual(expected, ds)
+
+        inputs = [{}, dict(cache=cache), dict(cache=cache2)]
+        mi = ModelInputs(Model(), inputs)
+        ds = mi.guess_dynamic_shapes()
+        DYN = torch.export.Dim.DYNAMIC
+        expected = ((), {"cache": [{2: DYN}, {2: DYN}, {2: DYN}, {2: DYN}]})
+        self.assertEqual(expected, ds)
+
+        inputs = [{}, dict(cache=cache), dict(cache=cache2)]
+        mi = ModelInputs(None, inputs)
+        ds = mi.guess_dynamic_shapes()
+        DYN = torch.export.Dim.DYNAMIC
+        expected = ((), {"cache": [{2: DYN}, {2: DYN}, {2: DYN}, {2: DYN}]})
+        self.assertEqual(expected, ds)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

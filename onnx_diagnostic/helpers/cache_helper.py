@@ -19,7 +19,7 @@ class CacheKeyValue:
         capi.value_cache
     """
 
-    def __init__(self, cache=None):
+    def __init__(self, cache=None, cls_layers=None):
         if hasattr(cache, "layers"):
             layers = [
                 layer
@@ -28,15 +28,26 @@ class CacheKeyValue:
             ]
             self.key_cache = [layer.keys for layer in layers]
             self.value_cache = [layer.values for layer in layers]
+            assert (
+                cls_layers is None
+            ), f"cache is {type(cache)}, cannot specify cls_layers={cls_layers}"
             self.cls_layers = [type(lay) for lay in cache.layers]
         elif cache is not None and hasattr(cache, "key_cache"):
             self.key_cache = cache.key_cache
             self.value_cache = cache.value_cache
-            self.cls_layers = None
+            self.cls_layers = cls_layers
+        elif (
+            cache is not None
+            and isinstance(cache, list)
+            and all(isinstance(t, torch.Tensor) for t in cache)
+        ):
+            self.key_cache = cache[::2]
+            self.value_cache = cache[1::2]
+            self.cls_layers = cls_layers
         elif cache is None:
             self.key_cache = None
             self.value_cache = None
-            self.cls_layers = None
+            self.cls_layers = cls_layers
         else:
             raise NotImplementedError(f"type(cache)={type(cache)}")
 
@@ -50,6 +61,18 @@ class CacheKeyValue:
     def n_layers(self) -> int:
         """Returns the number of layers."""
         return len(self.key_cache) if self.key_cache else 0
+
+    def __len__(self) -> int:
+        "Returns the number of tensors."
+        return len(self.key_cache) + len(self.value_cache)
+
+    def aslist(self) -> List[torch.Tensor]:
+        "Returns tensors in a list."
+        res = []
+        for i in range(self.n_layers):
+            res.append(self.key_cache[i])
+            res.append(self.value_cache[i])
+        return res
 
 
 def flatten_unflatten_for_dynamic_shapes(

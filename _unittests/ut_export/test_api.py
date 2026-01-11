@@ -15,7 +15,7 @@ from onnx_diagnostic.helpers.rt_helper import make_feeds
 from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache
 from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
-from onnx_diagnostic.export.api import to_onnx, method_to_onnx
+from onnx_diagnostic.export.api import to_onnx, method_to_onnx, WrapperToExportMethodToOnnx
 
 
 class TestValidate(ExtTestCase):
@@ -249,6 +249,62 @@ class TestValidate(ExtTestCase):
             self.assertEqualArray(expected, got[0])
         method_to_call.check_discrepancies(verbose=1)
         self.clean_dump()
+
+    def test_add_empty_cache_if_needed_dict(self):
+        inputs = [
+            dict(x=torch.rand((1, 3))),
+            dict(
+                x=torch.rand((1, 3)),
+                cache=make_dynamic_cache(
+                    [(torch.randn(1, 2, 3, 4), torch.randn(1, 2, 3, 4)) for i in range(2)]
+                ),
+            ),
+            dict(
+                x=torch.rand((1, 3)),
+                cache=make_dynamic_cache(
+                    [(torch.randn(1, 2, 1, 4), torch.randn(1, 2, 1, 4)) for i in range(2)]
+                ),
+            ),
+        ]
+        with_empty = WrapperToExportMethodToOnnx.add_empty_cache_if_needed(inputs)
+        self.assertEqual(
+            (
+                "dict(x:T1s1x3,cache:DynamicCache(key_cache=#2[T1s1x2x0x4,T1s1x2x0x4], "
+                "value_cache=#2[T1s1x2x0x4,T1s1x2x0x4]))"
+            ),
+            self.string_type(with_empty[0], with_shape=True),
+        )
+
+    def test_add_empty_cache_if_needed_args_kwargs(self):
+        inputs = [
+            (tuple(), dict(x=torch.rand((1, 3)))),
+            (
+                tuple(),
+                dict(
+                    x=torch.rand((1, 3)),
+                    cache=make_dynamic_cache(
+                        [(torch.randn(1, 2, 3, 4), torch.randn(1, 2, 3, 4)) for i in range(2)]
+                    ),
+                ),
+            ),
+            (
+                tuple(),
+                dict(
+                    x=torch.rand((1, 3)),
+                    cache=make_dynamic_cache(
+                        [(torch.randn(1, 2, 1, 4), torch.randn(1, 2, 1, 4)) for i in range(2)]
+                    ),
+                ),
+            ),
+        ]
+        with_empty = WrapperToExportMethodToOnnx.add_empty_cache_if_needed(inputs)
+        self.assertEqual(
+            (
+                "dict(x:T1s1x3,cache:DynamicCache(key_cache=#2[T1s1x2x0x4,T1s1x2x0x4], "
+                "value_cache=#2[T1s1x2x0x4,T1s1x2x0x4]))"
+            ),
+            self.string_type(with_empty[0][1], with_shape=True),
+        )
 
 
 if __name__ == "__main__":

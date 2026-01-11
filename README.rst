@@ -73,7 +73,7 @@ Enlightening Examples
 
 * `Export microsoft/phi-2
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_tiny_phi2.html>`_
-* `Export a model through method generate (with Tiny-LLM)
+* `Export a LLM through method generate (with Tiny-LLM)
   <https://sdpython.github.io/doc/onnx-diagnostic/dev/auto_examples/plot_export_tiny_llm_method_generate.html>`_
 
 **Torch Export**
