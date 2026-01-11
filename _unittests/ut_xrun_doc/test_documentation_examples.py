@@ -125,7 +125,6 @@ class TestDocumentationExamples(ExtTestCase):
                     "plot_export_locate_issue.py",
                     "plot_export_with_auto.py",
                     "plot_export_tiny_llm.py",
-                    "plot_export_tiny_llm_method_generate.py",
                 }
                 and not has_torch("2.8")
             ):
@@ -154,6 +153,9 @@ class TestDocumentationExamples(ExtTestCase):
 
             if not reason and torch.__version__.startswith("2.9.0"):
                 reason = "examples are failing for on CI for 2.9.0"
+
+            if not reason and name in {"plot_export_tiny_llm_method_generate.py"}:
+                reason = "does not work when called in a separate process"
 
             if reason:
 

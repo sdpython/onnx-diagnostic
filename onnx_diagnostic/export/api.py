@@ -634,17 +634,6 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         :return: results, a list of dictionaries, ready to be consumed by a dataframe
         """
 
-        def _missing_classes():
-            try:
-                import transformers
-
-                return [
-                    transformers.modeling_outputs.CausalLMOutputWithPast,
-                    transformers.cache_utils.DynamicCache,
-                ]
-            except ImportError:
-                return []
-
         assert self._export_done, "The onnx export was not done."
         assert os.path.exists(self._input_file), f"input file {self._input_file!r} not found"
         assert os.path.exists(
@@ -655,13 +644,9 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             filename
         ), f"onnx file {filename!r} not found"
         classes = [
-            *_missing_classes(),
-            *[
-                cls
-                for cls in self._serialization_classes
-                if cls
-                not in {int, float, bool, str, torch.Tensor, list, set, dict, torch.device}
-            ],
+            cls
+            for cls in self._serialization_classes
+            if cls not in {int, float, bool, str, torch.Tensor, list, set, dict, torch.device}
         ]
         if verbose:
             print(f"[method_to_onnx.check_discrepancies] register classes {classes}")
