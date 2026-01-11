@@ -367,6 +367,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         self.verbose = verbose
         self.skip_kwargs_names = skip_kwargs_names
         self.dynamic_shapes = dynamic_shapes
+        self.expand_batch_for = expand_batch_for
         self._to_onnx_kwargs = dict(
             input_names=input_names,
             target_opset=target_opset,
@@ -385,7 +386,6 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         )
         self._export_done = False
         self._serialization_classes: Set[type] = set()
-        self._expand_batch_for = expand_batch_for
 
     def __str__(self) -> str:
         "usual"
@@ -422,12 +422,12 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             inp_args = args
             inp_kwargs = (
                 kwargs
-                if not kwargs
+                if not kwargs or not self.skip_kwargs_names
                 else {k: v for k, v in kwargs.items() if k not in self.skip_kwargs_names}
             )
-            if self._expand_batch_for:
-                inp_args = self._expand_batch_dimension(inp_args, self._expand_batch_for)
-                inp_kwargs = self._expand_batch_dimension(inp_kwargs, self._expand_batch_for)
+            if self.expand_batch_for:
+                inp_args = self._expand_batch_dimension(inp_args, self.expand_batch_for)
+                inp_kwargs = self._expand_batch_dimension(inp_kwargs, self.expand_batch_for)
             inp_args, inp_kwargs = torch_deepcopy((inp_args, inp_kwargs))
             self._inputs.append((inp_args, inp_kwargs))
             if self.verbose:
@@ -618,6 +618,47 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             new_inputs.append({k: input_set_copy[k] for k in ordered})
         return new_inputs
 
+    @classmethod
+    def _expand_batch_dimension(cls, obj: Any, expand_for: Sequence[Union[int, str]]) -> Any:
+        expand_for_args = {i for i in expand_for if isinstance(i, int)}
+        expand_for_kwargs = {i for i in expand_for if isinstance(i, str)}
+        if isinstance(obj, tuple):
+            return tuple(
+                o if i not in expand_for_args else cls._expand_batch_dimension_input(o, i)
+                for i, o in enumerate(obj)
+            )
+        assert isinstance(obj, dict), f"Unexpected type {type(obj)}"
+        return {
+            k: v if k not in expand_for_kwargs else cls._expand_batch_dimension_input(v, k)
+            for k, v in obj.items()
+        }
+
+    @classmethod
+    def _expand_batch_dimension_input(cls, obj: Any, msg: str) -> Any:
+        if isinstance(obj, torch.Tensor):
+            assert obj.shape[0] == 1, (
+                f"Are you sure to expoand input {msg!r}, "
+                f"batch size is not 1 and shape={obj.shape}"
+            )
+            sizes = [2, *obj.shape[1:]]
+            return obj.expand(*sizes)
+        if isinstance(obj, list):
+            return [
+                cls._expand_batch_dimension_input(o, f"{msg}[{i}]") for i, o in enumerate(obj)
+            ]
+        if obj.__class__.__name__ == "DynamicCache":
+            dc = CacheKeyValue(obj)
+            flat = dc.aslist()
+            flat = cls._expand_batch_dimension_input(flat, msg)
+            return CacheKeyValue(flat, cls_layers=dc.cls_layers).make_dynamic_cache()
+        # This might end up in an infinite loop if no registration is done.
+        flat, _spec = torch.utils._pytree.tree_flatten(obj)
+        assert (
+            not isinstance(flat, list) or len(flat) != 1 or type(flat[0]) is not type(obj)
+        ), f"class {type(obj)} was is not registered for serialization."
+        flat = cls._expand_batch_dimension_input(flat, msg)
+        return torch.utils._pytree.tree_unflatten(flat, _spec)
+
     def check_discrepancies(
         self, atol: float = 1e-4, rtol: float = 0.1, hist=(0.1, 0.01), verbose: int = 0
     ) -> List[Dict[str, Union[str, int, float]]]:
@@ -632,7 +673,6 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         :param verbose: verbosity
         :return: results, a list of dictionaries, ready to be consumed by a dataframe
         """
-
         assert self._export_done, "The onnx export was not done."
         assert os.path.exists(self._input_file), f"input file {self._input_file!r} not found"
         assert os.path.exists(
