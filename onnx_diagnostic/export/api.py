@@ -349,6 +349,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         patch_kwargs: Optional[Dict[str, Any]] = None,
         skip_kwargs_names: Optional[Set[str]] = None,
         dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
+        dynamic_batch_for: Optional[Sequence[Union[int, str]]] = None,
         expand_batch_for: Optional[Sequence[Union[int, str]]] = None,
     ):
         super().__init__()
@@ -369,6 +370,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         self.skip_kwargs_names = skip_kwargs_names
         self.dynamic_shapes = dynamic_shapes
         self.expand_batch_for = expand_batch_for
+        self.dynamic_batch_for = (dynamic_batch_for,)
         self._to_onnx_kwargs = dict(
             input_names=input_names,
             target_opset=target_opset,
@@ -532,6 +534,8 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             if self.verbose:
                 print(f"[method_to_onnx] guess_dynamic_shapes={string_type(ds)}")
             a, kw, nds = mi.move_to_kwargs(*self._inputs[-1], ds)
+            if self.dynamic_batch_for:
+                nds = self._dynamic_batch_dimension(nds, self.dynamic_batch_for)
         else:
             a, kw = self._inputs[-1]
             nds = [self.dynamic_shapes]
@@ -676,6 +680,26 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         ), f"class {type(obj)} was is not registered for serialization."
         flat = cls._expand_batch_dimension_input(flat, msg)
         return torch.utils._pytree.tree_unflatten(flat, _spec)
+
+    @classmethod
+    def _dynamic_batch_dimension(
+        cls, ds: Dict[str, Any], dynamic_for: Sequence[Union[int, str]]
+    ) -> Dict[str, Any]:
+        return {
+            k: v if k not in dynamic_for else cls._dynamic_batch_dimension_input(v, k)
+            for k, v in ds.items()
+        }
+
+    @classmethod
+    def _dynamic_batch_dimension_input(cls, ds: Any, msg: Union[str, int]) -> Any:
+        if isinstance(ds, dict) and all(isinstance(k, int) for k in ds):
+            ds[0] = "batch"
+            return {k: v for k, v in sorted(ds.items())}  # noqa: C416
+        if isinstance(ds, list):
+            return [
+                cls._dynamic_batch_dimension_input(o, f"{msg}[{i}]") for i, o in enumerate(ds)
+            ]
+        raise NotImplementedError(f"cannot make first dimension dynamic for batch for {ds}")
 
     def check_discrepancies(
         self, atol: float = 1e-4, rtol: float = 0.1, hist=(0.1, 0.01), verbose: int = 0
@@ -824,6 +848,7 @@ def method_to_onnx(
     patch_kwargs: Optional[Dict[str, Any]] = None,
     skip_kwargs_names: Optional[Set[str]] = None,
     dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
+    dynamic_batch_for: Optional[Sequence[Union[int, str]]] = None,
     expand_batch_for: Optional[Sequence[Union[int, str]]] = None,
 ) -> Callable:
     """
@@ -854,6 +879,10 @@ def method_to_onnx(
     :param skip_kwargs_names: use default values for these parameters part of
         the signature of the method to export
     :param dynamic_shapes: dynamic shapes to use if the guessed ones are not right
+    :param dynamic_batch_for: LLM are usually called with a batch size equal to 1,
+        but the export may benefit from having a dynamic batch size,
+        this parameter forces the input specified in this set to have the first dimension
+        be dynamic
     :param expand_batch_for: LLM are usually called with a batch size equal to 1,
         but the export may benefit from having another value for the batch size,
         this parameter forces the input specified in this set to be expanded
@@ -884,6 +913,7 @@ def method_to_onnx(
         patch_kwargs=patch_kwargs,
         skip_kwargs_names=skip_kwargs_names,
         dynamic_shapes=dynamic_shapes,
+        dynamic_batch_for=dynamic_batch_for,
         expand_batch_for=expand_batch_for,
     )
     return wrapped_model
