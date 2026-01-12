@@ -868,8 +868,8 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             :showcode:
 
             import pprint
-            from onnx_diagnostic.export.api import WrappertoExportMethodToOnnx
-            pprint.pprint(WrappertoExportMethodToOnnx.get_dynamic_shape_patterns())
+            from onnx_diagnostic.export.api import WrapperToExportMethodToOnnx
+            pprint.pprint(WrapperToExportMethodToOnnx.get_dynamic_shape_patterns())
         """
         return {
             "LLM.text": {
@@ -890,7 +890,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         Dimension names in dynamic shapes are renamed if *ds* has
         the same number of named arguments as the one of the patterns
         returned by function :meth:`get_dynamic_shape_patterns
-        <onnx_diagnostic.export.api.WrappertoExportMethodToOnnx.get_dynamic_shape_patterns>`.
+        <onnx_diagnostic.export.api.WrapperToExportMethodToOnnx.get_dynamic_shape_patterns>`.
         """
         is_shape = lambda s: isinstance(s, dict) and all(  # noqa: E731
             isinstance(_, int) for _ in s
