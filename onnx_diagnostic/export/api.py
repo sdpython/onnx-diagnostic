@@ -11,6 +11,7 @@ from ..helpers import flatten_object, max_diff, string_diff, string_type
 from ..helpers.cache_helper import CacheKeyValue
 from ..helpers.torch_helper import torch_deepcopy
 from ..helpers.rt_helper import make_feeds
+from ..helpers.onnx_helper import pretty_onnx
 from ..reference import OnnxruntimeEvaluator
 
 
@@ -370,7 +371,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         self.skip_kwargs_names = skip_kwargs_names
         self.dynamic_shapes = dynamic_shapes
         self.expand_batch_for = expand_batch_for
-        self.dynamic_batch_for = (dynamic_batch_for,)
+        self.dynamic_batch_for = dynamic_batch_for
         self._to_onnx_kwargs = dict(
             input_names=input_names,
             target_opset=target_opset,
@@ -535,7 +536,13 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                 print(f"[method_to_onnx] guess_dynamic_shapes={string_type(ds)}")
             a, kw, nds = mi.move_to_kwargs(*self._inputs[-1], ds)
             if self.dynamic_batch_for:
-                nds = self._dynamic_batch_dimension(nds, self.dynamic_batch_for)
+                nds = (
+                    self._dynamic_batch_dimension(nds[0], self.dynamic_batch_for),
+                    self._dynamic_batch_dimension(nds[1], self.dynamic_batch_for),
+                )
+                if self.verbose:
+                    print(f"[method_to_onnx] dynamic_batch_for={self.dynamic_batch_for}")
+                    print(f"[method_to_onnx] dynamic_shapes with batch={nds}")
         else:
             a, kw = self._inputs[-1]
             nds = [self.dynamic_shapes]
@@ -683,10 +690,15 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
 
     @classmethod
     def _dynamic_batch_dimension(
-        cls, ds: Dict[str, Any], dynamic_for: Sequence[Union[int, str]]
-    ) -> Dict[str, Any]:
+        cls, ds: Union[Tuple[Any, ...], Dict[str, Any]], dynamic_for: Sequence[Union[int, str]]
+    ) -> Union[Tuple[Any, ...], Dict[str, Any]]:
+        if isinstance(ds, tuple):
+            return tuple(
+                (v if i not in dynamic_for else cls._dynamic_batch_dimension_input(v, i))
+                for i, v in enumerate(ds)
+            )
         return {
-            k: v if k not in dynamic_for else cls._dynamic_batch_dimension_input(v, k)
+            k: (v if k not in dynamic_for else cls._dynamic_batch_dimension_input(v, k))
             for k, v in ds.items()
         }
 
@@ -749,6 +761,10 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         input_names = sess.input_names
         if verbose:
             print(f"[method_to_onnx.check_discrepancies] input_names={input_names}")
+            print(
+                f"[method_to_onnx.check_discrepancies] onnx_shapes="
+                f"{', '.join(pretty_onnx(i) for i in sess.input_types)}"
+            )
         data = []
         for i, (input, (output, latency)) in enumerate(
             zip(self.add_empty_cache_if_needed(inputs), outputs)

@@ -88,6 +88,11 @@ forward_replacement = method_to_onnx(
     # these ones are filled with default values we don't want in
     # the onnx model
     skip_kwargs_names={"kwargs", "use_cache", "return_dict", "inputs_embeds"},
+    # The input used in the example has a batch size equal to 1, all
+    # inputs going through method forward will have the same batch size.
+    # To force the dynamism of this dimension, we need to indicate
+    # which inputs has a batch size.
+    dynamic_batch_for={"input_ids", "attention_mask", "past_key_values"},
 )
 
 # %%
@@ -134,7 +139,7 @@ print(generated_text)
 # It is done after because the model may not hold twice in memory
 # (torch and onnxruntime).
 # verbose=2 shows more information about expected outputs.
-data = forward_replacement.check_discrepancies(verbose=2)
+data = forward_replacement.check_discrepancies(verbose=1)
 df = pandas.DataFrame(data)
 print(df)
 

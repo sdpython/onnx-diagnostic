@@ -28,6 +28,7 @@ from onnx import (
     NodeProto,
     OperatorSetIdProto,
     TensorProto,
+    TypeProto,
     ValueInfoProto,
     load as onnx_load,
 )
@@ -384,6 +385,12 @@ def pretty_onnx(
         shape = tuple((d.dim_param or d.dim_value) for d in onx.type.tensor_type.shape.dim)
         shape_str = ",".join(map(str, shape))
         return f"{onnx_dtype_name(itype, exc=False)}[{shape_str}] {name}"
+
+    if isinstance(onx, TypeProto):
+        itype = onx.tensor_type.elem_type
+        shape = tuple((d.dim_param or d.dim_value) for d in onx.tensor_type.shape.dim)
+        shape_str = ",".join(map(str, shape))
+        return f"{onnx_dtype_name(itype, exc=False)}[{shape_str}]"
 
     if isinstance(onx, AttributeProto):
         att = onx
