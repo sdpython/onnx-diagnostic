@@ -431,11 +431,19 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
     def forward(self, *args, **kwargs):
         if not self._export_done:
             inp_args = args
-            # filters out the inputs not desired
+            # filters out the inputs not desired, int, float, bool, None
+            # are considered as constant for the exporter, they are removed
+            # from the named arguments.
             inp_kwargs = (
                 kwargs
-                if not kwargs or not self.skip_kwargs_names
-                else {k: v for k, v in kwargs.items() if k not in self.skip_kwargs_names}
+                if not kwargs
+                else {
+                    k: v
+                    for k, v in kwargs.items()
+                    if v is not None
+                    and (not self.skip_kwargs_names or k not in self.skip_kwargs_names)
+                    and not isinstance(v, (bool, int, float))
+                }
             )
             if self.expand_batch_for:
                 # extends the inputs to artificially create a batch dimension != 1.
@@ -538,7 +546,10 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             if self.dynamic_batch_for:
                 nds = (
                     self._dynamic_batch_dimension(nds[0], self.dynamic_batch_for),
-                    self._dynamic_batch_dimension(nds[1], self.dynamic_batch_for),
+                    self.rename_dynamic_shapes(
+                        self._dynamic_batch_dimension(nds[1], self.dynamic_batch_for),
+                        verbose=self.verbose,
+                    ),
                 )
                 if self.verbose:
                     print(f"[method_to_onnx] dynamic_batch_for={self.dynamic_batch_for}")
@@ -841,6 +852,79 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         if verbose:
             print("[method_to_onnx.check_discrepancies] done")
         return data
+
+    @classmethod
+    def _apply_known_shape_pattern(
+        cls, shape: Dict[int, Any], pattern: Dict[int, str]
+    ) -> Dict[int, Any]:
+        return {k: pattern.get(k, v) for k, v in shape.items()}
+
+    @classmethod
+    def get_dynamic_shape_patterns(cls) -> Dict[str, Any]:
+        """
+        Returns the known patterns for the dynamic shapes.
+
+        .. runpython::
+            :showcode:
+
+            import pprint
+            from onnx_diagnostic.export.api import WrappertoExportMethodToOnnx
+            pprint.pprint(WrappertoExportMethodToOnnx.get_dynamic_shape_patterns())
+        """
+        return {
+            "LLM.text": {
+                "cache_position": {0: "seqlength"},
+                "past_key_values": {0: "batch", 2: "pastlength"},
+                "input_ids": {0: "batch", 1: "seqlength"},
+                "attention_mask": {0: "batch", 1: "totallength"},  # pastlength+seqlength
+            }
+        }
+
+    @classmethod
+    def rename_dynamic_shapes(cls, ds: Dict[str, Any], verbose: int = 0) -> Dict[str, Any]:
+        """
+        Renames the dynamic shapes with names.
+        Tries to rename any dynamic dimnesion dimension
+        before export. It is not very clever, it just tries
+        to recognize a known configuration based on input names.
+        Dimension names in dynamic shapes are renamed if *ds* has
+        the same number of named arguments as the one of the patterns
+        returned by function :meth:`get_dynamic_shape_patterns
+        <onnx_diagnostic.export.api.WrappertoExportMethodToOnnx.get_dynamic_shape_patterns>`.
+        """
+        is_shape = lambda s: isinstance(s, dict) and all(  # noqa: E731
+            isinstance(_, int) for _ in s
+        )
+        llm_patterns = cls.get_dynamic_shape_patterns()
+        for pattern_name, pattern_shape in llm_patterns.items():
+            if len(set(ds) & set(pattern_shape)) == len(pattern_shape):
+                if verbose:
+                    print(
+                        f"[method_to_onnx.rename_dynamic_shapes] "
+                        f"apply pattern shapes {pattern_name!r}"
+                    )
+                new_ds = {}
+                for k, v in ds.items():
+                    if k not in pattern_shape:
+                        new_ds[k] = v
+                        continue
+                    if is_shape(v):
+                        # A shape
+                        new_ds[k] = cls._apply_known_shape_pattern(v, pattern_shape[k])
+                    elif isinstance(v, list):
+                        # A cache
+                        new_ds[k] = [
+                            (
+                                cls._apply_known_shape_pattern(s, pattern_shape[k])
+                                if is_shape(s)
+                                else s
+                            )
+                            for s in v
+                        ]
+                return new_ds
+
+        # unchanged
+        return ds
 
 
 def method_to_onnx(
