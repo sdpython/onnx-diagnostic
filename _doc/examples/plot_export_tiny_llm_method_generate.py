@@ -138,6 +138,49 @@ data = forward_replacement.check_discrepancies(verbose=1)
 df = pandas.DataFrame(data)
 print(df)
 
+# %%
+# Minimal script to export a LLM
+# ++++++++++++++++++++++++++++++
+#
+# The following lines are a condensed copy with less comments.
+
+# from HuggingFace
+MODEL_NAME = "arnir0/Tiny-LLM"
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+
+# to export into onnx
+forward_replacement = method_to_onnx(
+    model,
+    method_name="forward",
+    exporter="custom",
+    filename="plot_export_tiny_llm_method_generate.onnx",
+    patch_kwargs=dict(patch_transformers=True),
+    verbose=0,
+    convert_after_n_calls=3,
+    dynamic_batch_for={"input_ids", "attention_mask", "past_key_values"},
+)
+
+# from HuggingFace again
+prompt = "Continue: it rains..."
+inputs = tokenizer(prompt, return_tensors="pt")
+outputs = model.generate(
+    input_ids=inputs["input_ids"],
+    attention_mask=inputs["attention_mask"],
+    max_length=50,
+    temperature=1,
+    top_k=50,
+    top_p=0.95,
+    do_sample=True,
+)
+generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+print("prompt answer:", generated_text)
+
+# to check discrepancies
+data = forward_replacement.check_discrepancies()
+df = pandas.DataFrame(data)
+print(df)
+
 
 # %%
 doc.save_fig(doc.plot_dot(filename), f"{filename}.png", dpi=400)

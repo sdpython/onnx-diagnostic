@@ -750,7 +750,19 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         classes = [
             cls
             for cls in self._serialization_classes
-            if cls not in {int, float, bool, str, torch.Tensor, list, set, dict, torch.device}
+            if cls
+            not in {
+                int,
+                float,
+                bool,
+                str,
+                torch.Tensor,
+                list,
+                set,
+                dict,
+                torch.device,
+                torch.dtype,
+            }
         ]
         if verbose:
             print(f"[method_to_onnx.check_discrepancies] register classes {classes}")
