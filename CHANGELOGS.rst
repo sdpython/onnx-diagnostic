@@ -4,6 +4,8 @@ Change Logs
 0.8.10
 ++++++
 
+* :pr:`384`: add ``weights_only=False`` when using :func:`torch.load`
+
 0.8.9
 +++++
 

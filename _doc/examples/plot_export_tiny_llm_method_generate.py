@@ -145,6 +145,7 @@ print(df)
 # The following lines are a condensed copy with less comments.
 
 # from HuggingFace
+print("----------------")
 MODEL_NAME = "arnir0/Tiny-LLM"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
@@ -160,14 +161,15 @@ forward_replacement = method_to_onnx(
     convert_after_n_calls=3,
     dynamic_batch_for={"input_ids", "attention_mask", "past_key_values"},
 )
+model.forward = lambda *args, **kwargs: forward_replacement(*args, **kwargs)
 
 # from HuggingFace again
-prompt = "Continue: it rains..."
+prompt = "Continue: it rains, what should I do?"
 inputs = tokenizer(prompt, return_tensors="pt")
 outputs = model.generate(
     input_ids=inputs["input_ids"],
     attention_mask=inputs["attention_mask"],
-    max_length=50,
+    max_length=100,
     temperature=1,
     top_k=50,
     top_p=0.95,

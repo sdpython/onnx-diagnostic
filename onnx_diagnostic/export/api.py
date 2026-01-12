@@ -738,7 +738,9 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         :param verbose: verbosity
         :return: results, a list of dictionaries, ready to be consumed by a dataframe
         """
-        assert self._export_done, "The onnx export was not done."
+        assert (
+            self._export_done
+        ), f"The onnx export was not done, only {len(self._inputs)} were stored."
         assert os.path.exists(self._input_file), f"input file {self._input_file!r} not found"
         assert os.path.exists(
             self._output_file
@@ -768,11 +770,11 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             print(f"[method_to_onnx.check_discrepancies] register classes {classes}")
             print(f"[method_to_onnx.check_discrepancies] load {self._input_file!r}")
         with torch.serialization.safe_globals(classes):
-            inputs = torch.load(self._input_file)
+            inputs = torch.load(self._input_file, weights_only=False)
         if verbose:
             print(f"[method_to_onnx.check_discrepancies] load {self._output_file!r}")
         with torch.serialization.safe_globals(classes):
-            outputs = torch.load(self._output_file)
+            outputs = torch.load(self._output_file, weights_only=False)
         assert len(inputs) == len(outputs), (
             f"Unexpected number of inputs {len(inputs)} and outputs {len(outputs)}, "
             f"inputs={string_type(inputs, with_shape=True)}, "
