@@ -7,6 +7,7 @@ from onnx_diagnostic.helpers.cache_helper import make_dynamic_cache, CacheKeyVal
 from onnx_diagnostic.export import ModelInputs, CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
+from onnx_diagnostic.export.api import WrapperToExportMethodToOnnx
 
 
 class TestDynamicShapes(ExtTestCase):
@@ -994,6 +995,117 @@ class TestDynamicShapes(ExtTestCase):
         DYN = torch.export.Dim.DYNAMIC
         expected = ((), {"cache": [{2: DYN}, {2: DYN}, {2: DYN}, {2: DYN}]})
         self.assertEqual(expected, ds)
+
+    def test_dynamic_shape_order(self):
+        inputs = [
+            (
+                tuple(),
+                dict(
+                    cache_position=torch.arange(8),
+                    input_ids=torch.randint(10, size=(1, 8)),
+                    attention_mask=torch.ones((1, 8), dtype=torch.int64),
+                ),
+            ),
+            (
+                tuple(),
+                dict(
+                    cache_position=torch.arange(1),
+                    input_ids=torch.randint(10, size=(1, 1)),
+                    past_key_values=make_dynamic_cache(
+                        [(torch.rand((1, 1, 8, 96)), torch.rand((1, 1, 8, 96)))]
+                    ),
+                    attention_mask=torch.ones((1, 9), dtype=torch.int64),
+                ),
+            ),
+            (
+                tuple(),
+                dict(
+                    cache_position=torch.arange(1),
+                    input_ids=torch.randint(10, size=(1, 1)),
+                    past_key_values=make_dynamic_cache(
+                        [(torch.rand((1, 1, 9, 96)), torch.rand((1, 1, 9, 96)))]
+                    ),
+                    attention_mask=torch.ones((1, 10), dtype=torch.int64),
+                ),
+            ),
+        ]
+        mi = ModelInputs(None, inputs)
+        ds = mi.guess_dynamic_shapes()
+        DYN = torch.export.Dim.DYNAMIC
+        self.assertEqual(
+            (
+                (),
+                {
+                    "attention_mask": {1: DYN},
+                    "past_key_values": [{2: DYN}, {2: DYN}],
+                    "input_ids": {1: DYN},
+                    "cache_position": {0: DYN},
+                },
+            ),
+            ds,
+        )
+        ordered = list(ds[1])
+        self.assertEqual(
+            ["cache_position", "input_ids", "past_key_values", "attention_mask"], ordered
+        )
+
+    def test_dynamic_batch_dynamic(self):
+        inputs = [
+            (
+                tuple(),
+                dict(
+                    cache_position=torch.arange(8),
+                    input_ids=torch.randint(10, size=(1, 8)),
+                    attention_mask=torch.ones((1, 8), dtype=torch.int64),
+                ),
+            ),
+            (
+                tuple(),
+                dict(
+                    cache_position=torch.arange(1),
+                    input_ids=torch.randint(10, size=(1, 1)),
+                    past_key_values=make_dynamic_cache(
+                        [(torch.rand((1, 1, 8, 96)), torch.rand((1, 1, 8, 96)))]
+                    ),
+                    attention_mask=torch.ones((1, 9), dtype=torch.int64),
+                ),
+            ),
+            (
+                tuple(),
+                dict(
+                    cache_position=torch.arange(1),
+                    input_ids=torch.randint(10, size=(1, 1)),
+                    past_key_values=make_dynamic_cache(
+                        [(torch.rand((1, 1, 9, 96)), torch.rand((1, 1, 9, 96)))]
+                    ),
+                    attention_mask=torch.ones((1, 10), dtype=torch.int64),
+                ),
+            ),
+        ]
+        mi = ModelInputs(None, inputs)
+        ds = mi.guess_dynamic_shapes()[1]
+        DYN = torch.export.Dim.DYNAMIC
+        self.assertEqual(
+            {
+                "cache_position": {0: DYN},
+                "input_ids": {1: DYN},
+                "past_key_values": [{2: DYN}, {2: DYN}],
+                "attention_mask": {1: DYN},
+            },
+            ds,
+        )
+        ds = WrapperToExportMethodToOnnx._dynamic_batch_dimension(
+            ds, {"input_ids", "past_key_values", "attention_mask"}
+        )
+        self.assertEqual(
+            {
+                "cache_position": {0: DYN},
+                "input_ids": {0: "batch", 1: DYN},
+                "past_key_values": [{0: "batch", 2: DYN}, {0: "batch", 2: DYN}],
+                "attention_mask": {0: "batch", 1: DYN},
+            },
+            ds,
+        )
 
 
 if __name__ == "__main__":

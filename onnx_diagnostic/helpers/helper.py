@@ -1,7 +1,6 @@
 import ast
 import enum
 import inspect
-import itertools
 import json
 from dataclasses import is_dataclass, fields
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
@@ -991,15 +990,17 @@ def flatten_object(x: Any, drop_keys: bool = False) -> Any:
     if x.__class__.__name__ in {"DynamicCache", "StaticCache", "HybridCache"}:
         from .cache_helper import CacheKeyValue
 
-        kc = CacheKeyValue(x)
-        return list(itertools.chain.from_iterable(zip(kc.key_cache, kc.value_cache)))
+        return CacheKeyValue(x).aslist()
 
     if x.__class__.__name__ == "EncoderDecoderCache":
-        res = flatten_object(x.self_attention_cache) + flatten_object(x.cross_attention_cache)
+        res = [
+            *flatten_object(x.self_attention_cache),
+            *flatten_object(x.cross_attention_cache),
+        ]
         return tuple(res)
     if x.__class__.__name__ == "MambaCache":
         if isinstance(x.conv_states, list):
-            res = flatten_object(x.conv_states) + flatten_object(x.ssm_states)
+            res = [*flatten_object(x.conv_states), *flatten_object(x.ssm_states)]
             return tuple(res)
         return (x.conv_states, x.ssm_states)
     if hasattr(x, "to_tuple"):

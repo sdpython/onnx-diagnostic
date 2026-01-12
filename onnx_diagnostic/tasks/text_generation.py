@@ -1,11 +1,6 @@
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 import torch
-from ..helpers.cache_helper import (
-    make_dynamic_cache,
-    make_mamba_cache,
-    make_sliding_window_cache,
-    make_static_cache,
-)
+from ..helpers.cache_helper import make_dynamic_cache, make_mamba_cache, make_static_cache
 from ..helpers.config_helper import (
     update_config,
     check_hasattr,
@@ -187,17 +182,22 @@ def get_inputs(
             if cls_cache is None or isinstance(cls_cache, str)
             else cls_cache.__name__
         )
-        make_caches = {
-            "DynamicCache": make_dynamic_cache,
-            "SlidingWindowCache": make_sliding_window_cache,
-            "StaticCache": make_static_cache,
-        }
-        assert cache_name is None or cache_name in make_caches, (
-            f"Unable to handle cls_cache={cache_name!r}, it should be in "
-            f"{sorted(make_caches)}"
-        )
-        make_cache = make_dynamic_cache if cache_name is None else make_caches[cache_name]
-        is_static = cache_name == "StaticCache"
+        if cache_name == "DynamicSlidingWindowCache":
+            from ..helpers.cache_helper import make_sliding_window_cache
+
+            make_cache = make_sliding_window_cache
+            is_static = False
+        else:
+            make_caches = {
+                "DynamicCache": make_dynamic_cache,
+                "StaticCache": make_static_cache,
+            }
+            assert cache_name is None or cache_name in make_caches, (
+                f"Unable to handle cls_cache={cache_name!r}, it should be in "
+                f"{sorted(make_caches)}"
+            )
+            make_cache = make_dynamic_cache if cache_name is None else make_caches[cache_name]  # type: ignore[assignment]
+            is_static = cache_name == "StaticCache"
 
         if is_static:
             # static

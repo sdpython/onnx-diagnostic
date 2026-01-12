@@ -11,6 +11,7 @@ from ..helpers import flatten_object, max_diff, string_diff, string_type
 from ..helpers.cache_helper import CacheKeyValue
 from ..helpers.torch_helper import torch_deepcopy
 from ..helpers.rt_helper import make_feeds
+from ..helpers.onnx_helper import pretty_onnx
 from ..reference import OnnxruntimeEvaluator
 
 
@@ -349,6 +350,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         patch_kwargs: Optional[Dict[str, Any]] = None,
         skip_kwargs_names: Optional[Set[str]] = None,
         dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
+        dynamic_batch_for: Optional[Sequence[Union[int, str]]] = None,
         expand_batch_for: Optional[Sequence[Union[int, str]]] = None,
     ):
         super().__init__()
@@ -359,6 +361,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             if method_name == "forward"
             else getattr(mod, method_name)
         )
+        self._signature = inspect.signature(self._method_call)
         self._inputs: List[Tuple[Tuple[Any, ...], Dict[str, Any]]] = []
         self._outputs: List[Any] = []
         self._convert_after_n_calls = convert_after_n_calls
@@ -368,6 +371,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         self.skip_kwargs_names = skip_kwargs_names
         self.dynamic_shapes = dynamic_shapes
         self.expand_batch_for = expand_batch_for
+        self.dynamic_batch_for = dynamic_batch_for
         self._to_onnx_kwargs = dict(
             input_names=input_names,
             target_opset=target_opset,
@@ -417,25 +421,40 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                 self._collect_classes(v)
             return
 
+    def _reorder_kwargs(self, kwargs):
+        new_kwargs = {k: kwargs[k] for k in self._signature.parameters if k in kwargs}
+        for k, v in kwargs.items():
+            if k not in new_kwargs:
+                new_kwargs[k] = v
+        return new_kwargs
+
     def forward(self, *args, **kwargs):
         if not self._export_done:
             inp_args = args
+            # filters out the inputs not desired
             inp_kwargs = (
                 kwargs
                 if not kwargs or not self.skip_kwargs_names
                 else {k: v for k, v in kwargs.items() if k not in self.skip_kwargs_names}
             )
             if self.expand_batch_for:
+                # extends the inputs to artificially create a batch dimension != 1.
                 inp_args = self._expand_batch_dimension(inp_args, self.expand_batch_for)
                 inp_kwargs = self._expand_batch_dimension(inp_kwargs, self.expand_batch_for)
             inp_args, inp_kwargs = torch_deepcopy((inp_args, inp_kwargs))
+            # reorders the parameter following the method signature.
+            inp_kwargs = self._reorder_kwargs(inp_kwargs)
+            # stores the inputs
             self._inputs.append((inp_args, inp_kwargs))
+
             if self.verbose:
                 print(
                     f"[method_to_onnx] input[{len(self._inputs)-1}]: "
                     f"{string_type(self._inputs[-1], with_shape=True)}"
                 )
+
             if len(self._inputs) >= self._convert_after_n_calls:
+                # conversion starts after _convert_after_n_calls calls to the forward method
                 name = os.path.splitext(self._to_onnx_kwargs["filename"])[0]
                 input_file = f"{name}.inputs.pt"
                 self._input_file = input_file
@@ -447,11 +466,13 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                 self._convert_method_to_onnx()
                 self._export_done = True
 
+        # calls the inner method (no change here)
         begin = time.perf_counter()
         res = self._method_call(*args, **kwargs)
         duration = time.perf_counter() - begin
         self._collect_classes([args, kwargs, res])
         if self._inputs:
+            # stores the outputs if discrepancies need to be checked
             self._outputs.append((torch_deepcopy(res), duration))
             assert len(self._inputs) == len(self._outputs), (
                 f"Number of inputs {len(self._inputs)} and "
@@ -514,6 +535,14 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             if self.verbose:
                 print(f"[method_to_onnx] guess_dynamic_shapes={string_type(ds)}")
             a, kw, nds = mi.move_to_kwargs(*self._inputs[-1], ds)
+            if self.dynamic_batch_for:
+                nds = (
+                    self._dynamic_batch_dimension(nds[0], self.dynamic_batch_for),
+                    self._dynamic_batch_dimension(nds[1], self.dynamic_batch_for),
+                )
+                if self.verbose:
+                    print(f"[method_to_onnx] dynamic_batch_for={self.dynamic_batch_for}")
+                    print(f"[method_to_onnx] dynamic_shapes with batch={nds}")
         else:
             a, kw = self._inputs[-1]
             nds = [self.dynamic_shapes]
@@ -659,6 +688,31 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         flat = cls._expand_batch_dimension_input(flat, msg)
         return torch.utils._pytree.tree_unflatten(flat, _spec)
 
+    @classmethod
+    def _dynamic_batch_dimension(
+        cls, ds: Union[Tuple[Any, ...], Dict[str, Any]], dynamic_for: Sequence[Union[int, str]]
+    ) -> Union[Tuple[Any, ...], Dict[str, Any]]:
+        if isinstance(ds, tuple):
+            return tuple(
+                (v if i not in dynamic_for else cls._dynamic_batch_dimension_input(v, i))
+                for i, v in enumerate(ds)
+            )
+        return {
+            k: (v if k not in dynamic_for else cls._dynamic_batch_dimension_input(v, k))
+            for k, v in ds.items()
+        }
+
+    @classmethod
+    def _dynamic_batch_dimension_input(cls, ds: Any, msg: Union[str, int]) -> Any:
+        if isinstance(ds, dict) and all(isinstance(k, int) for k in ds):
+            ds[0] = "batch"
+            return {k: v for k, v in sorted(ds.items())}  # noqa: C416
+        if isinstance(ds, list):
+            return [
+                cls._dynamic_batch_dimension_input(o, f"{msg}[{i}]") for i, o in enumerate(ds)
+            ]
+        raise NotImplementedError(f"cannot make first dimension dynamic for batch for {ds}")
+
     def check_discrepancies(
         self, atol: float = 1e-4, rtol: float = 0.1, hist=(0.1, 0.01), verbose: int = 0
     ) -> List[Dict[str, Union[str, int, float]]]:
@@ -707,6 +761,10 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         input_names = sess.input_names
         if verbose:
             print(f"[method_to_onnx.check_discrepancies] input_names={input_names}")
+            print(
+                f"[method_to_onnx.check_discrepancies] onnx_shapes="
+                f"{', '.join(pretty_onnx(i) for i in sess.input_types)}"
+            )
         data = []
         for i, (input, (output, latency)) in enumerate(
             zip(self.add_empty_cache_if_needed(inputs), outputs)
@@ -728,6 +786,15 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                     )
 
             flat_inputs = flatten_object(input, drop_keys=True)
+            if verbose > 1:
+                print(
+                    f"[method_to_onnx.check_discrepancies] "
+                    f"input={string_type(input, with_shape=True)}"
+                )
+                print(
+                    f"[method_to_onnx.check_discrepancies] "
+                    f"flat_inputs={string_type(flat_inputs, with_shape=True)}"
+                )
             if len(flat_inputs) < len(input_names):
                 # not implemented yet, it is caused by a missing cache,
                 # which requires an empty cache instead
@@ -738,6 +805,11 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                 f"{len(flat_inputs)} flat torch inputs"
             )
             feeds = make_feeds(input_names, flat_inputs)
+            if verbose > 1:
+                print(
+                    f"[method_to_onnx.check_discrepancies] "
+                    f"feeds={string_type(feeds, with_shape=True)}"
+                )
             begin = time.perf_counter()
             ort_outputs = sess.run(None, feeds)
             duration = time.perf_counter() - begin
@@ -792,6 +864,7 @@ def method_to_onnx(
     patch_kwargs: Optional[Dict[str, Any]] = None,
     skip_kwargs_names: Optional[Set[str]] = None,
     dynamic_shapes: Optional[Union[Dict[str, Any], Tuple[Any]]] = None,
+    dynamic_batch_for: Optional[Sequence[Union[int, str]]] = None,
     expand_batch_for: Optional[Sequence[Union[int, str]]] = None,
 ) -> Callable:
     """
@@ -822,6 +895,10 @@ def method_to_onnx(
     :param skip_kwargs_names: use default values for these parameters part of
         the signature of the method to export
     :param dynamic_shapes: dynamic shapes to use if the guessed ones are not right
+    :param dynamic_batch_for: LLM are usually called with a batch size equal to 1,
+        but the export may benefit from having a dynamic batch size,
+        this parameter forces the input specified in this set to have the first dimension
+        be dynamic
     :param expand_batch_for: LLM are usually called with a batch size equal to 1,
         but the export may benefit from having another value for the batch size,
         this parameter forces the input specified in this set to be expanded
@@ -852,6 +929,7 @@ def method_to_onnx(
         patch_kwargs=patch_kwargs,
         skip_kwargs_names=skip_kwargs_names,
         dynamic_shapes=dynamic_shapes,
+        dynamic_batch_for=dynamic_batch_for,
         expand_batch_for=expand_batch_for,
     )
     return wrapped_model

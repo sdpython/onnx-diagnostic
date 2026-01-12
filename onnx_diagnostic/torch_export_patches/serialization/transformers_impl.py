@@ -19,13 +19,7 @@ try:
 except ImportError:
     from transformers.cache_utils import MambaCache
 from transformers.modeling_outputs import BaseModelOutput
-from ...helpers.cache_helper import (
-    make_dynamic_cache,
-    make_hybrid_cache,
-    make_sliding_window_cache,
-    make_static_cache,
-    CacheKeyValue,
-)
+from ...helpers.cache_helper import make_dynamic_cache, make_static_cache, CacheKeyValue
 from . import make_serialization_function_for_dataclass
 
 
@@ -132,6 +126,8 @@ if HybridCache:
         values: List[Any], context: torch.utils._pytree.Context, output_type=None
     ) -> HybridCache:
         """Restores a :class:`transformers.cache_utils.HybridCache` from python objects."""
+        from ...helpers.cache_helper import make_hybrid_cache
+
         return _unflatten_cache(make_hybrid_cache, values, context, output_type=output_type)
 
 
@@ -204,6 +200,8 @@ if SlidingWindowCache:
         Restores a :class:`transformers.cache_utils.SlidingWindowCache`
         from python objects.
         """
+        from ...helpers.cache_helper import make_sliding_window_cache
+
         return _unflatten_cache(
             make_sliding_window_cache, values, context, output_type=output_type
         )

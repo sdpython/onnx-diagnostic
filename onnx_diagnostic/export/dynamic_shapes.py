@@ -967,6 +967,8 @@ class ModelInputs:
         """
         Guesses the dynamic shapes for that module from two execution.
         If there is only one execution, then that would be static dimensions.
+        If the model signature is available, the kwargs are reordered following
+        the signature order, otherwise it follows the order given in the inputs.
 
         :param auto: if auto is True, use ``torch.export.Dim.AUTO`` for any
             dimension if the number of inputs is one,
@@ -1026,11 +1028,24 @@ class ModelInputs:
                 msg=lambda name=name: f" failing input {name!r}",
             )
         # reordering
-        if kwargs is not None and self.forward_ordered_parameter_names:
-            kwargs1 = {
-                p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs
-            }
-            kwargs = {**kwargs1, **{k: v for k, v in kwargs.items() if k not in kwargs1}}
+        if kwargs:
+            if self.forward_ordered_parameter_names:
+                kwargs1 = {
+                    p: kwargs[p] for p in self.forward_ordered_parameter_names if p in kwargs
+                }
+                kwargs = {**kwargs1, **{k: v for k, v in kwargs.items() if k not in kwargs1}}
+            else:
+                # We reorder the same the way the input were given.
+                use = None
+                params = set(kwargs)
+                for _args, kws in self.inputs:
+                    if set(kws) == params:
+                        use = kws
+                        break
+                if use:
+                    ordered = list(use)
+                    kwargs = {k: kwargs[k] for k in ordered}
+
         return tuple(args), kwargs
 
     def move_to_kwargs(
