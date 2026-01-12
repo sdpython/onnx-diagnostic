@@ -196,7 +196,7 @@ def get_inputs(
                 f"Unable to handle cls_cache={cache_name!r}, it should be in "
                 f"{sorted(make_caches)}"
             )
-            make_cache = make_dynamic_cache if cache_name is None else make_caches[cache_name]
+            make_cache = make_dynamic_cache if cache_name is None else make_caches[cache_name]  # type: ignore[assignment]
             is_static = cache_name == "StaticCache"
 
         if is_static:
