@@ -445,10 +445,6 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                     and not isinstance(v, (bool, int, float))
                 }
             )
-            if self.expand_batch_for:
-                # extends the inputs to artificially create a batch dimension != 1.
-                inp_args = self._expand_batch_dimension(inp_args, self.expand_batch_for)
-                inp_kwargs = self._expand_batch_dimension(inp_kwargs, self.expand_batch_for)
             inp_args, inp_kwargs = torch_deepcopy((inp_args, inp_kwargs))
             # reorders the parameter following the method signature.
             inp_kwargs = self._reorder_kwargs(inp_kwargs)
@@ -557,6 +553,10 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         else:
             a, kw = self._inputs[-1]
             nds = [self.dynamic_shapes]
+        if self.expand_batch_for:
+            # extends the inputs to artificially create a batch dimension != 1.
+            a = self._expand_batch_dimension(a, self.expand_batch_for)
+            kw = self._expand_batch_dimension(kw, self.expand_batch_for)
         if self.verbose:
             print(f"[method_to_onnx] export args={string_type(a, with_shape=True)}")
             print(f"[method_to_onnx] export kwargs={string_type(kw, with_shape=True)}")

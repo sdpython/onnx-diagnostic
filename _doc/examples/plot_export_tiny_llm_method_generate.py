@@ -50,7 +50,7 @@ def generate_text(
 
 
 # Define your prompt
-prompt = "Continue: it rains..."
+prompt = "Continue: it rains, what should I do?"
 generated_text = generate_text(prompt, model, tokenizer)
 print("-----------------")
 print(generated_text)
@@ -68,7 +68,7 @@ print("-----------------")
 # If the default settings do not work, ``skip_kwargs_names`` and ``dynamic_shapes``
 # can be changed to remove some undesired inputs or add more dynamic dimensions.
 
-filename = "plot_export_tiny_llm_method_generate.onnx"
+filename = "plot_export_tiny_llm_method_generate.custom.onnx"
 forward_replacement = method_to_onnx(
     model,
     method_name="forward",  # default value
@@ -88,6 +88,10 @@ forward_replacement = method_to_onnx(
     # To force the dynamism of this dimension, we need to indicate
     # which inputs have a batch size.
     dynamic_batch_for={"input_ids", "attention_mask", "past_key_values"},
+    # Earlier versions of pytorch did not accept a dynamic batch size equal to 1,
+    # this last parameter can be added to expand some inputs if the batch size is 1.
+    # The exporter should work without.
+    expand_batch_for={"input_ids", "attention_mask", "past_key_values"},
 )
 
 # %%
@@ -154,8 +158,8 @@ model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 forward_replacement = method_to_onnx(
     model,
     method_name="forward",
-    exporter="custom",
-    filename="plot_export_tiny_llm_method_generate.onnx",
+    exporter="onnx-dynamo",
+    filename="plot_export_tiny_llm_method_generate.dynamo.onnx",
     patch_kwargs=dict(patch_transformers=True),
     verbose=0,
     convert_after_n_calls=3,
