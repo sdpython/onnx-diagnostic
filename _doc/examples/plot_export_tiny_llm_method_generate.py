@@ -48,9 +48,8 @@ def generate_text(
     generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return generated_text
 
-    # Define your prompt
 
-
+# Define your prompt
 prompt = "Continue: it rains..."
 generated_text = generate_text(prompt, model, tokenizer)
 print("-----------------")
@@ -87,7 +86,7 @@ forward_replacement = method_to_onnx(
     # The input used in the example has a batch size equal to 1, all
     # inputs going through method forward will have the same batch size.
     # To force the dynamism of this dimension, we need to indicate
-    # which inputs has a batch size.
+    # which inputs have a batch size.
     dynamic_batch_for={"input_ids", "attention_mask", "past_key_values"},
 )
 
