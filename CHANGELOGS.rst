@@ -4,6 +4,7 @@ Change Logs
 0.8.9
 +++++
 
+* :pr:`383`: removed bool, int, float, None as input dummies for the exporter in ``method_to_onnx``
 * :pr:`382`: make the ordering of the inferred dynamic shapes more robust
 * :pr:`381`: add parameter *expand_batch_for* to ``method_to_onnx``
 * :pr:`378`: implements the computation of discrepancies in ``method_to_onnx``
