@@ -445,10 +445,6 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                     and not isinstance(v, (bool, int, float))
                 }
             )
-            if self.expand_batch_for:
-                # extends the inputs to artificially create a batch dimension != 1.
-                inp_args = self._expand_batch_dimension(inp_args, self.expand_batch_for)
-                inp_kwargs = self._expand_batch_dimension(inp_kwargs, self.expand_batch_for)
             inp_args, inp_kwargs = torch_deepcopy((inp_args, inp_kwargs))
             # reorders the parameter following the method signature.
             inp_kwargs = self._reorder_kwargs(inp_kwargs)
@@ -557,6 +553,10 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         else:
             a, kw = self._inputs[-1]
             nds = [self.dynamic_shapes]
+        if self.expand_batch_for:
+            # extends the inputs to artificially create a batch dimension != 1.
+            a = self._expand_batch_dimension(a, self.expand_batch_for)
+            kw = self._expand_batch_dimension(kw, self.expand_batch_for)
         if self.verbose:
             print(f"[method_to_onnx] export args={string_type(a, with_shape=True)}")
             print(f"[method_to_onnx] export kwargs={string_type(kw, with_shape=True)}")
@@ -738,7 +738,9 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         :param verbose: verbosity
         :return: results, a list of dictionaries, ready to be consumed by a dataframe
         """
-        assert self._export_done, "The onnx export was not done."
+        assert (
+            self._export_done
+        ), f"The onnx export was not done, only {len(self._inputs)} were stored."
         assert os.path.exists(self._input_file), f"input file {self._input_file!r} not found"
         assert os.path.exists(
             self._output_file
@@ -750,17 +752,29 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
         classes = [
             cls
             for cls in self._serialization_classes
-            if cls not in {int, float, bool, str, torch.Tensor, list, set, dict, torch.device}
+            if cls
+            not in {
+                int,
+                float,
+                bool,
+                str,
+                torch.Tensor,
+                list,
+                set,
+                dict,
+                torch.device,
+                torch.dtype,
+            }
         ]
         if verbose:
             print(f"[method_to_onnx.check_discrepancies] register classes {classes}")
             print(f"[method_to_onnx.check_discrepancies] load {self._input_file!r}")
         with torch.serialization.safe_globals(classes):
-            inputs = torch.load(self._input_file)
+            inputs = torch.load(self._input_file, weights_only=False)
         if verbose:
             print(f"[method_to_onnx.check_discrepancies] load {self._output_file!r}")
         with torch.serialization.safe_globals(classes):
-            outputs = torch.load(self._output_file)
+            outputs = torch.load(self._output_file, weights_only=False)
         assert len(inputs) == len(outputs), (
             f"Unexpected number of inputs {len(inputs)} and outputs {len(outputs)}, "
             f"inputs={string_type(inputs, with_shape=True)}, "

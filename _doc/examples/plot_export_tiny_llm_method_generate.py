@@ -48,10 +48,9 @@ def generate_text(
     generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return generated_text
 
-    # Define your prompt
 
-
-prompt = "Continue: it rains..."
+# Define your prompt
+prompt = "Continue: it rains, what should I do?"
 generated_text = generate_text(prompt, model, tokenizer)
 print("-----------------")
 print(generated_text)
@@ -69,7 +68,7 @@ print("-----------------")
 # If the default settings do not work, ``skip_kwargs_names`` and ``dynamic_shapes``
 # can be changed to remove some undesired inputs or add more dynamic dimensions.
 
-filename = "plot_export_tiny_llm_method_generate.onnx"
+filename = "plot_export_tiny_llm_method_generate.custom.onnx"
 forward_replacement = method_to_onnx(
     model,
     method_name="forward",  # default value
@@ -87,8 +86,12 @@ forward_replacement = method_to_onnx(
     # The input used in the example has a batch size equal to 1, all
     # inputs going through method forward will have the same batch size.
     # To force the dynamism of this dimension, we need to indicate
-    # which inputs has a batch size.
+    # which inputs have a batch size.
     dynamic_batch_for={"input_ids", "attention_mask", "past_key_values"},
+    # Earlier versions of pytorch did not accept a dynamic batch size equal to 1,
+    # this last parameter can be added to expand some inputs if the batch size is 1.
+    # The exporter should work without.
+    expand_batch_for={"input_ids", "attention_mask", "past_key_values"},
 )
 
 # %%
@@ -136,6 +139,51 @@ print(generated_text)
 # (torch and onnxruntime).
 # verbose=2 shows more information about expected outputs.
 data = forward_replacement.check_discrepancies(verbose=1)
+df = pandas.DataFrame(data)
+print(df)
+
+# %%
+# Minimal script to export a LLM
+# ++++++++++++++++++++++++++++++
+#
+# The following lines are a condensed copy with less comments.
+
+# from HuggingFace
+print("----------------")
+MODEL_NAME = "arnir0/Tiny-LLM"
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+
+# to export into onnx
+forward_replacement = method_to_onnx(
+    model,
+    method_name="forward",
+    exporter="onnx-dynamo",
+    filename="plot_export_tiny_llm_method_generate.dynamo.onnx",
+    patch_kwargs=dict(patch_transformers=True),
+    verbose=0,
+    convert_after_n_calls=3,
+    dynamic_batch_for={"input_ids", "attention_mask", "past_key_values"},
+)
+model.forward = lambda *args, **kwargs: forward_replacement(*args, **kwargs)
+
+# from HuggingFace again
+prompt = "Continue: it rains, what should I do?"
+inputs = tokenizer(prompt, return_tensors="pt")
+outputs = model.generate(
+    input_ids=inputs["input_ids"],
+    attention_mask=inputs["attention_mask"],
+    max_length=100,
+    temperature=1,
+    top_k=50,
+    top_p=0.95,
+    do_sample=True,
+)
+generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+print("prompt answer:", generated_text)
+
+# to check discrepancies
+data = forward_replacement.check_discrepancies()
 df = pandas.DataFrame(data)
 print(df)
 
