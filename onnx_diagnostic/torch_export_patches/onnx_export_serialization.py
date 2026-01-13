@@ -305,7 +305,7 @@ def serialization_functions(
 
 
 def unregister_class_serialization(cls: type, verbose: int = 0):
-    """Undo the registration."""
+    """Undo the registration for a class."""
     # torch.utils._pytree._deregister_pytree_flatten_spec(cls)
     if cls in torch.fx._pytree.SUPPORTED_NODES:
         del torch.fx._pytree.SUPPORTED_NODES[cls]
@@ -333,6 +333,10 @@ def unregister_class_serialization(cls: type, verbose: int = 0):
 
 
 def unregister_cache_serialization(undo: Dict[str, bool], verbose: int = 0):
+    """
+    Undo the registration made by
+    :func:`onnx_diagnostic.torch_export_patches.onnx_export_serialization.register_cache_serialization`.
+    """
     cls_ensemble = {DynamicCache, EncoderDecoderCache} | set(undo)
     for cls in cls_ensemble:
         if undo.get(cls.__name__, False):
