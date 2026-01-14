@@ -5,6 +5,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     requires_transformers,
     requires_torch,
+    ignore_errors,
 )
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
@@ -15,6 +16,7 @@ class TestTasksTextToTimage(ExtTestCase):
     @hide_stdout()
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
+    @ignore_errors(OSError)  # connectivity issues
     def test_text_to_image(self):
         mid = "diffusers/tiny-torch-full-checker"
         data = get_untrained_model_with_inputs(
