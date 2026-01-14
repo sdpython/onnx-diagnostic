@@ -15,6 +15,7 @@ class TestTasksTextToTimage(ExtTestCase):
     @hide_stdout()
     @requires_transformers("4.52")
     @requires_torch("2.7.99")
+    @ignore_errors(OSError)  # connectivity issues
     def test_text_to_image(self):
         mid = "diffusers/tiny-torch-full-checker"
         data = get_untrained_model_with_inputs(
