@@ -5,6 +5,7 @@ from onnx_diagnostic.ext_test_case import (
     hide_stdout,
     requires_transformers,
     requires_torch,
+    ignore_errors,
 )
 from onnx_diagnostic.torch_models.hghub.model_inputs import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches import torch_export_patches
