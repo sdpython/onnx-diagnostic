@@ -53,6 +53,7 @@ def get_phi2(
         "transformers_version": "4.37.0",
         "use_cache": True,
         "vocab_size": 51200,
+        "pad_token_id": 0,
     }
     config.update(**kwargs)
     conf = transformers.PhiConfig(**config)
