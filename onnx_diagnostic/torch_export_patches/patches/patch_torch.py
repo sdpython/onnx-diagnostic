@@ -524,13 +524,16 @@ class patched_ShapeEnv:
 
             transmute_into_runtime_assert = False
 
+            backed_var_to_val = getattr(
+                self, "backed_var_to_val", getattr(self, "var_to_val", {})
+            )
             concrete_val = None
-            if not (expr.free_symbols <= self.var_to_val.keys()):
+            if not (expr.free_symbols <= backed_var_to_val.keys()):
                 # TODO: dedupe this with _maybe_evaluate_static
                 # Attempt to eliminate the unbacked SymInt
                 new_expr = self._maybe_evaluate_static(expr, unbacked_only=True)
                 assert new_expr is not None
-                if not (new_expr.free_symbols <= self.var_to_val.keys()):
+                if not (new_expr.free_symbols <= backed_var_to_val.keys()):
                     ok = False
 
                     # fallback_value is set when guard_or_true or guard_or_false are used.
@@ -541,17 +544,15 @@ class patched_ShapeEnv:
                     # oblivious_var_to_val will be defined iff we have sizes
                     # with DimDynamic.OBLIVIOUS_SIZE type.
                     # See https://github.com/pytorch/pytorch/issues/137100#issuecomment-2495778113
-                    var_to_val = getattr(
-                        self,
-                        "unbacked_var_to_val",
-                        getattr(self, "oblivious_var_to_val", False),
-                    )
                     if (
-                        var_to_val
-                        and not (correct_hint := orig_expr.xreplace(var_to_val)).free_symbols
+                        backed_var_to_val
+                        and getattr(self, "real_tensor_prop_unbacked_vals", True)
+                        and not (
+                            correct_hint := orig_expr.xreplace(backed_var_to_val)
+                        ).free_symbols
                         and not (
                             counterfactual_hint := orig_expr.xreplace(
-                                {k: max(2, v) for k, v in var_to_val.items()}
+                                {k: max(2, v) for k, v in backed_var_to_val.items()}
                             )
                         ).free_symbols
                         and correct_hint == counterfactual_hint
@@ -574,10 +575,10 @@ class patched_ShapeEnv:
                     # and if they pass we add a runtime assertions and continue.
                     if (
                         not ok
-                        and var_to_val
+                        and backed_var_to_val
                         and not (
-                            unsound_result := orig_expr.xreplace(var_to_val).xreplace(
-                                var_to_val
+                            unsound_result := orig_expr.xreplace(backed_var_to_val).xreplace(
+                                backed_var_to_val
                             )
                         ).free_symbols
                     ):
