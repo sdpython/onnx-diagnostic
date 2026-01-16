@@ -1,10 +1,13 @@
 Change Logs
 ===========
 
+0.8.11
+++++++
+
 0.8.10
 ++++++
 
-* :pr:`384`: add ``weights_only=False`` when using :func:`torch.load`
+* :pr:`384`: add ``weights_only=False`` when using ``torch.load``
 
 0.8.9
 +++++

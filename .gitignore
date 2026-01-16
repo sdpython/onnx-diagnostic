@@ -11,6 +11,7 @@
 *.pte
 *.ep
 *.ep.txt
+*.ep.graph
 *.weight
 *.nsys-rep
 *.pkl
