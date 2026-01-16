@@ -143,6 +143,7 @@ def _ccached_microsoft_phi2():
             "transformers_version": "4.51.0.dev0",
             "use_cache": true,
             "vocab_size": 51200,
+            "pad_token_id": 0,
         }
     )
 
