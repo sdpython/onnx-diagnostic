@@ -34,7 +34,6 @@ from ..helpers.torch_helper import to_tensor
 from .report_results_comparison import ReportResultComparison
 from .evaluator import ExtendedReferenceEvaluator
 
-
 PROTO = (FunctionProto, ModelProto, GraphProto, NodeProto)
 Proto = Union[FunctionProto, ModelProto, GraphProto, NodeProto]
 

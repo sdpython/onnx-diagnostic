@@ -1033,16 +1033,14 @@ def main(
 if __name__ == "__main__":
     parser = get_parser(
         "qwen25",
-        epilog=textwrap.dedent(
-            r"""
+        epilog=textwrap.dedent(r"""
             Tested command lines::
 
                 python -m onnx_diagnostic.ci_models.export_phi4_mm \
                     -m microsoft/Phi-4-multimodal-instruct \
                     --device cuda --dtype float16 --exporter custom \
                     --pretrained --second-input --part vision
-            """
-        ),
+            """),
     )
     args = parser.parse_args(sys.argv[1:])
     main(

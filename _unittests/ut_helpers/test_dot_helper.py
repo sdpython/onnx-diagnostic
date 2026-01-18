@@ -38,8 +38,7 @@ class TestDotHelper(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 18)],
         )
         dot = to_dot(model)
-        expected = textwrap.dedent(
-            """
+        expected = textwrap.dedent("""
             digraph {
               graph [rankdir=TB, splines=true, overlap=false, nodesep=0.2, ranksep=0.2, fontsize=8];
               node [style="rounded,filled", color="#888888", fontcolor="#222222", shape=box];
@@ -57,8 +56,7 @@ class TestDotHelper(ExtTestCase):
               O_5 [label="Z\\nFLOAT16(b,c,d)", fillcolor="#aaaaee"];
               Add_4 -> O_5;
             }
-            """
-        )
+            """)
         self.maxDiff = None
         self.assertEqual(expected.strip("\n "), dot.strip("\n "))
 
@@ -90,9 +88,7 @@ class TestDotHelper(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 18)],
         )
         dot = to_dot(model)
-        expected = (
-            textwrap.dedent(
-                """
+        expected = textwrap.dedent("""
                 digraph {
                 graph [rankdir=TB, splines=true, overlap=false, nodesep=0.2, ranksep=0.2, fontsize=8];
                 node [style="rounded,filled", color="#888888", fontcolor="#222222", shape=box];
@@ -111,11 +107,7 @@ class TestDotHelper(ExtTestCase):
                 O_6 [label="Z\\nFLOAT16(b,c,d)", fillcolor="#aaaaee"];
                 Add_5 -> O_6;
                 }
-                """
-            )
-            .strip("\n")
-            .replace(" ", "")
-        )
+                """).strip("\n").replace(" ", "")
         self.maxDiff = None
         self.assertEqual(expected, dot.strip("\n").replace(" ", ""))
 

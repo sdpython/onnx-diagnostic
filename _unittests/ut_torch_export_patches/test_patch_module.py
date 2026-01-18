@@ -508,12 +508,10 @@ class TestPatchModule(ExtTestCase):
         self.assertEqual({"x"}, sh.found_shape)
 
     def test__find_loop_vars(self):
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             for i in range(x.shape[0]):
                 z[i, :] = ((x[i : i + 1, :] - y) ** 2).sum(dim=-1)
-            """
-        )
+            """)
         node = ast.parse(code)
         tr = RewriteControlFlow()
         vars = tr._find_loop_vars(node.body[0])

@@ -14,11 +14,9 @@ from argparse import ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
 def get_parser_dot() -> ArgumentParser:
     parser = ArgumentParser(
         prog="dot",
-        description=textwrap.dedent(
-            """
+        description=textwrap.dedent("""
             Converts a model into a dot file dot can draw into a graph.
-            """
-        ),
+            """),
     )
     parser.add_argument("input", type=str, help="onnx model to lighten")
     parser.add_argument(
@@ -85,12 +83,10 @@ def _cmd_dot(argv: List[Any]):
 def get_parser_lighten() -> ArgumentParser:
     parser = ArgumentParser(
         prog="lighten",
-        description=textwrap.dedent(
-            """
+        description=textwrap.dedent("""
             Removes the weights from a heavy model, stores statistics to restore
             random weights.
-            """
-        ),
+            """),
         epilog="This is mostly used to write unit tests without adding "
         "a big onnx file to the repository.",
     )
@@ -142,12 +138,10 @@ def _cmd_lighten(argv: List[Any]):
 def get_parser_unlighten() -> ArgumentParser:
     parser = ArgumentParser(
         prog="unlighten",
-        description=textwrap.dedent(
-            """
+        description=textwrap.dedent("""
             Restores random weights for a model reduces with command lighten,
             the command expects to find a file nearby with extension '.stats'.
-            """
-        ),
+            """),
         epilog="This is mostly used to write unit tests without adding "
         "a big onnx file to the repository.",
     )
@@ -200,8 +194,7 @@ def get_parser_print() -> ArgumentParser:
         "fmt",
         choices=["dot", "pretty", "printer", "raw", "shape", "text"],
         default="pretty",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             Prints out a model on the standard output.
 
             dot     - converts the graph into dot
@@ -211,10 +204,7 @@ def get_parser_print() -> ArgumentParser:
             shape   - prints every node node with input and output shapes
             text    - uses GraphRendering
 
-            """.strip(
-                "\n"
-            )
-        ),
+            """.strip("\n")),
     )
     parser.add_argument("input", type=str, help="onnx model to load")
     return parser
@@ -251,12 +241,10 @@ def _cmd_print(argv: List[Any]):
 def get_parser_find() -> ArgumentParser:
     parser = ArgumentParser(
         prog="find",
-        description=textwrap.dedent(
-            """
+        description=textwrap.dedent("""
             Look into a model and search for a set of names,
             tells which node is consuming or producing it.
-            """
-        ),
+            """),
         epilog="Enables Some quick validation.",
     )
     parser.add_argument(
@@ -315,12 +303,10 @@ def _cmd_find(argv: List[Any]):
 def get_parser_config() -> ArgumentParser:
     parser = ArgumentParser(
         prog="config",
-        description=textwrap.dedent(
-            """
+        description=textwrap.dedent("""
             Prints out a configuration for a model id,
             prints the associated task as well.
-            """
-        ),
+            """),
         formatter_class=RawTextHelpFormatter,
         epilog="",
     )
@@ -470,8 +456,7 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
             Creates a script to export  a model for a particular task given the model id.
             """
         ),
-        epilog=textwrap.dedent(
-            f"""
+        epilog=textwrap.dedent(f"""
             If the model id is specified, one untrained version of it is instantiated.
             Examples:
 
@@ -500,8 +485,7 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
 
                 pyinstrument -m onnx_diagnostic {name} ...
                 pyinstrument -r html -o profile.html -m onnx_diagnostic {name} ...
-            """
-        ),
+            """),
         formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument("-m", "--mid", type=str, help="model id, usually <author>/<name>")
@@ -527,17 +511,13 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         default=True,
         action=_BoolOrParseDictPatch,
         nargs="*",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             Applies patches before exporting, it can be a boolean
             to enable to disable the patches or be more finetuned
             (default is True). It is possible to disable patch for torch
             by adding:
                 --patch "patch_sympy=False" --patch "patch_torch=False"
-            """.strip(
-                "\n"
-            )
-        ),
+            """.strip("\n")),
     )
     parser.add_argument(
         "--rewrite",
@@ -567,16 +547,12 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         "--inputs2",
         default=1,
         type=int,
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
         Validates or exports the model on a second set of inputs
         to check the exported model supports dynamism. The values is used
         as an increment to the first set of inputs. A high value may trick
         a different behavior in the model and missed by the exporter.
-        """.strip(
-                "\n"
-            )
-        ),
+        """.strip("\n")),
     )
     parser.add_argument(
         "--runtime",
@@ -609,15 +585,11 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         parser.add_argument(
             "--ortfusiontype",
             required=False,
-            help=textwrap.dedent(
-                """
+            help=textwrap.dedent("""
                 Applies onnxruntime fusion, this parameter should contain the
                 model type or multiple values separated by `|`. `ALL` can be used
                 to run them all.
-                """.strip(
-                    "\n"
-                )
-            ),
+                """.strip("\n")),
         )
     parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity")
     parser.add_argument("--dtype", help="Changes dtype if necessary.")
@@ -626,32 +598,24 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         "--iop",
         metavar="KEY=VALUE",
         nargs="*",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
         Additional input options, used to change the default
         inputs use to export. Examples:
             --iop cls_cache=SlidingWindowCache
             --iop cls_cache=StaticCache
-        """.strip(
-                "\n"
-            )
-        ),
+        """.strip("\n")),
         action=_ParseDict,
     )
     parser.add_argument(
         "--mop",
         metavar="KEY=VALUE",
         nargs="*",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             Additional model options, used to change some parameters
             of the model. Example:
                 --mop attn_implementation=sdpa --mop attn_implementation=eager"
                 --mop "rope_scaling={'rope_type': 'dynamic', 'factor': 10.0}"
-            """.strip(
-                "\n"
-            )
-        ),
+            """.strip("\n")),
         action=_ParseDict,
     )
     if name == "validate":
@@ -683,42 +647,32 @@ def get_parser_validate(name: str = "validate") -> ArgumentParser:
         parser.add_argument(
             "--quiet-input-sets",
             default="",
-            help=textwrap.dedent(
-                """
+            help=textwrap.dedent("""
                 Avoids raising an exception when an input sets does not work with
                 the exported model. Example:
                     --quiet-input-sets=inputs,inputs22
-                """.strip(
-                    "\n"
-                )
-            ),
+                """.strip("\n")),
         )
     parser.add_argument(
         "--expop",
         metavar="KEY=VALUE",
         nargs="*",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             Additional exporter options, use to change some parameters
             of the model. Examples:
                 --expop report=True
                 --expop report=True --expop verify=True
-            """.strip(
-                "\n"
-            )
-        ),
+            """.strip("\n")),
         action=_ParseDict,
     )
     parser.add_argument(
         "--save-ep",
         default="",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             saves the exported program with torch.export.save
             and the inputs sets with torch.save,
             then command line sbs can be used to look for discrepancies.
-            """
-        ),
+            """),
     )
 
     return parser
@@ -1003,18 +957,15 @@ class _ParseNamedDict(argparse.Action):
 def get_parser_agg() -> ArgumentParser:
     parser = ArgumentParser(
         prog="agg",
-        description=textwrap.dedent(
-            """
+        description=textwrap.dedent("""
             Aggregates statistics coming from benchmarks.
             Every run is a row. Every row is indexed by some keys,
             and produces values. Every row has a date.
             The data can come any csv files produces by benchmarks,
             it can concatenates many csv files, or csv files inside zip files.
             It produces an excel file with many tabs, one per view.
-            """
-        ),
-        epilog=textwrap.dedent(
-            """
+            """),
+        epilog=textwrap.dedent("""
             examples:
 
                 python -m onnx_diagnostic agg test_agg.xlsx raw/*.zip -v 1
@@ -1025,8 +976,7 @@ def get_parser_agg() -> ArgumentParser:
 
                 python -m onnx_diagnostic agg history.xlsx raw/*.csv -v 1 --no-raw \\
                     --no-recent
-            """
-        ),
+            """),
         formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument("output", help="output excel file")
@@ -1104,15 +1054,13 @@ def get_parser_agg() -> ArgumentParser:
         "--views",
         default="agg-suite,agg-all,disc,speedup,time,time_export,err,cmd,"
         "bucket-speedup,raw-short,counts,peak-gpu,onnx",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             Views to add to the output files. Each view becomes a tab.
             A view is defined by its name, among
             agg-suite, agg-all, disc, speedup, time, time_export, err,
             cmd, bucket-speedup, raw-short, counts, peak-gpu, onnx.
             Their definition is part of class CubeLogsPerformance.
-            """
-        ),
+            """),
     )
     parser.add_argument(
         "--csv",
@@ -1134,14 +1082,12 @@ def get_parser_agg() -> ArgumentParser:
     )
     parser.add_argument(
         "--sbs",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             Defines an exporter to compare to another, there must be at least
             two arguments defined with --sbs. Example:
                 --sbs dynamo:exporter=onnx-dynamo,opt=ir,attn_impl=eager
                 --sbs custom:exporter=custom,opt=default,attn_impl=eager
-            """
-        ),
+            """),
         action=_ParseNamedDict,
     )
     return parser
@@ -1205,18 +1151,15 @@ def _cmd_agg(argv: List[Any]):
 def get_parser_sbs() -> ArgumentParser:
     parser = ArgumentParser(
         prog="side-by-side (sbs)",
-        description=textwrap.dedent(
-            """
+        description=textwrap.dedent("""
             Compares the intermediate outputs between the exported program and
             the exported onnx model. It assumes some names are common.
             The execution of the exported program and the onnx model
             are done in parallel. The device is the one used to store the
             model and the inputs.
             Where do discrepancies start? This function tries to answer that question.
-            """
-        ),
-        epilog=textwrap.dedent(
-            """
+            """),
+        epilog=textwrap.dedent("""
             The command line expects the following files to be saved with
             the following function. inputs is a dictionary of the input of the model.
 
@@ -1231,8 +1174,7 @@ def get_parser_sbs() -> ArgumentParser:
             model (through the exported program) and its onnx conversion.
             This functionality dumps everything it can to disk
             so that it be replayed in a separate process.
-            """
-        ),
+            """),
     )
     parser.add_argument(
         "-i",
@@ -1246,12 +1188,10 @@ def get_parser_sbs() -> ArgumentParser:
         "--ep",
         type=str,
         required=True,
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             exported program saved with torch.export.save,
             input sets saved with torch.save,
-            """
-        ),
+            """),
     )
     parser.add_argument(
         "-m",
@@ -1311,25 +1251,21 @@ def get_parser_sbs() -> ArgumentParser:
         "--second-run",
         action=BooleanOptionalAction,
         default=False,
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             Tries to run all onnx nodes with torch results produced by the exported
             program. It then measures the discrepancies again. It can be used
             to identify kernel introduces discrepancies from other just propagating them.
-            """
-        ),
+            """),
     )
     parser.add_argument(
         "--reset",
         required=False,
         default="",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             List of result names separated by a comma. For those results,
             the side-by-side will take torch results instead of onnx results
             to compute the rest of the onnx model.
-            """
-        ),
+            """),
     )
     parser.add_argument(
         "-s",
@@ -1365,14 +1301,12 @@ def get_parser_sbs() -> ArgumentParser:
         "--replay-prefix-model",
         action=BooleanOptionalAction,
         default=False,
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             There are two ways to recompute an intermediate output, the first one is to "
             produce the minimal model between torch and onnx.
             The second one is to dump onnx models from the inputs
             to the considered intermediate results. This enables the second one.
-            """
-        ),
+            """),
     )
 
     return parser
@@ -1511,20 +1445,16 @@ def _cmd_sbs(argv: List[Any]):
 def get_parser_compare() -> ArgumentParser:
     parser = ArgumentParser(
         prog="compare",
-        description=textwrap.dedent(
-            """
+        description=textwrap.dedent("""
             Compares two onnx models by aligning the nodes between both models.
             This is done through an edit distance.
-            """
-        ),
-        epilog=textwrap.dedent(
-            """
+            """),
+        epilog=textwrap.dedent("""
             Each element (initializer, input, node, output) of the model
             is converted into an observation. Then it defines a distance between
             two elements. And finally, it finds the best alignment with
             an edit distance.
-            """
-        ),
+            """),
     )
     parser.add_argument("model1", type=str, help="first model to compare")
     parser.add_argument("model2", type=str, help="second model to compare")
@@ -1551,15 +1481,12 @@ def get_parser_optimize() -> ArgumentParser:
     parser = ArgumentParser(
         prog="optimize",
         formatter_class=RawTextHelpFormatter,
-        description=textwrap.dedent(
-            """
+        description=textwrap.dedent("""
             Optimizes an onnx model by fusing nodes. It looks for patterns in the graphs
             and replaces them by the corresponding nodes. It also does basic optimization
             such as removing identity nodes or unused nodes.
-            """
-        ),
-        epilog=textwrap.dedent(
-            """
+            """),
+        epilog=textwrap.dedent("""
             The goal is to make the model faster.
             Argument patterns defines the patterns to apply or the set of patterns.
             It is possible to show statistics or to remove a particular pattern.
@@ -1575,8 +1502,7 @@ def get_parser_optimize() -> ArgumentParser:
             - PATTERN=<pattern1,pattern2,...>: increase verbosity for specific
                 patterns to understand why one pattern was not applied,
                 this shows which line is rejecting a pattern if it seems one pattern was missed
-            """
-        ),
+            """),
     )
     parser.add_argument(
         "algorithm",
@@ -1608,13 +1534,11 @@ def get_parser_optimize() -> ArgumentParser:
     parser.add_argument(
         "--processor",
         default="",
-        help=textwrap.dedent(
-            """
+        help=textwrap.dedent("""
             optimization for a specific processor, CPU, CUDA or both CPU,CUDA,
             some operators are only available in one processor, it might be not used
             with all
-            """
-        ).strip("\n"),
+            """).strip("\n"),
     )
     parser.add_argument(
         "--remove-shape-info",
@@ -1658,8 +1582,7 @@ def get_main_parser() -> ArgumentParser:
         prog="onnx_diagnostic",
         description="onnx_diagnostic main command line.\n",
         formatter_class=RawTextHelpFormatter,
-        epilog=textwrap.dedent(
-            """
+        epilog=textwrap.dedent("""
             Type 'python -m onnx_diagnostic <cmd> --help'
             to get help for a specific command.
 
@@ -1675,8 +1598,7 @@ def get_main_parser() -> ArgumentParser:
             stats        - produces statistics on a model
             unlighten    - restores an onnx model produces by the previous experiment
             validate     - validate a model (knowing its model id on HuggginFace Hub)
-            """
-        ),
+            """),
     )
     parser.add_argument(
         "cmd",

@@ -29,7 +29,6 @@ from onnx_diagnostic.torch_export_patches import (
 )
 from experimental_experiment.torch_interpreter import to_onnx, ExportOptions
 
-
 data = get_untrained_model_with_inputs("arnir0/Tiny-LLM", add_second_input=True)
 model, dynamic_shapes = data["model"], data["dynamic_shapes"]
 

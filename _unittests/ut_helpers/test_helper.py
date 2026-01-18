@@ -51,7 +51,6 @@ from onnx_diagnostic.helpers.cache_helper import (
 )
 from onnx_diagnostic.torch_models.hghub.hub_api import get_pretrained_config
 
-
 TFLOAT = onnx.TensorProto.FLOAT
 
 

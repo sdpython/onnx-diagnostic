@@ -32,7 +32,6 @@ from onnx_diagnostic.torch_models.hghub.hub_api import get_pretrained_config, ta
 from onnx_diagnostic.tasks import random_input_kwargs
 from onnx_diagnostic.export.api import to_onnx
 
-
 device = "cuda" if torch.cuda.is_available() else "cpu"
 data = []
 

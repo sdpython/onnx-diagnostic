@@ -32,7 +32,6 @@ from onnx_diagnostic.helpers.torch_helper import dummy_llm, steal_forward
 from onnx_diagnostic.helpers.mini_onnx_builder import create_input_tensors_from_onnx_model
 from onnx_diagnostic.reference import OnnxruntimeEvaluator, ReportResultComparison
 
-
 model, inputs, ds = dummy_llm(dynamic_shapes=True)
 
 # %%

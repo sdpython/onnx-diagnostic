@@ -14,7 +14,6 @@ from .onnx_helper import (
 )
 from .torch_helper import torch_dtype_to_onnx_dtype
 
-
 DEVICES = {-1: ORTC.OrtDevice(ORTC.OrtDevice.cpu(), ORTC.OrtDevice.default_memory(), 0)}
 TensorLike = Union[np.ndarray, torch.Tensor]
 

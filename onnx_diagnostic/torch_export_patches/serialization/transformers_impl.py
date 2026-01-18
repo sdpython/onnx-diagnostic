@@ -22,7 +22,6 @@ from transformers.modeling_outputs import BaseModelOutput
 from ...helpers.cache_helper import make_dynamic_cache, make_static_cache, CacheKeyValue
 from . import make_serialization_function_for_dataclass
 
-
 SUPPORTED_DATACLASSES: Set[type] = set()
 WRONG_REGISTRATIONS = {
     DynamicCache: "4.50",

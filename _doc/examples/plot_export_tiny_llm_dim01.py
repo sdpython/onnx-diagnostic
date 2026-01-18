@@ -30,7 +30,6 @@ from onnx_diagnostic.torch_export_patches import (
     register_additional_serialization_functions,
 )
 
-
 data = get_untrained_model_with_inputs("arnir0/Tiny-LLM", add_second_input=True)
 model, dynamic_shapes = data["model"], data["dynamic_shapes"]
 

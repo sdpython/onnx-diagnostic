@@ -509,12 +509,10 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
             simple_sig = inspect.Signature(params, return_annotation=inspect._empty)
             args = str(simple_sig)[1:-1]
             calls_args = ", ".join(f"{p}={p}" for p in simple_sig.parameters)
-            src = textwrap.dedent(
-                f"""
+            src = textwrap.dedent(f"""
                 def f(self, {args}):
                     return self._method_call({calls_args})
-                """
-            )
+                """)
             self._method_src = src
             ns = {}
             try:

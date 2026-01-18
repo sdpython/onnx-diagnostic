@@ -35,7 +35,6 @@ from onnx_diagnostic.helpers.torch_helper import steal_forward
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 
-
 MODEL_NAME = "arnir0/Tiny-LLM"
 tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL_NAME)
 model = transformers.AutoModelForCausalLM.from_pretrained(MODEL_NAME)

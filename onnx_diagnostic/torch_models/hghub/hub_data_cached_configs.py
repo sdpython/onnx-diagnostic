@@ -194,8 +194,7 @@ def _ccached_hf_internal_testing_tiny_random_beitforimageclassification():
 
 def _ccached_hf_internal_testing_tiny_random_convnext():
     "hf-internal-testing/tiny-random-convnext"
-    t64 = textwrap.dedent(
-        """
+    t64 = textwrap.dedent("""
     ewogICJhcmNoaXRlY3R1cmVzIjogWwogICAgIkNvbnZOZXh0Rm9ySW1hZ2VDbGFzc2lmaWNhdGlvbiIKI
     CBdLAogICJkZXB0aHMiOiBbCiAgICAzLAogICAgMywKICAgIDksCiAgICAzCiAgXSwKICAiZHJvcF9wYX
     RoX3JhdGUiOiAwLjAsCiAgImhpZGRlbl9hY3QiOiAiZ2VsdSIsCiAgImhpZGRlbl9zaXplcyI6IFsKICA
@@ -1345,8 +1344,7 @@ def _ccached_hf_internal_testing_tiny_random_convnext():
     F0Y2hfc2l6ZSI6IDQsCiAgInN0YWdlX25hbWVzIjogWwogICAgInN0ZW0iLAogICAgInN0YWdlMSIsCiA
     gICAic3RhZ2UyIiwKICAgICJzdGFnZTMiLAogICAgInN0YWdlNCIKICBdLAogICJ0b3JjaF9kdHlwZSI6
     ICJmbG9hdDMyIiwKICAidHJhbnNmb3JtZXJzX3ZlcnNpb24iOiAiNC41MS4wLmRldjAiCn0K
-    """.strip()
-    )
+    """.strip())
     js = base64.b64decode(t64.encode("utf-8"))
     kwargs = json.loads(js)
     return transformers.ConvNextConfig(**kwargs)
@@ -1817,8 +1815,7 @@ def _ccached_sshleifer_tiny_marian_en_de():
 
 def _ccached_hf_internal_testing_tiny_random_maskformerforinstancesegmentation():
     "hf-internal-testing/tiny-random-MaskFormerForInstanceSegmentation"
-    t64 = textwrap.dedent(
-        """
+    t64 = textwrap.dedent("""
     ewogICJhcmNoaXRlY3R1cmVzIjogWwogICAgIk1hc2tGb3JtZXJGb3JJbnN0YW5jZVNlZ21lbnRhdGlvb
     iIKICBdLAogICJiYWNrYm9uZSI6IG51bGwsCiAgImJhY2tib25lX2NvbmZpZyI6IHsKICAgICJhdHRlbn
     Rpb25fcHJvYnNfZHJvcG91dF9wcm9iIjogMC4wLAogICAgImRlcHRocyI6IFsKICAgICAgMSwKICAgICA
@@ -1866,8 +1863,7 @@ def _ccached_hf_internal_testing_tiny_random_maskformerforinstancesegmentation()
     b2F0MzIiLAogICJ0cmFuc2Zvcm1lcnNfdmVyc2lvbiI6ICI0LjUxLjAuZGV2MCIsCiAgInVzZV9hdXhpb
     GlhcnlfbG9zcyI6IGZhbHNlLAogICJ1c2VfcHJldHJhaW5lZF9iYWNrYm9uZSI6IGZhbHNlLAogICJ1c2
     VfdGltbV9iYWNrYm9uZSI6IGZhbHNlCn0K
-    """.strip()
-    )
+    """.strip())
     js = base64.b64decode(t64.encode("utf-8"))
     kwargs = json.loads(js)
     return transformers.MaskFormerConfig(**kwargs)
@@ -1910,8 +1906,7 @@ def _ccached_echarlaix_tiny_random_mistral():
 
 def _ccached_hf_internal_testing_tiny_random_mobilevit():
     "hf-internal-testing/tiny-random-mobilevit"
-    t64 = textwrap.dedent(
-        """
+    t64 = textwrap.dedent("""
     ewogICJhcmNoaXRlY3R1cmVzIjogWwogICAgIk1vYmlsZVZpVEZvckltYWdlQ2xhc3NpZmljYXRpb24iC
     iAgXSwKICAiYXNwcF9kcm9wb3V0X3Byb2IiOiAwLjEsCiAgImFzcHBfb3V0X2NoYW5uZWxzIjogMjU2LA
     ogICJhdHJvdXNfcmF0ZXMiOiBbCiAgICA2LAogICAgMTIsCiAgICAxOAogIF0sCiAgImF0dGVudGlvbl9
@@ -3064,8 +3059,7 @@ def _ccached_hf_internal_testing_tiny_random_mobilevit():
     iAgIm91dHB1dF9zdHJpZGUiOiAzMiwKICAicGF0Y2hfc2l6ZSI6IDIsCiAgInFrdl9iaWFzIjogdHJ1ZS
     wKICAic2VtYW50aWNfbG9zc19pZ25vcmVfaW5kZXgiOiAyNTUsCiAgInRvcmNoX2R0eXBlIjogImZsb2F
     0MzIiLAogICJ0cmFuc2Zvcm1lcnNfdmVyc2lvbiI6ICI0LjUxLjAuZGV2MCIKfQo=
-    """.strip()
-    )
+    """.strip())
     js = base64.b64decode(t64.encode("utf-8"))
     kwargs = json.loads(js)
     return transformers.MobileViTConfig(**kwargs)

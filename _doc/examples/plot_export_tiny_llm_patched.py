@@ -73,7 +73,6 @@ from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 
-
 experiment = get_tiny_llm()
 untrained_model, inputs, dynamic_shapes = (
     experiment["model"],

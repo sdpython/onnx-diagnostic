@@ -10,8 +10,7 @@ __data_arch_values__ = {
     "ResNetForImageClassification": dict(image_size=224),
 }
 
-__data_arch__ = textwrap.dedent(
-    """
+__data_arch__ = textwrap.dedent("""
     architecture,task
     ASTModel,feature-extraction
     AutoencoderKL,image-to-image
@@ -166,8 +165,7 @@ __data_arch__ = textwrap.dedent(
     YolosModel,image-feature-extraction
     Alibaba-NLP/gte-large-en-v1.5,sentence-similarity
     emilyalsentzer/Bio_ClinicalBERT,fill-mask
-    nvidia/Cosmos-Predict2-2B-Video2World//transformer,image-to-video"""
-)
+    nvidia/Cosmos-Predict2-2B-Video2World//transformer,image-to-video""")
 
 __data_tasks__ = [
     "audio-classification",

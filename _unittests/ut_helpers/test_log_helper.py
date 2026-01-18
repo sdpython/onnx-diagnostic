@@ -24,19 +24,13 @@ from onnx_diagnostic.helpers.log_helper import (
 class TestLogHelper(ExtTestCase):
     @classmethod
     def df1(cls):
-        return pandas.read_csv(
-            io.StringIO(
-                textwrap.dedent(
-                    """
+        return pandas.read_csv(io.StringIO(textwrap.dedent("""
                     date,version_python,version_transformers,model_name,model_exporter,time_load,time_latency,time_baseline,disc_ort,disc_ort2
                     2025/01/01,3.13.3,4.52.4,phi3,export,0.51,0.1,0.1,1e-5,1e-5
                     2025/01/02,3.13.3,4.52.4,phi3,export,0.62,0.11,0.11,1e-5,1e-5
                     2025/01/01,3.13.3,4.52.4,phi4,export,0.53,0.1,0.105,1e-5,1e-5
                     2025/01/01,3.12.3,4.52.4,phi4,onnx-dynamo,0.54,0.14,0.999,1e-5,1e-5
-                    """
-                )
-            )
-        )
+                    """)))
 
     @classmethod
     def cube1(cls, verbose=0):

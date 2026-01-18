@@ -16,7 +16,6 @@ from onnx_diagnostic.reference import (
 from onnx_diagnostic.reference.torch_ops import OpRunKernel, OpRunTensor
 from onnx_diagnostic.reference.torch_evaluator import get_kernels
 
-
 TFLOAT = onnx.TensorProto.FLOAT
 TFLOAT16 = onnx.TensorProto.FLOAT16
 TINT64 = onnx.TensorProto.INT64

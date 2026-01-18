@@ -14,7 +14,6 @@ from onnx_diagnostic.ext_test_case import (
     ignore_errors,
 )
 
-
 VERBOSE = 0
 ROOT = os.path.realpath(os.path.abspath(os.path.join(onnx_diagnostic_file, "..", "..")))
 
