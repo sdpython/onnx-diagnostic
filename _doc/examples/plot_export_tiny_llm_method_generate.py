@@ -22,7 +22,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from onnx_diagnostic import doc
 from onnx_diagnostic.export.api import method_to_onnx
 
-
 MODEL_NAME = "arnir0/Tiny-LLM"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)

@@ -4,7 +4,6 @@ from .onnx_export_errors import (
 )
 from .patch_module import torch_export_rewrite
 
-
 # bypass_export_some_errors is the first name given to the patches.
 bypass_export_some_errors = torch_export_patches  # type: ignore
 

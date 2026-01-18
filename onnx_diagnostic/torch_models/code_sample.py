@@ -8,11 +8,9 @@ from .hghub.model_inputs import _preprocess_model_id
 from .hghub import get_untrained_model_with_inputs
 from .validate import filter_inputs, make_patch_kwargs
 
-
 CODE_SAMPLES = {
     "imports": "from typing import Any\nimport torch",
-    "get_model_with_inputs": textwrap.dedent(
-        """
+    "get_model_with_inputs": textwrap.dedent("""
     def get_model_with_inputs(
         model_id:str,
         subfolder: str | None = None,
@@ -57,8 +55,7 @@ CODE_SAMPLES = {
             if device:
                 data["model"] = data["model"].to(device)
         return data["model"]
-    """
-    ),
+    """),
 }
 
 
@@ -326,11 +323,9 @@ def code_sample(
         imports,
         cache_import,
         CODE_SAMPLES["get_model_with_inputs"],
-        textwrap.dedent(
-            f"""
+        textwrap.dedent(f"""
             model = get_model_with_inputs({model_args})
-                        """
-        ),
+                        """),
         f"inputs = {input_code}",
         exporter_code,
     ]

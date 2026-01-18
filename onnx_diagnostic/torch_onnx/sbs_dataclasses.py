@@ -120,8 +120,7 @@ class ReplayConfiguration:
             rc = ReplayConfiguration(dump_folder="unused")
             print(rc.get_replay_code())
         """
-        return textwrap.dedent(
-            """
+        return textwrap.dedent("""
             import onnx
             import torch
             from onnx_diagnostic.helpers import max_diff, string_diff, string_type
@@ -225,8 +224,7 @@ class ReplayConfiguration:
                     sess.run(None, ep_feeds)
                 obj = prof.key_averages()
                 print(obj.table())
-            """
-        )
+            """)
 
     def dump(
         self,

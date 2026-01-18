@@ -1,6 +1,5 @@
 from typing import Any, Dict, List, Tuple, Union
 
-
 ReportKeyNameType = Union[str, Tuple[str, int, str]]
 ReportKeyValueType = Tuple[int, Tuple[int, ...]]
 

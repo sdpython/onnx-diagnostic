@@ -5,7 +5,6 @@ import numpy as np
 import onnx
 from ..helpers.onnx_helper import onnx_dtype_name
 
-
 _NOT_SO_FAR_OPS = [
     {"MatMul", "Gemm", "FusedMatMul"},
     {"Conv", "FusedConv"},

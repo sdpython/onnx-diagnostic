@@ -33,7 +33,6 @@ from onnx_diagnostic.helpers.onnx_helper import (
     _enumerate_model_node_outputs,
 )
 
-
 TFLOAT = TensorProto.FLOAT
 TINT64 = TensorProto.INT64
 

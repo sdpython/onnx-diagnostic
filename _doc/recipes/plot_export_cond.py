@@ -16,7 +16,6 @@ import torch
 from onnx_diagnostic import doc
 from onnx_diagnostic.torch_export_patches import torch_export_rewrite
 
-
 # %%
 # We define a model with a control flow (-> graph break)
 

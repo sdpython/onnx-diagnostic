@@ -3,7 +3,6 @@ import torch
 from ..helpers.config_helper import update_config, check_hasattr
 from ..helpers.cache_helper import make_dynamic_cache, make_encoder_decoder_cache
 
-
 __TASK__ = "feature-extraction"
 
 
