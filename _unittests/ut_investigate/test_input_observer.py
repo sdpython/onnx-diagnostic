@@ -8,7 +8,7 @@ from onnx_diagnostic.investigate.input_observer import (
 )
 
 
-class TestTracingVector(ExtTestCase):
+class TestInputObserver(ExtTestCase):
     def test_infer_dynamic_dimensions(self):
         self.assertEqual([2], infer_dynamic_dimensions([(1, 2, 3), (1, 2, 4)]))
         self.assertEqual([0, 2], infer_dynamic_dimensions([(1, 2, 3), (2, 2, 4)]))
