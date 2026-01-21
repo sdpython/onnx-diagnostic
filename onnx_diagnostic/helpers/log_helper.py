@@ -1222,7 +1222,6 @@ class CubeLogs:
                 if view is None:
                     continue
                 df, tview = self.view(view, return_view_def=True, verbose=max(verbose - 1, 0))
-                assert isinstance(df, pandas.DataFrame)  # type checking
                 if cube_time is not None:
                     cube_mask = cube_time.view(view)
                     assert isinstance(cube_mask, pandas.DataFrame)  # type checking
