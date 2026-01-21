@@ -128,7 +128,7 @@ class InputObserverInfo:
         self.flat_outputs.append([t.clone().detach() for t in flat_res])
 
     def build_inputs_completed_with_none_values(self) -> list[list[torch.Tensor]]:
-        # Let's compute the sizes of each indenpendently.
+        # Let's compute the sizes of each independently.
         if not self.flat_inputs or self._max_args is None or self._max_kwargs is None:
             raise RuntimeError("No inputs were captured.")
         arg_sizes = [len(torch.utils._pytree.tree_flatten(a)[0]) for a in self._max_args]
@@ -137,7 +137,7 @@ class InputObserverInfo:
         }
 
         # Let's reprocess everything.
-        captured_inputs = {}
+        captured_inputs: dict[int | str, int] = {}
         new_flat_inputs = []
         for args_kwargs, spec in zip(self.flat_inputs, self.inputs_specs):
             args, kwargs = torch.utils._pytree.tree_unflatten(args_kwargs, spec)
@@ -178,6 +178,9 @@ class InputObserverInfo:
 
     def infer_dynamic_shapes(self) -> tuple[dict[int, Any]] | dict[str, dict[int, Any]]:
         flat_inputs = self.build_inputs_completed_with_none_values()
+        # This is already checked by build_inputs_completed_with_none_values
+        # but this is not always well captured by tools checking types.
+        assert self._max_kwargs is not None and self._max_kwargs is not None
         if len({len(flat) for flat in flat_inputs}) != 1:
             raise NotImplementedError(
                 "infer_dynamic_shapes is not implemented "
@@ -244,7 +247,7 @@ class InputObserverInfo:
 class InputObserver:
     def __init__(self, store_n_calls: int = 3):
         self.store_n_calls = store_n_calls
-        self.info = None
+        self.info: InputObserverInfo | None = None
 
     def _forward_captured(self, *args, _captured_forward=None, **kwargs):
         assert _captured_forward is not None, "_captured_forward cannot be None"
