@@ -176,11 +176,11 @@ class InputObserverInfo:
             new_flat_inputs.append(flat)
         return new_flat_inputs
 
-    def infer_dynamic_shapes(self) -> tuple[dict[int, Any]] | dict[str, dict[int, Any]]:
+    def infer_dynamic_shapes(self) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
         flat_inputs = self.build_inputs_completed_with_none_values()
         # This is already checked by build_inputs_completed_with_none_values
         # but this is not always well captured by tools checking types.
-        assert self._max_kwargs is not None and self._max_kwargs is not None
+        assert self._max_args is not None and self._max_kwargs is not None
         if len({len(flat) for flat in flat_inputs}) != 1:
             raise NotImplementedError(
                 "infer_dynamic_shapes is not implemented "
