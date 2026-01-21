@@ -131,6 +131,7 @@ disable_error_code = ["arg-type", "assignment", "operator", "var-annotated", "un
 #########
 
 [tool.pyrefly]
+
 project-includes = ["onnx_diagnostic"]
 project-excludes = [
     "onnx_diagnostic/__main__*",
@@ -145,13 +146,15 @@ project-excludes = [
     "onnx_diagnostic/torch_models/**",
 ]
 
+
 untyped-def-behavior = "check-and-infer-return-any"
 errors.implicitly-defined-attribute = false
 errors.bad-param-name-override = false
 errors.implicit-import = false
 errors.deprecated = false
-ignore-missing-imports = true
 permissive-ignores = true
+
+ignore-missing-imports = ["**"]
 
 ######
 # ruff
