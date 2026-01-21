@@ -24,6 +24,10 @@ onnx_diagnostic = ["tasks/data/*.onnx"]
 line-length = 95
 extend-exclude = '''.*clones.*'''
 
+######
+# mypy
+######
+
 [tool.mypy]
 ignore_missing_imports = true
 packages = ["onnx_diagnostic"]
@@ -121,6 +125,29 @@ disable_error_code = ["assignment", "attr-defined", "call-overload", "operator"]
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.torch_onnx.sbs"]
 disable_error_code = ["arg-type", "assignment", "operator", "var-annotated", "union-attr"]
+
+#########
+# pyrefly
+#########
+
+[tool.pyrefly]
+
+project-includes = [
+    "onnx_diagnostic/investigate/**",
+]
+
+untyped-def-behavior = "check-and-infer-return-any"
+errors.implicitly-defined-attribute = false
+errors.bad-param-name-override = false
+errors.implicit-import = false
+errors.deprecated = false
+permissive-ignores = true
+
+ignore-missing-imports = ["**"]
+
+######
+# ruff
+######
 
 [tool.ruff]
 
