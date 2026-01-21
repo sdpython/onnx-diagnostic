@@ -251,7 +251,7 @@ class InputObserver:
 
     def _forward_captured(self, *args, _captured_forward=None, **kwargs):
         assert _captured_forward is not None, "_captured_forward cannot be None"
-        assert self.info, "info cannot be None"
+        assert self.info is not None, "info cannot be None"
         n_stored = len(self.info)
         if n_stored < self.store_n_calls:
             self.info.add_inputs(args, kwargs)
