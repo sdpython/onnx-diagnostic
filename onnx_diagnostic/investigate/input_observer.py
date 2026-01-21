@@ -315,10 +315,12 @@ class InputObserver:
 
     def infer_dynamic_shapes(self) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
         self._check_captured()
+        assert self.info is not None  # missed by type checking
         return self.info.infer_dynamic_shapes()
 
     def infer_arguments(
         self, index: int | None = None
     ) -> tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
         self._check_captured()
+        assert self.info is not None  # missed by type checking
         return self.info.infer_arguments(index=index)
