@@ -277,7 +277,7 @@ class InputObserver:
         finally:
             model.forward = forward_method
 
-    def infer_dynamic_shapes(self) -> tuple[dict[int, Any]] | dict[str, dict[int, Any]]:
+    def infer_dynamic_shapes(self) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
         if self.info is None:
             raise RuntimeError("No inputs were captured.")
         return self.info.infer_dynamic_shapes()
