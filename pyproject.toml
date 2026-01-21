@@ -133,6 +133,7 @@ disable_error_code = ["arg-type", "assignment", "operator", "var-annotated", "un
 [tool.pyrefly]
 
 project-includes = [
+    "onnx_diagnostic/export/validate.py",
     "onnx_diagnostic/investigate/**",
     "onnx_diagnostic/helpers/args_helper.py",
     "onnx_diagnostic/helpers/config_helper.py",

@@ -103,6 +103,7 @@ def _process_memory_spy(conn):
     process = psutil.Process(pid)
 
     if cuda:
+        # pyrefly: ignore[missing-import]
         from pynvml import (
             nvmlDeviceGetCount,
             nvmlDeviceGetHandleByIndex,

@@ -21,7 +21,7 @@ jobs:
         run: |
           pip install pyrefly
           pip install -r requirements.txt
-          pip install transformers pandas matplotlib
+          pip install transformers pandas matplotlib openpyxl
 
       - name: Run pyrefly
         run: pyrefly check
