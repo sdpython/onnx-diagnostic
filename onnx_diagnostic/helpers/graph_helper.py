@@ -36,7 +36,7 @@ class GraphRendering:
         :return: computation order
         """
         assert not ({"If", "Scan", "Loop", "SequenceMap"} & set(n.op_type for n in nodes)), (
-            f"This algorithme is not yet implemented if the sequence contains "
+            f"This algorithm is not yet implemented if the sequence contains "
             f"a control flow, types={sorted(set(n.op_type for n in nodes))}"
         )
         number = {e: start - 1 for e in (existing or [])}  # noqa: C420

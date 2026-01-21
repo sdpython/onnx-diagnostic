@@ -90,7 +90,7 @@ def flatten_unflatten_for_dynamic_shapes(
         the context gives the dictionary keys but it is not expressed
         in the dynamic shapes, these specifications seems to be different
         for the strict and non strict mode. It also preserves tuple.
-    :param change_function: to modifies the tensor in the structure itself,
+    :param change_function: to modify the tensor in the structure itself,
         like replace them by a shape
     :return: the serialized object
     """
@@ -110,7 +110,7 @@ def flatten_unflatten_for_dynamic_shapes(
         start = end
     if use_dict:
         if spec.type is dict:
-            # This a dictionary.
+            # This is a dictionary.
             return dict(zip(spec.context, subtrees))
         if spec.type is tuple:
             return tuple(subtrees)

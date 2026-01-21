@@ -986,7 +986,7 @@ def torch_export_rewrite(
             name = me.__qualname__
             spl = name.split(".")
             if len(spl) == 1:
-                # This a function
+                # This is a function
                 module = me.__module__
                 if module in me.__globals__:
                     mod = me.__globals__[module]

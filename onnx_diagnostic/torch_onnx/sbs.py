@@ -374,7 +374,7 @@ def _preparation_with_fx_graph(
                 positions[n] = dict(fx=i)
         if node.op == "placeholder":
             if node.name in placeholders_to_state_dict:
-                # This a weight.
+                # This is a weight.
                 placeholders[node.name] = ep_state_dict[placeholders_to_state_dict[node.name]]
                 torch_results[node.name] = placeholders[node.name]
                 assert isinstance(torch_results[node.name], torch.Tensor), (

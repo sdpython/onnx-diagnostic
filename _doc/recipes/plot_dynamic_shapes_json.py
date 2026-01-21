@@ -81,7 +81,7 @@ def flatten_unflatten_like_dynamic_shapes(obj):
         subtrees.append(value)
         start = end
     if spec.type is dict:
-        # This a dictionary.
+        # This is a dictionary.
         return dict(zip(spec.context, subtrees))
     if spec.type is tuple:
         return tuple(subtrees)

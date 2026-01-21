@@ -23,7 +23,7 @@ def flatten_unflatten_for_dynamic_shapes(
             in the dynamic shapes, these specifications seems to be different
             for the strict and non strict mode. It also preserves tuple.
         change_function:
-            to modifies the tensor in the structure itself,
+            to modify the tensor in the structure itself,
             like replace them by a shape
 
     Returns:
@@ -45,7 +45,7 @@ def flatten_unflatten_for_dynamic_shapes(
         start = end
     if use_dict:
         if spec.type is dict:
-            # This a dictionary.
+            # This is a dictionary.
             return dict(zip(spec.context, subtrees))
         if spec.type is tuple:
             return tuple(subtrees)
@@ -68,7 +68,7 @@ def flatten_unflatten_for_dynamic_shapes(
 
 def infer_dynamic_dimensions(shape_list: Sequence[tuple[int, ...]]) -> list[int]:
     """
-    Returns the list dynamic dimensions given a list of shapes
+    Returns the list of dynamic dimensions given a list of shapes
     corresponding to the same tensor.
 
     Args:
@@ -155,7 +155,7 @@ class InputObserverInfo:
                     if i in captured_inputs and captured_inputs[i] != len(ts):
                         raise RuntimeError(
                             f"Positional argument {i} has {len(ts)} tensors "
-                            f"but previously got {captured_inputs[i]} tensors."
+                            f"but previously got {captured_inputs[i]} tensors. "
                             f"Inference is impossible in that case."
                         )
                     captured_inputs[i] = len(ts)
@@ -168,7 +168,7 @@ class InputObserverInfo:
                     if k in captured_inputs and captured_inputs[k] != len(ts):
                         raise RuntimeError(
                             f"Named argument {k!r} has {len(ts)} tensors "
-                            f"but previously got {captured_inputs[k]} tensors."
+                            f"but previously got {captured_inputs[k]} tensors. "
                             f"Inference is impossible in that case."
                         )
                     captured_inputs[k] = len(ts)
