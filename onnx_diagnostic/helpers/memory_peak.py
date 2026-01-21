@@ -221,7 +221,7 @@ def start_spying_on(
     Starts the memory spy. The function starts another
     process spying on the one sent as an argument.
 
-    :param pid: process id to spy or the the current one.
+    :param pid: process id to spy or the current one.
     :param delay: delay between two measures.
     :param cuda: True or False to get memory for cuda devices
 

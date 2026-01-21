@@ -80,7 +80,7 @@ def infer_dynamic_dimensions(shape_list: Sequence[tuple[int, ...]]) -> list[int]
     """
     unique_ranks = {len(shape) for shape in shape_list}
     torch._check(
-        len(unique_ranks) == 1, lambda: "all shapes in shape_list must have the the same rank"
+        len(unique_ranks) == 1, lambda: "all shapes in shape_list must have the same rank"
     )
     rank = unique_ranks.pop()
     dynamic = []
@@ -216,7 +216,7 @@ class InputObserverInfo:
                 **dict(zip(list(self._max_kwargs), flat_dynamic_shapes[n_args:])),
             }
 
-        # nested types, here comes the fun part because the the shapes cannot be unflattened,
+        # nested types, here comes the fun part because the shapes cannot be unflattened,
         # custom classes must appear in their flattened shape.
         # This does not work in all cases but every time every available argument is flattened
         # with the same number of tensors. The function does not check
