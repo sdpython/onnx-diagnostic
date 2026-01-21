@@ -93,8 +93,10 @@ def infer_dynamic_dimensions(shape_list: Sequence[tuple[int, ...]]) -> list[int]
 
 class InputObserverInfo:
     def __init__(self, signature: inspect.Signature):
+        # pyrefly: ignore
         self.inputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_inputs: list[list[torch.Tensor | None]] = []
+        # pyrefly: ignore
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_outputs: list[torch.Tensor | list[torch.Tensor]] = []
         self.signature = signature
@@ -238,10 +240,39 @@ class InputObserverInfo:
         if not ds_args:
             return tuple(ds_kwargs)
         pos_names = list(self.signature.parameters)[: len(ds_args)]
-        return {
-            **dict(zip(pos_names, ds_args)),
-            **ds_kwargs,
-        }
+        return {**dict(zip(pos_names, ds_args)), **ds_kwargs}
+
+    def infer_arguments(
+        self, index: int | None = None
+    ) -> tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
+        # This is already checked by build_inputs_completed_with_none_values
+        # but this is not always well captured by tools checking types.
+        assert self._max_args is not None and self._max_kwargs is not None
+        candidate = None
+        if index is None:
+            for i, (args_kwargs, spec) in enumerate(zip(self.flat_inputs, self.inputs_specs)):
+                args, kwargs = torch.utils._pytree.tree_unflatten(args_kwargs, spec)
+                if len(args) == len(self._max_args) and len(kwargs) == len(self._max_kwargs):
+                    index = i
+                    candidate = args, kwargs
+                    break
+        if index is not None:
+            # found one available set.
+            args, kwargs = candidate or torch.utils._pytree.tree_unflatten(
+                self.flat_inputs[index], self.inputs_specs[index]
+            )
+            if not kwargs:
+                return args
+            if not args:
+                return kwargs
+            # We need to more args to kwargs
+            pos_names = list(self.signature.parameters)[: len(args)]
+            return {**dict(zip(pos_names, args)), **kwargs}
+
+        raise NotImplementedError(
+            "We coud not find a good set of inputs/outputs. "
+            "We need to replace none by empty tensors."
+        )
 
 
 class InputObserver:
@@ -278,7 +309,16 @@ class InputObserver:
         finally:
             model.forward = forward_method
 
-    def infer_dynamic_shapes(self) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
+    def _check_captured(self):
         if self.info is None:
             raise RuntimeError("No inputs were captured.")
+
+    def infer_dynamic_shapes(self) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
+        self._check_captured()
         return self.info.infer_dynamic_shapes()
+
+    def infer_arguments(
+        self, index: int | None = None
+    ) -> tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
+        self._check_captured()
+        return self.info.infer_arguments(index=index)

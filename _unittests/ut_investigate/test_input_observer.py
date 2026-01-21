@@ -38,6 +38,9 @@ class TestTracingVeector(ExtTestCase):
 
         cst = torch.export.Dim.DYNAMIC
         self.assertEqual(({0: cst, 1: cst}, {1: cst}), observer.infer_dynamic_shapes())
+        args = observer.infer_arguments()
+        self.assertIsInstance(args, tuple)
+        self.assertEqual(2, len(args))
 
     def test_io_captured_kwargs(self):
         class Model(torch.nn.Module):
@@ -64,6 +67,9 @@ class TestTracingVeector(ExtTestCase):
 
         cst = torch.export.Dim.DYNAMIC
         self.assertEqual(dict(x={0: cst, 1: cst}, y={1: cst}), observer.infer_dynamic_shapes())
+        args = observer.infer_arguments()
+        self.assertIsInstance(args, dict)
+        self.assertEqual(2, len(args))
 
     def test_io_captured_kwargs_bool(self):
         class Model(torch.nn.Module):
@@ -92,6 +98,9 @@ class TestTracingVeector(ExtTestCase):
 
         cst = torch.export.Dim.DYNAMIC
         self.assertEqual(dict(x={0: cst, 1: cst}, y={1: cst}), observer.infer_dynamic_shapes())
+        args = observer.infer_arguments()
+        self.assertIsInstance(args, dict)
+        self.assertEqual(2, len(args))
 
     def test_io_captured_args_kwargs(self):
         class Model(torch.nn.Module):
@@ -138,6 +147,9 @@ class TestTracingVeector(ExtTestCase):
             dict(x={0: cst, 1: cst}, y={1: cst}, z={0: cst, 1: cst}, w={1: cst}),
             observer.infer_dynamic_shapes(),
         )
+        args = observer.infer_arguments()
+        self.assertIsInstance(args, dict)
+        self.assertEqual(4, len(args))
 
     def test_io_captured_optional_args(self):
         class Model(torch.nn.Module):
