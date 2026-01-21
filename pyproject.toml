@@ -137,6 +137,12 @@ project-excludes = [
     "onnx_diagnostic/_command_lines_parser*",
     "onnx_diagnostic/doc*",
     "onnx_diagnostic/ext_test_case*",
+    "onnx_diagnostic/helpers/**",
+    "onnx_diagnostic/reference/**",
+    "onnx_diagnostic/tasks/**",
+    "onnx_diagnostic/torch_export_patches/**",
+    "onnx_diagnostic/torch_onnx/**",
+    "onnx_diagnostic/torch_models/**",
 ]
 ignore-missing-imports = ["*"]
 
