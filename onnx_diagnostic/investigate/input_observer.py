@@ -94,7 +94,7 @@ def infer_dynamic_dimensions(shape_list: Sequence[tuple[int, ...]]) -> list[int]
 class InputObserverInfo:
     def __init__(self, signature: inspect.Signature):
         self.inputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
-        self.flat_inputs: list[list[torch.Tensor]] = []
+        self.flat_inputs: list[list[torch.Tensor | None]] = []
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_outputs: list[torch.Tensor | list[torch.Tensor]] = []
         self.signature = signature
@@ -251,6 +251,7 @@ class InputObserver:
 
     def _forward_captured(self, *args, _captured_forward=None, **kwargs):
         assert _captured_forward is not None, "_captured_forward cannot be None"
+        assert self.info, "info cannot be None"
         n_stored = len(self.info)
         if n_stored < self.store_n_calls:
             self.info.add_inputs(args, kwargs)
