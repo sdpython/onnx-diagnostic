@@ -142,6 +142,10 @@ project-includes = [
     "onnx_diagnostic/helpers/log_helper.py",
     "onnx_diagnostic/helpers/memory_peak.py",
     "onnx_diagnostic/helpers/mini_onnx_builder.py",
+    "onnx_diagnostic/reference/evaluator.py",
+    "onnx_diagnostic/reference/quantized_evaluator.py",
+    "onnx_diagnostic/reference/report_results_comparison.py",
+    "onnx_diagnostic/reference/torch_evaluator.py",
 ]
 
 untyped-def-behavior = "check-and-infer-return-any"

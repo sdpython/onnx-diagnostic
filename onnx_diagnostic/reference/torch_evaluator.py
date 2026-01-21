@@ -494,8 +494,10 @@ class TorchOnnxEvaluator:
             r = self.runtime_info[k]
             r.set_value(
                 torch_ops.OpRunTensor(
+                    # pyrefly: ignore[missing-attribute]
                     v.to(self.CUDA) if not r.is_shape and self.on_cuda else v,
                     is_constant=False,
+                    # pyrefly: ignore[missing-attribute]
                     may_cpu=len(v.shape) == 1 and v.numel() < 8 and v.dtype == torch.int64,
                 )
             )
@@ -524,6 +526,7 @@ class TorchOnnxEvaluator:
                         f"for kernel {type(kernel)}."
                     )
                     for name, t in zip(kernel.output, res):
+                        # pyrefly: ignore[bad-argument-type]
                         self.runtime_info[name].set_value(t)
                     if self.verbose:
                         for name in kernel.output:
@@ -644,6 +647,7 @@ class TorchOnnxEvaluator:
                         f"for kernel {type(kernel)}."
                     )
                     for name, t in zip(kernel.output, res):
+                        # pyrefly: ignore[bad-argument-type]
                         self.runtime_info[name].set_value(t)
                 else:
                     assert isinstance(

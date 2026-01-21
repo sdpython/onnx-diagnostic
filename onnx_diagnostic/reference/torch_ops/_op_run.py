@@ -314,9 +314,7 @@ class OpRunKernel:
 
 
 class OpRunFunction(OpRunKernel):
-    """
-    Defines a kernel based on a local functions.
-    """
+    """Defines a kernel based on a local functions."""
 
     def __init__(
         self,

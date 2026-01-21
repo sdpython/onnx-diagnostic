@@ -29,10 +29,10 @@ class CubeViewDef:
     :param order: to reorder key in columns index
     :param key_agg: aggregate according to these columns before
         creating the view
-    :param agg_args: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`,
+    :param agg_args: see :meth:`pandas.api.typing.DataFrameGroupBy.agg`,
         it can be also a callable to return a different aggregation
         method depending on the column name
-    :param agg_kwargs: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
+    :param agg_kwargs: see :meth:`pandas.api.typing.DataFrameGroupBy.agg`
     :param agg_multi: aggregation over multiple columns
     :param ignore_columns: ignore the following columns if known to overload the view
     :param keep_columns_in_index: keeps the columns even if there is only one unique value
@@ -98,7 +98,7 @@ class CubeViewDef:
         agg_args: Union[Sequence[Any], Callable[[str], Any]] = ("sum",),
         agg_kwargs: Optional[Dict[str, Any]] = None,
         agg_multi: Optional[
-            Dict[str, Callable[[pandas.core.groupby.DataFrameGroupBy], pandas.Series]]
+            Dict[str, Callable[[pandas.api.typing.DataFrameGroupBy], pandas.Series]]
         ] = None,
         ignore_columns: Optional[Sequence[str]] = None,
         keep_columns_in_index: Optional[Sequence[str]] = None,
