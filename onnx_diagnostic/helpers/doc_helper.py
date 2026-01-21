@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import onnx
 import onnx.helper as oh
 import torch
@@ -46,10 +46,10 @@ class LayerNormalizationOrt(OpRunKernel):
             f"This kernel implementation only work when only one output "
             f"is required but {node.output} were."
         )
-        self._cache: Dict[Tuple[int, int], onnx.ModelProto] = {}
+        self._cache: Dict[Tuple[int, int], Any] = {}
         self.is_cpu = torch.device("cpu") == self.device
 
-    def _make_model(self, itype: int, rank: int, has_bias: bool) -> onnx.ModelProto:
+    def _make_model(self, itype: int, rank: int, has_bias: bool) -> Any:
         shape = [*["d{i}" for i in range(rank - 1)], "last"]
         layer_model = oh.make_model(
             oh.make_graph(
@@ -88,6 +88,7 @@ class LayerNormalizationOrt(OpRunKernel):
             providers=[provider],
         )
 
+    # pyrefly: ignore[bad-override]
     def run(self, x, scale, bias=None):
         itype = torch_dtype_to_onnx_dtype(x.dtype)
         rank = len(x.shape)
@@ -124,7 +125,7 @@ class MatMulOrt(OpRunKernel):
         self._cache: Dict[Tuple[int, int, int], onnx.ModelProto] = {}
         self.is_cpu = torch.device("cpu") == self.device
 
-    def _make_model(self, itype: int, ranka: int, rankb: int) -> onnx.ModelProto:
+    def _make_model(self, itype: int, ranka: int, rankb: int) -> Any:
         shapea = ["a{i}" for i in range(ranka)]
         shapeb = ["b{i}" for i in range(rankb)]
         shapec = ["c{i}" for i in range(max(ranka, rankb))]
@@ -149,6 +150,7 @@ class MatMulOrt(OpRunKernel):
             providers=[provider],
         )
 
+    # pyrefly: ignore[bad-override]
     def run(self, a, b):
         itype = torch_dtype_to_onnx_dtype(a.dtype)
         ranka, rankb = len(a.shape), len(b.shape)
@@ -159,5 +161,6 @@ class MatMulOrt(OpRunKernel):
         if self.verbose:
             print(f"[MatMulOrt] running on {self._provider!r}")
         feeds = dict(A=a.tensor, B=b.tensor)
+        # pyrefly: ignore[missing-attribute]
         got = sess.run(None, feeds)[0]
         return OpRunTensor(got)

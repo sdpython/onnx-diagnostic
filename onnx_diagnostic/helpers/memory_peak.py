@@ -131,6 +131,7 @@ def _process_memory_spy(conn):
         mem = process.memory_info().rss
         cpu.update(mem)
         if cuda:
+            # pyrefly: ignore[unbound-name]
             for r, g in zip(gpu_used(), gpus):
                 g.update(r)
         if conn.poll(timeout=timeout):
@@ -142,6 +143,7 @@ def _process_memory_spy(conn):
     end = process.memory_info().rss
     cpu.update(end)
     if cuda:
+        # pyrefly: ignore[unbound-name]
         for r, g in zip(gpu_used(), gpus):
             g.update(r)
 
@@ -151,6 +153,7 @@ def _process_memory_spy(conn):
     for g in gpus:
         g.send(conn)
     if cuda:
+        # pyrefly: ignore[unbound-name]
         nvmlShutdown()
     conn.close()
 

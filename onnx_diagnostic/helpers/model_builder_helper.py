@@ -14,7 +14,7 @@ CACHE_SUBDIR = "onnx-diagnostic"
 
 def download_model_builder_to_cache(
     url: str = "https://raw.githubusercontent.com/microsoft/onnxruntime-genai/refs/heads/main/src/python/py/models/builder.py",
-):
+) -> Path:
     """
     Downloads ``builder.py`` from the
     ``https://github.com/microsoft/onnxruntime-genai/blob/main/src/python/py/models/builder.py``.
