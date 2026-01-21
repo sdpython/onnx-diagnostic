@@ -262,7 +262,50 @@ class TestTracingVeector(ExtTestCase):
         with observer(model):
             for kwargs in inputs:
                 model(**kwargs)
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(RuntimeError, "At least one call to the observed model"):
+            observer.infer_dynamic_shapes()
+
+    def test_io_captured_incompatible_number_of_flattened_kwargs(self):
+        class Model(torch.nn.Module):
+            def forward(self, x=None, y=None):
+                if y is None:
+                    return x
+                if x is None:
+                    return y[0]
+                return x - y[0]
+
+        inputs = [
+            dict(x=torch.randn((5, 6))),
+            dict(x=torch.randn((5, 7)), y=[torch.randn((1, 7))]),
+            dict(x=torch.randn((5, 7)), y=[torch.randn((1, 7)), torch.randn((1, 7))]),
+        ]
+
+        model = Model()
+        observer = InputObserver()
+        with observer(model):
+            for kwargs in inputs:
+                model(**kwargs)
+        with self.assertRaisesRegex(RuntimeError, "Named argument 'y' has"):
+            observer.infer_dynamic_shapes()
+
+    def test_io_captured_incompatible_number_of_flattened_args(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return x - y[0]
+
+        inputs = [
+            (torch.randn((5, 7)), [torch.randn((1, 7))]),
+            (torch.randn((5, 7)), [torch.randn((1, 7)), torch.randn((1, 7))]),
+        ]
+
+        model = Model()
+        observer = InputObserver()
+        with self.assertRaisesRegex(RuntimeError, "No inputs were captured."):
+            observer.infer_dynamic_shapes()
+        with observer(model):
+            for args in inputs:
+                model(*args)
+        with self.assertRaisesRegex(RuntimeError, "Positional argument 1 has"):
             observer.infer_dynamic_shapes()
 
     def test_io_captured_args_list(self):
