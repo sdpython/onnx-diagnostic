@@ -14,15 +14,33 @@ dependencies = []
 Homepage = "https://sdpython.github.io/doc/onnx-diagnostic/dev/"
 Repository = "https://github.com/sdpython/onnx-diagnostic/"
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/ci_models/**/*"
+
 [tool.setuptools.dynamic]
 dependencies = {file = "requirements.txt"}
+
+[tool.pyrefly.sub-config.errors]
+bad-assignment = "ignore"
+no-matching-overload = "ignore"
+unknown-name = "ignore"
+bad-index = "ignore"
+unsupported-operation = "ignore"
 
 [tool.setuptools.package-data]
 onnx_diagnostic = ["tasks/data/*.onnx"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/doc"
+
 [tool.black]
 line-length = 95
 extend-exclude = '''.*clones.*'''
+
+[tool.pyrefly.sub-config.errors]
+unknown-name = "ignore"
+no-matching-overload = "ignore"
+untyped-import = "ignore"
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -38,89 +56,175 @@ exclude = [
     "^dist",  # skips dist
 ]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/ext_test_case"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.ci_models.*"]
 disable_error_code = ["assignment", "index", "name-defined", "operator", "call-overload"]
+
+[tool.pyrefly.sub-config.errors]
+unknown-name = "ignore"
+untyped-import = "ignore"
+bad-override = "ignore"
+redundant-condition = "ignore"
+bad-assignment = "ignore"
+bad-return = "ignore"
+bad-argument-type = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.doc"]
 disable_error_code = ["call-overload", "name-defined", "import-untyped"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/export/shape_helper"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.ext_test_case"]
 disable_error_code = ["arg-type", "assignment", "import-untyped", "misc", "name-defined", "override", "return-value", "truthy-function"]
+
+[tool.pyrefly.sub-config.errors]
+unknown-name = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.export.shape_helper"]
 disable_error_code = ["name-defined"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/ci_models/export_phi4_mm"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.ci_models.export_phi4_mm", "onnx_diagnostic.ci_models.export_qwen25_vl"]
 disable_error_code = ["has-type", "import-untyped", "union-attr"]
+
+[tool.pyrefly.sub-config.errors]
+missing-attribute = "ignore"
+untyped-import = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.args_helper"]
 disable_error_code = ["arg-type", "call-overload", "index"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/ci_models/export_qwen25_vl"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.cache_helper"]
 disable_error_code = ["name-defined"]
+
+[tool.pyrefly.sub-config.errors]
+untyped-import = "ignore"
+missing-attribute = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.fake_tensor_helper"]
 disable_error_code = ["name-defined"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/helpers/args_helper"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.helper"]
 disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr"]
+
+[tool.pyrefly.sub-config.errors]
+bad-argument-type = "ignore"
+no-matching-overload = "ignore"
+unsupported-operation = "ignore"
+bad-index = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.model_builder_helper"]
 disable_error_code = ["attr-defined", "import-untyped", "name-defined", "union-attr", "var-annotated"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/helpers/cache_helper"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.onnx_helper"]
 disable_error_code = ["assignment", "arg-type", "name-defined", "union-attr"]
+
+[tool.pyrefly.sub-config.errors]
+unknown-name = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.ort_session"]
 disable_error_code = ["union-attr"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/helpers/fake_tensor_helper"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.rt_helper"]
 disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr", "name-defined"]
+
+[tool.pyrefly.sub-config.errors]
+unknown-name = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.helpers.torch_helper"]
 disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "misc", "name-defined", "union-attr", "name-defined"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/helpers/helper"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.reference.report_results_comparison"]
 disable_error_code = ["name-defined"]
+
+[tool.pyrefly.sub-config.errors]
+unknown-name = "ignore"
+missing-attribute = "ignore"
+bad-assignment = "ignore"
+no-matching-overload = "ignore"
+bad-argument-type = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.reference.torch_ops.*"]
 disable_error_code = ["override"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/helpers/model_builder_helper"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.reference.torch_ops.controlflow_ops"]
 disable_error_code = ["attr-defined", "name-defined"]
+
+[tool.pyrefly.sub-config.errors]
+missing-attribute = "ignore"
+unknown-name = "ignore"
+untyped-import = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.reference.torch_ops._op_run"]
 disable_error_code = ["name-defined"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/helpers/onnx_helper"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.torch_export_patches.*"]
 disable_error_code = ["arg-type", "assignment", "attr-defined", "index", "misc", "name-defined", "operator", "return-value", "union-attr", "var-annotated"]
+
+[tool.pyrefly.sub-config.errors]
+bad-argument-type = "ignore"
+missing-attribute = "ignore"
+unknown-name = "ignore"
+bad-assignment = "ignore"
 
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.torch_models.*"]
 disable_error_code = ["assignment", "attr-defined", "call-overload", "operator"]
 
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/helpers/ort_session"
+
 [[tool.mypy.overrides]]
 module = ["onnx_diagnostic.torch_onnx.sbs"]
 disable_error_code = ["arg-type", "assignment", "operator", "var-annotated", "union-attr"]
+
+[tool.pyrefly.sub-config.errors]
+missing-attribute = "ignore"
 
 [tool.ruff]
 
@@ -135,6 +239,9 @@ exclude = [
 ]
 
 line-length = 95
+
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/helpers/rt_helper"
 
 [tool.ruff.lint]
 # see https://docs.astral.sh/ruff/rules/
@@ -166,6 +273,13 @@ select = [
     "YTT", # flake8-2020
 ]
 
+[tool.pyrefly.sub-config.errors]
+no-matching-overload = "ignore"
+unknown-name = "ignore"
+missing-attribute = "ignore"
+bad-argument-type = "ignore"
+bad-assignment = "ignore"
+
 [tool.ruff.lint.extend-per-file-ignores]
 "**" = [
     "C401", "C408", "C413",
@@ -194,3 +308,82 @@ select = [
 "onnx_diagnostic/torch_export_patches/patches/__init__.py" = ["F401"]
 "onnx_diagnostic/torch_export_patches/patches/patch_transformers.py" = ["F401"]
 "onnx_diagnostic/torch_models/llms.py" = ["F401"]
+
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/helpers/torch_helper"
+
+[tool.pyrefly]
+project-includes = ["onnx_diagnostic"]
+project-excludes = [
+    "**/_doc/auto_examples*",
+    "**/_doc/auto_recipes*",
+    "**/_doc/auto_technical*",
+    "**/_doc/conf.py",
+    "**/_doc/examples*",
+    "**/_unittests*",
+    "**/build*",
+    "**/dist*",
+]
+ignore-missing-imports = ["*"]
+
+[tool.pyrefly.sub-config.errors]
+bad-argument-type = "ignore"
+missing-attribute = "ignore"
+no-matching-overload = "ignore"
+unknown-name = "ignore"
+bad-assignment = "ignore"
+
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/reference/report_results_comparison"
+
+[tool.pyrefly.sub-config.errors]
+unknown-name = "ignore"
+
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/reference/torch_ops/**/*"
+
+[tool.pyrefly.sub-config.errors]
+bad-override = "ignore"
+
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/reference/torch_ops/controlflow_ops"
+
+[tool.pyrefly.sub-config.errors]
+missing-attribute = "ignore"
+unknown-name = "ignore"
+
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/reference/torch_ops/_op_run"
+
+[tool.pyrefly.sub-config.errors]
+unknown-name = "ignore"
+
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/torch_export_patches/**/*"
+
+[tool.pyrefly.sub-config.errors]
+unsupported-operation = "ignore"
+bad-argument-type = "ignore"
+missing-attribute = "ignore"
+bad-return = "ignore"
+bad-assignment = "ignore"
+unknown-name = "ignore"
+bad-index = "ignore"
+
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/torch_models/**/*"
+
+[tool.pyrefly.sub-config.errors]
+missing-attribute = "ignore"
+unsupported-operation = "ignore"
+bad-assignment = "ignore"
+no-matching-overload = "ignore"
+
+[[tool.pyrefly.sub-config]]
+matches = "onnx_diagnostic/torch_onnx/sbs"
+
+[tool.pyrefly.sub-config.errors]
+bad-argument-type = "ignore"
+bad-assignment = "ignore"
+missing-attribute = "ignore"
+unsupported-operation = "ignore"
