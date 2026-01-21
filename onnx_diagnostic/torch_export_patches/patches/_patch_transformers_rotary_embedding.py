@@ -7,10 +7,10 @@ import transformers
 
 def patched__compute_dynamic_ntk_parameters(
     config: Optional[transformers.PretrainedConfig] = None,
-    device: Optional["torch.device"] = None,
+    device: Optional[torch.device] = None,
     seq_len: Optional[int] = None,
     **rope_kwargs,
-) -> Tuple["torch.Tensor", float]:
+) -> Tuple[torch.Tensor, float]:
     """
     manual patch:
     ``[patch:transformers.modeling_rope_utils._compute_dynamic_ntk_parameters]``
