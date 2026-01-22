@@ -1314,7 +1314,7 @@ def make_submodel(
     nodes: List[NodeProto],
     ir_version: int,
     opset_imports: List[OperatorSetIdProto],
-    output_names: Optional[List[str]],
+    output_names: List[str],
     type_rank_fn: Callable[[str], Tuple[int, int]],
 ) -> ModelProto:
     """
@@ -1358,7 +1358,7 @@ def make_submodel(
 def make_subfunction(
     name: str,
     nodes: List[NodeProto],
-    opset_imports: List[OperatorSetIdProto],
+    opset_imports: Sequence[OperatorSetIdProto],
     output_names: List[str],
     domain: str = "local_function",
 ) -> FunctionProto:
@@ -1767,7 +1767,7 @@ def _find_used_names(node_list, node_indices):
 
 
 def check_for_non_recursivity(
-    node_list: List[NodeProto], inputs: List[str], outputs: List[str]
+    node_list: List[Optional[NodeProto]], inputs: Sequence[str], outputs: Sequence[str]
 ):
     """
     We finally need to check that any of this output is not required
@@ -1807,7 +1807,7 @@ def make_model_with_local_functions(
     domain: str = "local_function",
     metadata_key_prefix: Union[str, Tuple[str, ...]] = ("namespace", "source["),
     verbose: int = 0,
-) -> FunctionProto:
+) -> ModelProto:
     """
     Selects nodes based on a regular expression, using metadata
     ``'namespace'``. It is going to look into every value
@@ -1857,7 +1857,7 @@ def make_model_with_local_functions(
     if verbose:
         print(f"[make_model_with_local_functions] matched {len(unique)} partitions")
     functions = []
-    new_nodes = list(model.graph.node)
+    new_nodes: List[Optional[NodeProto]] = list(model.graph.node)
     for key, node_indices in unique.items():
         function_name = key.strip().replace(".", "_")
         if verbose:
@@ -1866,8 +1866,14 @@ def make_model_with_local_functions(
                 f"nodes in partition {function_name!r}"
             )
         outputs = _find_used_names(new_nodes, node_indices)
-        nodes = [new_nodes[i] for i in node_indices]
-        lf = make_subfunction(function_name, nodes, model.opset_import, outputs, domain=domain)
+        function_nodes = [new_nodes[i] for i in node_indices]
+        lf = make_subfunction(
+            function_name,
+            [n for n in function_nodes if n],
+            model.opset_import,
+            outputs,
+            domain=domain,
+        )
         check_for_non_recursivity(new_nodes, lf.input, lf.output)
         functions.append(lf)
         maxi = max(node_indices)
