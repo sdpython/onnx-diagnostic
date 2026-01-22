@@ -20,7 +20,7 @@ API of onnx_diagnostic
     :maxdepth: 1
     :caption: modules
 
-    api
+    typing
     ext_test_case
 
 .. automodule:: onnx_diagnostic

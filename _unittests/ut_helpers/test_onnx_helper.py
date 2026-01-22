@@ -28,9 +28,12 @@ from onnx_diagnostic.helpers.onnx_helper import (
     shadowing_names,
     onnx_dtype_name,
     extract_subset_of_nodes,
+    make_subfunction,
     make_submodel,
+    make_model_with_local_functions,
     select_model_inputs_outputs,
     _enumerate_model_node_outputs,
+    pretty_onnx,
 )
 
 TFLOAT = TensorProto.FLOAT
@@ -537,6 +540,46 @@ class TestOnnxHelper(ExtTestCase):
         check_model(new_model)
         self.check_ort(new_model)
 
+    def test_make_subfunction(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+                    oh.make_node("Unsqueeze", ["xu1", "un"], ["xu2"]),
+                    oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+                    oh.make_node("Cast", ["xm2c"], ["xm2"], to=1),
+                    oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                    oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, [320, 1280])],
+                [oh.make_tensor_value_info("Z", TFLOAT, [3, 5, 320, 640])],
+                [
+                    onh.from_array(
+                        np.random.rand(3, 5, 1280, 640).astype(np.float32), name="Y"
+                    ),
+                    onh.from_array(np.array([0], dtype=np.int64), name="zero"),
+                    onh.from_array(np.array([1], dtype=np.int64), name="un"),
+                    onh.from_array(np.array([1, 320, 1280], dtype=np.int64), name="shape1"),
+                    onh.from_array(np.array([15, 1280, 640], dtype=np.int64), name="shape2"),
+                    onh.from_array(np.array([3, 5, 320, 640], dtype=np.int64), name="shape3"),
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        new_function = make_subfunction(
+            "localf",
+            model.graph.node[:4],
+            opset_imports=model.opset_import,
+            output_names=["xm1", "xm2c"],
+        )
+        self.assertIsInstance(new_function, FunctionProto)
+        self.assertEqual(len(new_function.node), 4)
+        self.assertEqual(new_function.output, ["xm1", "xm2c"])
+        self.assertEqual(new_function.input, ["X", "Y", "shape1", "shape2", "un", "zero"])
+
     def test_extract_subset_of_nodes_bigger(self):
         model = onnx.load(
             os.path.join(
@@ -669,6 +712,150 @@ class TestOnnxHelper(ExtTestCase):
         sess = ExtendedReferenceEvaluator(new_model)
         got = sess.run(None, {"X": x})[0]
         self.assertEqual((x**2 + y).tolist(), got.tolist())
+
+    def test_make_model_with_local_functions(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+                    oh.make_node("Unsqueeze", ["xu1", "un"], ["xu2"]),
+                    oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+                    oh.make_node("Cast", ["xm2c"], ["xm2"], to=1),
+                    oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                    oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, [320, 1280])],
+                [oh.make_tensor_value_info("Z", TFLOAT, [3, 5, 320, 640])],
+                [
+                    onh.from_array(
+                        np.random.rand(3, 5, 1280, 640).astype(np.float32), name="Y"
+                    ),
+                    onh.from_array(np.array([0], dtype=np.int64), name="zero"),
+                    onh.from_array(np.array([1], dtype=np.int64), name="un"),
+                    onh.from_array(np.array([1, 320, 1280], dtype=np.int64), name="shape1"),
+                    onh.from_array(np.array([15, 1280, 640], dtype=np.int64), name="shape2"),
+                    onh.from_array(np.array([3, 5, 320, 640], dtype=np.int64), name="shape3"),
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        for i_node in [0, 1, 2, 3]:
+            node = model.graph.node[i_node]
+            meta = node.metadata_props.add()
+            meta.key = "namespace"
+            meta.value = "LLL"
+        new_model = make_model_with_local_functions(model, "^LLL$")
+        check_model(model)
+        self.assertEqual(len(new_model.functions), 1)
+        self.assertEqual(
+            ["X", "Y", "shape1", "shape2", "un", "zero"], new_model.functions[0].input
+        )
+        self.assertEqual(["xm1", "xm2c"], new_model.functions[0].output)
+        self.assertEqual("LLL", new_model.functions[0].name)
+        self.assertEqual("local_function", new_model.functions[0].domain)
+        self.assertIn("LLL[local_function]", pretty_onnx(new_model))
+        check_model(new_model)
+
+    def test_make_model_with_local_functions_bug(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+                    oh.make_node("Unsqueeze", ["xu1", "un"], ["xu2"]),
+                    oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+                    oh.make_node("Cast", ["xm2c"], ["xm2"], to=1),
+                    oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                    oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, [320, 1280])],
+                [oh.make_tensor_value_info("Z", TFLOAT, [3, 5, 320, 640])],
+                [
+                    onh.from_array(
+                        np.random.rand(3, 5, 1280, 640).astype(np.float32), name="Y"
+                    ),
+                    onh.from_array(np.array([0], dtype=np.int64), name="zero"),
+                    onh.from_array(np.array([1], dtype=np.int64), name="un"),
+                    onh.from_array(np.array([1, 320, 1280], dtype=np.int64), name="shape1"),
+                    onh.from_array(np.array([15, 1280, 640], dtype=np.int64), name="shape2"),
+                    onh.from_array(np.array([3, 5, 320, 640], dtype=np.int64), name="shape3"),
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        for i_node in [0, 2, 3, 4]:
+            node = model.graph.node[i_node]
+            meta = node.metadata_props.add()
+            meta.key = "namespace"
+            meta.value = "LLL"
+        self.assertRaise(
+            lambda: make_model_with_local_functions(model, "^LLL$"),
+            ValueError,
+            "Results {'xu1'} are needed for inputs ['X', 'Y', 'shape1', "
+            "'shape2', 'xu2', 'zero'] but also requires ['xm1', 'xm2', 'xu1'] "
+            "which is not allowed.",
+        )
+        check_model(model)
+
+    def test_make_model_with_local_functions_2(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+                    oh.make_node("Unsqueeze", ["xu1", "un"], ["xu2"]),
+                    oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+                    oh.make_node("Cast", ["xm2c"], ["xm2"], to=1),
+                    oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                    oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, [320, 1280])],
+                [oh.make_tensor_value_info("Z", TFLOAT, [3, 5, 320, 640])],
+                [
+                    onh.from_array(
+                        np.random.rand(3, 5, 1280, 640).astype(np.float32), name="Y"
+                    ),
+                    onh.from_array(np.array([0], dtype=np.int64), name="zero"),
+                    onh.from_array(np.array([1], dtype=np.int64), name="un"),
+                    onh.from_array(np.array([1, 320, 1280], dtype=np.int64), name="shape1"),
+                    onh.from_array(np.array([15, 1280, 640], dtype=np.int64), name="shape2"),
+                    onh.from_array(np.array([3, 5, 320, 640], dtype=np.int64), name="shape3"),
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        for i_node in [0, 1, 2, 3]:
+            node = model.graph.node[i_node]
+            meta = node.metadata_props.add()
+            meta.key = "namespace"
+            meta.value = f"LLL{i_node//3}"
+        new_model = make_model_with_local_functions(model, "^LLL[01]$")
+        check_model(model)
+        self.assertEqual(len(new_model.functions), 2)
+        p = pretty_onnx(new_model)
+        self.assertIn("LLL0[local_function]", p)
+        self.assertIn("LLL1[local_function]", p)
+
+        self.assertEqual(["X", "shape1", "un", "zero"], new_model.functions[0].input)
+        self.assertEqual(["xm1"], new_model.functions[0].output)
+        self.assertEqual("LLL0", new_model.functions[0].name)
+        self.assertEqual("local_function", new_model.functions[0].domain)
+        self.assertEqual(len(new_model.functions[0].node), 3)
+
+        self.assertEqual(["Y", "shape2"], new_model.functions[1].input)
+        self.assertEqual(["xm2c"], new_model.functions[1].output)
+        self.assertEqual("LLL1", new_model.functions[1].name)
+        self.assertEqual("local_function", new_model.functions[1].domain)
+        self.assertEqual(len(new_model.functions[1].node), 1)
+
+        check_model(new_model)
 
 
 if __name__ == "__main__":
