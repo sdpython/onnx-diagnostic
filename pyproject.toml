@@ -133,7 +133,20 @@ disable_error_code = ["arg-type", "assignment", "operator", "var-annotated", "un
 [tool.pyrefly]
 
 project-includes = [
+    "onnx_diagnostic/export/validate.py",
     "onnx_diagnostic/investigate/**",
+    "onnx_diagnostic/helpers/args_helper.py",
+    "onnx_diagnostic/helpers/config_helper.py",
+    "onnx_diagnostic/helpers/doc_helper.py",
+    "onnx_diagnostic/helpers/dot_helper.py",
+    "onnx_diagnostic/helpers/graph_helper.py",
+    "onnx_diagnostic/helpers/log_helper.py",
+    "onnx_diagnostic/helpers/memory_peak.py",
+    "onnx_diagnostic/helpers/mini_onnx_builder.py",
+    "onnx_diagnostic/reference/evaluator.py",
+    "onnx_diagnostic/reference/quantized_evaluator.py",
+    "onnx_diagnostic/reference/report_results_comparison.py",
+    "onnx_diagnostic/reference/torch_evaluator.py",
 ]
 
 untyped-def-behavior = "check-and-infer-return-any"

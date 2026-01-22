@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Set, Tuple, Union
 
 ReportKeyNameType = Union[str, Tuple[str, int, str]]
 ReportKeyValueType = Tuple[int, Tuple[int, ...]]
@@ -13,6 +13,7 @@ class ReportResultComparison:
     :param tensors: tensor
     """
 
+    # pyrefly: ignore[unknown-name]
     def __init__(self, tensors: Dict[ReportKeyNameType, "torch.Tensor"]):  # noqa: F821
         from ..helpers.onnx_helper import dtype_to_tensor_dtype
         from ..helpers import max_diff, string_type
@@ -25,6 +26,7 @@ class ReportResultComparison:
         self.tensors = tensors
         self._build_mapping()
 
+    # pyrefly: ignore[unknown-name]
     def key(self, tensor: "torch.Tensor") -> ReportKeyValueType:  # noqa: F821
         "Returns a key for a tensor, (onnx dtype, shape)."
         return self.dtype_to_tensor_dtype(tensor.dtype), tuple(map(int, tensor.shape))
@@ -42,7 +44,7 @@ class ReportResultComparison:
     def clear(self):
         """Clears the last report."""
         self.report_cmp = {}
-        self.unique_run_names = set()
+        self.unique_run_names: Set[str] = set()
 
     @property
     def value(
@@ -58,12 +60,15 @@ class ReportResultComparison:
         for k, v in self.value.items():
             (i_run, run_name), ref_name = k
             d = dict(run_index=i_run, run_name=run_name, ref_name=ref_name)
+            # pyrefly: ignore[no-matching-overload]
             d.update(v)
             rows.append(d)
         return rows
 
     def report(
-        self, outputs: Dict[str, "torch.Tensor"]  # noqa: F821
+        self,
+        # pyrefly: ignore[unknown-name]
+        outputs: Dict[str, "torch.Tensor"],  # noqa: F821
     ) -> List[Tuple[Tuple[int, str], ReportKeyNameType, Dict[str, Union[float, str]]]]:
         """
         For every tensor in outputs, compares it to every tensor held by
@@ -78,6 +83,7 @@ class ReportResultComparison:
             key = self.key(tensor)
             if key not in self.mapping:
                 continue
+            # pyrefly: ignore[unknown-name]
             cache: Dict["torch.device", "torch.Tensor"] = {}  # noqa: F821, UP037
             for held_key in self.mapping[key]:
                 t2 = self.tensors[held_key]

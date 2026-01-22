@@ -36,7 +36,7 @@ class GraphRendering:
         :return: computation order
         """
         assert not ({"If", "Scan", "Loop", "SequenceMap"} & set(n.op_type for n in nodes)), (
-            f"This algorithme is not yet implemented if the sequence contains "
+            f"This algorithm is not yet implemented if the sequence contains "
             f"a control flow, types={sorted(set(n.op_type for n in nodes))}"
         )
         number = {e: start - 1 for e in (existing or [])}  # noqa: C420
@@ -131,14 +131,14 @@ class GraphRendering:
     @property
     def nodes(self) -> List[onnx.NodeProto]:
         "Returns the list of nodes"
-        return (
+        return list(
             self.proto.graph.node
             if isinstance(self.proto, onnx.ModelProto)
             else self.proto.node
         )
 
     @property
-    def start_names(self) -> List[onnx.NodeProto]:
+    def start_names(self) -> List[str]:
         "Returns the list of known names, inputs and initializer"
         graph = self.proto.graph if isinstance(self.proto, onnx.ModelProto) else self.proto
         input_names = (
@@ -151,7 +151,7 @@ class GraphRendering:
             if isinstance(graph, onnx.FunctionProto)
             else [
                 *[i.name for i in graph.initializer],
-                *[i.name for i in graph.sparse_initializer],
+                *[i.values.name for i in graph.sparse_initializer],
             ]
         )
         return [*input_names, *init_names]
@@ -159,7 +159,7 @@ class GraphRendering:
     @property
     def input_names(self) -> List[str]:
         "Returns the list of input names."
-        return (
+        return list(
             self.proto.input
             if isinstance(self.proto, onnx.FunctionProto)
             else [
@@ -173,7 +173,7 @@ class GraphRendering:
     @property
     def output_names(self) -> List[str]:
         "Returns the list of output names."
-        return (
+        return list(
             self.proto.output
             if isinstance(self.proto, onnx.FunctionProto)
             else [

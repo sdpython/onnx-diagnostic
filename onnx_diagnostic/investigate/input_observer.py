@@ -23,7 +23,7 @@ def flatten_unflatten_for_dynamic_shapes(
             in the dynamic shapes, these specifications seems to be different
             for the strict and non strict mode. It also preserves tuple.
         change_function:
-            to modifies the tensor in the structure itself,
+            to modify the tensor in the structure itself,
             like replace them by a shape
 
     Returns:
@@ -45,7 +45,7 @@ def flatten_unflatten_for_dynamic_shapes(
         start = end
     if use_dict:
         if spec.type is dict:
-            # This a dictionary.
+            # This is a dictionary.
             return dict(zip(spec.context, subtrees))
         if spec.type is tuple:
             return tuple(subtrees)
@@ -68,7 +68,7 @@ def flatten_unflatten_for_dynamic_shapes(
 
 def infer_dynamic_dimensions(shape_list: Sequence[tuple[int, ...]]) -> list[int]:
     """
-    Returns the list dynamic dimensions given a list of shapes
+    Returns the list of dynamic dimensions given a list of shapes
     corresponding to the same tensor.
 
     Args:
@@ -80,7 +80,7 @@ def infer_dynamic_dimensions(shape_list: Sequence[tuple[int, ...]]) -> list[int]
     """
     unique_ranks = {len(shape) for shape in shape_list}
     torch._check(
-        len(unique_ranks) == 1, lambda: "all shapes in shape_list must have the the same rank"
+        len(unique_ranks) == 1, lambda: "all shapes in shape_list must have the same rank"
     )
     rank = unique_ranks.pop()
     dynamic = []
@@ -155,7 +155,7 @@ class InputObserverInfo:
                     if i in captured_inputs and captured_inputs[i] != len(ts):
                         raise RuntimeError(
                             f"Positional argument {i} has {len(ts)} tensors "
-                            f"but previously got {captured_inputs[i]} tensors."
+                            f"but previously got {captured_inputs[i]} tensors. "
                             f"Inference is impossible in that case."
                         )
                     captured_inputs[i] = len(ts)
@@ -168,7 +168,7 @@ class InputObserverInfo:
                     if k in captured_inputs and captured_inputs[k] != len(ts):
                         raise RuntimeError(
                             f"Named argument {k!r} has {len(ts)} tensors "
-                            f"but previously got {captured_inputs[k]} tensors."
+                            f"but previously got {captured_inputs[k]} tensors. "
                             f"Inference is impossible in that case."
                         )
                     captured_inputs[k] = len(ts)
@@ -216,7 +216,7 @@ class InputObserverInfo:
                 **dict(zip(list(self._max_kwargs), flat_dynamic_shapes[n_args:])),
             }
 
-        # nested types, here comes the fun part because the the shapes cannot be unflattened,
+        # nested types, here comes the fun part because the shapes cannot be unflattened,
         # custom classes must appear in their flattened shape.
         # This does not work in all cases but every time every available argument is flattened
         # with the same number of tensors. The function does not check
@@ -265,7 +265,7 @@ class InputObserverInfo:
                 return args
             if not args:
                 return kwargs
-            # We need to more args to kwargs
+            # We need to move args to kwargs
             pos_names = list(self.signature.parameters)[: len(args)]
             return {**dict(zip(pos_names, args)), **kwargs}
 

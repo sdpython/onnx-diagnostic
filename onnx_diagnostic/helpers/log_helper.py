@@ -29,10 +29,10 @@ class CubeViewDef:
     :param order: to reorder key in columns index
     :param key_agg: aggregate according to these columns before
         creating the view
-    :param agg_args: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`,
+    :param agg_args: see :meth:`pandas.api.typing.DataFrameGroupBy.agg`,
         it can be also a callable to return a different aggregation
         method depending on the column name
-    :param agg_kwargs: see :meth:`pandas.core.groupby.DataFrameGroupBy.agg`
+    :param agg_kwargs: see :meth:`pandas.api.typing.DataFrameGroupBy.agg`
     :param agg_multi: aggregation over multiple columns
     :param ignore_columns: ignore the following columns if known to overload the view
     :param keep_columns_in_index: keeps the columns even if there is only one unique value
@@ -98,7 +98,7 @@ class CubeViewDef:
         agg_args: Union[Sequence[Any], Callable[[str], Any]] = ("sum",),
         agg_kwargs: Optional[Dict[str, Any]] = None,
         agg_multi: Optional[
-            Dict[str, Callable[[pandas.core.groupby.DataFrameGroupBy], pandas.Series]]
+            Dict[str, Callable[[pandas.api.typing.DataFrameGroupBy], pandas.Series]]
         ] = None,
         ignore_columns: Optional[Sequence[str]] = None,
         keep_columns_in_index: Optional[Sequence[str]] = None,
@@ -365,6 +365,7 @@ class CubePlot:
                     # This is very slow
                     # ddd.plot(ax=axs[row, ii],linewidth=3)
                     for jj in range(ddd.shape[1]):
+                        # pyrefly: ignore[bad-index]
                         axs[row, ii].plot(x, ddd.iloc[:, jj], lw=3, label=ddd.columns[jj])
                     axs[row, ii].set_title(f"{c}{title_suffix}")
                     rotate_align(axs[row, ii])
@@ -480,7 +481,9 @@ class CubeLogs:
         elif isinstance(self._data, list) and all(isinstance(r, dict) for r in self._data):
             if verbose:
                 print(f"[CubeLogs.load] load from list of dicts, n={len(self._data)}")
-            self.data = pandas.DataFrame(self.post_load_process_piece(self._data, unique=True))
+            self.data = pandas.DataFrame(
+                self.post_load_process_piece(pandas.DataFrame(self._data), unique=True)
+            )
             if verbose:
                 print(f"[CubeLogs.load] after postprocessing shape={self.data.shape}")
         elif isinstance(self._data, list) and all(
@@ -614,7 +617,7 @@ class CubeLogs:
 
     def _process_formula(
         self, formula: Union[str, Callable[[pandas.DataFrame], pandas.Series]]
-    ) -> Callable[[pandas.DataFrame], pandas.Series]:
+    ) -> Callable[[pandas.DataFrame], Optional[pandas.Series]]:
         assert callable(formula), f"formula={formula!r} is not supported."
         return formula
 
@@ -625,9 +628,11 @@ class CubeLogs:
         return self.data.shape
 
     @property
-    def columns(self) -> Sequence[str]:
+    def columns(self) -> Sequence[Any]:
         "Returns the columns."
         assert hasattr(self, "data"), "Method load was not called"
+        assert isinstance(self.data, pandas.DataFrame)  # type checking
+        # pyrefly: ignore[bad-return]
         return self.data.columns
 
     def _preprocess(self):
@@ -647,7 +652,7 @@ class CubeLogs:
             )
             assert gr.shape[0] > 0, (
                 f"Something went wrong after the groupby.\n"
-                f"{cp[[*self.keys, self.time, '__index__']].head().T}"
+                f"{cp[[*self.keys_no_time, self.time, '__index__']].head().T}"
             )
             filtered = pandas.merge(cp, gr, on=["__index__", *self.keys_time])
             assert filtered.shape[0] <= self.data.shape[0], (
@@ -797,6 +802,7 @@ class CubeLogs:
             if view_def.agg_multi:
                 append = []
                 for k, f in view_def.agg_multi.items():
+                    # pyrefly: ignore[no-matching-overload]
                     cv = grouped_data.apply(f, include_groups=False)
                     append.append(cv.to_frame(k))
                 data = pandas.concat([data, *append], axis=1)
@@ -1020,8 +1026,10 @@ class CubeLogs:
 
         keys = set(self.keys_no_time) - {columns_to_fix}
         select = data[self.keys_no_time]
+        # pyrefly: ignore[no-matching-overload]
         select_agg = select.groupby(list(keys), as_index=True).apply(
-            lambda x: "-".join(sorted(set(x[columns_to_fix].dropna()))), include_groups=False
+            lambda x: "-".join(sorted(set(x[columns_to_fix].dropna()))),
+            include_groups=False,
         )
         select_agg = select_agg.to_frame(name=columns_to_fix)
         res = pandas.merge(
@@ -1137,6 +1145,7 @@ class CubeLogs:
             if len(nonan) > 0:
                 obs.update(dict(count=len(nonan)))
                 if is_numeric_dtype(nonan) and not pandas.api.types.is_object_dtype(nonan):
+                    # pyrefly: ignore[no-matching-overload]
                     obs.update(
                         dict(
                             min=nonan.min(),
@@ -1208,12 +1217,15 @@ class CubeLogs:
                 df.to_excel(writer, sheet_name=main, freeze_panes=(1, 1))
 
             time_mask_view: Dict[str, pandas.DataFrame] = {}
+            df = None
             for name, view in views.items():
                 if view is None:
                     continue
                 df, tview = self.view(view, return_view_def=True, verbose=max(verbose - 1, 0))
                 if cube_time is not None:
                     cube_mask = cube_time.view(view)
+                    assert isinstance(cube_mask, pandas.DataFrame)  # type checking
+                    assert isinstance(df, pandas.DataFrame)  # type checking
                     aligned = align_dataframe_with(cube_mask, df)
                     if aligned is not None:
                         assert aligned.shape == df.shape, (
@@ -1228,6 +1240,7 @@ class CubeLogs:
                             )
                 if tview is None:
                     continue
+                assert isinstance(df, pandas.DataFrame)  # type checking
                 memory = df.memory_usage(deep=True).sum()
                 if verbose:
                     print(
@@ -1269,7 +1282,9 @@ class CubeLogs:
                         sheet_name=name,
                         freeze_panes=(df.columns.nlevels + 1, df.index.nlevels),
                     )
+                    # pyrefly: ignore[missing-attribute]
                     f_highlights[name] = tview.f_highlight
+                    # pyrefly: ignore[missing-attribute]
                     if tview.plots:
                         plots.append(
                             CubePlot(
@@ -1282,6 +1297,7 @@ class CubeLogs:
                             if self.time in df.columns.names
                             else CubePlot(df, kind="barh", orientation="row", split=True)
                         )
+            assert isinstance(df, pandas.DataFrame)  # type checking
             if raw:
                 assert main not in views, f"{main!r} is duplicated in views {sorted(views)}"
                 # Too long.
@@ -1439,7 +1455,7 @@ class CubeLogs:
             len(configs) >= 2
         ), f"A side by side needs at least two configs but configs={configs}"
         set_keys_time = set(self.keys_time)
-        columns_index = None
+        columns_index: Optional[List[str]] = None
         data_list = []
         for name_conf, conf in configs.items():
             if columns_index is None:
@@ -1478,9 +1494,11 @@ class CubeLogs:
 
         # add metrics
         index_column_name = list(view_res.columns.names).index(column_name)
+        # pyrefly: ignore[missing-attribute]
         index_metrics = list(view_res.columns.names).index("METRICS")
 
         def _mkc(m, s):
+            # pyrefly: ignore[missing-attribute]
             c = ["" for c in view_res.columns.names]
             c[index_column_name] = s
             c[index_metrics] = m
@@ -1515,7 +1533,9 @@ class CubeLogs:
                     ci["CONF"] = iname
                     cj["CONF"] = jname
 
+                    # pyrefly: ignore[bad-index]
                     ci_name = tuple(ci[n] for n in view_res.columns.names)
+                    # pyrefly: ignore[bad-index]
                     cj_name = tuple(cj[n] for n in view_res.columns.names)
                     assert ci_name in view_res.columns or cj_name in view_res.columns, (
                         f"Unable to find column {ci_name} or {cj_name} "
@@ -1562,6 +1582,7 @@ class CubeLogs:
         }
         flat = view_res.groupby(self.time).agg(aggs)
         flat = flat.stack("METRICS", future_stack=True)
+        # pyrefly: ignore[bad-return, missing-attribute]
         return res, flat, view_res.T.sort_index().T
 
 
@@ -1679,7 +1700,7 @@ class CubeLogsPerformance(CubeLogs):
 
     def _process_formula(
         self, formula: Union[str, Callable[[pandas.DataFrame], pandas.Series]]
-    ) -> Callable[[pandas.DataFrame], pandas.Series]:
+    ) -> Callable[[pandas.DataFrame], Optional[pandas.Series]]:
         """
         Processes a formula, converting it into a function.
 
@@ -1726,6 +1747,7 @@ class CubeLogsPerformance(CubeLogs):
                 f"{pprint.pformat(sorted(columns))}"
             )
             # return lambda df: df["time_latency_eager"] / df["time_latency"]
+            # pyrefly: ignore[no-matching-overload]
             return lambda df: pandas.cut(
                 df["speedup"], bins=BUCKET_SCALES, right=False, duplicates="raise"
             )
@@ -1733,9 +1755,9 @@ class CubeLogsPerformance(CubeLogs):
         if formula == "ERR1":
             columns = set(self._filter_column(["^ERR_.*"], self.data.columns))
             if not columns:
-                return lambda df: np.nan
+                return lambda df: None
 
-            def first_err(df: pandas.DataFrame) -> pandas.Series:
+            def first_err(df: pandas.DataFrame) -> Optional[pandas.Series]:
                 ordered = [
                     c
                     for c in [
@@ -1752,7 +1774,7 @@ class CubeLogsPerformance(CubeLogs):
                     ]
                     if c in df.columns
                 ]
-                res = None
+                res: Optional[pandas.Series] = None
                 for c in ordered:
                     if res is None:
                         res = df[c].fillna("")
@@ -1949,6 +1971,7 @@ class CubeLogsPerformance(CubeLogs):
             f"{pprint.pformat(sorted(self.data.columns))}"
         )
 
+    # pyrefly: ignore[bad-override]
     def view(
         self,
         view_def: Optional[Union[str, CubeViewDef]],
@@ -2265,7 +2288,7 @@ class CubeLogsPerformance(CubeLogs):
         if unique:
             return df
         cols = self._filter_column(self._keys, df)
-        res = None
+        res: Optional[pandas.DataFrame] = None
         for c in cols:
             if df[c].isna().any():
                 # Missing values for keys are not supposed to happen.

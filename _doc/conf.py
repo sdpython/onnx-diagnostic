@@ -132,6 +132,7 @@ nitpick_ignore = [
     ("py:class", "Module"),
     ("py:class", "np.ndarray"),
     ("py:class", "onnx_ir.Tuple"),
+    ("py:class", "pandas.api.typing.DataFrameGroupBy"),
     ("py:class", "pandas.core.groupby.generic.DataFrameGroupBy"),
     ("py:class", "pipeline.Pipeline"),
     ("py:class", "torch._guards.Source"),

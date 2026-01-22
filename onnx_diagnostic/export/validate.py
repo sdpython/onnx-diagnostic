@@ -80,6 +80,7 @@ def compare_modules(
         )
     got = modep(*_get(args), **_get(kwargs))
     if verbose:
+        # pyrefly: ignore[unbound-name]
         d = time.perf_counter() - begin
         print(f"[compare_modules] done in {d} with output={string_type(got, with_shape=True)}")
     if mod:
@@ -89,6 +90,7 @@ def compare_modules(
         expected = mod(*_get(args), **_get(kwargs))
         diff = max_diff(expected, got)
         if verbose:
+            # pyrefly: ignore[unbound-name]
             d = time.perf_counter() - begin
             print(
                 f"[compare_modules] done in {d} with "

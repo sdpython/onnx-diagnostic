@@ -8,11 +8,6 @@ import torch
 from .onnx_helper import dtype_to_tensor_dtype, tensor_dtype_to_np_dtype, from_array_extended
 from . import string_type
 
-STORAGE_TYPE = {
-    TensorProto.FLOAT16: np.int16,
-    TensorProto.BFLOAT16: np.int16,
-}
-
 
 def proto_from_array(
     arr: torch.Tensor,
@@ -67,13 +62,13 @@ def proto_from_array(
         byte_data = (ctypes.c_ubyte * numel * element_size).from_address(np_arr.data_ptr())
         tensor.raw_data = bytes(byte_data)
         if sys.byteorder == "big":
-            np_dtype = tensor_dtype_to_np_dtype(STORAGE_TYPE[tensor.data_type])
-            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)
+            np_dtype = tensor_dtype_to_np_dtype(tensor.data_type)
+            np.frombuffer(tensor.raw_data, dtype=np_dtype).byteswap(inplace=True)
     else:
         tensor.raw_data = np_arr.tobytes()
         if sys.byteorder == "big":
             np_dtype = tensor_dtype_to_np_dtype(tensor.data_type)
-            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)
+            np.frombuffer(tensor.raw_data, dtype=np_dtype).byteswap(inplace=True)
 
     return tensor
 
@@ -133,6 +128,7 @@ class MiniOnnxBuilder:
                     }
                 shape = tuple(map(int, tensor.shape))
                 self.nodes.append(
+                    # pyrefly: ignore[bad-argument-type]
                     oh.make_node(op_type, [], [name], dtype=dtype, shape=shape, **kwargs)
                 )
                 self.outputs.append(oh.make_tensor_value_info(name, dtype, shape))
@@ -632,6 +628,7 @@ def create_input_tensors_from_onnx_model(
         raise AssertionError(f"Unexpected value for engine={engine!r}")
 
     got = sess.run(None, {})
+    assert isinstance(got, list)  # type checking
     if len(names) == 1:
         name = names[0]
         output = got[0]
@@ -639,12 +636,10 @@ def create_input_tensors_from_onnx_model(
             return None
         if name == "array":
             return output
-        if name == "bool":
-            return bool(output[0])
-        if name == "int":
-            return int(output[0])
-        if name == "float":
-            return float(output[0])
+        if name in {"bool", "int", "float"}:
+            cvt = {"bool": bool, "int": int, "float": float}[name]
+            # pyrefly: ignore[bad-index]
+            return cvt(output[0])
         if name == "tensor":
             return torch.from_numpy(output).to(device)
         assert name.startswith(

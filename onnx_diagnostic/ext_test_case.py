@@ -780,7 +780,7 @@ class ExtTestCase(unittest.TestCase):
 
     @property
     def verbose(self) -> int:
-        "Returns the the value of environment variable ``VERBOSE``."
+        "Returns the value of environment variable ``VERBOSE``."
         return int(os.environ.get("VERBOSE", "0"))
 
     @classmethod

@@ -85,12 +85,12 @@ def proto_from_tensor(
         tensor.raw_data = bytes(byte_data)
         if sys.byteorder == "big":
             np_dtype = _STORAGE_TYPE[tensor.data_type]  # type: ignore
-            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)  # type: ignore
+            np.frombuffer(tensor.raw_data, dtype=np_dtype).byteswap(inplace=True)  # type: ignore
     else:
         tensor.raw_data = np_arr.tobytes()
         if sys.byteorder == "big":
             np_dtype = tensor_dtype_to_np_dtype(tensor.data_type)
-            np.byteswap(np.frombuffer(tensor.raw_data, dtype=np_dtype), inplace=True)
+            np.frombuffer(tensor.raw_data, dtype=np_dtype).byteswap(inplace=True)
     return tensor
 
 

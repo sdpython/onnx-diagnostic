@@ -871,7 +871,7 @@ def validate_model(
         this is not always possible
     :param use_pretrained: use the trained model, not the untrained one
     :param optimization: optimization to apply to the exported model,
-        depend on the the exporter
+        depend on the exporter
     :param quiet: if quiet, catches exception if any issue
     :param patch: applies patches (``patch_transformers=True, path_diffusers=True``)
         if True before exporting

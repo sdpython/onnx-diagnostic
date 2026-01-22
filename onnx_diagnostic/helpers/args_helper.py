@@ -105,6 +105,7 @@ def get_parsed_args(
                 default=tries,
             )
     for k, v in kwargs.items():
+        assert isinstance(v, tuple)  # type
         parser.add_argument(
             f"--{k}",
             help=f"{v[1]}, default is {v[0]}",

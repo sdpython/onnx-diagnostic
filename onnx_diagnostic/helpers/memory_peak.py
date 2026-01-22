@@ -103,6 +103,7 @@ def _process_memory_spy(conn):
     process = psutil.Process(pid)
 
     if cuda:
+        # pyrefly: ignore[missing-import]
         from pynvml import (
             nvmlDeviceGetCount,
             nvmlDeviceGetHandleByIndex,
@@ -131,6 +132,7 @@ def _process_memory_spy(conn):
         mem = process.memory_info().rss
         cpu.update(mem)
         if cuda:
+            # pyrefly: ignore[unbound-name]
             for r, g in zip(gpu_used(), gpus):
                 g.update(r)
         if conn.poll(timeout=timeout):
@@ -142,6 +144,7 @@ def _process_memory_spy(conn):
     end = process.memory_info().rss
     cpu.update(end)
     if cuda:
+        # pyrefly: ignore[unbound-name]
         for r, g in zip(gpu_used(), gpus):
             g.update(r)
 
@@ -151,6 +154,7 @@ def _process_memory_spy(conn):
     for g in gpus:
         g.send(conn)
     if cuda:
+        # pyrefly: ignore[unbound-name]
         nvmlShutdown()
     conn.close()
 
@@ -217,7 +221,7 @@ def start_spying_on(
     Starts the memory spy. The function starts another
     process spying on the one sent as an argument.
 
-    :param pid: process id to spy or the the current one.
+    :param pid: process id to spy or the current one.
     :param delay: delay between two measures.
     :param cuda: True or False to get memory for cuda devices
 
