@@ -1803,9 +1803,10 @@ def check_for_non_recursivity(
 
 def make_model_with_local_functions(
     model: ModelProto,
-    regex: str,
+    regex: str = ".*[.]layers[.][0-9]+[.]forward$",
     domain: str = "local_function",
     metadata_key_prefix: Union[str, Tuple[str, ...]] = ("namespace", "source["),
+    verbose: int = 0,
 ) -> FunctionProto:
     """
     Selects nodes based on a regular expression, using metadata
@@ -1819,6 +1820,7 @@ def make_model_with_local_functions(
     :param domain: function domain
     :param metadata_keys: list of metadata keys to consider,
         every value is split into multiple ones.
+    :param verbose: verbosity
     :return: model proto
     """
     prefix = (
@@ -1827,37 +1829,51 @@ def make_model_with_local_functions(
         else (metadata_key_prefix,)
     )
     reg = re.compile(regex)
+    unique_values = set()
     unique: Dict[str, List[int]] = {}
     for i, node in enumerate(model.graph.node):
         selected = False
         for data in node.metadata_props:
             if data.key.startswith(prefix):
-                values = data.value.split(",")
+                values = re.split("[,:]", data.value)
                 for v in values:
+                    if not v:
+                        continue
                     if reg.match(v):
                         if v not in unique:
                             unique[v] = []
                         unique[v].append(i)
                         selected = True
                         break
+                    unique_values.add(v)
                 if selected:
                     break
     # sets of nodes.
     if not unique:
+        if verbose:
+            print(f"[make_model_with_local_functions] no match in {sorted(unique_values)}")
         return model
 
+    if verbose:
+        print(f"[make_model_with_local_functions] matched {len(unique)} partitions")
     functions = []
     new_nodes = list(model.graph.node)
     for key, node_indices in unique.items():
+        function_name = key.strip().replace(".", "_")
+        if verbose:
+            print(
+                f"[make_model_with_local_functions] move {len(node_indices)} "
+                f"nodes in partition {function_name!r}"
+            )
         outputs = _find_used_names(new_nodes, node_indices)
         nodes = [new_nodes[i] for i in node_indices]
-        lf = make_subfunction(key, nodes, model.opset_import, outputs, domain=domain)
+        lf = make_subfunction(function_name, nodes, model.opset_import, outputs, domain=domain)
         check_for_non_recursivity(new_nodes, lf.input, lf.output)
         functions.append(lf)
         maxi = max(node_indices)
         for i in node_indices:
             new_nodes[i] = None
-        new_nodes[maxi] = oh.make_node(key, lf.input, lf.output, domain=domain)
+        new_nodes[maxi] = oh.make_node(lf.name, lf.input, lf.output, domain=lf.domain)
 
     return oh.make_model(
         oh.make_graph(

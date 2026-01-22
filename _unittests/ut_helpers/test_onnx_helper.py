@@ -802,6 +802,7 @@ class TestOnnxHelper(ExtTestCase):
         )
         check_model(model)
 
+    @hide_stdout()
     def test_make_model_with_local_functions_2(self):
         model = oh.make_model(
             oh.make_graph(
@@ -837,7 +838,7 @@ class TestOnnxHelper(ExtTestCase):
             meta.key = f"source[{i_node}]"
             meta.value = f"LLL{i_node//3}"
         new_model = make_model_with_local_functions(
-            model, "^LLL[01]$", metadata_key_prefix="source["
+            model, "^LLL[01]$", metadata_key_prefix="source[", verbose=1
         )
         check_model(model)
         self.assertEqual(len(new_model.functions), 2)
