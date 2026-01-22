@@ -16,7 +16,7 @@ it comes from. In particular the eky `namespace`:
 Description
 +++++++++++
 
-See :func:`onnx_diagnostic.helpers.optim_helper.make_model_with_local_functions`.
+See :func:`onnx_diagnostic.helpers.onnx_helper.make_model_with_local_functions`.
 
 .. runpython::
 
