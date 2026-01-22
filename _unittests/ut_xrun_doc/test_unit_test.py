@@ -16,7 +16,7 @@ from onnx_diagnostic.ext_test_case import (
     has_cuda,
     has_onnxscript,
 )
-from onnx_diagnostic.api import TensorLike
+from onnx_diagnostic.typing import TensorLike
 
 
 class TestUnitTest(ExtTestCase):

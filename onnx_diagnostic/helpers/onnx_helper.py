@@ -32,11 +32,10 @@ from onnx import (
     ValueInfoProto,
     load as onnx_load,
 )
+from ..typing import InferenceSessionLike, TensorLike
 
-TensorLike = Union[np.ndarray, "torch.Tensor"]  # noqa: F821
 
-
-def _make_stat(init: TensorProto) -> Dict[str, float]:
+def _make_stat(init: TensorProto) -> Dict[str, Any]:
     """
     Produces statistics.
 
@@ -160,11 +159,11 @@ def _validate_graph(
     verbose: int = 0,
     watch: Optional[Set[str]] = None,
     path: Optional[Sequence[str]] = None,
-):
-    found = []
+) -> List[Union[NodeProto, TensorProto, ValueInfoProto]]:
+    found: List[Union[NodeProto, TensorProto, ValueInfoProto]] = []
     path = path or ["root"]
-    set_init = set(i.name for i in g.initializer)
-    set_input = set(i.name for i in g.input)
+    set_init = {i.name for i in g.initializer}
+    set_input = {i.name for i in g.input}
     existing |= set_init | set_input
     if watch and set_init & watch:
         if verbose:
@@ -215,18 +214,15 @@ def _validate_graph(
                     f"in {'/'.join(path)}/{node.op_type}[{node.name}]"
                 )
             found.append(node)
-    out = set(o.name for o in g.output)
+    out = {o.name for o in g.output}
     ins = out & existing
-    if ins != out:
-        raise AssertionError(
-            f"One output is missing, out={node.input}, existing={ins}, path={path}"
-        )
+    assert ins == out, f"One output is missing, out={node.input}, existing={ins}, path={path}"
     return found
 
 
 def _validate_function(g: FunctionProto, verbose: int = 0, watch: Optional[Set[str]] = None):
-    existing = set(g.input)
-    found = []
+    existing: Set[str] = set(g.input)
+    found: List[Union[NodeProto, TensorProto, ValueInfoProto]] = []
     for node in g.node:
         ins = set(node.input) & existing
         if ins != set(node.input):
@@ -240,7 +236,7 @@ def _validate_function(g: FunctionProto, verbose: int = 0, watch: Optional[Set[s
         for att in node.attribute:
             if att.type == AttributeProto.GRAPH:
                 found.extend(
-                    _validate_graph(g, existing.copy(), path=[g.name], verbose=verbose)
+                    _validate_graph(att.g, existing.copy(), path=[g.name], verbose=verbose)
                 )
         existing |= set(node.output)
         if watch and set(node.output) & watch:
@@ -285,7 +281,7 @@ def check_model_ort(
     onx: ModelProto,
     providers: Optional[Union[str, List[Any]]] = None,
     dump_file: Optional[str] = None,
-) -> "onnxruntime.InferenceSession":  # noqa: F821
+) -> InferenceSessionLike:
     """
     Loads a model with onnxruntime.
 
@@ -308,10 +304,9 @@ def check_model_ort(
 
     if isinstance(onx, str):
         try:
+            # pyrefly: ignore[bad-return]
             return InferenceSession(onx, providers=providers)
         except Exception as e:
-            import onnx
-
             if dump_file:
                 onnx.save(onx, dump_file)
 
@@ -319,8 +314,8 @@ def check_model_ort(
                 f"onnxruntime cannot load the model "
                 f"due to {e}\n{pretty_onnx(onnx.load(onx))}"
             )
-        return
     try:
+        # pyrefly: ignore[bad-return]
         return InferenceSession(onx.SerializeToString(), providers=providers)
     except Exception as e:
         if dump_file:
@@ -358,7 +353,17 @@ def onnx_dtype_name(itype: int, exc: bool = True) -> str:
 
 
 def pretty_onnx(
-    onx: Union[FunctionProto, GraphProto, ModelProto, ValueInfoProto, str],
+    onx: Union[
+        AttributeProto,
+        FunctionProto,
+        GraphProto,
+        ModelProto,
+        NodeProto,
+        onnx.SparseTensorProto,
+        TensorProto,
+        ValueInfoProto,
+        str,
+    ],
     with_attributes: bool = False,
     highlight: Optional[Set[str]] = None,
     shape_inference: bool = False,
@@ -377,6 +382,9 @@ def pretty_onnx(
     assert onx is not None, "onx cannot be None"
 
     if shape_inference:
+        assert isinstance(
+            onx, ModelProto
+        ), f"shape inference only works for ModelProto, not {type(onx)}"
         onx = onnx.shape_inference.infer_shapes(onx)
 
     if isinstance(onx, ValueInfoProto):
@@ -446,6 +454,8 @@ def pretty_onnx(
     if isinstance(onx, TensorProto):
         shape = "x".join(map(str, onx.dims))
         return f"TensorProto:{onx.data_type}:{shape}:{onx.name}"
+
+    assert not isinstance(onx, onnx.SparseTensorProto), "SparseTensorProto is not handled yet."
 
     try:
         from onnx_array_api.plotting.text_plot import onnx_simple_text_plot
@@ -538,12 +548,6 @@ def from_array_ml_dtypes(arr: TensorLike, name: Optional[str] = None) -> TensorP
     return tensor
 
 
-_STORAGE_TYPE = {
-    TensorProto.FLOAT16: np.int16,
-    TensorProto.BFLOAT16: np.int16,
-}
-
-
 def from_array_extended(tensor: TensorLike, name: Optional[str] = None) -> TensorProto:
     """
     Converts an array into a :class:`onnx.TensorProto`.
@@ -561,54 +565,9 @@ def from_array_extended(tensor: TensorLike, name: Optional[str] = None) -> Tenso
         ), f"Unable to convert type {type(tensor)} into TensorProto."
         return proto_from_tensor(tensor, name=name)
 
-    try:
-        from onnx.reference.ops.op_cast import (
-            bfloat16,
-            float8e4m3fn,
-            float8e4m3fnuz,
-            float8e5m2,
-            float8e5m2fnuz,
-        )
-    except ImportError:
-        bfloat16 = None
-
-    if bfloat16 is None:
-        return onh.from_array(tensor, name)
-
-    dt = tensor.dtype
-    if dt == float8e4m3fn and dt.descr[0][0] == "e4m3fn":
-        to = TensorProto.FLOAT8E4M3FN
-        dt_to = np.uint8
-    elif dt == float8e4m3fnuz and dt.descr[0][0] == "e4m3fnuz":
-        to = TensorProto.FLOAT8E4M3FNUZ
-        dt_to = np.uint8
-    elif dt == float8e5m2 and dt.descr[0][0] == "e5m2":
-        to = TensorProto.FLOAT8E5M2
-        dt_to = np.uint8
-    elif dt == float8e5m2fnuz and dt.descr[0][0] == "e5m2fnuz":
-        to = TensorProto.FLOAT8E5M2FNUZ
-        dt_to = np.uint8
-    elif dt == bfloat16 and dt.descr[0][0] == "bfloat16":
-        to = TensorProto.BFLOAT16
-        dt_to = np.uint16
-    else:
-        try:
-            import ml_dtypes
-        except ImportError:
-            ml_dtypes = None
-        if ml_dtypes is not None and (
-            tensor.dtype == ml_dtypes.bfloat16
-            or tensor.dtype == ml_dtypes.float8_e4m3fn
-            or tensor.dtype == ml_dtypes.float8_e4m3fnuz
-            or tensor.dtype == ml_dtypes.float8_e5m2
-            or tensor.dtype == ml_dtypes.float8_e5m2fnuz
-        ):
-            return from_array_ml_dtypes(tensor, name)
-        return onh.from_array(tensor, name)
-
-    t = onh.from_array(tensor.astype(dt_to), name)
-    t.data_type = to
-    return t
+    assert isinstance(tensor, np.ndarray)  # type checking
+    # pyrefly: ignore[bad-argument-type]
+    return onh.from_array(tensor, name)
 
 
 def to_array_extended(proto: TensorProto) -> TensorLike:
@@ -666,6 +625,7 @@ def onnx_dtype_to_np_dtype(itype: int) -> Any:
     )
 
 
+# pyrefly: ignore[unknown-name]
 def dtype_to_tensor_dtype(dt: Union[np.dtype, "torch.dtype"]) -> int:  # noqa: F821
     """
     Converts a torch dtype or numpy dtype into a onnx element type.
@@ -679,6 +639,7 @@ def dtype_to_tensor_dtype(dt: Union[np.dtype, "torch.dtype"]) -> int:  # noqa: F
         pass
     from .torch_helper import torch_dtype_to_onnx_dtype
 
+    # pyrefly: ignore[bad-argument-type]
     return torch_dtype_to_onnx_dtype(dt)
 
 
@@ -779,6 +740,7 @@ def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
                 f"ml_dtypes can be used."
             ) from e
 
+        # pyrefly: ignore[bad-assignment]
         mapping: Dict[int, np.dtype] = {
             TensorProto.BFLOAT16: ml_dtypes.bfloat16,
             TensorProto.FLOAT8E4M3FN: ml_dtypes.float8_e4m3fn,
@@ -798,7 +760,7 @@ def iterator_initializer_constant(
     model: Union[FunctionProto, GraphProto, ModelProto],
     use_numpy: bool = True,
     prefix: str = "",
-) -> Iterator[Tuple[str, Union["torch.Tensor", np.ndarray]]]:  # noqa: F821
+) -> Iterator[Tuple[str, TensorLike]]:  # noqa: F821
     """
     Iterates on iniatialiers and constant in an onnx model.
 
@@ -814,9 +776,11 @@ def iterator_initializer_constant(
         if prefix:
             prefix += "."
         for init in graph.initializer:
-            yield f"{prefix}{init.name}", (
-                to_array_extended(init) if use_numpy else to_tensor(init)
-            )
+            s = f"{prefix}{init.name}"
+            if use_numpy:
+                yield s, to_array_extended(init)
+            # pyrefly: ignore[unbound-name]
+            yield s, to_tensor(init)
         nodes = graph.node
         name = graph.name
         if isinstance(model, ModelProto):
@@ -831,13 +795,14 @@ def iterator_initializer_constant(
         if node.op_type == "Constant" and node.domain == "":
             from ..reference import ExtendedReferenceEvaluator as Inference
 
-            if not use_numpy:
-                import torch
             sess = Inference(node)
             value = sess.run(None, {})[0]
-            yield f"{prefix}{node.output[0]}", (
-                value if use_numpy else torch.from_numpy(value)
-            )
+
+            if not use_numpy:
+                import torch
+
+                yield f"{prefix}{node.output[0]}", (torch.from_numpy(value))
+            yield f"{prefix}{node.output[0]}", (value)
 
         if node.op_type in {"Loop", "Body", "Scan"}:
             for att in node.attribute:
@@ -870,7 +835,9 @@ def tensor_statistics(tensor: Union[np.ndarray, TensorProto]) -> Dict[str, Union
     from .helper import size_type
 
     if isinstance(tensor, TensorProto):
+        # pyrefly: ignore[bad-assignment]
         tensor = to_array_extended(tensor)
+    assert isinstance(tensor, np.ndarray)  # type checking
     itype = np_dtype_to_tensor_dtype(tensor.dtype)
     stat = dict(
         mean=float(tensor.mean()),
@@ -948,7 +915,7 @@ class NodeCoordinates:
 
     def __init__(
         self,
-        node: Union[onnx.TensorProto, NodeProto, str],
+        node: Union[TensorProto, NodeProto, onnx.SparseTensorProto, ValueInfoProto, str],
         path: Tuple[Tuple[int, str, str], ...],
     ):
         assert isinstance(path, tuple), f"Unexpected type {type(path)} for path"
@@ -968,9 +935,7 @@ class NodeCoordinates:
 
 
 class ResultFound:
-    """
-    Class returned by :func:`enumerate_results`.
-    """
+    """Class returned by :func:`enumerate_results`."""
 
     __slots__ = ("consumer", "name", "producer")
 
@@ -1060,9 +1025,9 @@ def enumerate_results(
                     print(f"[enumerate_results] {indent}-- {r}")
                 yield r
         for i in proto.sparse_initializer:
-            if i.name in name:
+            if i.values.name in name:
                 r = ResultFound(
-                    i.name,
+                    i.values.name,
                     NodeCoordinates(i, tuple([*coordinates, (-1, "INIT", "")])),  # noqa: C409
                     None,
                 )
@@ -1165,9 +1130,9 @@ def shadowing_names(
         return shadowing_names(
             proto.node,
             verbose=verbose,
-            existing=set(i.name for i in proto.initializer)
-            | set(i.name for i in proto.sparse_initializer)
-            | set(i.name for i in proto.input if i.name),
+            existing={i.name for i in proto.initializer}
+            | {i.values.name for i in proto.sparse_initializer}
+            | {i.name for i in proto.input if i.name},
             shadow_context=set(),
             post_shadow_context=set(),
         )
@@ -1201,9 +1166,9 @@ def shadowing_names(
         for att in node.attribute:
             if att.type == AttributeProto.GRAPH:
                 g = att.g
-                shadow |= set(i.name for i in g.input) & shadow_context
-                shadow |= set(i.name for i in g.initializer) & shadow_context
-                shadow |= set(i.name for i in g.sparse_initializer) & shadow_context
+                shadow |= {i.name for i in g.input} & shadow_context
+                shadow |= {i.name for i in g.initializer} & shadow_context
+                shadow |= {i.values.name for i in g.sparse_initializer} & shadow_context
                 s, _ps, c = shadowing_names(
                     g.node, verbose=verbose, existing=existing, shadow_context=existing
                 )
@@ -1225,9 +1190,9 @@ def get_hidden_inputs(graph: onnx.GraphProto) -> Set[str]:
     """
     hidden = set()
     memo = (
-        set(i.name for i in graph.initializer)
-        | set(i.name for i in graph.sparse_initializer)
-        | set(i.name for i in graph.input)
+        {i.name for i in graph.initializer}
+        | {i.values.name for i in graph.sparse_initializer}
+        | {i.name for i in graph.input}
     )
     for node in graph.node:
         for i in node.input:
@@ -1392,9 +1357,7 @@ def make_submodel(
 def get_tensor_shape(
     obj: Union[onnx.ValueInfoProto, onnx.TypeProto, onnx.TensorProto],
 ) -> Optional[List[Optional[Union[int, str]]]]:
-    """
-    Returns the shape if that makes sense for this object.
-    """
+    """Returns the shape if that makes sense for this object."""
     if isinstance(obj, ValueInfoProto):
         return get_tensor_shape(obj.type)
     elif not isinstance(obj, onnx.TypeProto):
@@ -1512,9 +1475,6 @@ def onnx_remove_node_unused(
         if not ({o for o in node.output if o} & marked_set):
             removed.add(ind)
 
-    if not is_function:
-        initializers = [i for i in graph.initializer if i.name in marked]
-        sparse_initializers = [i for i in graph.sparse_initializer if i.name in marked]
     new_nodes = [node for i, node in enumerate(nodes) if i not in removed]
 
     # Finally create the new graph.
@@ -1529,13 +1489,16 @@ def onnx_remove_node_unused(
             attributes=graph.attribute,
             doc_string=graph.doc_string,
         )
+
+    initializers = [i for i in graph.initializer if i.name in marked]
+    sparse_initializers = [i for i in graph.sparse_initializer if i.values.name in marked]
     new_graph = oh.make_graph(
         new_nodes,
         graph.name,
         graph.input,
         graph.output,
         initializers,
-        sparse_initializers,
+        sparse_initializer=sparse_initializers,
     )
     new_graph.value_info.extend(graph.value_info)
     return new_graph
@@ -1549,7 +1512,7 @@ def select_model_inputs_outputs(
     overwrite: Optional[Dict[str, Any]] = None,
     remove_unused: bool = True,
     verbose: int = 0,
-):
+) -> ModelProto:
     """
     Takes a model and changes its outputs.
 
@@ -1709,6 +1672,7 @@ def select_model_inputs_outputs(
     )
     if remove_unused:
         graph = onnx_remove_node_unused(graph, recursive=False)
+        assert isinstance(graph, GraphProto)  # type checking
     onnx_model = oh.make_model(graph, functions=model.functions)
     onnx_model.ir_version = model.ir_version
     onnx_model.producer_name = model.producer_name

@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional, Union, Tuple
 import onnx
 import torch
-from ...api import TensorLike
+from ...typing import TensorLike
 from ...helpers import string_type
 from ...helpers.torch_helper import to_tensor
 
