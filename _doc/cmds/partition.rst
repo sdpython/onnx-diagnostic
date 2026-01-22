@@ -42,6 +42,6 @@ This produces the following output:
     -- save into 'partition.onnx'
     -- done
 
-The partioned model includes the following node:
+The partitioned model includes the following node:
 
 .. image:: _img_partition.png
