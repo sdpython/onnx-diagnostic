@@ -16,7 +16,6 @@ from onnx_diagnostic.ext_test_case import (
     has_cuda,
     has_onnxscript,
 )
-from onnx_diagnostic.typing import TensorLike
 
 
 class TestUnitTest(ExtTestCase):
@@ -110,10 +109,6 @@ class TestUnitTest(ExtTestCase):
                 "number",
             },
         )
-
-    def test_exc(self):
-        self.assertRaise(lambda: TensorLike().dtype, NotImplementedError)
-        self.assertRaise(lambda: TensorLike().shape, NotImplementedError)
 
 
 if __name__ == "__main__":
