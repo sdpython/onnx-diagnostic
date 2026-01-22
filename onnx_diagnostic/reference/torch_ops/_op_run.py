@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional, Union, Tuple
 import onnx
 import torch
-from ...api import TensorLike
+from ...typing import TensorLike
 from ...helpers import string_type
 from ...helpers.torch_helper import to_tensor
 
@@ -149,7 +149,7 @@ class OpRunSequence(OpRunValue):
     ) -> "OpRunSequence":
         "Inserts a value at a given position."
         assert isinstance(tensor, OpRunTensor), f"Unexpected type {type(tensor)} for tensor"
-        new_seq = OpRunSequence()
+        new_seq = OpRunSequence()  # type: ignore[abstract]
         seq = self.sequence.copy()
         new_seq.sequence = seq
         if position is None:

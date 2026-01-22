@@ -180,9 +180,7 @@ class TestOnnxHelper(ExtTestCase):
         opsets: Dict[str, int],
         **kwargs: Any,
     ) -> FunctionProto:
-        """
-        Returns the CDist implementation as a function.
-        """
+        """Returns the CDist implementation as a function."""
         assert len(node_inputs) == 2
         assert len(node_outputs) == 1
         assert opsets
@@ -191,12 +189,6 @@ class TestOnnxHelper(ExtTestCase):
         metric = kwargs["metric"]
         assert metric in ("euclidean", "sqeuclidean")
         # subgraph
-        nodes = [
-            oh.make_node("Sub", ["next", "next_in"], ["diff"]),
-            oh.make_node("Constant", [], ["axis"], value_ints=[1]),
-            oh.make_node("ReduceSumSquare", ["diff", "axis"], ["scan_out"], keepdims=0),
-            oh.make_node("Identity", ["next_in"], ["next_out"]),
-        ]
 
         def make_value(name):
             value = ValueInfoProto()
@@ -204,26 +196,32 @@ class TestOnnxHelper(ExtTestCase):
             return value
 
         graph = oh.make_graph(
-            nodes,
+            [
+                oh.make_node("Sub", ["next", "next_in"], ["diff"]),
+                oh.make_node("Constant", [], ["axis"], value_ints=[1]),
+                oh.make_node("ReduceSumSquare", ["diff", "axis"], ["scan_out"], keepdims=0),
+                oh.make_node("Identity", ["next_in"], ["next_out"]),
+            ],
             "loop",
             [make_value("next_in"), make_value("next")],
             [make_value("next_out"), make_value("scan_out")],
         )
 
-        scan = oh.make_node(
-            "Scan", ["xb", "xa"], ["next_out", "zout"], num_scan_inputs=1, body=graph
-        )
-        final = (
-            oh.make_node("Sqrt", ["zout"], ["z"])
-            if metric == "euclidean"
-            else oh.make_node("Identity", ["zout"], ["z"])
-        )
         return oh.make_function(
             "npx",
             f"CDist_{metric}",
             ["xa", "xb"],
             ["z"],
-            [scan, final],
+            [
+                oh.make_node(
+                    "Scan", ["xb", "xa"], ["next_out", "zout"], num_scan_inputs=1, body=graph
+                ),
+                (
+                    oh.make_node("Sqrt", ["zout"], ["z"])
+                    if metric == "euclidean"
+                    else oh.make_node("Identity", ["zout"], ["z"])
+                ),
+            ],
             [oh.make_opsetid("", opsets[""])],
         )
 
@@ -234,9 +232,7 @@ class TestOnnxHelper(ExtTestCase):
         )
         model = oh.make_model(
             oh.make_graph(
-                [
-                    oh.make_node(proto.name, ["X", "Y"], ["Z"]),
-                ],
+                [oh.make_node(proto.name, ["X", "Y"], ["Z"])],
                 "dummy",
                 [
                     oh.make_tensor_value_info("X", itype, [None, None]),

@@ -25,6 +25,7 @@ class ReportResultComparison:
         self.max_diff = max_diff
         self.tensors = tensors
         self._build_mapping()
+        self.unique_run_names: Set[str] = set()
 
     # pyrefly: ignore[unknown-name]
     def key(self, tensor: "torch.Tensor") -> ReportKeyValueType:  # noqa: F821
@@ -44,7 +45,7 @@ class ReportResultComparison:
     def clear(self):
         """Clears the last report."""
         self.report_cmp = {}
-        self.unique_run_names: Set[str] = set()
+        self.unique_run_names = set()
 
     @property
     def value(

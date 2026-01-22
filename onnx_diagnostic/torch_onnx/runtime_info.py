@@ -2,7 +2,7 @@ import enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import onnx
 import torch
-from ..api import TensorLike
+from ..typing import TensorLike
 from ..helpers import string_type
 from ..helpers.onnx_helper import get_hidden_inputs
 
