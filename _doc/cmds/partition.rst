@@ -3,7 +3,7 @@
 
 The command line leverages the metadata added by the exporter.
 Every node is tagged with information indicating which part of the model
-it comes from. In particular the eky `namespace`:
+it comes from. In particular the key `namespace`:
 
 ::
 
