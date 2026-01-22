@@ -779,8 +779,9 @@ def iterator_initializer_constant(
             s = f"{prefix}{init.name}"
             if use_numpy:
                 yield s, to_array_extended(init)
-            # pyrefly: ignore[unbound-name]
-            yield s, to_tensor(init)
+            else:
+                # pyrefly: ignore[unbound-name]
+                yield s, to_tensor(init)
         nodes = graph.node
         name = graph.name
         if isinstance(model, ModelProto):
@@ -802,7 +803,8 @@ def iterator_initializer_constant(
                 import torch
 
                 yield f"{prefix}{node.output[0]}", (torch.from_numpy(value))
-            yield f"{prefix}{node.output[0]}", (value)
+            else:
+                yield f"{prefix}{node.output[0]}", (value)
 
         if node.op_type in {"Loop", "Body", "Scan"}:
             for att in node.attribute:

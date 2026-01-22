@@ -149,7 +149,7 @@ class OpRunSequence(OpRunValue):
     ) -> "OpRunSequence":
         "Inserts a value at a given position."
         assert isinstance(tensor, OpRunTensor), f"Unexpected type {type(tensor)} for tensor"
-        new_seq = OpRunSequence()
+        new_seq = OpRunSequence()  # type: ignore[abstract]
         seq = self.sequence.copy()
         new_seq.sequence = seq
         if position is None:

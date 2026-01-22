@@ -46,7 +46,7 @@ class SequenceEmpty_11(OpRunOpSequence):
         )
 
     def run(self) -> OpRunSequence:
-        return OpRunSequence(dtype=self.dtype)
+        return OpRunSequence(dtype=self.dtype)  # type: ignore[abstract]
 
 
 class SequenceInsert_11(OpRunOpSequence):
