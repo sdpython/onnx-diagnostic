@@ -1572,6 +1572,76 @@ def _cmd_optimize(argv: List[Any]):
     )
 
 
+def get_parser_partition() -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="partition",
+        formatter_class=RawTextHelpFormatter,
+        description=textwrap.dedent("""
+            Partitions an onnx model by moving nodes into local functions.
+            Exporters may add metadata to the onnx nodes telling which part
+            of the model it comes from (namespace, source, ...).
+            This nodes are moved into local functions.
+            """),
+        epilog=textwrap.dedent("""
+            The regular may match the following values,
+            'model.layers.0.forward', 'model.layers.1.forward', ...
+            A local function will be created for each distinct layer.
+            """),
+    )
+    parser.add_argument("input", help="input model")
+    parser.add_argument("output", help="output model")
+    parser.add_argument(
+        "-r",
+        "--regex",
+        default=".*[.]layers[.][0-9]+[.]forward$",
+        help=textwrap.dedent("""
+            merges all nodes sharing the same value in node metadata,
+            these values must match the regular expression specified by
+            this parameter, the default value matches what transformers
+            usually to define a layer
+            """).strip("\n"),
+    )
+    parser.add_argument(
+        "-p",
+        "--meta-prefix",
+        default="namespace,source[",
+        help="allowed prefixes for keys in the metadata",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        default=0,
+        required=False,
+        type=int,
+        help="verbosity",
+    )
+    return parser
+
+
+def _cmd_partition(argv: List[Any]):
+    from .helpers.onnx_helper import make_model_with_local_functions
+
+    parser = get_parser_partition()
+    args = parser.parse_args(argv[1:])
+
+    if args.verbose:
+        print(f"-- load {args.input!r}")
+    onx = onnx.load(args.input, load_external_data=False)
+    if args.verbose:
+        print("-- partition")
+    onx2 = make_model_with_local_functions(
+        onx,
+        regex=args.regex,
+        metadata_key_prefix=tuple(args.meta_prefix.split(",")),
+        verbose=args.verbose,
+    )
+    if args.verbose:
+        print(f"-- save into {args.output!r}")
+    onnx.save(onx2, args.output)
+    if args.verbose:
+        print("-- done")
+
+
 #############
 # main parser
 #############
@@ -1593,6 +1663,7 @@ def get_main_parser() -> ArgumentParser:
             find         - find node consuming or producing a result
             lighten      - makes an onnx model lighter by removing the weights
             optimize     - optimizes an onnx model
+            partition    - partition a model, each partition appears as local function
             print        - prints the model on standard output
             sbs          - compares an exported program and a onnx model
             stats        - produces statistics on a model
@@ -1610,6 +1681,7 @@ def get_main_parser() -> ArgumentParser:
             "find",
             "lighten",
             "optimize",
+            "partition",
             "print",
             "sbs",
             "stats",
@@ -1631,6 +1703,7 @@ def main(argv: Optional[List[Any]] = None):
         find=_cmd_find,
         lighten=_cmd_lighten,
         optimize=_cmd_optimize,
+        partition=_cmd_partition,
         print=_cmd_print,
         sbs=_cmd_sbs,
         stats=_cmd_stats,
@@ -1658,6 +1731,7 @@ def main(argv: Optional[List[Any]] = None):
                 find=get_parser_find,
                 lighten=get_parser_lighten,
                 optimize=get_parser_optimize,
+                partition=get_parser_partition,
                 print=get_parser_print,
                 sbs=get_parser_sbs,
                 stats=get_parser_stats,

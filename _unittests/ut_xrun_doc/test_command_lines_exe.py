@@ -219,6 +219,14 @@ class TestCommandLines(ExtTestCase):
         self.assertIn("default", text)
         self.assertExists(output)
 
+    def test_m_parser_partition(self):
+        output = self.get_dump_file("test_parser_partition.onnx")
+        st = StringIO()
+        with redirect_stdout(st):
+            main(["partition", self.dummy_path, output, "-v", "1"])
+        text = st.getvalue()
+        self.assertIn("-- done", text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -11,5 +11,6 @@ Command Lines
     compare
     config
     optimize
+    partition
     sbs
     validate

@@ -1,6 +1,7 @@
 import functools
 import json
 import os
+import re
 import sys
 import warnings
 from typing import (
@@ -1320,7 +1321,6 @@ def make_submodel(
     Creates a model with the given list of nodes.
     It computes the minimum list of inputs needed for this model.
     The function assumes the nodes are sorted.
-    It does not handle yet subgraphs.
 
     :param nodes: list of nodes
     :param ir_version: ir version
@@ -1343,17 +1343,55 @@ def make_submodel(
                 if att.type == onnx.AttributeProto.GRAPH:
                     not_known |= get_hidden_inputs(att.g)
 
-    model = oh.make_model(
+    return oh.make_model(
         oh.make_graph(
             nodes,
             "submodel",
             [_mkv_(n, *type_rank_fn(n)) for n in sorted(not_known) if n],
-            [_mkv_(n, *type_rank_fn(n)) for n in sorted(output_names) if n],
+            [_mkv_(n, *type_rank_fn(n)) for n in output_names if n],
         ),
         ir_version=ir_version,
         opset_imports=opset_imports,
     )
-    return model
+
+
+def make_subfunction(
+    name: str,
+    nodes: List[NodeProto],
+    opset_imports: Sequence[OperatorSetIdProto],
+    output_names: List[str],
+    domain: str = "local_function",
+) -> FunctionProto:
+    """
+    Creates a function with the given list of nodes.
+    It computes the minimum list of inputs needed for this model.
+    The function assumes the nodes are sorted.
+
+    :param name: function name
+    :param nodes: list of nodes
+    :param opset_imports: opset import
+    :param output_names: desired outputs
+    :param domain: function domain
+    :return: model proto
+    """
+    not_known: Set[str] = set()
+    for node in nodes[::-1]:
+        not_known -= {o for o in node.output if o}
+        not_known |= {i for i in node.input if i}
+        if node.op_type in {"Scan", "If", "Loop"}:
+            # there are hidden inputs
+            for att in node.attribute:
+                if att.type == onnx.AttributeProto.GRAPH:
+                    not_known |= get_hidden_inputs(att.g)
+
+    return oh.make_function(
+        domain,
+        name,
+        nodes=nodes,
+        inputs=sorted(not_known),
+        outputs=output_names,
+        opset_imports=opset_imports,
+    )
 
 
 def get_tensor_shape(
@@ -1693,3 +1731,172 @@ def select_model_inputs_outputs(
         op_set.version = oimp.version
 
     return onnx_model
+
+
+def _find_used_names(node_list, node_indices):
+    # find all the outputs the subset of nodes produces
+    possible_outputs = set()
+    for i_node in node_indices:
+        if not node_list[i_node]:
+            continue
+        possible_outputs |= {o for o in node_list[i_node].output if o}
+    # find all requires input from the other nodes
+    set_indices = set(node_indices)
+    not_known: Set[str] = set()
+    ranges = list(range(len(node_list)))
+    for i_node in ranges[::-1]:
+        if i_node in set_indices:
+            continue
+        node = node_list[i_node]
+        if not node:
+            continue
+        not_known -= {o for o in node.output if o}
+        not_known |= {i for i in node.input if i}
+        if node.op_type in {"Scan", "If", "Loop"}:
+            # there are hidden inputs
+            for att in node.attribute:
+                if att.type == onnx.AttributeProto.GRAPH:
+                    not_known |= get_hidden_inputs(att.g)
+    # output
+    selection = possible_outputs & not_known
+    assert selection, (
+        f"No output is needed, possible_outputs={sorted(possible_outputs)}, "
+        f"not_known={sorted(not_known)}"
+    )
+    return sorted(selection)
+
+
+def check_for_non_recursivity(
+    node_list: List[Optional[NodeProto]], inputs: Sequence[str], outputs: Sequence[str]
+):
+    """
+    We finally need to check that any of this output is not required
+    by one input from the function itself, that would mean one node
+    needs an output of the function and is also required by the function:
+    it is probably missing from the initial set.
+
+
+
+    :param node_list: list of nodes
+    :param inputs: input names to consider
+    :param outputs: output names which cannot be involved in input names
+    """
+    set_inputs = set(inputs)
+    set_outputs = set(outputs)
+    for node in node_list[::-1]:
+        if not node:
+            continue
+        si = set(node.output)
+        if si & set_inputs:
+            set_inputs |= set(node.input)
+            if node.op_type in {"Scan", "If", "Loop"}:
+                # there are hidden inputs
+                for att in node.attribute:
+                    if att.type == onnx.AttributeProto.GRAPH:
+                        set_inputs |= get_hidden_inputs(att.g)
+        if set_outputs & set_inputs:
+            raise ValueError(
+                f"Results {set_outputs & set_inputs} are needed for inputs {inputs} "
+                f"but also requires {outputs} which is not allowed."
+            )
+
+
+def make_model_with_local_functions(
+    model: ModelProto,
+    regex: str = ".*[.]layers[.][0-9]+[.]forward$",
+    domain: str = "local_function",
+    metadata_key_prefix: Union[str, Tuple[str, ...]] = ("namespace", "source["),
+    verbose: int = 0,
+) -> ModelProto:
+    """
+    Selects nodes based on a regular expression, using metadata
+    ``'namespace'``. It is going to look into every value
+    matching the regular expression and partition the nodes based
+    on the unique values the regular expression finds.
+    Every set of nodes it replaced by a call to a local function.
+
+    :param model: model proto
+    :param regex: regular expression
+    :param domain: function domain
+    :param metadata_keys: list of metadata keys to consider,
+        every value is split into multiple ones.
+    :param verbose: verbosity
+    :return: model proto
+    """
+    prefix = (
+        metadata_key_prefix
+        if isinstance(metadata_key_prefix, tuple)
+        else (metadata_key_prefix,)
+    )
+    reg = re.compile(regex)
+    unique_values = set()
+    unique: Dict[str, List[int]] = {}
+    for i, node in enumerate(model.graph.node):
+        selected = False
+        for data in node.metadata_props:
+            if data.key.startswith(prefix):
+                values = re.split("[,:]", data.value)
+                for v in values:
+                    if not v:
+                        continue
+                    if reg.match(v):
+                        if v not in unique:
+                            unique[v] = []
+                        unique[v].append(i)
+                        selected = True
+                        break
+                    unique_values.add(v)
+                if selected:
+                    break
+    # sets of nodes.
+    if not unique:
+        if verbose:
+            print(f"[make_model_with_local_functions] no match in {sorted(unique_values)}")
+        return model
+
+    if verbose:
+        print(f"[make_model_with_local_functions] matched {len(unique)} partitions")
+    functions = []
+    new_nodes: List[Optional[NodeProto]] = list(model.graph.node)
+    for key, node_indices in unique.items():
+        function_name = key.strip().replace(".", "_")
+        if verbose:
+            print(
+                f"[make_model_with_local_functions] move {len(node_indices)} "
+                f"nodes in partition {function_name!r}"
+            )
+        outputs = _find_used_names(new_nodes, node_indices)
+        function_nodes = [new_nodes[i] for i in node_indices]
+        lf = make_subfunction(
+            function_name,
+            [n for n in function_nodes if n],
+            model.opset_import,
+            outputs,
+            domain=domain,
+        )
+        check_for_non_recursivity(new_nodes, lf.input, lf.output)
+        functions.append(lf)
+        maxi = max(node_indices)
+        for i in node_indices:
+            new_nodes[i] = None
+        new_nodes[maxi] = oh.make_node(lf.name, lf.input, lf.output, domain=lf.domain)
+
+    return oh.make_model(
+        oh.make_graph(
+            [n for n in new_nodes if n],
+            model.graph.name,
+            model.graph.input,
+            model.graph.output,
+            model.graph.initializer,
+            doc_string=model.graph.doc_string,
+            value_info=model.graph.value_info,
+            sparse_initializer=model.graph.sparse_initializer,
+        ),
+        ir_version=model.ir_version,
+        opset_imports=(
+            model.opset_import
+            if domain in {d.domain for d in model.opset_import}
+            else [*model.opset_import, oh.make_opsetid(domain, 1)]
+        ),
+        functions=[*model.functions, *functions],
+    )
