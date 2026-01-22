@@ -834,9 +834,11 @@ class TestOnnxHelper(ExtTestCase):
         for i_node in [0, 1, 2, 3]:
             node = model.graph.node[i_node]
             meta = node.metadata_props.add()
-            meta.key = "namespace"
+            meta.key = f"source[{i_node}]"
             meta.value = f"LLL{i_node//3}"
-        new_model = make_model_with_local_functions(model, "^LLL[01]$")
+        new_model = make_model_with_local_functions(
+            model, "^LLL[01]$", metadata_key_prefix="source["
+        )
         check_model(model)
         self.assertEqual(len(new_model.functions), 2)
         p = pretty_onnx(new_model)

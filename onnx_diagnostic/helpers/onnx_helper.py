@@ -1805,7 +1805,7 @@ def make_model_with_local_functions(
     model: ModelProto,
     regex: str,
     domain: str = "local_function",
-    metadata_keys: Tuple[str, ...] = ("namespace",),
+    metadata_key_prefix: Union[str, Tuple[str, ...]] = ("namespace", "source["),
 ) -> FunctionProto:
     """
     Selects nodes based on a regular expression, using metadata
@@ -1821,13 +1821,17 @@ def make_model_with_local_functions(
         every value is split into multiple ones.
     :return: model proto
     """
-    set_keys = set(metadata_keys)
+    prefix = (
+        metadata_key_prefix
+        if isinstance(metadata_key_prefix, tuple)
+        else (metadata_key_prefix,)
+    )
     reg = re.compile(regex)
     unique: Dict[str, List[int]] = {}
     for i, node in enumerate(model.graph.node):
         selected = False
         for data in node.metadata_props:
-            if data.key in set_keys:
+            if data.key.startswith(prefix):
                 values = data.value.split(",")
                 for v in values:
                     if reg.match(v):
