@@ -19,12 +19,7 @@ from .cache_helper import (
     CacheKeyValue,
 )
 from .mini_onnx_builder import create_onnx_model_from_input_tensors
-from .onnx_helper import (
-    to_array_extended,
-    tensor_dtype_to_np_dtype,
-    _STORAGE_TYPE,
-    onnx_dtype_name,
-)
+from .onnx_helper import to_array_extended, tensor_dtype_to_np_dtype, onnx_dtype_name
 
 
 def proto_from_tensor(
@@ -84,7 +79,11 @@ def proto_from_tensor(
         byte_data = (ctypes.c_ubyte * numel * element_size).from_address(np_arr.data_ptr())
         tensor.raw_data = bytes(byte_data)
         if sys.byteorder == "big":
-            np_dtype = _STORAGE_TYPE[tensor.data_type]  # type: ignore
+            storage_type = {
+                onnx.TensorProto.FLOAT16: np.int16,
+                onnx.TensorProto.BFLOAT16: np.int16,
+            }
+            np_dtype = storage_type[tensor.data_type]  # type: ignore
             np.frombuffer(tensor.raw_data, dtype=np_dtype).byteswap(inplace=True)  # type: ignore
     else:
         tensor.raw_data = np_arr.tobytes()
