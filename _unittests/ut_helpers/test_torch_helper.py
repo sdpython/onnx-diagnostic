@@ -362,6 +362,25 @@ class TestTorchTestHelper(ExtTestCase):
         self.assertEqual(hash1, hash2)
         self.assertGreater(torch_tensor_size(cache), 1)
 
+    @unittest.skipIf(make_sliding_window_cache is not None, "transformers<5")
+    def test_torch_deepcopy_sliding_windon_cache5(self):
+        cache = make_dynamic_cache(
+            [
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+            ],
+            cls_layers="DynamicSlidingWindowCache",
+        )
+        at = torch_deepcopy(cache)
+        self.assertEqual(type(cache), type(at))
+        self.assertEqual(max_diff(cache, at)["abs"], 0)
+        hash1 = string_type(at, with_shape=True, with_min_max=True)
+        CacheKeyValue(cache).key_cache[0] += 1000
+        hash2 = string_type(at, with_shape=True, with_min_max=True)
+        self.assertEqual(hash1, hash2)
+        self.assertGreater(torch_tensor_size(cache), 1)
+
     def test_torch_deepcopy_none(self):
         self.assertEmpty(torch_deepcopy(None))
         self.assertEqual(torch_tensor_size(None), 0)

@@ -1,6 +1,7 @@
 import itertools
 from typing import Any, Callable, List, Set, Tuple
 import torch
+import transformers.cache_utils
 from transformers.cache_utils import Cache, DynamicCache, EncoderDecoderCache, StaticCache
 
 try:
@@ -27,16 +28,34 @@ WRONG_REGISTRATIONS = {
     DynamicCache: "4.50",
     BaseModelOutput: None,
 }
+SHORTEN_LAYER_NAMES = {
+    "DynamicLayer": "D",
+    "DynamicSlidingWindowLayer": "W",
+    "StaticLayer": "S",
+    "StaticSlidingWindowLayer": "X",
+    "D": "DynamicLayer",
+    "W": "DynamicSlidingWindowLayer",
+    "S": "StaticLayer",
+    "X": "StaticSlidingWindowLayer",
+}
 
 
 def _flatten_key_value_cache(cache: Cache) -> Tuple[List[Any], torch.utils._pytree.Context]:
     ca = CacheKeyValue(cache)
     flat = list(itertools.chain.from_iterable(zip(ca.key_cache, ca.value_cache)))
-    keys = list(
-        itertools.chain.from_iterable(
-            (f"key_{i}", f"value_{i}") for i in range(len(ca.key_cache))
+    unique = set(ca.cls_layers)
+    if len(unique) == 1 and unique.pop().__name__ == "DynamicLayer":
+        keys = list(
+            itertools.chain.from_iterable(
+                (f"key_{i}", f"value_{i}") for i in range(len(ca.key_cache))
+            )
         )
-    )
+        return flat, keys
+
+    keys = []
+    for i in range(len(ca.key_cache)):
+        letter = SHORTEN_LAYER_NAMES[ca.cls_layers[i].__name__]
+        keys.extend([f"key_{letter}{i}", f"value_{letter}{i}"])
     return flat, keys
 
 
@@ -54,7 +73,21 @@ def _unflatten_cache(
     output_type=None,
 ) -> DynamicCache:
     """Restores a :class:`transformers.cache_utils.DynamicCache` from python objects."""
-    res = make_cache(list(zip(values[::2], values[1::2])))
+    expected = list(
+        itertools.chain.from_iterable(
+            (f"key_{i}", f"value_{i}") for i in range(len(values) // 2)
+        )
+    )
+    if expected == context:
+        res = make_cache(list(zip(values[::2], values[1::2])))
+        assert output_type is None or isinstance(
+            res, output_type
+        ), f"Type mismatch between {output_type} (expected) and {type(res)}"
+        return res
+
+    cls_layer_names = [SHORTEN_LAYER_NAMES[name.split("_")[1][0]] for name in context][::2]
+    cls_layers = [getattr(transformers.cache_utils, cls_name) for cls_name in cls_layer_names]
+    res = make_cache(list(zip(values[::2], values[1::2])), cls_layers=cls_layers)
     assert output_type is None or isinstance(
         res, output_type
     ), f"Type mismatch between {output_type} (expected) and {type(res)}"
@@ -70,14 +103,6 @@ def flatten_dynamic_cache(
     dynamic_cache: DynamicCache,
 ) -> Tuple[List[Any], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
-    assert (
-        not hasattr(dynamic_cache, "layers")
-        or not dynamic_cache.layers
-        or all(lay.__class__.__name__ == "DynamicLayer" for lay in dynamic_cache.layers)
-    ), (
-        f"The serialization does not work yet on other layers "
-        f"than DynamicLayer, but layers={[lay.__class__ for lay in dynamic_cache.layers]}"
-    )
     return _flatten_key_value_cache(dynamic_cache)
 
 
@@ -85,14 +110,6 @@ def flatten_with_keys_dynamic_cache(
     dynamic_cache: DynamicCache,
 ) -> Tuple[List[Tuple[torch.utils._pytree.KeyEntry, Any]], torch.utils._pytree.Context]:
     """Serializes a :class:`transformers.cache_utils.DynamicCache` with python objects."""
-    assert (
-        not hasattr(dynamic_cache, "layers")
-        or not dynamic_cache.layers
-        or all(lay.__class__.__name__ == "DynamicLayer" for lay in dynamic_cache.layers)
-    ), (
-        f"The serialization does not work yet on other layers "
-        f"than DynamicLayer, but layers={[lay.__class__ for lay in dynamic_cache.layers]}"
-    )
     return _flatten_with_keys_cache(dynamic_cache)
 
 
