@@ -43,7 +43,7 @@ SHORTEN_LAYER_NAMES = {
 def _flatten_key_value_cache(cache: Cache) -> Tuple[List[Any], torch.utils._pytree.Context]:
     ca = CacheKeyValue(cache)
     flat = list(itertools.chain.from_iterable(zip(ca.key_cache, ca.value_cache)))
-    unique = set(ca.cls_layers)
+    unique = set(ca.cls_layers) if ca.cls_layers else {"DynamicLayer"}
     if len(unique) == 1 and unique.pop().__name__ == "DynamicLayer":
         keys = list(
             itertools.chain.from_iterable(
@@ -177,7 +177,9 @@ def unflatten_static_cache(
 ) -> StaticCache:
     """Restores a :class:`transformers.cache_utils.StaticCache` from python objects."""
     return _unflatten_cache(
-        lambda *args: make_static_cache(*args, max_cache_len=values[0].shape[2]),
+        lambda *args, **kwargs: make_static_cache(
+            *args, max_cache_len=values[0].shape[2], **kwargs
+        ),
         values,
         context,
         output_type=output_type,

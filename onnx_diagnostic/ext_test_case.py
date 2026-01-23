@@ -1028,6 +1028,19 @@ class ExtTestCase(unittest.TestCase):
                 rtol=rtol,
                 msg=msg,
             )
+        elif expected.__class__.__name__ == "BaseModelOutputWithPooling":
+            if expected.__class__.__name__ == value.__class__.__name__:
+                self.assertEqual(len(expected), len(value), msg=msg)
+                self.assertEqual(list(expected), list(value), msg=msg)  # checks the order
+                self.assertEqualAny(
+                    {k: v for k, v in expected.items()},  # noqa: C416
+                    {k: v for k, v in value.items()},  # noqa: C416
+                    atol=atol,
+                    rtol=rtol,
+                    msg=msg,
+                )
+            else:
+                self.assertEqualArray(expected.last_hidden_state, value)
         elif isinstance(expected, (tuple, list, dict)):
             self.assertIsInstance(value, type(expected), msg=msg)
             self.assertEqual(len(expected), len(value), msg=msg)

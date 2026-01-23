@@ -4,6 +4,7 @@ Change Logs
 0.8.11
 ++++++
 
+* :pr:`396`: fix serialization for DynamicCache with different layer classes
 * :pr:`394`: add function make_model_with_local_functions to partition a model into local functions
 
 0.8.10

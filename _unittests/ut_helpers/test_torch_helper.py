@@ -370,7 +370,7 @@ class TestTorchTestHelper(ExtTestCase):
                 (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
                 (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
             ],
-            cls_layers="DynamicSlidingWindowCache",
+            cls_layers="DynamicSlidingWindowLayer",
         )
         at = torch_deepcopy(cache)
         self.assertEqual(type(cache), type(at))
