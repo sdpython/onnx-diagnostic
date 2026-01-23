@@ -1068,11 +1068,14 @@ class ExtTestCase(unittest.TestCase):
             self.assertEqualAny(CacheKeyValue(expected), CacheKeyValue(value))
         elif expected.__class__.__name__ == "CacheKeyValue":
             self.assertEqual(type(expected), type(value), msg=msg)
-            self.assertEqualAny(
-                [cls.__name__ for cls in expected.cls_layers],
-                [cls.__name__ for cls in value.cls_layers],
-                msg=msg,
-            )
+            if expected.cls_layers is None:
+                self.assertEqual(expected.cls_layers, value.cls_layers)
+            else:
+                self.assertEqualAny(
+                    [cls.__name__ for cls in expected.cls_layers],
+                    [cls.__name__ for cls in value.cls_layers],
+                    msg=msg,
+                )
             self.assertEqualAny(expected.key_cache, value.key_cache, msg=msg)
             self.assertEqualAny(expected.value_cache, value.value_cache, msg=msg)
         elif expected.__class__.__name__ == "EncoderDecoderCache":
