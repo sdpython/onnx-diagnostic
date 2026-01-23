@@ -43,8 +43,8 @@ SHORTEN_LAYER_NAMES = {
 def _flatten_key_value_cache(cache: Cache) -> Tuple[List[Any], torch.utils._pytree.Context]:
     ca = CacheKeyValue(cache)
     flat = list(itertools.chain.from_iterable(zip(ca.key_cache, ca.value_cache)))
-    unique = set(ca.cls_layers) if ca.cls_layers else {"DynamicLayer"}
-    if len(unique) == 1 and unique.pop().__name__ == "DynamicLayer":
+    unique = set(ca.cls_layers) if ca.cls_layers else None
+    if unique is None or (len(unique) == 1 and unique.pop().__name__ == "DynamicLayer"):
         keys = list(
             itertools.chain.from_iterable(
                 (f"key_{i}", f"value_{i}") for i in range(len(ca.key_cache))
