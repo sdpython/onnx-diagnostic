@@ -44,7 +44,11 @@ def _flatten_key_value_cache(cache: Cache) -> Tuple[List[Any], torch.utils._pytr
     ca = CacheKeyValue(cache)
     flat = list(itertools.chain.from_iterable(zip(ca.key_cache, ca.value_cache)))
     unique = set(ca.cls_layers) if ca.cls_layers else None
-    if unique is None or (len(unique) == 1 and unique.pop().__name__ == "DynamicLayer"):
+    if (
+        cache.__class__.__name__ != "DynamicCache"
+        or unique is None
+        or (len(unique) == 1 and unique.pop().__name__ == "DynamicLayer")
+    ):
         keys = list(
             itertools.chain.from_iterable(
                 (f"key_{i}", f"value_{i}") for i in range(len(ca.key_cache))
@@ -80,14 +84,13 @@ def _unflatten_cache(
     )
     if expected == context:
         res = make_cache(list(zip(values[::2], values[1::2])))
-        assert output_type is None or isinstance(
-            res, output_type
-        ), f"Type mismatch between {output_type} (expected) and {type(res)}"
-        return res
+    else:
+        cls_layer_names = [SHORTEN_LAYER_NAMES[name.split("_")[1][0]] for name in context][::2]
+        cls_layers = [
+            getattr(transformers.cache_utils, cls_name) for cls_name in cls_layer_names
+        ]
+        res = make_cache(list(zip(values[::2], values[1::2])), cls_layers=cls_layers)
 
-    cls_layer_names = [SHORTEN_LAYER_NAMES[name.split("_")[1][0]] for name in context][::2]
-    cls_layers = [getattr(transformers.cache_utils, cls_name) for cls_name in cls_layer_names]
-    res = make_cache(list(zip(values[::2], values[1::2])), cls_layers=cls_layers)
     assert output_type is None or isinstance(
         res, output_type
     ), f"Type mismatch between {output_type} (expected) and {type(res)}"
