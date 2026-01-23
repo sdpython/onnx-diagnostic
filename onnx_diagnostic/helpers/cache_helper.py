@@ -348,6 +348,7 @@ else:
 def make_static_cache(
     key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
     max_cache_len: Optional[int] = None,
+    cls_layers: Optional[Union[str, List[type]]] = None,
 ) -> transformers.cache_utils.DynamicCache:
     """
     Creates an instance of :class:`transformers.cache_utils.StaticCache`.
@@ -379,6 +380,9 @@ def make_static_cache(
         )
         print(string_type(past_key_values, with_shape=True))
     """
+    assert not cls_layers or set(cls_layers) == {
+        transformers.cache_utils.StaticLayer
+    }, f"Not implemented when cls_layers={cls_layers!r}"
     key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
 
     class _config:
@@ -583,12 +587,8 @@ if hasattr(transformers.cache_utils, "SlidingWindowCache"):
         )
         return finalize_cache(cache)
 
-    def get_make_hybrid_cache():
-        return make_sliding_window_cache
-
 else:
     make_sliding_window_cache = None  # type: ignore[assignment]
-
 
 if hasattr(transformers.cache_utils, "HybridCache"):
 

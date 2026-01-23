@@ -1028,6 +1028,19 @@ class ExtTestCase(unittest.TestCase):
                 rtol=rtol,
                 msg=msg,
             )
+        elif expected.__class__.__name__ == "BaseModelOutputWithPooling":
+            if expected.__class__.__name__ == value.__class__.__name__:
+                self.assertEqual(len(expected), len(value), msg=msg)
+                self.assertEqual(list(expected), list(value), msg=msg)  # checks the order
+                self.assertEqualAny(
+                    {k: v for k, v in expected.items()},  # noqa: C416
+                    {k: v for k, v in value.items()},  # noqa: C416
+                    atol=atol,
+                    rtol=rtol,
+                    msg=msg,
+                )
+            else:
+                self.assertEqualArray(expected.last_hidden_state, value)
         elif isinstance(expected, (tuple, list, dict)):
             self.assertIsInstance(value, type(expected), msg=msg)
             self.assertEqual(len(expected), len(value), msg=msg)
@@ -1043,24 +1056,28 @@ class ExtTestCase(unittest.TestCase):
             "SlidingWindowCache",
             "HybridCache",
         ):
+            from .helpers.cache_helper import CacheKeyValue
+
             self.assertEqual(type(expected), type(value), msg=msg)
-            atts = ["key_cache", "value_cache"]
-            self.assertEqualAny(
-                {k: expected.__dict__.get(k, None) for k in atts},
-                {k: value.__dict__.get(k, None) for k in atts},
-                atol=atol,
-                rtol=rtol,
-            )
+            self.assertEqualAny(CacheKeyValue(expected), CacheKeyValue(value))
         elif expected.__class__.__name__ == "StaticCache":
+            from .helpers.cache_helper import CacheKeyValue
+
             self.assertEqual(type(expected), type(value), msg=msg)
             self.assertEqual(expected.max_cache_len, value.max_cache_len)
-            atts = ["key_cache", "value_cache"]
-            self.assertEqualAny(
-                {k: expected.__dict__.get(k, None) for k in atts},
-                {k: value.__dict__.get(k, None) for k in atts},
-                atol=atol,
-                rtol=rtol,
-            )
+            self.assertEqualAny(CacheKeyValue(expected), CacheKeyValue(value))
+        elif expected.__class__.__name__ == "CacheKeyValue":
+            self.assertEqual(type(expected), type(value), msg=msg)
+            if expected.cls_layers is None:
+                self.assertEqual(expected.cls_layers, value.cls_layers)
+            else:
+                self.assertEqualAny(
+                    [cls.__name__ for cls in expected.cls_layers],
+                    [cls.__name__ for cls in value.cls_layers],
+                    msg=msg,
+                )
+            self.assertEqualAny(expected.key_cache, value.key_cache, msg=msg)
+            self.assertEqualAny(expected.value_cache, value.value_cache, msg=msg)
         elif expected.__class__.__name__ == "EncoderDecoderCache":
             self.assertEqual(type(expected), type(value), msg=msg)
             atts = ["self_attention_cache", "cross_attention_cache"]
