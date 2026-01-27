@@ -69,8 +69,7 @@ def _flatten_unflatten_for_dynamic_shapes(
 def _infer_dynamic_dimensions(
     shape_list: Sequence[tuple[int, ...]], add_batch_dimension: bool = False
 ) -> list[int]:
-    """
-    Returns the list of dynamic dimensions given a list of shapes
+    """Returns the list of dynamic dimensions given a list of shapes
     corresponding to the same tensor.
 
     Args:
@@ -215,8 +214,8 @@ class InputObserverInfo:
     def infer_dynamic_shapes(
         self, add_batch_dimension_for: set[int | str] | None = None
     ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
-        """
-        Infers dynamic shapes. Most of the time, models do support a batch dimension
+        """Infers dynamic shapes.  based on the collected tensors.
+        Most of the time, models do support a batch dimension
         but this batch dimension has the same value for every input sample.
         Instead of running inference on new samples, argument `add_batch_dimension_for`
         can be used to tell the first dimension is a dynamic dimension for a particular
