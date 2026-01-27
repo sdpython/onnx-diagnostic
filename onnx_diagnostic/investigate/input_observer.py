@@ -160,7 +160,7 @@ class InputObserverInfo:
         if not self.flat_inputs or self._max_args is None or self._max_kwargs is None:
             raise RuntimeError("No inputs were captured.")
 
-        flat_index_to_args = []
+        flat_index_to_args: list[int | str] = []
         arg_sizes = []
         for index_args, a in enumerate(self._max_args):
             size = len(torch.utils._pytree.tree_flatten(a)[0])
