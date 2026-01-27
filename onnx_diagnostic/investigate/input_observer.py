@@ -4,7 +4,7 @@ from typing import Any, Callable, Sequence
 import torch
 
 
-def flatten_unflatten_for_dynamic_shapes(
+def _flatten_unflatten_for_dynamic_shapes(
     obj: Any,
     use_dict: bool = True,
     change_function: Callable[[torch.Tensor], Any] | None = None,
@@ -38,7 +38,7 @@ def flatten_unflatten_for_dynamic_shapes(
     for subspec in (spec.children() if hasattr(spec, "children") else spec.children_specs):
         end += subspec.num_leaves
         value = subspec.unflatten(flat[start:end])
-        value = flatten_unflatten_for_dynamic_shapes(
+        value = _flatten_unflatten_for_dynamic_shapes(
             value, use_dict=use_dict, change_function=change_function
         )
         subtrees.append(value)
@@ -66,7 +66,9 @@ def flatten_unflatten_for_dynamic_shapes(
     return subtrees
 
 
-def infer_dynamic_dimensions(shape_list: Sequence[tuple[int, ...]]) -> list[int]:
+def _infer_dynamic_dimensions(
+    shape_list: Sequence[tuple[int, ...]], add_batch_dimension: bool = False
+) -> list[int]:
     """
     Returns the list of dynamic dimensions given a list of shapes
     corresponding to the same tensor.
@@ -74,6 +76,8 @@ def infer_dynamic_dimensions(shape_list: Sequence[tuple[int, ...]]) -> list[int]
     Args:
         shape_list:
             list of shapes, they must all have the same length
+        add_batch_dimension:
+            make the first dimension dynamic if it is not
 
     Returns:
         list of dynamic dimensions
@@ -86,28 +90,44 @@ def infer_dynamic_dimensions(shape_list: Sequence[tuple[int, ...]]) -> list[int]
     dynamic = []
     for i in range(rank):
         dims = [shape[i] for shape in shape_list]
-        if len(set(dims)) > 1:
+        if len(set(dims)) > 1 or (i == 0 and add_batch_dimension):
             dynamic.append(i)
     return dynamic
 
 
 class InputObserverInfo:
-    def __init__(self, signature: inspect.Signature):
+    """Contains all the necessary information to infer dynamic shapes
+    and the arguments to send to :func:`torch.export.export`.
+
+    Args:
+        signature_names: Names of the arguments of the method
+            the collector tensors come from. They are used if it becomes
+            necessary to move positional arguments to named ones.
+    """
+
+    def __init__(self, signature_names: list[str]):
         # pyrefly: ignore
         self.inputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_inputs: list[list[torch.Tensor | None]] = []
         # pyrefly: ignore
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
-        self.flat_outputs: list[torch.Tensor | list[torch.Tensor]] = []
-        self.signature = signature
+        self.flat_outputs: list[list[torch.Tensor]] = []
+        self.signature_names = signature_names
 
         self._max_args: tuple[Any, torch.Tensor] | None = None
         self._max_kwargs: dict[str, torch.Tensor] | None = None
 
     def __len__(self) -> int:
+        """Returns the number of collected set of inputs/outputs."""
         return len(self.flat_inputs)
 
     def add_inputs(self, args: tuple[Any, ...], kwargs: dict[str, Any]):
+        """Stores one set of inputs. They are deepcopied.
+
+        Args:
+            args: Positional arguments.
+            kwargs: Named arguments.
+        """
         kwargs = {
             k: v
             for k, v in kwargs.items()
@@ -128,18 +148,29 @@ class InputObserverInfo:
             self._max_kwargs = cloned_kwargs
 
     def add_outputs(self, res: torch.Tensor | tuple[torch.Tensor, ...]):
+        """Stores outputs. They are deepcopied."""
         flat_res, spec = torch.utils._pytree.tree_flatten(res)
         self.outputs_specs.append(spec)
         self.flat_outputs.append([t.clone().detach() for t in flat_res])
 
-    def build_inputs_completed_with_none_values(self) -> list[list[torch.Tensor]]:
+    def _build_inputs_completed_with_none_values(
+        self,
+    ) -> tuple[list[int | str], list[list[torch.Tensor]]]:
         # Let's compute the sizes of each independently.
         if not self.flat_inputs or self._max_args is None or self._max_kwargs is None:
             raise RuntimeError("No inputs were captured.")
-        arg_sizes = [len(torch.utils._pytree.tree_flatten(a)[0]) for a in self._max_args]
-        kwarg_sizes = {
-            k: len(torch.utils._pytree.tree_flatten(v)[0]) for k, v in self._max_kwargs.items()
-        }
+
+        flat_index_to_args = []
+        arg_sizes = []
+        for index_args, a in enumerate(self._max_args):
+            size = len(torch.utils._pytree.tree_flatten(a)[0])
+            arg_sizes.append(size)
+            flat_index_to_args.extend([index_args] * size)
+        kwarg_sizes = {}
+        for k, v in self._max_kwargs.items():
+            size = len(torch.utils._pytree.tree_flatten(v)[0])
+            kwarg_sizes[k] = size
+            flat_index_to_args.extend([k] * size)
 
         # Let's reprocess everything.
         captured_inputs: dict[int | str, int] = {}
@@ -179,10 +210,36 @@ class InputObserverInfo:
                 else:
                     flat.extend([None for _ in range(kwarg_sizes[k])])
             new_flat_inputs.append(flat)
-        return new_flat_inputs
+        return flat_index_to_args, new_flat_inputs
 
-    def infer_dynamic_shapes(self) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
-        flat_inputs = self.build_inputs_completed_with_none_values()
+    def infer_dynamic_shapes(
+        self, add_batch_dimension_for: set[int | str] | None = None
+    ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
+        """
+        Infers dynamic shapes. Most of the time, models do support a batch dimension
+        but this batch dimension has the same value for every input sample.
+        Instead of running inference on new samples, argument `add_batch_dimension_for`
+        can be used to tell the first dimension is a dynamic dimension for a particular
+        set of inputs referenced by their name (str) or their position (int).
+        """
+
+        def _add_batch_dimension(name_or_position):
+            if not add_batch_dimension_for:
+                return False
+            if name_or_position in add_batch_dimension_for:
+                return True
+            if (
+                isinstance(name_or_position, int)
+                and self.signature_names[name_or_position] in add_batch_dimension_for
+            ):
+                return True
+            return False
+
+        flat_index_to_args, flat_inputs = self._build_inputs_completed_with_none_values()
+
+        def _add_batch_dimension_for_flat_index(index):
+            return _add_batch_dimension(flat_index_to_args[index])
+
         # This is already checked by build_inputs_completed_with_none_values
         # but this is not always well captured by tools checking types.
         assert self._max_args is not None and self._max_kwargs is not None
@@ -196,8 +253,9 @@ class InputObserverInfo:
         ]
         n_tensors = len(shape_lists[0])
         dynamic_shapes = [
-            infer_dynamic_dimensions(
-                [s for s in [shapes[index] for shapes in shape_lists] if s is not None]
+            _infer_dynamic_dimensions(
+                [s for s in [shapes[index] for shapes in shape_lists] if s is not None],
+                add_batch_dimension=_add_batch_dimension_for_flat_index(index),
             )
             for index in range(n_tensors)
         ]
@@ -213,7 +271,7 @@ class InputObserverInfo:
                 return dict(zip(list(self._max_kwargs), flat_dynamic_shapes))
             # positional arguments needs to be moved to the named arguments
             n_args = len(self._max_args)
-            pos_names = list(self.signature.parameters)[:n_args]
+            pos_names = self.signature_names[:n_args]
             return {
                 **dict(zip(pos_names, flat_dynamic_shapes[:n_args])),
                 **dict(zip(list(self._max_kwargs), flat_dynamic_shapes[n_args:])),
@@ -235,20 +293,21 @@ class InputObserverInfo:
             ),
         )
         mapping = {id(t): shape for t, shape in zip(flat_inputs, flat_dynamic_shapes)}
-        ds_args, ds_kwargs = flatten_unflatten_for_dynamic_shapes(
+        ds_args, ds_kwargs = _flatten_unflatten_for_dynamic_shapes(
             (self._max_args, self._max_kwargs), change_function=lambda t: mapping[id(t)]
         )
         if not ds_kwargs:
             return tuple(ds_args)
         if not ds_args:
             return tuple(ds_kwargs)
-        pos_names = list(self.signature.parameters)[: len(ds_args)]
+        pos_names = self.signature_names[: len(ds_args)]
         return {**dict(zip(pos_names, ds_args)), **ds_kwargs}
 
     def infer_arguments(
         self, index: int | None = None
     ) -> tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
-        # This is already checked by build_inputs_completed_with_none_values
+        """Infers arguments based on the collected tensors."""
+        # This is already checked by _build_inputs_completed_with_none_values
         # but this is not always well captured by tools checking types.
         assert self._max_args is not None and self._max_kwargs is not None
         candidate = None
@@ -269,61 +328,99 @@ class InputObserverInfo:
             if not args:
                 return kwargs
             # We need to move args to kwargs
-            pos_names = list(self.signature.parameters)[: len(args)]
+            pos_names = self.signature_names[: len(args)]
             return {**dict(zip(pos_names, args)), **kwargs}
 
         raise NotImplementedError(
             "We could not find a good set of inputs/outputs. "
-            "We need to replace none by empty tensors."
+            "We need to replace none by empty tensors. "
+            "This will be soon implemented."
         )
 
 
 class InputObserver:
-    def __init__(self, store_n_calls: int = 3):
-        self.store_n_calls = store_n_calls
+    def __init__(self):
         self.info: InputObserverInfo | None = None
 
-    def _forward_captured(self, *args, _captured_forward=None, **kwargs):
-        assert _captured_forward is not None, "_captured_forward cannot be None"
+    def _replaced_method(
+        self,
+        *args,
+        _captured_method: Callable | None = None,
+        _store_n_calls: int = 3,
+        **kwargs,
+    ):
+        assert _captured_method is not None, "_captured_forward cannot be None"
         assert self.info is not None, "info cannot be None"
         n_stored = len(self.info)
-        if n_stored < self.store_n_calls:
+        if n_stored < _store_n_calls:
             self.info.add_inputs(args, kwargs)
-        res = _captured_forward(*args, **kwargs)
-        if n_stored < self.store_n_calls:
+        res = _captured_method(*args, **kwargs)
+        if n_stored < _store_n_calls:
             self.info.add_outputs(res)
         return res
 
     @contextlib.contextmanager
-    def __call__(self, model: torch.nn.Module):
+    def __call__(
+        self, model: torch.nn.Module, store_n_calls: int = 3, method_name: str = "forward"
+    ):
+        """Starts collecting inputs and outputs of a specific method.
+        The model method is replaced by a new one collecting tensors
+        before and after the inner one is called.
+        The original method is restored after the collection.
+
+        Args:
+            model: Model
+            store_n_calls: The collection stops after this many calls
+                to avoid taking too much memory.
+            method_name: Method name to spy on.
+        """
         if self.info is not None:
             raise RuntimeError(
                 "This class was already used to capture a model. Please create a new one."
             )
-        self.info = InputObserverInfo(signature=inspect.signature(model.forward))
-        forward_method = model.forward
-        model.forward = (
-            lambda *args, _captured_forward=forward_method, **kwargs: self._forward_captured(
-                *args, _captured_forward=_captured_forward, **kwargs
-            )
+        if not hasattr(model, method_name):
+            raise ValueError(f"Model type {model} does not have a method {method_name!r}")
+        captured_method = getattr(model, method_name)
+        self.info = InputObserverInfo(
+            signature_names=list(inspect.signature(captured_method).parameters)
+        )
+        setattr(
+            model,
+            method_name,
+            lambda *args, _cm=captured_method, _snc=store_n_calls, **kwargs: self._replaced_method(  # noqa: E501
+                *args,
+                _captured_method=_cm,
+                _store_n_calls=_snc,
+                **kwargs,
+            ),
         )
         try:
             yield self
         finally:
-            model.forward = forward_method
+            setattr(model, method_name, captured_method)
 
     def _check_captured(self):
         if self.info is None:
             raise RuntimeError("No inputs were captured.")
 
-    def infer_dynamic_shapes(self) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
+    def infer_dynamic_shapes(
+        self, add_batch_dimension_for: set[int | str] | None = None
+    ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
+        """
+        Infers dynamic shapes. Most of the time, models do support a batch dimension
+        but this batch dimension has the same value for every input sample.
+        Instead of running inference on new samples, argument `add_batch_dimension_for`
+        can be used to tell the first dimension is a dynamic dimension for a particular
+        set of inputs referenced by their name (str) or their position (int).
+        """
         self._check_captured()
         assert self.info is not None  # missed by type checking
-        return self.info.infer_dynamic_shapes()
+        return self.info.infer_dynamic_shapes(add_batch_dimension_for=add_batch_dimension_for)
 
     def infer_arguments(
         self, index: int | None = None
     ) -> tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
+        """Infers arguments based on the collected tensors."""
         self._check_captured()
         assert self.info is not None  # missed by type checking
         return self.info.infer_arguments(index=index)
