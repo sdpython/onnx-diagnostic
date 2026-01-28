@@ -10,6 +10,7 @@ from onnx_diagnostic.ci_models.export_qwen25_vl import main as main_qwen25
 
 class TestCiExport(ExtTestCase):
     @hide_stdout()
+    @requires_transformers("4.55")
     def test_main_qwen25_tiny_llm(self):
         main_qwen25(
             model_id="arnir0/Tiny-LLM",
