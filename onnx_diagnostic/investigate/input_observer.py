@@ -96,7 +96,7 @@ def _infer_dynamic_dimensions(
 class InputCandidate:
     """Represents a consistence set of inputs for the exported method."""
 
-    def __init__(self, args: list[Any], kwargs: dict[str, Any], cloned: bool):
+    def __init__(self, args: tuple[Any, ...], kwargs: dict[str, Any], cloned: bool):
         self.args = args
         self.kwargs = kwargs
         self.flat_list, self.spec = torch.utils._pytree.tree_flatten((args, kwargs))
@@ -114,7 +114,7 @@ class InputCandidate:
             )
 
         self.aligned_spec: torch.utils._pytree.PyTreeSpec | None = None
-        self.aligned_flat_list: list[torch.Tensor | None] = None
+        self.aligned_flat_list: list[torch.Tensor | None] | None = None
 
     def __str__(self) -> str:
         return (
@@ -152,13 +152,17 @@ class InputCandidate:
         """
         if self._position_to_args_kwargs is None:
             self.build_mappings()
+        # type checking is missing it
+        assert self._position_to_args_kwargs is not None
         return self._position_to_args_kwargs
 
     @property
-    def n_tensors_for_args_kwargs(self) -> list[int | str]:
+    def n_tensors_for_args_kwargs(self) -> dict[int | str, int]:
         """Returns the number of flat tensors in every args or kwargs."""
         if self._n_tensors_for_args_kwargs is None:
             self.build_mappings()
+        # type checking is missing it
+        assert self._n_tensors_for_args_kwargs is not None
         return self._n_tensors_for_args_kwargs
 
     def _set_aligned_flat_list(
@@ -255,9 +259,7 @@ class InputObserverInfo:
         self.outputs_specs.append(spec)
         self.flat_outputs.append([t.clone().detach() for t in flat_res])
 
-    def align_inputs_none_values(
-        self,
-    ) -> list[list[torch.Tensor]]:
+    def align_inputs_none_values(self):
         """Once the best candidate is chosen, this method aligns every set of inputs
         on the best candidate, it inserts None at the right position when
         optional inputs are not specified. We consider a set of inputs is aligned
@@ -283,7 +285,7 @@ class InputObserverInfo:
             candidate.align_with(self._best_candidate, self._captured_inputs)
 
     def infer_dynamic_shapes(
-        self, set_batch_dimension_for: set[int | str] | None = None
+        self, set_batch_dimension_for: set[int | str] | None = None, return_flat: bool = False
     ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
         """Infers dynamic shapes.  based on the collected tensors.
         Most of the time, models do support a batch dimension
@@ -291,8 +293,15 @@ class InputObserverInfo:
         Instead of running inference on new samples, argument `set_batch_dimension_for`
         can be used to tell the first dimension is a dynamic dimension for a particular
         set of inputs referenced by their name (str) or their position (int).
+
+        `return_flat` tells the function to return a flat tuple instead of
+        nested structured.
         """
         self.align_inputs_none_values()
+        # type checking
+        assert self._best_candidate is not None
+        assert self._best_candidate.flat_list is not None
+        assert self._best_candidate.aligned_flat_list is not None
 
         def _set_batch_dimension(name_or_position):
             if not set_batch_dimension_for:
@@ -309,6 +318,8 @@ class InputObserverInfo:
             return False
 
         def _set_batch_dimension_for_flat_index(index):
+            # type checking
+            assert self._best_candidate is not None
             return _set_batch_dimension(self._best_candidate.position_to_args_kwargs[index])
 
         if len(self._best_candidate.flat_list) != len(self._best_candidate.aligned_flat_list):
@@ -329,6 +340,7 @@ class InputObserverInfo:
         shape_lists = [
             [(None if t is None else t.shape) for t in candidate.aligned_flat_list]
             for candidate in self.inputs
+            if candidate.aligned_flat_list is not None
         ]
         n_tensors = len(shape_lists[0])
         dynamic_shapes = [
@@ -340,6 +352,8 @@ class InputObserverInfo:
         ]
         cst = torch.export.Dim.DYNAMIC
         flat_dynamic_shapes = [dict.fromkeys(dims, cst) for dims in dynamic_shapes]
+        if return_flat:
+            return tuple(flat_dynamic_shapes)
         if len(flat_dynamic_shapes) == len(self._best_candidate.args) + len(
             self._best_candidate.kwargs
         ):
@@ -391,10 +405,9 @@ class InputObserverInfo:
         """Infers arguments based on the collected tensors."""
         # This is already checked by _build_inputs_completed_with_none_values
         # but this is not always well captured by tools checking types.
-        torch._check(
-            self._best_candidate.args is not None and self._best_candidate.kwargs is not None,
-            lambda: "No input was captured.",
-        )
+        torch._check(self._best_candidate is not None, lambda: "No input was captured.")
+        # type checking
+        assert self._best_candidate is not None
         candidate = None
         if index is None:
             for cand in self.inputs:
@@ -412,16 +425,25 @@ class InputObserverInfo:
             candidate = self.inputs[index]
 
         torch._check(candidate is not None, "No input was captured.")
+        # type checking
+        assert candidate is not None
+        assert candidate.aligned_flat_list is not None
 
         aligned_flat_list = candidate.aligned_flat_list
         if any(t is None for t in aligned_flat_list):
-            dynamic_shapes = self.infer_dynamic_shapes()
+            dynamic_shapes = self.infer_dynamic_shapes(return_flat=True)
+            # type checking
+            assert isinstance(dynamic_shapes, tuple)
             aligned_flat_list = aligned_flat_list.copy()
             for index in range(len(aligned_flat_list)):
                 if aligned_flat_list[index] is not None:
                     continue
                 shape = dynamic_shapes[index]
-                all_non_empty_tensors = [c.aligned_flat_list[index] for c in self.inputs]
+                all_non_empty_tensors = [
+                    c.aligned_flat_list[index]
+                    for c in self.inputs
+                    if c.aligned_flat_list is not None
+                ]
                 all_non_empty_tensors = [t for t in all_non_empty_tensors if t is not None]
                 if not all_non_empty_tensors:
                     raise RuntimeError(
@@ -444,6 +466,9 @@ class InputObserverInfo:
                 aligned_flat_list[index] = torch.empty(
                     tuple(new_shape), dtype=tensor.dtype, device=tensor.device
                 )
+        # type checking
+        assert candidate is not None
+        assert candidate.aligned_spec is not None
         args, kwargs = torch.utils._pytree.tree_unflatten(
             aligned_flat_list, candidate.aligned_spec
         )
