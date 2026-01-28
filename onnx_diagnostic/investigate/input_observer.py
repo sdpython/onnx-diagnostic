@@ -9,8 +9,7 @@ def _flatten_unflatten_for_dynamic_shapes(
     use_dict: bool = True,
     change_function: Callable[[torch.Tensor], Any] | None = None,
 ) -> Any:
-    """
-    Returns the object in a different structure similar to what
+    """Returns the object in a different structure similar to what
     the definition of the dynamic shapes should use.
 
     Args:
@@ -67,7 +66,7 @@ def _flatten_unflatten_for_dynamic_shapes(
 
 
 def _infer_dynamic_dimensions(
-    shape_list: Sequence[tuple[int, ...]], add_batch_dimension: bool = False
+    shape_list: Sequence[tuple[int, ...]], set_batch_dimension: bool = False
 ) -> list[int]:
     """Returns the list of dynamic dimensions given a list of shapes
     corresponding to the same tensor.
@@ -75,7 +74,7 @@ def _infer_dynamic_dimensions(
     Args:
         shape_list:
             list of shapes, they must all have the same length
-        add_batch_dimension:
+        set_batch_dimension:
             make the first dimension dynamic if it is not
 
     Returns:
@@ -89,9 +88,126 @@ def _infer_dynamic_dimensions(
     dynamic = []
     for i in range(rank):
         dims = [shape[i] for shape in shape_list]
-        if len(set(dims)) > 1 or (i == 0 and add_batch_dimension):
+        if len(set(dims)) > 1 or (i == 0 and set_batch_dimension):
             dynamic.append(i)
     return dynamic
+
+
+class InputCandidate:
+    """Represents a consistence set of inputs for the exported method."""
+
+    def __init__(self, args: list[Any], kwargs: dict[str, Any], cloned: bool):
+        self.args = args
+        self.kwargs = kwargs
+        self.flat_list, self.spec = torch.utils._pytree.tree_flatten((args, kwargs))
+        self.n_tensors = sum(t is not None for t in self.flat_list)
+        self._position_to_args_kwargs: list[int | str] | None = None
+        self._n_tensors_for_args_kwargs: dict[int | str, int] | None = None
+
+        if cloned:
+            self.flat_list = [
+                (None if not isinstance(t, torch.Tensor) else t.clone().detach())
+                for t in self.flat_list
+            ]
+            self.args, self.kwargs = torch.utils._pytree.tree_unflatten(
+                self.flat_list, self.spec
+            )
+
+        self.aligned_spec: torch.utils._pytree.PyTreeSpec | None = None
+        self.aligned_flat_list: list[torch.Tensor | None] = None
+
+    def __str__(self) -> str:
+        return (
+            f"{self.__class__.__name__}({len(self.args)} args, "
+            f"{len(self.kwargs)} kwargs, {len(self.flat_list)} tensors, "
+            f"{len(self.aligned_flat_list or [])} aligned tensors)"
+        )
+
+    def __len__(self) -> int:
+        """Returns the number of flattended tensors, None tensors are included."""
+        return len(self.flat_list)
+
+    def build_mappings(self):
+        if self._position_to_args_kwargs is not None:
+            return self._position_to_args_kwargs
+        self._n_tensors_for_args_kwargs = {}
+
+        flat_index_to_args: list[int | str] = []
+        for index_args, a in enumerate(self.args):
+            size = len(torch.utils._pytree.tree_flatten(a)[0])
+            self._n_tensors_for_args_kwargs[index_args] = size
+            flat_index_to_args.extend([index_args] * size)
+        for k, v in self.kwargs.items():
+            size = len(torch.utils._pytree.tree_flatten(v)[0])
+            self._n_tensors_for_args_kwargs[k] = size
+            flat_index_to_args.extend([k] * size)
+
+        self._position_to_args_kwargs = flat_index_to_args
+        return self._position_to_args_kwargs
+
+    @property
+    def position_to_args_kwargs(self) -> list[int | str]:
+        """Returns the corresponding args or kwargs
+        for every tensor in the flattened inputs.
+        """
+        if self._position_to_args_kwargs is None:
+            self.build_mappings()
+        return self._position_to_args_kwargs
+
+    @property
+    def n_tensors_for_args_kwargs(self) -> list[int | str]:
+        """Returns the number of flat tensors in every args or kwargs."""
+        if self._n_tensors_for_args_kwargs is None:
+            self.build_mappings()
+        return self._n_tensors_for_args_kwargs
+
+    def _set_aligned_flat_list(
+        self,
+        aligned_flat_list: list[torch.Tensor | None],
+        aligned_spec: torch.utils._pytree.PyTreeSpec,
+    ):
+        self.aligned_flat_list = aligned_flat_list
+        self.aligned_spec = aligned_spec
+
+    def align_with(
+        self, best_candidate: "InputCandidate", captured_inputs: dict[int | str, int]
+    ):
+        """Two candidates are considered as aligned if after being flattened,
+        they have the same number of tensors (None allowed)."""
+        flat = []
+        for i in range(len(best_candidate.args)):
+            if i < len(self.args):
+                ts = torch.utils._pytree.tree_flatten(self.args[i])[0]
+                if i in captured_inputs and captured_inputs[i] != len(ts):
+                    raise RuntimeError(
+                        f"Positional argument {i} has {len(ts)} tensors "
+                        f"but previously got {captured_inputs[i]} tensors. "
+                        f"Inference is impossible in that case."
+                    )
+                captured_inputs[i] = len(ts)
+                flat.extend(ts)
+            else:
+                flat.extend([None for _ in range(best_candidate.n_tensors_for_args_kwargs[i])])
+        for k in best_candidate.kwargs:
+            if k in self.kwargs:
+                ts = torch.utils._pytree.tree_flatten(self.kwargs[k])[0]
+                if k in captured_inputs and captured_inputs[k] != len(ts):
+                    raise RuntimeError(
+                        f"Named argument {k!r} has {len(ts)} tensors "
+                        f"but previously got {captured_inputs[k]} tensors. "
+                        f"Inference is impossible in that case."
+                    )
+                captured_inputs[k] = len(ts)
+                flat.extend(ts)
+            else:
+                flat.extend([None for _ in range(best_candidate.n_tensors_for_args_kwargs[k])])
+        self._set_aligned_flat_list(flat, best_candidate.spec)
+
+    @property
+    def n_aligned_tensors(self) -> int:
+        if self.aligned_flat_list is None:
+            raise RuntimeError("This input was not aligned with the others.")
+        return len(self.aligned_flat_list)
 
 
 class InputObserverInfo:
@@ -105,20 +221,16 @@ class InputObserverInfo:
     """
 
     def __init__(self, signature_names: list[str]):
-        # pyrefly: ignore
-        self.inputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
-        self.flat_inputs: list[list[torch.Tensor | None]] = []
-        # pyrefly: ignore
+        self.inputs: list[InputCandidate] = []
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_outputs: list[list[torch.Tensor]] = []
         self.signature_names = signature_names
-
-        self._max_args: tuple[Any, torch.Tensor] | None = None
-        self._max_kwargs: dict[str, torch.Tensor] | None = None
+        self._best_candidate: InputCandidate | None = None
+        self._captured_inputs: dict[int | str, int] | None = None
 
     def __len__(self) -> int:
         """Returns the number of collected set of inputs/outputs."""
-        return len(self.flat_inputs)
+        return len(self.inputs)
 
     def add_inputs(self, args: tuple[Any, ...], kwargs: dict[str, Any]):
         """Stores one set of inputs. They are deepcopied.
@@ -132,19 +244,10 @@ class InputObserverInfo:
             for k, v in kwargs.items()
             if v is not None and not isinstance(v, (int, float, bool))
         }
-        flat_args, spec = torch.utils._pytree.tree_flatten((args, kwargs))
-        self.inputs_specs.append(spec)
-        cloned = [
-            (None if not isinstance(t, torch.Tensor) else t.clone().detach())
-            for t in flat_args
-        ]
-        self.flat_inputs.append(cloned)
-
-        cloned_args, cloned_kwargs = torch.utils._pytree.tree_unflatten(cloned, spec)
-        if self._max_args is None or len(cloned_args) > len(self._max_args):
-            self._max_args = cloned_args
-        if self._max_kwargs is None or len(cloned_kwargs) > len(self._max_kwargs):
-            self._max_kwargs = cloned_kwargs
+        candidate = InputCandidate(args, kwargs, cloned=True)
+        self.inputs.append(candidate)
+        if self._best_candidate is None or len(self._best_candidate) < len(candidate):
+            self._best_candidate = candidate
 
     def add_outputs(self, res: torch.Tensor | tuple[torch.Tensor, ...]):
         """Stores outputs. They are deepcopied."""
@@ -152,128 +255,107 @@ class InputObserverInfo:
         self.outputs_specs.append(spec)
         self.flat_outputs.append([t.clone().detach() for t in flat_res])
 
-    def _build_inputs_completed_with_none_values(
+    def align_inputs_none_values(
         self,
-    ) -> tuple[list[int | str], list[list[torch.Tensor]]]:
-        # Let's compute the sizes of each independently.
-        if not self.flat_inputs or self._max_args is None or self._max_kwargs is None:
+    ) -> list[list[torch.Tensor]]:
+        """Once the best candidate is chosen, this method aligns every set of inputs
+        on the best candidate, it inserts None at the right position when
+        optional inputs are not specified. We consider a set of inputs is aligned
+        if this method does not change the original flattened inputs.
+        """
+        if not self.inputs or self._best_candidate is None:
             raise RuntimeError("No inputs were captured.")
 
-        flat_index_to_args: list[int | str] = []
-        arg_sizes = []
-        for index_args, a in enumerate(self._max_args):
-            size = len(torch.utils._pytree.tree_flatten(a)[0])
-            arg_sizes.append(size)
-            flat_index_to_args.extend([index_args] * size)
-        kwarg_sizes = {}
-        for k, v in self._max_kwargs.items():
-            size = len(torch.utils._pytree.tree_flatten(v)[0])
-            kwarg_sizes[k] = size
-            flat_index_to_args.extend([k] * size)
+        if all(candidate.aligned_flat_list is not None for candidate in self.inputs):
+            # No new inputs, no alignment is necessary.
+            return
 
         # Let's reprocess everything.
-        captured_inputs: dict[int | str, int] = {}
-        new_flat_inputs = []
-        for args_kwargs, spec in zip(self.flat_inputs, self.inputs_specs):
-            args, kwargs = torch.utils._pytree.tree_unflatten(args_kwargs, spec)
-            if len(set(kwargs) | set(self._max_kwargs)) > len(self._max_kwargs):
+        self._captured_inputs = {}
+        for candidate in self.inputs:
+            if len(set(candidate.kwargs) | set(self._best_candidate.kwargs)) > len(
+                self._best_candidate.kwargs
+            ):
                 raise RuntimeError(
                     "At least one call to the observed model "
                     "must contain all the named arguments."
                 )
-            flat = []
-            for i in range(len(self._max_args)):
-                if i < len(args):
-                    ts = torch.utils._pytree.tree_flatten(args[i])[0]
-                    if i in captured_inputs and captured_inputs[i] != len(ts):
-                        raise RuntimeError(
-                            f"Positional argument {i} has {len(ts)} tensors "
-                            f"but previously got {captured_inputs[i]} tensors. "
-                            f"Inference is impossible in that case."
-                        )
-                    captured_inputs[i] = len(ts)
-                    flat.extend(ts)
-                else:
-                    flat.extend([None for _ in range(arg_sizes[i])])
-            for k in self._max_kwargs:
-                if k in kwargs:
-                    ts = torch.utils._pytree.tree_flatten(kwargs[k])[0]
-                    if k in captured_inputs and captured_inputs[k] != len(ts):
-                        raise RuntimeError(
-                            f"Named argument {k!r} has {len(ts)} tensors "
-                            f"but previously got {captured_inputs[k]} tensors. "
-                            f"Inference is impossible in that case."
-                        )
-                    captured_inputs[k] = len(ts)
-                    flat.extend(ts)
-                else:
-                    flat.extend([None for _ in range(kwarg_sizes[k])])
-            new_flat_inputs.append(flat)
-        return flat_index_to_args, new_flat_inputs
+            candidate.align_with(self._best_candidate, self._captured_inputs)
 
     def infer_dynamic_shapes(
-        self, add_batch_dimension_for: set[int | str] | None = None
+        self, set_batch_dimension_for: set[int | str] | None = None
     ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
         """Infers dynamic shapes.  based on the collected tensors.
         Most of the time, models do support a batch dimension
         but this batch dimension has the same value for every input sample.
-        Instead of running inference on new samples, argument `add_batch_dimension_for`
+        Instead of running inference on new samples, argument `set_batch_dimension_for`
         can be used to tell the first dimension is a dynamic dimension for a particular
         set of inputs referenced by their name (str) or their position (int).
         """
+        self.align_inputs_none_values()
 
-        def _add_batch_dimension(name_or_position):
-            if not add_batch_dimension_for:
+        def _set_batch_dimension(name_or_position):
+            if not set_batch_dimension_for:
                 return False
-            if name_or_position in add_batch_dimension_for:
+            if name_or_position in set_batch_dimension_for:
                 return True
-            if (
-                isinstance(name_or_position, int)
-                and self.signature_names[name_or_position] in add_batch_dimension_for
-            ):
-                return True
+            if isinstance(name_or_position, int):
+                torch._check(
+                    name_or_position < len(self.signature_names),
+                    lambda: f"argument at position {name_or_position} is out of boundary",
+                )
+                if self.signature_names[name_or_position] in set_batch_dimension_for:
+                    return True
             return False
 
-        flat_index_to_args, flat_inputs = self._build_inputs_completed_with_none_values()
+        def _set_batch_dimension_for_flat_index(index):
+            return _set_batch_dimension(self._best_candidate.position_to_args_kwargs[index])
 
-        def _add_batch_dimension_for_flat_index(index):
-            return _add_batch_dimension(flat_index_to_args[index])
-
-        # This is already checked by build_inputs_completed_with_none_values
-        # but this is not always well captured by tools checking types.
-        assert self._max_args is not None and self._max_kwargs is not None
-        if len({len(flat) for flat in flat_inputs}) != 1:
+        if len(self._best_candidate.flat_list) != len(self._best_candidate.aligned_flat_list):
             raise NotImplementedError(
                 "infer_dynamic_shapes is not implemented "
-                "when the number of input tensors are not the same."
+                "when the best candidate is not 'aligned'."
+                "This happens when there is not stored set inputs where "
+                "all optional inputs showing in other sets are defined."
+            )
+
+        if len({inputs.n_aligned_tensors for inputs in self.inputs}) != 1:
+            raise NotImplementedError(
+                f"infer_dynamic_shapes is not implemented "
+                f"when the number of input tensors are not the same in "
+                f"every set of inputs "
+                f"{[inputs.n_aligned_tensors for inputs in self.inputs]}."
             )
         shape_lists = [
-            [(None if t is None else t.shape) for t in tensors] for tensors in flat_inputs
+            [(None if t is None else t.shape) for t in candidate.aligned_flat_list]
+            for candidate in self.inputs
         ]
         n_tensors = len(shape_lists[0])
         dynamic_shapes = [
             _infer_dynamic_dimensions(
                 [s for s in [shapes[index] for shapes in shape_lists] if s is not None],
-                add_batch_dimension=_add_batch_dimension_for_flat_index(index),
+                set_batch_dimension=_set_batch_dimension_for_flat_index(index),
             )
             for index in range(n_tensors)
         ]
         cst = torch.export.Dim.DYNAMIC
         flat_dynamic_shapes = [dict.fromkeys(dims, cst) for dims in dynamic_shapes]
-        if len(flat_dynamic_shapes) == len(self._max_args) + len(self._max_kwargs):
+        if len(flat_dynamic_shapes) == len(self._best_candidate.args) + len(
+            self._best_candidate.kwargs
+        ):
             # It means forward method is called with tensors only.
-            if not self._max_kwargs:
+            if not self._best_candidate.kwargs:
                 # only positional arguments
                 return tuple(flat_dynamic_shapes)
-            if not self._max_args:
+            if not self._best_candidate.args:
                 # only named arguments
-                return dict(zip(list(self._max_kwargs), flat_dynamic_shapes))
+                return dict(zip(list(self._best_candidate.kwargs), flat_dynamic_shapes))
             # positional arguments needs to be moved to the named arguments
-            n_args = len(self._max_args)
+            n_args = len(self._best_candidate.args)
             pos_names = self.signature_names[:n_args]
             return {
                 **dict(zip(pos_names, flat_dynamic_shapes[:n_args])),
-                **dict(zip(list(self._max_kwargs), flat_dynamic_shapes[n_args:])),
+                **dict(zip(list(self._best_candidate.kwargs), flat_dynamic_shapes[n_args:])),
             }
 
         # nested types, here comes the fun part because the shapes cannot be unflattened,
@@ -282,7 +364,7 @@ class InputObserverInfo:
         # with the same number of tensors. The function does not check
         # if that assumption is true.
         flat_inputs, _max_spec = torch.utils._pytree.tree_flatten(
-            (self._max_args, self._max_kwargs)
+            (self._best_candidate.args, self._best_candidate.kwargs)
         )
         torch._check(
             len(flat_inputs) == len(flat_dynamic_shapes),
@@ -293,7 +375,8 @@ class InputObserverInfo:
         )
         mapping = {id(t): shape for t, shape in zip(flat_inputs, flat_dynamic_shapes)}
         ds_args, ds_kwargs = _flatten_unflatten_for_dynamic_shapes(
-            (self._max_args, self._max_kwargs), change_function=lambda t: mapping[id(t)]
+            (self._best_candidate.args, self._best_candidate.kwargs),
+            change_function=lambda t: mapping[id(t)],
         )
         if not ds_kwargs:
             return tuple(ds_args)
@@ -308,33 +391,69 @@ class InputObserverInfo:
         """Infers arguments based on the collected tensors."""
         # This is already checked by _build_inputs_completed_with_none_values
         # but this is not always well captured by tools checking types.
-        assert self._max_args is not None and self._max_kwargs is not None
+        torch._check(
+            self._best_candidate.args is not None and self._best_candidate.kwargs is not None,
+            lambda: "No input was captured.",
+        )
         candidate = None
         if index is None:
-            for i, (args_kwargs, spec) in enumerate(zip(self.flat_inputs, self.inputs_specs)):
-                args, kwargs = torch.utils._pytree.tree_unflatten(args_kwargs, spec)
-                if len(args) == len(self._max_args) and len(kwargs) == len(self._max_kwargs):
-                    index = i
-                    candidate = args, kwargs
+            for cand in self.inputs:
+                args, kwargs = cand.args, cand.kwargs
+                if len(args) == len(self._best_candidate.args) and len(kwargs) == len(
+                    self._best_candidate.kwargs
+                ):
+                    candidate = cand
                     break
-        if index is not None:
-            # found one available set.
-            args, kwargs = candidate or torch.utils._pytree.tree_unflatten(
-                self.flat_inputs[index], self.inputs_specs[index]
+        else:
+            torch._check(
+                index < len(self.inputs),
+                lambda: f"No stored input set for index={index}<{len(self.inputs)}.",
             )
-            if not kwargs:
-                return args
-            if not args:
-                return kwargs
-            # We need to move args to kwargs
-            pos_names = self.signature_names[: len(args)]
-            return {**dict(zip(pos_names, args)), **kwargs}
+            candidate = self.inputs[index]
 
-        raise NotImplementedError(
-            "We could not find a good set of inputs/outputs. "
-            "We need to replace none by empty tensors. "
-            "This will be soon implemented."
+        torch._check(candidate is not None, "No input was captured.")
+
+        aligned_flat_list = candidate.aligned_flat_list
+        if any(t is None for t in aligned_flat_list):
+            dynamic_shapes = self.infer_dynamic_shapes()
+            aligned_flat_list = aligned_flat_list.copy()
+            for index in range(len(aligned_flat_list)):
+                if aligned_flat_list[index] is not None:
+                    continue
+                shape = dynamic_shapes[index]
+                all_non_empty_tensors = [c.aligned_flat_list[index] for c in self.inputs]
+                all_non_empty_tensors = [t for t in all_non_empty_tensors if t is not None]
+                if not all_non_empty_tensors:
+                    raise RuntimeError(
+                        f"There is no tensor at position {index} in any flattened inputs."
+                    )
+                tensor = all_non_empty_tensors.pop()
+                if tensor.numel() == 0:
+                    aligned_flat_list[index] = tensor
+                    continue
+                dim = max(shape)
+                torch._check(
+                    dim < tensor.ndim,
+                    lambda index=index, shape=shape, tshape=tensor.shape: (
+                        f"Tensor shape {tshape} does not match the "
+                        f"dynamic shape {shape} at position {index}."
+                    ),
+                )
+                new_shape = list(tensor.shape)
+                new_shape[dim] = 0
+                aligned_flat_list[index] = torch.empty(
+                    tuple(new_shape), dtype=tensor.dtype, device=tensor.device
+                )
+        args, kwargs = torch.utils._pytree.tree_unflatten(
+            aligned_flat_list, candidate.aligned_spec
         )
+        if not kwargs:
+            return args
+        if not args:
+            return kwargs
+        # We need to move args to kwargs
+        pos_names = self.signature_names[: len(args)]
+        return {**dict(zip(pos_names, args)), **kwargs}
 
 
 class InputObserver:
@@ -403,23 +522,33 @@ class InputObserver:
             raise RuntimeError("No inputs were captured.")
 
     def infer_dynamic_shapes(
-        self, add_batch_dimension_for: set[int | str] | None = None
+        self, set_batch_dimension_for: set[int | str] | None = None
     ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
         """
         Infers dynamic shapes. Most of the time, models do support a batch dimension
         but this batch dimension has the same value for every input sample.
-        Instead of running inference on new samples, argument `add_batch_dimension_for`
+        Instead of running inference on new samples, argument `set_batch_dimension_for`
         can be used to tell the first dimension is a dynamic dimension for a particular
         set of inputs referenced by their name (str) or their position (int).
         """
         self._check_captured()
         assert self.info is not None  # missed by type checking
-        return self.info.infer_dynamic_shapes(add_batch_dimension_for=add_batch_dimension_for)
+        return self.info.infer_dynamic_shapes(set_batch_dimension_for=set_batch_dimension_for)
 
     def infer_arguments(
         self, index: int | None = None
     ) -> tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
-        """Infers arguments based on the collected tensors."""
+        """Infers arguments based on the collected tensors.
+
+        Args:
+            index: If missing, the method selects one set of inputs
+                among the available ones, usually this inputs containing
+                the set of stored inputs with the highest number of tensors.
+                The then replaces None values and missing tensors by empty tensors.
+
+        Returns:
+            Inferred arguments, every optional tensor is replaced by a empty tensor.
+        """
         self._check_captured()
         assert self.info is not None  # missed by type checking
         return self.info.infer_arguments(index=index)

@@ -209,6 +209,41 @@ class TestInputObserver(ExtTestCase):
         cst = torch.export.Dim.DYNAMIC
         self.assertEqual(({0: cst, 1: cst}, {1: cst}), observer.infer_dynamic_shapes())
 
+    def test_infer_arguments_optional(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y=None):
+                if y is None:
+                    return x
+                return x - y
+
+        inputs = [
+            (torch.randn((5, 6)),),
+            (torch.randn((6, 7)), torch.randn((1, 7))),
+            (torch.randn((7, 8)), torch.randn((1, 8))),
+            (torch.randn((8, 9)), torch.randn((1, 9))),
+        ]
+
+        model = Model()
+        expected = [model(*args) for args in inputs]
+        observer = InputObserver()
+        with observer(model):
+            for args in inputs:
+                model(*args)
+        self.assertEqual(len(observer.info), 3)
+        for i in range(3):
+            self.assertEqual(len(observer.info.flat_outputs[i]), 1)
+            torch.testing.assert_close(expected[i], observer.info.flat_outputs[i][0])
+
+        cst = torch.export.Dim.DYNAMIC
+        self.assertEqual(({0: cst, 1: cst}, {1: cst}), observer.infer_dynamic_shapes())
+        infer_args = observer.infer_arguments(0)
+        self.assertIsInstance(infer_args, tuple)
+        self.assertEqual(len(infer_args), 2)
+        self.assertIsInstance(infer_args[0], torch.Tensor)
+        self.assertIsInstance(infer_args[1], torch.Tensor)
+        self.assertEqual(infer_args[0].shape, (5, 6))
+        self.assertEqual(infer_args[1].shape, (1, 0))
+
     def test_io_captured_optional_kwargs(self):
         class Model(torch.nn.Module):
             def forward(self, x, y=None):
@@ -589,11 +624,11 @@ class TestInputObserver(ExtTestCase):
         cst = torch.export.Dim.DYNAMIC
         self.assertEqual(
             dict(x={0: cst, 1: cst}, y={1: cst}, z={0: cst, 1: cst}, w={1: cst}),
-            observer.infer_dynamic_shapes(add_batch_dimension_for={0, "z"}),
+            observer.infer_dynamic_shapes(set_batch_dimension_for={0, "z"}),
         )
         self.assertEqual(
             dict(x={0: cst, 1: cst}, y={1: cst}, z={0: cst, 1: cst}, w={1: cst}),
-            observer.infer_dynamic_shapes(add_batch_dimension_for={"x", "z"}),
+            observer.infer_dynamic_shapes(set_batch_dimension_for={"x", "z"}),
         )
 
 
