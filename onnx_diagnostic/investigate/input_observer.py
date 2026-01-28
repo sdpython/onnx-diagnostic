@@ -444,12 +444,14 @@ class InputObserverInfo:
                     for c in self.inputs
                     if c.aligned_flat_list is not None
                 ]
-                all_non_empty_tensors = [t for t in all_non_empty_tensors if t is not None]
-                if not all_non_empty_tensors:
+                all_non_empty_tensors_not_none = [
+                    t for t in all_non_empty_tensors if t is not None
+                ]
+                if not all_non_empty_tensors_not_none:
                     raise RuntimeError(
                         f"There is no tensor at position {index} in any flattened inputs."
                     )
-                tensor = all_non_empty_tensors.pop()
+                tensor = all_non_empty_tensors_not_none.pop()
                 if tensor.numel() == 0:
                     aligned_flat_list[index] = tensor
                     continue
