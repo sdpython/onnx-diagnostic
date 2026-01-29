@@ -223,7 +223,7 @@ epkg_dictionary = {
     "DOT": "https://graphviz.org/doc/info/lang.html",
     "executorch": "https://pytorch.org/executorch/stable/intro-overview.html",
     "ExecuTorch": "https://pytorch.org/executorch/stable/intro-overview.html",
-    "ExecuTorch Runtime Python API Reference": "https://pytorch.org/executorch/stable/runtime-python-api-reference.html",
+    "ExecuTorch Runtime Python API Reference": "https://docs.pytorch.org/executorch/main/runtime-python-api-reference.html",
     "ExecuTorch Tutorial": "https://pytorch.org/executorch/stable/tutorials/export-to-executorch-tutorial.html",
     "experimental-experiment": "https://sdpython.github.io/doc/experimental-experiment/dev/",
     "JIT": "https://en.wikipedia.org/wiki/Just-in-time_compilation",
