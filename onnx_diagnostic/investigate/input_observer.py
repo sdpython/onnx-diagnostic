@@ -1,7 +1,11 @@
 import contextlib
 import inspect
+import time
 from typing import Any, Callable, Sequence
+import onnx
 import torch
+from ..helpers import max_diff
+from ..reference import OnnxruntimeEvaluator
 
 
 def _flatten_unflatten_for_dynamic_shapes(
@@ -94,7 +98,35 @@ def _infer_dynamic_dimensions(
 
 
 class InputCandidate:
-    """Represents a consistence set of inputs for the exported method."""
+    """Steals forward method to collect inputs and outputs.
+    This information is used to infer dynamic shapes and
+    export arguments.
+
+    Examples
+    --------
+    >>> input_observer = InputObserver()
+    >>> with input_observer(model):
+    >>>     model(x1, y1)
+    >>>     model(x2, y2)
+    >>> ep = torch.export.export(  # or torch.onnx.export
+    >>>     model,
+    >>>     input_observer.infer_arguments(),
+    >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
+    >>> )
+
+    With LLM:
+    >>> input_observer = InputObserver()
+    >>> with input_observer(model):
+    >>>     model.generate(input_ids)
+    >>> ep = torch.export.export(  # or torch.onnx.export
+    >>>     model,
+    >>>     ()
+    >>>     kwargs=input_observer.infer_arguments(),
+    >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
+    >>> )
+
+    See example :ref:`l-plot-tiny-llm-export-input-observer`.
+    """
 
     def __init__(self, args: tuple[Any, ...], kwargs: dict[str, Any], cloned: bool):
         self.args = args
@@ -228,6 +260,7 @@ class InputObserverInfo:
         self.inputs: list[InputCandidate] = []
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_outputs: list[list[torch.Tensor]] = []
+        self.latencies: list[float] = []
         self.signature_names = signature_names
         self._best_candidate: InputCandidate | None = None
         self._captured_inputs: dict[int | str, int] | None = None
@@ -253,11 +286,12 @@ class InputObserverInfo:
         if self._best_candidate is None or len(self._best_candidate) < len(candidate):
             self._best_candidate = candidate
 
-    def add_outputs(self, res: torch.Tensor | tuple[torch.Tensor, ...]):
+    def add_outputs(self, res: torch.Tensor | tuple[torch.Tensor, ...], latency: float):
         """Stores outputs. They are deepcopied."""
         flat_res, spec = torch.utils._pytree.tree_flatten(res)
         self.outputs_specs.append(spec)
         self.flat_outputs.append([t.clone().detach() for t in flat_res])
+        self.latencies.append(latency)
 
     def align_inputs_none_values(self):
         """Once the best candidate is chosen, this method aligns every set of inputs
@@ -285,7 +319,9 @@ class InputObserverInfo:
             candidate.align_with(self._best_candidate, self._captured_inputs)
 
     def infer_dynamic_shapes(
-        self, set_batch_dimension_for: set[int | str] | None = None, return_flat: bool = False
+        self,
+        set_batch_dimension_for: set[int | str] | bool | None = None,
+        return_flat: bool = False,
     ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
         """Infers dynamic shapes.  based on the collected tensors.
         Most of the time, models do support a batch dimension
@@ -306,7 +342,9 @@ class InputObserverInfo:
         def _set_batch_dimension(name_or_position):
             if not set_batch_dimension_for:
                 return False
-            if name_or_position in set_batch_dimension_for:
+            if (
+                isinstance(set_batch_dimension_for, bool) and set_batch_dimension_for
+            ) or name_or_position in set_batch_dimension_for:
                 return True
             if isinstance(name_or_position, int):
                 torch._check(
@@ -387,15 +425,28 @@ class InputObserverInfo:
                 f"len(flat_dynamic_shapes)={len(flat_dynamic_shapes)}"
             ),
         )
-        mapping = {id(t): shape for t, shape in zip(flat_inputs, flat_dynamic_shapes)}
+
+        index = 0
+
+        def change_function(t):
+            nonlocal index
+            if index >= len(flat_dynamic_shapes):
+                raise RuntimeError(
+                    f"Flattened {index} tensors when there are only "
+                    f"{len(flat_dynamic_shapes)}."
+                )
+            res = flat_dynamic_shapes[index]
+            index += 1
+            return res
+
         ds_args, ds_kwargs = _flatten_unflatten_for_dynamic_shapes(
             (self._best_candidate.args, self._best_candidate.kwargs),
-            change_function=lambda t: mapping[id(t)],
+            change_function=change_function,
         )
         if not ds_kwargs:
             return tuple(ds_args)
         if not ds_args:
-            return tuple(ds_kwargs)
+            return ds_kwargs
         pos_names = self.signature_names[: len(ds_args)]
         return {**dict(zip(pos_names, ds_args)), **ds_kwargs}
 
@@ -405,6 +456,7 @@ class InputObserverInfo:
         """Infers arguments based on the collected tensors."""
         # This is already checked by _build_inputs_completed_with_none_values
         # but this is not always well captured by tools checking types.
+        self.align_inputs_none_values()
         torch._check(self._best_candidate is not None, lambda: "No input was captured.")
         # type checking
         assert self._best_candidate is not None
@@ -484,6 +536,8 @@ class InputObserverInfo:
 
 
 class InputObserver:
+    """ """
+
     def __init__(self):
         self.info: InputObserverInfo | None = None
 
@@ -499,9 +553,11 @@ class InputObserver:
         n_stored = len(self.info)
         if n_stored < _store_n_calls:
             self.info.add_inputs(args, kwargs)
+        begin = time.perf_counter()
         res = _captured_method(*args, **kwargs)
+        duration = time.perf_counter() - begin
         if n_stored < _store_n_calls:
-            self.info.add_outputs(res)
+            self.info.add_outputs(res, latency=duration)
         return res
 
     @contextlib.contextmanager
@@ -549,7 +605,7 @@ class InputObserver:
             raise RuntimeError("No inputs were captured.")
 
     def infer_dynamic_shapes(
-        self, set_batch_dimension_for: set[int | str] | None = None
+        self, set_batch_dimension_for: set[int | str] | bool | None = None
     ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
         """
         Infers dynamic shapes. Most of the time, models do support a batch dimension
@@ -579,3 +635,76 @@ class InputObserver:
         self._check_captured()
         assert self.info is not None  # missed by type checking
         return self.info.infer_arguments(index=index)
+
+    def check_discrepancies(
+        self,
+        onnx_model: str | onnx.ModelProto,
+        atol: float = 1e-4,
+        rtol: float = 0.1,
+        hist=(0.1, 0.01),
+        progress_bar: bool = False,
+    ) -> list[dict[str, str | int | float]]:
+        """Computes the discrepancies between the saved inputs and outputs
+        with the saved onnx model.
+
+        Args:
+            onnx_model: ONNX Model to verifiy.
+            atol: Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
+            rtol: Relative tolerance.
+            hist:
+                Thresholds, the function determines the number of discrepancies
+                above that threshold.
+            progress_bar: Shows a progress bar (requires ``tqdm``).
+        Returns:
+            A list of dictionaries, ready to be consumed by a dataframe.
+        """
+        sess = OnnxruntimeEvaluator(onnx_model, whole=True)
+        input_names = sess.input_names
+        self._check_captured()
+        # type checking
+        assert self.info is not None
+        assert self.info.inputs is not None
+        assert self.info.flat_outputs is not None
+        assert self.info.latencies is not None
+        io_sets = list(zip(self.info.inputs, self.info.flat_outputs, self.info.latencies))
+        if progress_bar:
+            from tqdm import tqdm
+
+            loop = tqdm(io_sets)
+        else:
+            loop = io_sets
+        lhist = list(hist)
+        data: list[dict[str, Any]] = []
+        for inputs, outputs, latency in loop:
+            # type checking
+            assert inputs.aligned_flat_list is not None
+            if len(input_names) != len(inputs.aligned_flat_list):
+                raise RuntimeError(
+                    f"There are ({len(inputs.aligned_flat_list)}) "
+                    f"tensors but the model expects {len(input_names)}."
+                )
+            feeds = dict(zip(input_names, inputs.aligned_flat_list))
+
+            begin = time.perf_counter()
+            ort_outputs = sess.run(None, feeds)
+            duration = time.perf_counter() - begin
+            diff = max_diff(outputs, ort_outputs, hist=lhist)
+            if "rep" in diff and isinstance(diff["rep"], dict):
+                diff.update(diff["rep"])
+                del diff["rep"]
+            diff["SUCCESS"] = (
+                isinstance(diff["abs"], float)
+                and isinstance(diff["rel"], float)
+                and diff["abs"] < atol
+                and diff["rel"] < rtol
+            )
+            diff.update(
+                dict(
+                    index=len(diff),
+                    duration_torch=latency,
+                    ort_duration=duration,
+                    n_inputs=len(input_names),
+                )
+            )
+            data.append(diff)
+        return data

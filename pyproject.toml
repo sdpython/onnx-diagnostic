@@ -217,6 +217,7 @@ select = [
     "UP006", "UP015", "UP027", "UP031", "UP032", "UP034", "UP035"
 ]
 "_doc/examples/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
+"_doc/final/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_doc/notebooks/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_doc/recipes/plot_*.py" = ["E402", "B018", "PIE808", "SIM105", "SIM117"]
 "_scripts/compare_model_execution.py" = ["E402", "F401"]

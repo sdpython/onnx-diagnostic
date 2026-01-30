@@ -182,6 +182,7 @@ sphinx_gallery_conf = {
     # path to your examples scripts
     "examples_dirs": [
         os.path.join(os.path.dirname(__file__), "examples"),
+        os.path.join(os.path.dirname(__file__), "final"),
         os.path.join(os.path.dirname(__file__), "recipes"),
         os.path.join(os.path.dirname(__file__), "technical"),
     ],
