@@ -66,9 +66,9 @@ print("-----------------")
 # Replace forward method
 # ++++++++++++++++++++++
 #
-# We first cpature inputs and outputs with an :class`InputObserver
+# We first capture inputs and outputs with an :class`InputObserver
 # <onnx_diagnostic.investigate.input_observer>`.
-# We also need to registers additional patchs for :epkg:`transformers`.
+# We also need to registers additional patches for :epkg:`transformers`.
 # Then :epkg:`pytorch` knows how to flatten/unflatten inputs.
 
 
@@ -106,11 +106,11 @@ with torch_export_patches(patch_transformers=True):
     )
 
 # %%
-# Check disrepancies
-# ++++++++++++++++++
+# Check discrepancies
+# +++++++++++++++++++
 #
 # The model is exported into ONNX. We use again the stored inputs and outputs
-# to verify the model prooduces the same outputs.
+# to verify the model produces the same outputs.
 
 data = observer.check_discrepancies(filename, progress_bar=True)
 print(pandas.DataFrame(data))
@@ -142,7 +142,7 @@ outputs = model.generate(
 )
 
 observer = InputObserver()
-with register_additional_serialization_functions(patch_transformers=True), observer:
+with register_additional_serialization_functions(patch_transformers=True), observer(model):
     generate_text(prompt, model, tokenizer)
 
 filename = "plot_export_tiny_llm_input_observer.onnx"

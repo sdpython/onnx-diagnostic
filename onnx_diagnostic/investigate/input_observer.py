@@ -648,7 +648,7 @@ class InputObserver:
         with the saved onnx model.
 
         Args:
-            onnx_model: ONNX Model to verifiy.
+            onnx_model: ONNX Model to verify.
             atol: Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
             rtol: Relative tolerance.
             hist:
