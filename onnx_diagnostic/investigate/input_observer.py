@@ -128,7 +128,7 @@ class InputCandidate:
     See example :ref:`l-plot-tiny-llm-export-input-observer`.
     """
 
-    def __init__(self, args: tuple[Any, ...], kwargs: dict[str, Any], cloned: bool):
+    def __init__(self, args: tuple[Any, ...], kwargs: dict[str, Any], clone: bool):
         self.args = args
         self.kwargs = kwargs
         self.flat_list, self.spec = torch.utils._pytree.tree_flatten((args, kwargs))
@@ -136,7 +136,7 @@ class InputCandidate:
         self._position_to_args_kwargs: list[int | str] | None = None
         self._n_tensors_for_args_kwargs: dict[int | str, int] | None = None
 
-        if cloned:
+        if clone:
             self.flat_list = [
                 (None if not isinstance(t, torch.Tensor) else t.clone().detach())
                 for t in self.flat_list
@@ -254,6 +254,9 @@ class InputObserverInfo:
         signature_names: Names of the arguments of the method
             the collector tensors come from. They are used if it becomes
             necessary to move positional arguments to named ones.
+            They are used a second time because :func:`torch.export.export`
+            cares about the order in kwargs and dynamic shapes, it needs
+            to be the same in the ordered dictionaries `add_inputs` receive.
     """
 
     def __init__(self, signature_names: list[str]):
@@ -281,7 +284,17 @@ class InputObserverInfo:
             for k, v in kwargs.items()
             if v is not None and not isinstance(v, (int, float, bool))
         }
-        candidate = InputCandidate(args, kwargs, cloned=True)
+
+        # kwargs may come in a different ordeer teach.
+        # dictionaries are ordered and torch.export.export expects
+        # dynamic shapes an kwargs to follow the same order.
+
+        ordered_kwargs = {k: kwargs[k] for k in self.signature_names if k in kwargs}
+        for k, v in kwargs.items():
+            if k not in ordered_kwargs:
+                ordered_kwargs[k] = v
+
+        candidate = InputCandidate(args, ordered_kwargs, clone=True)
         self.inputs.append(candidate)
         if self._best_candidate is None or len(self._best_candidate) < len(candidate):
             self._best_candidate = candidate
@@ -451,8 +464,8 @@ class InputObserverInfo:
         return {**dict(zip(pos_names, ds_args)), **ds_kwargs}
 
     def infer_arguments(
-        self, index: int | None = None
-    ) -> tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
+        self, index_or_candidate: InputCandidate | int | None = None, flat: bool = False
+    ) -> list[torch.Tensor] | tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
         """Infers arguments based on the collected tensors."""
         # This is already checked by _build_inputs_completed_with_none_values
         # but this is not always well captured by tools checking types.
@@ -461,7 +474,7 @@ class InputObserverInfo:
         # type checking
         assert self._best_candidate is not None
         candidate = None
-        if index is None:
+        if index_or_candidate is None:
             for cand in self.inputs:
                 args, kwargs = cand.args, cand.kwargs
                 if len(args) == len(self._best_candidate.args) and len(kwargs) == len(
@@ -469,17 +482,27 @@ class InputObserverInfo:
                 ):
                     candidate = cand
                     break
-        else:
+        elif isinstance(index_or_candidate, int):
             torch._check(
-                index < len(self.inputs),
-                lambda: f"No stored input set for index={index}<{len(self.inputs)}.",
+                index_or_candidate < len(self.inputs),
+                lambda: (
+                    f"No stored input set for index="
+                    f"{index_or_candidate}<{len(self.inputs)}."
+                ),
             )
-            candidate = self.inputs[index]
+            candidate = self.inputs[index_or_candidate]
+        else:
+            candidate = index_or_candidate
 
         torch._check(candidate is not None, "No input was captured.")
         # type checking
         assert candidate is not None
-        assert candidate.aligned_flat_list is not None
+        if candidate.aligned_flat_list is None:
+            raise RuntimeError(
+                f"Candidate {candidate} has no aligned flat list of tensors, "
+                f"index_or_candidate={index_or_candidate}. You should call "
+                f"method 'align_with'."
+            )
 
         aligned_flat_list = candidate.aligned_flat_list
         if any(t is None for t in aligned_flat_list):
@@ -520,6 +543,10 @@ class InputObserverInfo:
                 aligned_flat_list[index] = torch.empty(
                     tuple(new_shape), dtype=tensor.dtype, device=tensor.device
                 )
+        if flat:
+            # type checking
+            assert all(t is not None for t in aligned_flat_list)
+            return aligned_flat_list
         # type checking
         assert candidate is not None
         assert candidate.aligned_spec is not None
@@ -536,7 +563,33 @@ class InputObserverInfo:
 
 
 class InputObserver:
-    """ """
+    """Steals forward method to collect inputs and outputs.
+    This information is used to infer dynamic shapes and
+    export arguments.
+
+    Examples
+    --------
+    >>> input_observer = InputObserver()
+    >>> with input_observer(model):
+    >>>     model(x1, y1)
+    >>>     model(x2, y2)
+    >>> ep = torch.export.export(  # or torch.onnx.export
+    >>>     model,
+    >>>     input_observer.infer_arguments(),
+    >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
+    >>> )
+
+    With LLM:
+    >>> input_observer = InputObserver()
+    >>> with input_observer(model):
+    >>>     model.generate(input_ids)
+    >>> ep = torch.export.export(  # or torch.onnx.export
+    >>>     model,
+    >>>     ()
+    >>>     kwargs=input_observer.infer_arguments(),
+    >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
+    >>> )
+    """
 
     def __init__(self):
         self.info: InputObserverInfo | None = None
@@ -619,22 +672,50 @@ class InputObserver:
         return self.info.infer_dynamic_shapes(set_batch_dimension_for=set_batch_dimension_for)
 
     def infer_arguments(
-        self, index: int | None = None
-    ) -> tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
+        self,
+        index_or_args_or_kwargs: tuple[Any] | dict[str, Any] | int | None = None,
+        flat: bool = False,
+    ) -> list[torch.Tensor] | tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
         """Infers arguments based on the collected tensors.
 
         Args:
-            index: If missing, the method selects one set of inputs
+            index_or_args_or_kwargs: If missing, the method selects one set of inputs
                 among the available ones, usually this inputs containing
                 the set of stored inputs with the highest number of tensors.
                 The then replaces None values and missing tensors by empty tensors.
+                If not missing, it can be an integer to fetch one of the stored set
+                or some inputs.
+            flat: If True, it returns a flattened list of tensors,
+                if False, it returns a tuple or a dictionary preserving
+                the nested structures.
 
         Returns:
             Inferred arguments, every optional tensor is replaced by a empty tensor.
         """
         self._check_captured()
         assert self.info is not None  # missed by type checking
-        return self.info.infer_arguments(index=index)
+        index_or_candidate: int | InputCandidate | None = None
+        if index_or_args_or_kwargs is None or isinstance(index_or_args_or_kwargs, int):
+            index_or_candidate = index_or_args_or_kwargs
+        else:
+            if isinstance(index_or_args_or_kwargs, tuple):
+                index_or_candidate = InputCandidate(
+                    args=index_or_args_or_kwargs, kwargs={}, clone=False
+                )
+            elif isinstance(index_or_args_or_kwargs, dict):
+                index_or_candidate = InputCandidate(
+                    args=(), kwargs=index_or_args_or_kwargs, clone=False
+                )
+            else:
+                raise ValueError(
+                    f"Unexpected type {type(index_or_args_or_kwargs)} "
+                    f"for index_or_args_or_kwargs."
+                )
+            self.info.align_inputs_none_values()
+            index_or_candidate.align_with(
+                self.info._best_candidate, self.info._captured_inputs
+            )
+        return self.info.infer_arguments(index_or_candidate=index_or_candidate, flat=flat)
 
     def check_discrepancies(
         self,
@@ -683,7 +764,8 @@ class InputObserver:
                     f"There are ({len(inputs.aligned_flat_list)}) "
                     f"tensors but the model expects {len(input_names)}."
                 )
-            feeds = dict(zip(input_names, inputs.aligned_flat_list))
+
+            feeds = dict(zip(input_names, self.info.infer_arguments(inputs, flat=True)))
 
             begin = time.perf_counter()
             ort_outputs = sess.run(None, feeds)

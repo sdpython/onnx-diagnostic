@@ -189,6 +189,7 @@ sphinx_gallery_conf = {
     # path where to save gallery generated examples
     "gallery_dirs": [
         "auto_examples",
+        "auto_final",
         "auto_recipes",
         "auto_technical",
     ],
