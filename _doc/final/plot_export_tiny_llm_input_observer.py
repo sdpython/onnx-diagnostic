@@ -22,6 +22,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
+from onnx_diagnostic.helpers.rt_helper import onnx_generate
 from onnx_diagnostic.torch_export_patches import (
     register_additional_serialization_functions,
     torch_export_patches,
@@ -35,7 +36,14 @@ model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 
 
 def generate_text(
-    prompt, model, tokenizer, max_length=50, temperature=1, top_k=50, top_p=0.95
+    prompt,
+    model,
+    tokenizer,
+    max_length=50,
+    temperature=0.01,
+    top_k=50,
+    top_p=0.95,
+    do_sample=True,
 ):
     inputs = tokenizer(prompt, return_tensors="pt")
     input_ids = inputs["input_ids"]
@@ -48,7 +56,7 @@ def generate_text(
         temperature=temperature,
         top_k=top_k,
         top_p=top_p,
-        do_sample=True,
+        do_sample=do_sample,
     )
 
     generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -94,14 +102,14 @@ print(string_type(observer.infer_arguments(), with_shape=True))
 # %%
 # Let's export.
 
-filename = "plot_export_tiny_llm_input_observer.custom.onnx"
+filenamec = "plot_export_tiny_llm_input_observer.custom.onnx"
 with torch_export_patches(patch_transformers=True):
     to_onnx(
         model,
         (),
         kwargs=observer.infer_arguments(),
         dynamic_shapes=observer.infer_dynamic_shapes(set_batch_dimension_for=True),
-        filename=filename,
+        filename=filenamec,
         exporter="custom",
     )
 
@@ -112,7 +120,7 @@ with torch_export_patches(patch_transformers=True):
 # The model is exported into ONNX. We use again the stored inputs and outputs
 # to verify the model produces the same outputs.
 
-data = observer.check_discrepancies(filename, progress_bar=True)
+data = observer.check_discrepancies(filenamec, progress_bar=True)
 print(pandas.DataFrame(data))
 
 
@@ -134,11 +142,7 @@ inputs = tokenizer(prompt, return_tensors="pt")
 outputs = model.generate(
     input_ids=inputs["input_ids"],
     attention_mask=inputs["attention_mask"],
-    max_length=100,
-    temperature=1,
-    top_k=50,
-    top_p=0.95,
-    do_sample=True,
+    do_sample=False,
 )
 
 observer = InputObserver()
@@ -158,6 +162,17 @@ with torch_export_patches(patch_transformers=True):
 data = observer.check_discrepancies(filename, progress_bar=True)
 print(pandas.DataFrame(data))
 
+# %%
+# ONNX Prompt
+# +++++++++++
+
+onnx_tokens = onnx_generate(
+    filename, inputs["input_ids"], eos_token_id=model.config.eos_token_id, max_new_tokens=50
+)
+onnx_generated_text = tokenizer.decode(onnx_tokens, skip_special_tokens=True)
+print("-----------------")
+print(onnx_generated_text)
+print("-----------------")
 
 # %%
 doc.save_fig(doc.plot_dot(filename), f"{filename}.png", dpi=400)

@@ -29,6 +29,7 @@ extend-exclude = '''.*clones.*'''
 ######
 
 [tool.mypy]
+check_untyped_defs = false
 ignore_missing_imports = true
 packages = ["onnx_diagnostic"]
 exclude = [

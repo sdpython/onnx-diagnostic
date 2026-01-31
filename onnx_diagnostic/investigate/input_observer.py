@@ -712,6 +712,9 @@ class InputObserver:
                     f"for index_or_args_or_kwargs."
                 )
             self.info.align_inputs_none_values()
+            # type checking
+            assert self.info._best_candidate is not None
+            assert self.info._captured_inputs is not None
             index_or_candidate.align_with(
                 self.info._best_candidate, self.info._captured_inputs
             )
@@ -732,10 +735,10 @@ class InputObserver:
             onnx_model: ONNX Model to verify.
             atol: Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
             rtol: Relative tolerance.
-            hist:
-                Thresholds, the function determines the number of discrepancies
-                above that threshold.
-            progress_bar: Shows a progress bar (requires ``tqdm``).
+            hist: Thresholds, the function determines the number of discrepancies
+                above these thresholds.
+            progress_bar: Shows a progress bar (requires :epkg:`tqdm`).
+
         Returns:
             A list of dictionaries, ready to be consumed by a dataframe.
         """

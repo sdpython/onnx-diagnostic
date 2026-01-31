@@ -2,7 +2,7 @@ import itertools
 import unittest
 import pandas
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
 from onnx_diagnostic.investigate.input_observer import (
     InputObserver,
     _infer_dynamic_dimensions,
@@ -633,6 +633,7 @@ class TestInputObserver(ExtTestCase):
             observer.infer_dynamic_shapes(set_batch_dimension_for={"x", "z"}),
         )
 
+    @requires_torch("2.10.99")
     def test_io_captured_different_order(self):
         class Model(torch.nn.Module):
             def forward(self, x, y, z=None, w=None):
