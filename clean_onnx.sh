@@ -6,6 +6,7 @@ rm *.nsys-rep
 rm *.sqlite
 rm *.pte
 rm *.ep
+rm *.ep.graph
 rm *.ep.txt
 rm *.pkl
 rm tt_*

@@ -65,6 +65,7 @@ onnxruntime_profile*
 prof
 plot_*.txt
 _doc/auto_examples/*
+_doc/auto_final/*
 _doc/auto_recipes/*
 _doc/auto_technical/*
 _doc/sg_execution_times.rst
@@ -75,6 +76,13 @@ _doc/examples/plot_*.png
 _doc/examples/plot_*.xlsx
 _doc/examples/data/*.optimized.onnx
 _doc/examples/*.html
+_doc/final/_cache/*
+_doc/final/dump_models/*
+_doc/final/onnxruntime_profile*
+_doc/final/plot_*.png
+_doc/final/plot_*.xlsx
+_doc/final/data/*.optimized.onnx
+_doc/final/*.html
 _doc/_static/require.js
 _doc/_static/viz.js
 _doc/LICENSE.txt

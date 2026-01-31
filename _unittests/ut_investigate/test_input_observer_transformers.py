@@ -1,6 +1,6 @@
 import unittest
 import pandas
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_transformers
 from onnx_diagnostic.investigate.input_observer import InputObserver
 from onnx_diagnostic.torch_export_patches import (
     register_additional_serialization_functions,
@@ -12,6 +12,7 @@ from onnx_diagnostic.helpers.rt_helper import onnx_generate
 
 
 class TestInputObserverTransformers(ExtTestCase):
+    @requires_transformers("4.57")
     def test_input_observer_onnx_generate_tiny_llm(self):
         mid = "arnir0/Tiny-LLM"
         print("-- test_onnx_generate: get model")
