@@ -115,7 +115,7 @@ def make_feeds(
 def _get_dim(i: int, s: Union[str, int], batch: int = 1) -> int:
     if isinstance(s, int):
         return s
-    if s == "batch":
+    if s == "batch" or i == 0:
         return batch
     # Everything else is cache length or sequence length.
     return 0
@@ -153,9 +153,13 @@ def make_empty_cache(
             [i.type for i in sess.get_inputs()[2:]],
         )
     """
+    assert batch > 0, f"batch size = {batch} must be positive"
     feeds = {}
     for name, shape, dtype in zip(onnx_input_names, onnx_input_shapes, onnx_input_types):
         new_shape = tuple(_get_dim(i, s, batch=batch) for i, s in enumerate(shape))
+        assert (
+            new_shape and new_shape[0] > 0
+        ), f"new_shape={new_shape} cannot have a null batch size, name={name!r}, shape={shape}"
         feeds[name] = torch.empty(new_shape, dtype=rt_type_to_torch_dtype(dtype))
     return feeds
 
@@ -272,6 +276,7 @@ def generate_and_validate(
 def onnx_generate(
     model_or_path: Union[onnx.ModelProto, str, InferenceSessionForTorch],
     input_ids: torch.Tensor,
+    attention_mask: Optional[torch.Tensor] = None,
     eos_token_id: int = 2,
     max_new_tokens=100,
     return_session: bool = False,
@@ -364,6 +369,7 @@ def onnx_generate(
     input_names = session.input_names
     input_types = session.input_types
     has_position_ids = "position_ids" in session.input_names
+    has_cache_position = "cache_position" in session.input_names
 
     assert (
         len(input_names) > 2
@@ -377,21 +383,46 @@ def onnx_generate(
         not has_position_ids or input_names[2] == "position_ids"
     ), f"position_ids must the third input but input_names={input_names}"
 
+    cache_names, cache_shapes, cache_types = [], [], []
+    for name, shape, dt in zip(input_names, input_shapes, input_types):
+        if name.startswith("past_key_values"):
+            cache_names.append(name)
+            cache_shapes.append(shape)
+            cache_types.append(dt)
+
     # First call: prefill
+    empty_cache = make_empty_cache(input_ids.shape[0], cache_names, cache_shapes, cache_types)
     feeds = dict(
         input_ids=input_ids,
-        attention_mask=torch.ones(
-            input_ids.shape, dtype=input_ids.dtype, device=input_ids.device
+        attention_mask=(
+            attention_mask
+            if attention_mask is not None
+            else torch.ones(input_ids.shape, dtype=input_ids.dtype, device=input_ids.device)
         ),
-        **make_empty_cache(
-            input_ids.shape[0], input_names[2:], input_shapes[2:], input_types[2:]
-        ),
+        **empty_cache,
     )
+
     if has_position_ids:
-        feeds["position_ids"] = torch.unsqueeze(
+        assert (
+            input_ids.shape[1] > 0
+        ), f"unexpected value for input_ids shape={input_ids.shape}"
+        position_ids = torch.unsqueeze(
             torch.arange(input_ids.shape[1], dtype=torch.int64, device=input_ids.device), 0
         )
+        feeds["position_ids"] = position_ids
 
+    if has_cache_position:
+        assert empty_cache, "no cache means no cache_position"
+        first_tensor = next(iter(empty_cache.values()))
+        cache_position = torch.arange(
+            first_tensor.shape[2],
+            input_ids.shape[1] + first_tensor.shape[2],
+            dtype=torch.int64,
+            device=input_ids.device,
+        )
+        feeds["cache_position"] = cache_position
+
+    # prefill step
     outputs = session.run(None, feeds)
 
     # Next calls: decode
@@ -424,7 +455,18 @@ def onnx_generate(
                 ),
                 0,
             )
-        feeds.update(dict(zip(input_names[3 if has_position_ids else 2 :], outputs[1:])))
+        if has_cache_position:
+            feeds["cache_position"] = torch.arange(
+                input_ids.shape[1],
+                input_ids.shape[1] + 1,
+                dtype=torch.int64,
+                device=input_ids.device,
+            )
+
+        feeds.update(
+            dict(zip([n for n in input_names if n.startswith("past_key_values")], outputs[1:]))
+        )
+        # generate/decoding step
         outputs = session.run(None, feeds)
 
     if return_session:

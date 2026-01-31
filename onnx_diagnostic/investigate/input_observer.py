@@ -544,7 +544,7 @@ class InputObserverInfo:
                     tuple(new_shape), dtype=tensor.dtype, device=tensor.device
                 )
         if flat:
-            # type checking
+            # pyrefly: ignore[bad-return]
             assert all(t is not None for t in aligned_flat_list)
             return aligned_flat_list
         # type checking

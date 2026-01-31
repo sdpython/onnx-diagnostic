@@ -167,11 +167,15 @@ print(pandas.DataFrame(data))
 # +++++++++++
 
 onnx_tokens = onnx_generate(
-    filename, inputs["input_ids"], eos_token_id=model.config.eos_token_id, max_new_tokens=50
+    filenamec,
+    input_ids=inputs["input_ids"],
+    attention_mask=inputs["attention_mask"],
+    eos_token_id=model.config.eos_token_id,
+    max_new_tokens=50,
 )
 onnx_generated_text = tokenizer.decode(onnx_tokens, skip_special_tokens=True)
 print("-----------------")
-print(onnx_generated_text)
+print("\n".join(onnx_generated_text))
 print("-----------------")
 
 # %%
