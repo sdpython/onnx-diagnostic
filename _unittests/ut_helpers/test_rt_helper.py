@@ -59,7 +59,7 @@ class TestRtSession(ExtTestCase):
 
         print("-- test_onnx_generate: generate")
         res, session, _feeds = onnx_generate(
-            model_name, input_ids[:1], 2, max_new_tokens=10, return_session=True
+            model_name, input_ids[:1], eos_token_id=2, max_new_tokens=10, return_session=True
         )
         n_inputs = input_ids.shape[1]
         self.assertEqualArray(input_ids[:1], res[:, :n_inputs])
