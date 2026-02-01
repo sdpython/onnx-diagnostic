@@ -186,7 +186,7 @@ if not os.path.exists(model_name):
 # Let's ask first the function to return the session to avoid creating on the second call.
 
 _res, session, _feeds = onnx_generate(
-    model_name, inputs.input_ids, 2, max_new_tokens=2, return_session=True
+    model_name, inputs.input_ids, eos_token_id=2, max_new_tokens=2, return_session=True
 )
 
 # And now the full answer.
