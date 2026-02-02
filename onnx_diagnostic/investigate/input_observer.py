@@ -4,8 +4,10 @@ import time
 from typing import Any, Callable, Sequence
 import onnx
 import torch
-from ..helpers import max_diff
+from ..helpers import max_diff, string_type
 from ..reference import OnnxruntimeEvaluator
+
+EOL = "\n"
 
 
 def _flatten_unflatten_for_dynamic_shapes(
@@ -159,6 +161,13 @@ class InputCandidate:
         """Returns the number of flattended tensors, None tensors are included."""
         return len(self.flat_list)
 
+    def str_obs(self) -> str:
+        """Prints out some information about the osbervations."""
+        return (
+            f"InputCandidate(args={string_type(self.args, with_shape=True)}, "
+            f"kwargs={string_type(self.kwargs, with_shape=True)})"
+        )
+
     def build_mappings(self):
         if self._position_to_args_kwargs is not None:
             return self._position_to_args_kwargs
@@ -206,13 +215,27 @@ class InputCandidate:
         self.aligned_spec = aligned_spec
 
     def align_with(
-        self, best_candidate: "InputCandidate", captured_inputs: dict[int | str, int]
+        self,
+        best_candidate: "InputCandidate",
+        captured_inputs: dict[int | str, int],
+        signature_names: list[str],
     ):
-        """Two candidates are considered as aligned if after being flattened,
-        they have the same number of tensors (None allowed)."""
+        """Two candidates are considered as aligned if after being flattened
+        if they have the same number of tensors (None allowed)."""
+        args = self.args
+        if len(self.args) > len(best_candidate.args):
+            # We need to move some args to kwargs as the best_candidate does.
+            new_kwargs = {}
+            for i in range(len(best_candidate.args), len(self.args)):
+                new_kwargs[signature_names[i]] = args[i]
+            args = args[: len(best_candidate.args)]
+            kwargs = {**new_kwargs, **self.kwargs}
+        else:
+            kwargs = self.kwargs
+
         flat = []
         for i in range(len(best_candidate.args)):
-            if i < len(self.args) and (isinstance(self.args[i], torch.Tensor) or self.args[i]):
+            if i < len(args) and (isinstance(args[i], torch.Tensor) or args[i]):
                 ts = torch.utils._pytree.tree_flatten(self.args[i])[0]
                 if i in captured_inputs and captured_inputs[i] != len(ts):
                     raise RuntimeError(
@@ -227,15 +250,13 @@ class InputCandidate:
             flat.extend([None for _ in range(best_candidate.n_tensors_for_args_kwargs[i])])
 
         for k in best_candidate.kwargs:
-            if k in self.kwargs and (
-                isinstance(self.kwargs[k], torch.Tensor) or self.kwargs[k]
-            ):
-                ts = torch.utils._pytree.tree_flatten(self.kwargs[k])[0]
+            if k in kwargs and (isinstance(kwargs[k], torch.Tensor) or kwargs[k]):
+                ts = torch.utils._pytree.tree_flatten(kwargs[k])[0]
                 if k in captured_inputs and captured_inputs[k] != len(ts):
                     raise RuntimeError(
                         f"Named argument {k!r} has {len(ts)} tensors "
                         f"but previously got {captured_inputs[k]} tensors in "
-                        f"kwargs={list(self.kwargs)}. "
+                        f"kwargs={list(kwargs)}. "
                         f"Inference is impossible in that case."
                     )
                 captured_inputs[k] = len(ts)
@@ -333,10 +354,16 @@ class InputObserverInfo:
                 self._best_candidate.kwargs
             ):
                 raise RuntimeError(
-                    "At least one call to the observed model "
-                    "must contain all the named arguments."
+                    f"At least one call to the observed model "
+                    f"must contain all the named arguments. "
+                    f"candidate kwargs={list(candidate.kwargs)}, "
+                    f"best candidate kwargs={list(self._best_candidate.kwargs)}, "
+                    f"all candidate kwargs={EOL}"
+                    f"{EOL.join(string_type(c.kwargs, with_shape=True) for c in self.inputs)}"
                 )
-            candidate.align_with(self._best_candidate, self._captured_inputs)
+            candidate.align_with(
+                self._best_candidate, self._captured_inputs, self.signature_names
+            )
 
     def infer_dynamic_shapes(
         self,
@@ -534,7 +561,7 @@ class InputObserverInfo:
                         f"There is no tensor at position {index} in any flattened inputs."
                     )
                 tensor = all_non_empty_tensors_not_none.pop()
-                if tensor.numel() == 0:
+                if tensor.numel() == 0 or not shape:
                     aligned_flat_list[index] = tensor
                     continue
                 dim = max(shape)
@@ -621,6 +648,10 @@ class InputObserver:
             self.info.add_outputs(res, latency=duration)
         return res
 
+    def num_obs(self) -> int:
+        """Returns the number of stored set if inputs."""
+        return 0 if not self.info else len(self.info)
+
     @contextlib.contextmanager
     def __call__(
         self, model: torch.nn.Module, store_n_calls: int = 3, method_name: str = "forward"
@@ -636,20 +667,20 @@ class InputObserver:
                 to avoid taking too much memory.
             method_name: Method name to spy on.
         """
-        if self.info is not None:
-            raise RuntimeError(
-                "This class was already used to capture a model. Please create a new one."
-            )
         if not hasattr(model, method_name):
             raise ValueError(f"Model type {model} does not have a method {method_name!r}")
         captured_method = getattr(model, method_name)
-        self.info = InputObserverInfo(
-            signature_names=list(inspect.signature(captured_method).parameters)
-        )
+        if self.info is None:
+            self.info = InputObserverInfo(
+                signature_names=list(inspect.signature(captured_method).parameters)
+            )
+        n_already_stored = len(self.info)
         setattr(
             model,
             method_name,
-            lambda *args, _cm=captured_method, _snc=store_n_calls, **kwargs: self._replaced_method(  # noqa: E501
+            lambda *args, _cm=captured_method, _snc=(
+                store_n_calls + n_already_stored
+            ), **kwargs: self._replaced_method(
                 *args,
                 _captured_method=_cm,
                 _store_n_calls=_snc,
@@ -724,7 +755,9 @@ class InputObserver:
             assert self.info._best_candidate is not None
             assert self.info._captured_inputs is not None
             index_or_candidate.align_with(
-                self.info._best_candidate, self.info._captured_inputs
+                self.info._best_candidate,
+                self.info._captured_inputs,
+                self.info.signature_names,
             )
         return self.info.infer_arguments(index_or_candidate=index_or_candidate, flat=flat)
 
@@ -779,18 +812,25 @@ class InputObserver:
             feeds = dict(zip(input_names, self.info.infer_arguments(inputs, flat=True)))
 
             begin = time.perf_counter()
-            ort_outputs = sess.run(None, feeds)
+            try:
+                ort_outputs = sess.run(None, feeds)
+                error = None
+            except Exception as e:
+                error = str(e)
             duration = time.perf_counter() - begin
-            diff = max_diff(outputs, ort_outputs, hist=lhist)
-            if "rep" in diff and isinstance(diff["rep"], dict):
-                diff.update(diff["rep"])
-                del diff["rep"]
-            diff["SUCCESS"] = (
-                isinstance(diff["abs"], float)
-                and isinstance(diff["rel"], float)
-                and diff["abs"] < atol
-                and diff["rel"] < rtol
-            )
+            if error:
+                diff = dict(error=error, SUCCESS=False)
+            else:
+                diff = max_diff(outputs, ort_outputs, hist=lhist)
+                if "rep" in diff and isinstance(diff["rep"], dict):
+                    diff.update(diff["rep"])
+                    del diff["rep"]
+                diff["SUCCESS"] = (
+                    isinstance(diff["abs"], float)
+                    and isinstance(diff["rel"], float)
+                    and diff["abs"] < atol
+                    and diff["rel"] < rtol
+                )
             diff.update(
                 dict(
                     index=len(diff),
