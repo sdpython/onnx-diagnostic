@@ -335,7 +335,9 @@ def onnx_generate(
             )
 
         print("-- generate with onnx")
-        onnx_outputs = onnx_generate(model_name, input_ids[:1], 2, max_new_tokens=10)
+        onnx_outputs = onnx_generate(
+            model_name, input_ids[:1], eos_token_id=2, max_new_tokens=10
+        )
         print("-- onnx output", onnx_outputs)
 
         # The example continues with other functions doing the same.
