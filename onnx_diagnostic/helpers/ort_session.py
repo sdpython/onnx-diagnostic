@@ -6,7 +6,7 @@ import torch
 from torch._C import _from_dlpack
 import onnxruntime
 from onnxruntime.capi import _pybind_state as ORTC
-from .helper import size_type
+from .helper import size_type, string_type
 from .onnx_helper import (
     onnx_dtype_to_np_dtype,
     np_dtype_to_tensor_dtype,
@@ -511,6 +511,10 @@ class InferenceSessionForTorch(_InferenceSession):
         device = -1
         for k, v in feeds.items():
             assert k != "", f"Input cannot be empty but feeds names={list(feeds)}"
+            assert hasattr(v, "device"), (
+                f"Unepxected class {type(v)} for input {k!r}, "
+                f"feeds={string_type(feeds, with_shape=True)}"
+            )
             device = max(device, v.get_device())
             assert hasattr(v, "__dlpack__"), f"class {type(v)} should be serialized"
             if not v.is_contiguous():

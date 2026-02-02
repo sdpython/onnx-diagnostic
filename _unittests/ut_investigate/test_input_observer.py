@@ -1,11 +1,13 @@
 import itertools
 import unittest
+import pandas
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
 from onnx_diagnostic.investigate.input_observer import (
     InputObserver,
     _infer_dynamic_dimensions,
 )
+from onnx_diagnostic.export.api import to_onnx
 
 
 class TestInputObserver(ExtTestCase):
@@ -630,6 +632,149 @@ class TestInputObserver(ExtTestCase):
             dict(x={0: cst, 1: cst}, y={1: cst}, z={0: cst, 1: cst}, w={1: cst}),
             observer.infer_dynamic_shapes(set_batch_dimension_for={"x", "z"}),
         )
+
+    @requires_torch("2.10.99")
+    def test_io_captured_different_order(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y, z=None, w=None):
+                r = x + y
+                if z is not None:
+                    r += z
+                if w is not None:
+                    r += w
+                return r
+
+        inputs = [
+            (
+                (torch.randn((5, 6)), torch.randn((1, 6))),
+                dict(w=torch.randn((1, 6)), z=torch.randn((5, 6))),
+            ),
+            (
+                (torch.randn((5, 7)), torch.randn((1, 7))),
+                dict(z=torch.randn((5, 7)), w=torch.randn((1, 7))),
+            ),
+            (
+                (torch.randn((5, 8)), torch.randn((1, 8))),
+                dict(w=torch.randn((1, 8)), z=torch.randn((5, 8))),
+            ),
+            (
+                (torch.randn((5, 9)), torch.randn((1, 9))),
+                dict(z=torch.randn((5, 9)), w=torch.randn((1, 9))),
+            ),
+        ]
+
+        model = Model()
+        expected = [model(*args, **kwargs) for args, kwargs in inputs]
+        observer = InputObserver()
+        with observer(model):
+            for args, kwargs in inputs:
+                model(*args, **kwargs)
+        self.assertEqual(len(observer.info), 3)
+        for i in range(3):
+            self.assertEqual(len(observer.info.flat_outputs[i]), 1)
+            torch.testing.assert_close(expected[i], observer.info.flat_outputs[i][0])
+
+        cst = torch.export.Dim.DYNAMIC
+        self.assertEqual(
+            dict(x={0: cst, 1: cst}, y={1: cst}, z={0: cst, 1: cst}, w={1: cst}),
+            observer.infer_dynamic_shapes(set_batch_dimension_for={0, "z"}),
+        )
+        self.assertEqual(
+            dict(x={0: cst, 1: cst}, y={1: cst}, z={0: cst, 1: cst}, w={1: cst}),
+            observer.infer_dynamic_shapes(set_batch_dimension_for={"x", "z"}),
+        )
+        proto_name = self.get_dump_file("test_io_captured_different_order.onnx")
+        to_onnx(
+            model,
+            observer.infer_arguments(),
+            dynamic_shapes=observer.infer_dynamic_shapes(set_batch_dimension_for=True),
+            exporter="custom",
+            filename=proto_name,
+        )
+        data = observer.check_discrepancies(proto_name, progress_bar=False)
+        df = pandas.DataFrame(data)
+        self.assertLess(df["abs"].max(), 1e-5)
+
+    def test_io_check_discrepancies(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                return x + y
+
+        inputs = [
+            (torch.randn((5, 6)), torch.randn((1, 6))),
+            (torch.randn((7, 7)), torch.randn((1, 7))),
+            (torch.randn((7, 8)), torch.randn((1, 8))),
+            (torch.randn((7, 9)), torch.randn((1, 9))),
+        ]
+
+        model = Model()
+        observer = InputObserver()
+        with observer(model):
+            for args in inputs:
+                model(*args)
+
+        proto_name = self.get_dump_file("test_io_check_discrepancies.onnx")
+        to_onnx(
+            model,
+            observer.infer_arguments(),
+            dynamic_shapes=observer.infer_dynamic_shapes(set_batch_dimension_for=True),
+            exporter="custom",
+            filename=proto_name,
+        )
+        data = observer.check_discrepancies(proto_name, progress_bar=False)
+        self.assertEqual(len(data), 3)
+        self.assertIsInstance(data[0], dict)
+        self.assertLess(max(obs["abs"] for obs in data), 1e-5)
+        df = pandas.DataFrame(data)
+        self.assertLess(df["abs"].max(), 1e-5)
+
+    def test_io_infer_arguments(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y, z=None, w=None):
+                r = x + y
+                if z is not None:
+                    r += z
+                if w is not None:
+                    r += w
+                return r
+
+        inputs = [
+            (
+                (torch.randn((5, 6)), torch.randn((1, 6))),
+                dict(w=torch.randn((1, 6)), z=torch.randn((5, 6))),
+            ),
+            (
+                (torch.randn((5, 7)), torch.randn((1, 7))),
+                dict(z=torch.randn((5, 7)), w=torch.randn((1, 7))),
+            ),
+            (
+                (torch.randn((5, 8)), torch.randn((1, 8))),
+                dict(w=torch.randn((1, 8)), z=torch.randn((5, 8))),
+            ),
+            (
+                (torch.randn((5, 9)), torch.randn((1, 9))),
+                dict(z=torch.randn((5, 9)), w=torch.randn((1, 9))),
+            ),
+        ]
+
+        model = Model()
+        observer = InputObserver()
+        with observer(model):
+            for args, kwargs in inputs:
+                model(*args, **kwargs)
+        iargs = observer.infer_arguments(dict(w=torch.randn((1, 6)), z=torch.randn((5, 6))))
+        self.assertEqual(len(iargs), 4)
+        self.assertEqual(iargs["x"].shape, (5, 0))
+        self.assertEqual(iargs["y"].shape, (1, 0))
+        self.assertEqual(iargs["w"].shape, (1, 6))
+        self.assertEqual(iargs["z"].shape, (5, 6))
+
+        iargs = observer.infer_arguments((torch.randn((5, 6)), torch.randn((1, 6))))
+        self.assertEqual(len(iargs), 4)
+        self.assertEqual(iargs["x"].shape, (5, 6))
+        self.assertEqual(iargs["y"].shape, (1, 6))
+        self.assertEqual(iargs["w"].shape, (1, 0))
+        self.assertEqual(iargs["z"].shape, (5, 0))
 
 
 if __name__ == "__main__":

@@ -668,12 +668,17 @@ def get_inputs_for_part(
                 f"{user_prompt}<|image_1|>\n<|image_2|>\n<|image_3|>\n<|image_4|>\n"
                 f"What is shown in these four images?{prompt_suffix}{assistant_prompt}"
             )
-            url = "https://img.freepik.com/free-photo/painting-mountain-lake-with-mountain-background_188544-9126.jpg?w=2000"
-            image_2 = Image.open(requests.get(url, stream=True).raw)
+            image_2_path = os.path.join(
+                os.path.dirname(__file__), "data", "Blanca_Lake_Hudak.jpg"
+            )
+            image_2 = Image.open(image_2_path)
             url = (
                 "https://th.bing.com/th/id/OIP.gCvQ1vmPVJmrq1nnzM3ZHQHaEo?rs=1&pid=ImgDetMain"
             )
-            image_3 = Image.open(requests.get(url, stream=True).raw)
+            image_3_path = os.path.join(
+                os.path.dirname(__file__), "data", "Ice_worm_glacier.jpg"
+            )
+            image_3 = Image.open(image_3_path)
 
             images = [image_1, image_2, image_3, image_4]
             inputs = processor(prompt, images=images, return_tensors="pt").to(device)

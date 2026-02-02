@@ -6,6 +6,7 @@ rm *.nsys-rep
 rm *.sqlite
 rm *.pte
 rm *.ep
+rm *.ep.graph
 rm *.ep.txt
 rm *.pkl
 rm tt_*
@@ -65,6 +66,25 @@ rm _doc/recipes/*.dynamo.onnx
 rm _doc/recipes/*.script.onnx
 rm _doc/recipes/dump_models -rf
 rm _doc/recipes/dump_onx_*
+
+rm _doc/final/plot*.onnx
+rm _doc/final/plot*.onnx.weight
+rm _doc/final/plot*.onnx.data
+rm _doc/final/plot*.txt
+rm _doc/final/ort*.onnx
+rm _doc/final/*.sarif
+rm _doc/final/*.json
+rm _doc/final/*.png
+rm _doc/final/*.csv
+rm _doc/final/*.pte
+rm _doc/final/*.xlsx
+rm _doc/final/dummy*.onnx
+rm _doc/final/evaluation*-script.onnx
+rm _doc/final/*.opt.onnx
+rm _doc/final/*.dynamo.onnx
+rm _doc/final/*.script.onnx
+rm _doc/final/dump_models -rf
+rm _doc/final/dump_onx_*
 
 rm _doc/technical/plot*.onnx
 rm _doc/technical/plot*.onnx.weight

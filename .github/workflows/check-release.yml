@@ -73,6 +73,7 @@ jobs:
           git config core.sparsecheckout true
           echo _unittests/ >> .git/info/sparse-checkout
           echo _doc/examples/ >> .git/info/sparse-checkout
+          echo _doc/final/ >> .git/info/sparse-checkout
           echo _doc/recipes/ >> .git/info/sparse-checkout
           echo _doc/technical/ >> .git/info/sparse-checkout
           echo pyproject.toml >> .git/info/sparse-checkout

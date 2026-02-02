@@ -10,6 +10,7 @@ API of onnx_diagnostic
     ci_models/index
     export/index
     helpers/index
+    investigate/index
     reference/index
     tasks/index
     torch_export_patches/index

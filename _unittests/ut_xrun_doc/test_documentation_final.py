@@ -4,14 +4,13 @@ import sys
 import importlib.util
 import subprocess
 import time
-import torch
 from onnx_diagnostic import __file__ as onnx_diagnostic_file
 from onnx_diagnostic.ext_test_case import (
     ExtTestCase,
     is_windows,
-    has_transformers,
     has_torch,
     ignore_errors,
+    has_transformers,
 )
 
 VERBOSE = 0
@@ -30,7 +29,7 @@ def import_source(module_file_path, module_name):
     return module_spec.loader.exec_module(module)
 
 
-class TestDocumentationExamples(ExtTestCase):
+class TestDocumentationFinal(ExtTestCase):
     def run_test(self, fold: str, name: str, verbose=0) -> int:
         ppath = os.environ.get("PYTHONPATH", "")
         if not ppath:
@@ -72,88 +71,22 @@ class TestDocumentationExamples(ExtTestCase):
     @classmethod
     def add_test_methods(cls):
         this = os.path.abspath(os.path.dirname(__file__))
-        fold = os.path.normpath(os.path.join(this, "..", "..", "_doc", "examples"))
+        fold = os.path.normpath(os.path.join(this, "..", "..", "_doc", "final"))
         found = os.listdir(fold)
-        has_dot = int(os.environ.get("UNITTEST_DOT", "0"))
+        # has_dot = int(os.environ.get("UNITTEST_DOT", "0"))
         for name in found:
             if not name.endswith(".py") or not name.startswith("plot_"):
                 continue
             reason = None
 
-            if not reason and not has_dot and name in {"plot_dump_intermediate_results.py"}:
-                reason = "dot not installed"
-
-            # transformers
-
+            if not reason and not has_torch("4.10"):
+                reason = "torch<2.10"
             if (
                 not reason
-                and name in {"plot_export_tiny_llm.py", "plot_export_tiny_llm_patched.py"}
+                and name in {"plot_export_tiny_llm_method_generate.py"}
                 and not has_transformers("4.55")
             ):
                 reason = "transformers<4.55"
-
-            if (
-                not reason
-                and name in {"plot_export_hub_codellama.py"}
-                and not has_transformers("4.52")
-            ):
-                reason = "transformers<4.52"
-
-            if (
-                not reason
-                and name in {"plot_export_tiny_phi2.py"}
-                and not has_transformers("4.55")
-            ):
-                reason = "transformers<4.55"
-
-            if (
-                not reason
-                and name in {"plot_export_with_dynamic_cache.py"}
-                and not has_transformers("4.56")
-            ):
-                reason = "transformers<4.56"
-
-            # pytorch
-
-            if (
-                not reason
-                and name
-                in {
-                    "plot_export_hub_codellama.py",
-                    "plot_export_locate_issue.py",
-                    "plot_export_with_auto.py",
-                    "plot_export_tiny_llm.py",
-                }
-                and not has_torch("2.8")
-            ):
-                reason = "torch<2.8"
-
-            if (
-                not reason
-                and name in {"plot_export_with_dynamic_cache.py"}
-                and not has_torch("2.9")
-            ):
-                reason = "does not work with 2.8"
-
-            if (
-                not reason
-                and name in {"plot_dump_intermediate_results.py"}
-                and not has_torch("2.9.1")
-            ):
-                reason = "unstable, let's wait for the next version"
-
-            if not reason and name in {
-                "plot_export_tiny_llm_dim01.py",
-                "plot_export_tiny_llm_dim01_onnx.py",
-                "plot_export_tiny_llm_dim01_onnx_custom.py",
-            }:
-                reason = "too long"
-
-            if not reason and torch.__version__.startswith("2.9.0"):
-                reason = "examples are failing for on CI for 2.9.0"
-
-            if not reason and name in {"plot_export_tiny_llm_method_generate.py"}:
-                reason = "does not work when called in a separate process"
 
             if reason:
 
@@ -173,7 +106,7 @@ class TestDocumentationExamples(ExtTestCase):
             setattr(cls, f"test_{short_name}", _test_)
 
 
-TestDocumentationExamples.add_test_methods()
+TestDocumentationFinal.add_test_methods()
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
