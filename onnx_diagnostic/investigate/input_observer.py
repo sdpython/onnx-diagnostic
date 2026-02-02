@@ -168,7 +168,7 @@ class InputCandidate:
             f"kwargs={string_type(self.kwargs, with_shape=True)})"
         )
 
-    def build_mappings(self):
+    def build_mappings(self) -> list[int | str]:
         if self._position_to_args_kwargs is not None:
             return self._position_to_args_kwargs
         self._n_tensors_for_args_kwargs = {}
@@ -817,11 +817,12 @@ class InputObserver:
                 error = None
             except Exception as e:
                 error = str(e)
+                ort_outputs = None
             duration = time.perf_counter() - begin
             if error:
-                diff = dict(error=error, SUCCESS=False)
+                diff: dict[str, Any] = dict(error=error, SUCCESS=False)
             else:
-                diff = max_diff(outputs, ort_outputs, hist=lhist)
+                diff: dict[str, Any] = max_diff(outputs, ort_outputs, hist=lhist)
                 if "rep" in diff and isinstance(diff["rep"], dict):
                     diff.update(diff["rep"])
                     del diff["rep"]
