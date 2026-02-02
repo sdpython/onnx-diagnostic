@@ -212,7 +212,7 @@ class InputCandidate:
         they have the same number of tensors (None allowed)."""
         flat = []
         for i in range(len(best_candidate.args)):
-            if i < len(self.args):
+            if i < len(self.args) and (isinstance(self.args[i], torch.Tensor) or self.args[i]):
                 ts = torch.utils._pytree.tree_flatten(self.args[i])[0]
                 if i in captured_inputs and captured_inputs[i] != len(ts):
                     raise RuntimeError(
@@ -222,21 +222,28 @@ class InputCandidate:
                     )
                 captured_inputs[i] = len(ts)
                 flat.extend(ts)
-            else:
-                flat.extend([None for _ in range(best_candidate.n_tensors_for_args_kwargs[i])])
+                continue
+            # If the argument i is not specified or is None or an empty container.
+            flat.extend([None for _ in range(best_candidate.n_tensors_for_args_kwargs[i])])
+
         for k in best_candidate.kwargs:
-            if k in self.kwargs:
+            if k in self.kwargs and (
+                isinstance(self.kwargs[k], torch.Tensor) or self.kwargs[k]
+            ):
                 ts = torch.utils._pytree.tree_flatten(self.kwargs[k])[0]
                 if k in captured_inputs and captured_inputs[k] != len(ts):
                     raise RuntimeError(
                         f"Named argument {k!r} has {len(ts)} tensors "
-                        f"but previously got {captured_inputs[k]} tensors. "
+                        f"but previously got {captured_inputs[k]} tensors in "
+                        f"kwargs={list(self.kwargs)}. "
                         f"Inference is impossible in that case."
                     )
                 captured_inputs[k] = len(ts)
                 flat.extend(ts)
-            else:
-                flat.extend([None for _ in range(best_candidate.n_tensors_for_args_kwargs[k])])
+                continue
+            # If the argument k is not specified or is None or an empty container.
+            flat.extend([None for _ in range(best_candidate.n_tensors_for_args_kwargs[k])])
+
         self._set_aligned_flat_list(flat, best_candidate.spec)
 
     @property
