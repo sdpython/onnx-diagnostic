@@ -627,7 +627,7 @@ class InputObserver:
     """
 
     def __init__(self):
-        self.info: InputObserverInfo | None = None
+        self.info: InputObserverInfo | None = None  # type: ignore[annotation-unchecked]
 
     def _replaced_method(
         self,
@@ -822,7 +822,7 @@ class InputObserver:
             if error:
                 diff: dict[str, Any] = dict(error=error, SUCCESS=False)
             else:
-                diff: dict[str, Any] = max_diff(outputs, ort_outputs, hist=lhist)
+                diff = max_diff(outputs, ort_outputs, hist=lhist)
                 if "rep" in diff and isinstance(diff["rep"], dict):
                     diff.update(diff["rep"])
                     del diff["rep"]
