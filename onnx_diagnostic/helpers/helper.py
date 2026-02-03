@@ -574,6 +574,32 @@ def string_type(
             print(f"[string_type] CACHE1:{type(obj)}")
         return f"MambaCache(conv_states={c}, ssm_states={d})"
 
+    if (
+        obj.__class__.__name__ in {"DynamicCache"}
+        and hasattr(obj, "layers")
+        and any(lay.__class__.__name__ != "DynamicLayer" for lay in obj.layers)
+    ):
+        slay = []
+        for lay in obj.layers:
+            skeys = string_type(
+                lay.keys,
+                with_shape=with_shape,
+                with_min_max=with_min_max,
+                with_device=with_device,
+                limit=limit,
+                verbose=verbose,
+            )
+            svalues = string_type(
+                lay.keys,
+                with_shape=with_shape,
+                with_min_max=with_min_max,
+                with_device=with_device,
+                limit=limit,
+                verbose=verbose,
+            )
+            slay.append(f"{lay.__class__.__name__}({skeys}, {svalues})")
+        return f"{obj.__class__.__name__}({', '.join(slay)})"
+
     if obj.__class__.__name__ in {
         "DynamicCache",
         "SlidingWindowCache",
@@ -829,6 +855,19 @@ def string_type(
         return f"{obj}"
     if obj.__class__.__name__ == "FakeTensorContext":
         return "FakeTensorContext(...)"
+    if obj.__class__.__name__ == "Chat":
+        import transformers.utils.chat_template_utils as ctu
+
+        assert isinstance(obj, ctu.Chat), f"unexpected type {type(obj)}"
+        msg = string_type(
+            obj.messages,
+            with_shape=with_shape,
+            with_min_max=with_min_max,
+            with_device=with_device,
+            limit=limit,
+            verbose=verbose,
+        )
+        return f"Chat({msg})"
 
     if verbose:
         print(f"[string_type] END:{type(obj)}")

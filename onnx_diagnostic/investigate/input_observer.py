@@ -631,6 +631,9 @@ class InputObserver:
     >>>     kwargs=input_observer.infer_arguments(),
     >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
     >>> )
+
+    Examples can be found in :ref:`l-plot-tiny-llm-export-input-observer`,
+    :ref:`l-plot-whisper-tiny-export-input-observer`.
     """
 
     def __init__(self):
@@ -682,18 +685,20 @@ class InputObserver:
                 signature_names=list(inspect.signature(captured_method).parameters)
             )
         n_already_stored = len(self.info)
-        setattr(
-            model,
-            method_name,
-            lambda *args, _cm=captured_method, _snc=(
-                store_n_calls + n_already_stored
-            ), **kwargs: self._replaced_method(
-                *args,
-                _captured_method=_cm,
-                _store_n_calls=_snc,
-                **kwargs,
-            ),
+        lambda_method = lambda *args, _cm=captured_method, _snc=(  # noqa: E731
+            store_n_calls + n_already_stored
+        ), **kwargs: self._replaced_method(
+            *args, _captured_method=_cm, _store_n_calls=_snc, **kwargs
         )
+
+        # It may happen than the signature of the forward is used to trigger a preprocessing.
+        # This is used in GenerationMixin (transformers):
+        #   position_ids_key = "decoder_position_ids" if ... else "position_ids"
+        #   if position_ids_key in set(inspect.signature(self.forward).parameters.keys()):
+        lambda_method.__signature__ = inspect.signature(captured_method)
+
+        setattr(model, method_name, lambda_method)
+
         try:
             yield self
         finally:

@@ -845,6 +845,9 @@ class TestInputObserver(ExtTestCase):
         # self.assertEqual(2, len(args))
         # self.assertEqual(len([v for v in args.values() if v is not None]), 2)
 
+    def test_infer_dynamic_shapes_exception(self):
+        return
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
