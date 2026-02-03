@@ -46,7 +46,7 @@ class TestInputObserverTransformers(ExtTestCase):
         onnx_tokens = onnx_generate(
             filenamec,
             input_ids=input_ids,
-            attention_mask=torch.ones(input_ids.shape, dtype=torch.float32),
+            attention_mask=torch.ones(input_ids.shape, dtype=torch.int64),
             eos_token_id=model.config.eos_token_id,
             max_new_tokens=20,
         )
