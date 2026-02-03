@@ -5,7 +5,7 @@ Change Logs
 ++++++
 
 
-* :pr:`400`, :pr:`401`:, :pr:`402`: improves InputObserver (investigations), add it the documentation
+* :pr:`400`, :pr:`401`:, :pr:`402`, :pr:`403`: improves InputObserver (investigations), add it the documentation
 * :pr:`399`: update CI
 
 0.8.11
