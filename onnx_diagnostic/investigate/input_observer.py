@@ -780,12 +780,17 @@ class InputObserver:
         with the saved onnx model.
 
         Args:
-            onnx_model: ONNX Model to verify.
-            atol: Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
-            rtol: Relative tolerance.
-            hist: Thresholds, the function determines the number of discrepancies
+            onnx_model:
+                ONNX Model to verify.
+            atol:
+                Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
+            rtol:
+                Relative tolerance.
+            hist:
+                Thresholds, the function determines the number of discrepancies
                 above these thresholds.
-            progress_bar: Shows a progress bar (requires :epkg:`tqdm`).
+            progress_bar:
+                Shows a progress bar (requires :epkg:`tqdm`).
 
         Returns:
             A list of dictionaries, ready to be consumed by a dataframe.
@@ -815,6 +820,8 @@ class InputObserver:
                     f"There are ({len(inputs.aligned_flat_list)}) "
                     f"tensors but the model expects {len(input_names)}."
                 )
+            n_none = sum([t is None for t in inputs.aligned_flat_list])
+            n_empty = sum([t is None or t.numel() == 0 for t in inputs.aligned_flat_list])
 
             feeds = dict(zip(input_names, self.info.infer_arguments(inputs, flat=True)))
 
@@ -845,6 +852,8 @@ class InputObserver:
                     duration_torch=latency,
                     ort_duration=duration,
                     n_inputs=len(input_names),
+                    n_none=n_none,
+                    n_empty=n_empty,
                 )
             )
             data.append(diff)

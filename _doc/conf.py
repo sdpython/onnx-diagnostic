@@ -275,6 +275,7 @@ epkg_dictionary = {
     "torch.compiler": "https://docs.pytorch.org/docs/stable/torch.compiler.html",
     "torch.export.export": "https://docs.pytorch.org/docs/stable/export.html#torch.export.export",
     "torch.onnx": "https://docs.pytorch.org/docs/stable/onnx.html",
+    "tqdm": "https://github.com/tqdm/tqdm",
     "transformers": "https://huggingface.co/docs/transformers/en/index",
     "vocos": "https://github.com/gemelo-ai/vocos",
     "Windows": "https://www.microsoft.com/windows",
