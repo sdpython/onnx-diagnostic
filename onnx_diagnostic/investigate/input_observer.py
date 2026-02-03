@@ -81,14 +81,16 @@ def _infer_dynamic_dimensions(
         shape_list:
             list of shapes, they must all have the same length
         set_batch_dimension:
-            make the first dimension dynamic if it is not
+            forces the first dimension to be treated as dynamic,
+            even if all shapes have the same value for that dimension
 
     Returns:
         list of dynamic dimensions
     """
     unique_ranks = {len(shape) for shape in shape_list}
     torch._check(
-        len(unique_ranks) == 1, lambda: "all shapes in shape_list must have the same rank"
+        len(unique_ranks) == 1,
+        lambda: "all shapes in shape_list must have the same rank",
     )
     rank = unique_ranks.pop()
     dynamic = []
@@ -757,6 +759,13 @@ class InputObserver:
         Instead of running inference on new samples, argument `set_batch_dimension_for`
         can be used to tell the first dimension is a dynamic dimension for a particular
         set of inputs referenced by their name (str) or their position (int).
+
+        Args:
+            set_batch_dimension_for (set[int | str] | None): A set of input
+                identifiers (by position as ``int`` or by name as ``str``) for
+                which the first dimension should be treated as a dynamic batch
+                dimension. If ``None``, no dimensions are explicitly marked as
+                dynamic.
         """
         self._check_captured()
         assert self.info is not None  # missed by type checking
