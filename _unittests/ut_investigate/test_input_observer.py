@@ -514,7 +514,6 @@ class TestInputObserver(ExtTestCase):
         self.assertEqual(expected, observer.infer_dynamic_shapes())
 
     def test_io_captured_custom_class(self):
-
         class TestCustomClass:
             def __init__(self, keys, values):
                 self.data = list(zip(keys, values))
@@ -572,7 +571,10 @@ class TestInputObserver(ExtTestCase):
         ]
 
         cst = torch.export.Dim.DYNAMIC
-        expected = ({0: cst, 1: cst}, [{0: cst, 1: cst}, {1: cst}, {1: cst}, {0: cst, 1: cst}])
+        expected = (
+            {0: cst, 1: cst},
+            [{0: cst, 1: cst}, {1: cst}, {1: cst}, {0: cst, 1: cst}],
+        )
         flat = torch.utils._pytree.tree_flatten(inputs[-1])[0]
         self.assertEqual(len(flat), 5)
 

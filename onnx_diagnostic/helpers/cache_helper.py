@@ -273,7 +273,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                 if isinstance(cls_kwargs, list)
                 else [cls_kwargs for _ in key_value_pairs]
             )
-        else:
+        elif cls_layers is not None:
             assert isinstance(cls_layers, list), f"Unexpected type cls_layers={cls_layers}"
             assert isinstance(cls_kwargs, list), f"Unexpected type cls_kwargs={cls_kwargs}"
 

@@ -102,34 +102,16 @@ def _infer_dynamic_dimensions(
 
 
 class InputCandidate:
-    """Steals forward method to collect inputs and outputs.
-    This information is used to infer dynamic shapes and
-    export arguments.
+    """Retains one set of inputs given to the forward method or any
+    other method the class :class:`InputObserver` is stealing from.
 
-    Examples
-    --------
-    >>> input_observer = InputObserver()
-    >>> with input_observer(model):
-    >>>     model(x1, y1)
-    >>>     model(x2, y2)
-    >>> ep = torch.export.export(  # or torch.onnx.export
-    >>>     model,
-    >>>     input_observer.infer_arguments(),
-    >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
-    >>> )
-
-    With LLM:
-    >>> input_observer = InputObserver()
-    >>> with input_observer(model):
-    >>>     model.generate(input_ids)
-    >>> ep = torch.export.export(  # or torch.onnx.export
-    >>>     model,
-    >>>     ()
-    >>>     kwargs=input_observer.infer_arguments(),
-    >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
-    >>> )
-
-    See example :ref:`l-plot-tiny-llm-export-input-observer`.
+    Args:
+        args: Positional arguments.
+        kwargs: Optional arguments.
+        clone: Clone the inputs before storing them. Some tensors
+            may be modified inplace, the original value must be retained.
+        cst_kwargs: Any optional arguments constant over multiple calls.
+            int, float, str, bool values must be stored here.
     """
 
     def __init__(
@@ -400,15 +382,20 @@ class InputObserverInfo:
         set_batch_dimension_for: set[int | str] | bool | None = None,
         return_flat: bool = False,
     ) -> tuple[dict[int, Any] | None, ...] | dict[str, dict[int, Any] | None]:
-        """Infers dynamic shapes.  based on the collected tensors.
+        """Infers dynamic shapes based on the collected tensors.
         Most of the time, models do support a batch dimension
         but this batch dimension has the same value for every input sample.
         Instead of running inference on new samples, argument `set_batch_dimension_for`
         can be used to tell the first dimension is a dynamic dimension for a particular
         set of inputs referenced by their name (str) or their position (int).
 
-        `return_flat` tells the function to return a flat tuple instead of
-        nested structured.
+        Args:
+            set_batch_dimension_for (set[int | str] | None): Set of input identifiers,
+                by name (``str``) or position (``int``), for which the first dimension
+                should be treated as a dynamic batch dimension. If ``None`` or empty,
+                no additional batch dimensions are marked as dynamic.
+            return_flat: Tells the function to return a flat tuple instead of
+                nested structured.
         """
         self.align_inputs_none_values()
         # type checking
@@ -699,7 +686,10 @@ class InputObserver:
 
     @contextlib.contextmanager
     def __call__(
-        self, model: torch.nn.Module, store_n_calls: int = 3, method_name: str = "forward"
+        self,
+        model: torch.nn.Module,
+        store_n_calls: int = 3,
+        method_name: str = "forward",
     ):
         """Starts collecting inputs and outputs of a specific method.
         The model method is replaced by a new one collecting tensors
@@ -713,7 +703,7 @@ class InputObserver:
             method_name: Method name to spy on.
         """
         if not hasattr(model, method_name):
-            raise ValueError(f"Model type {model} does not have a method {method_name!r}")
+            raise ValueError(f"Model type {model} does not have a method {method_name!r}.")
         captured_method = getattr(model, method_name)
         sig = inspect.signature(captured_method)
         if self.info is None:
