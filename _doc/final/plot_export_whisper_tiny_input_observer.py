@@ -27,7 +27,9 @@ model.config.forced_decoder_ids = None
 
 # load dummy dataset and read audio files
 ds = load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation")
-samples = [ds[0]["audio"], ds[1]["audio"]]
+samples = [ds[0]["audio"], ds[2]["audio"]]
+for s in samples:
+    print(s["array"].shape, s["array"].min(), s["array"].max(), s["sampling_rate"])
 input_features = [
     processor(
         sample["array"], sampling_rate=sample["sampling_rate"], return_tensors="pt"
@@ -90,14 +92,6 @@ kwargs = observer_decoder.infer_arguments()
 dynamic_shapes = observer_decoder.infer_dynamic_shapes(set_batch_dimension_for=True)
 print(f"decoder kwargs={string_type(kwargs, with_shape=True)}")
 print(f"decoder dynamic_shapes={dynamic_shapes}")
-for candidate in observer_decoder.info.inputs:
-    print(
-        "   ",
-        candidate,
-        candidate.str_obs(),
-        string_type(candidate.aligned_flat_list, with_shape=True),
-    )
-
 
 filename_decoder = "plot_export_whisper_tiny_input_observer_decoder.onnx"
 with torch_export_patches(patch_transformers=True):

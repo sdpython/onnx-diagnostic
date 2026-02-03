@@ -331,7 +331,9 @@ class InputObserverInfo:
         """Stores outputs. They are deepcopied."""
         flat_res, spec = torch.utils._pytree.tree_flatten(res)
         self.outputs_specs.append(spec)
-        self.flat_outputs.append([t.clone().detach() for t in flat_res])
+        self.flat_outputs.append(
+            [(None if t is None else t.clone().detach()) for t in flat_res]
+        )
         self.latencies.append(latency)
 
     def align_inputs_none_values(self):
@@ -561,8 +563,13 @@ class InputObserverInfo:
                         f"There is no tensor at position {index} in any flattened inputs."
                     )
                 tensor = all_non_empty_tensors_not_none.pop()
-                if tensor.numel() == 0 or not shape:
+                if tensor.numel() == 0:
                     aligned_flat_list[index] = tensor
+                    continue
+                if not shape:
+                    aligned_flat_list[index] = torch.zeros(
+                        tensor.shape, dtype=tensor.dtype, device=tensor.device
+                    )
                     continue
                 dim = max(shape)
                 torch._check(

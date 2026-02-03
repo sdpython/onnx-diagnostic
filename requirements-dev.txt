@@ -30,6 +30,7 @@ sphinx-issues
 sphinx-runpython
 tabulate
 timm
+torchcodec
 transformers>=4.45
 tqdm
 wheel
