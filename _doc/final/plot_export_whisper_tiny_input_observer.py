@@ -6,6 +6,9 @@ Export whisper-tiny with InputObserver
 
 This reuses the recipe introduced by example :ref:`l-plot-tiny-llm-export-input-observer`
 for model `openai/whisper-tiny <https://huggingface.co/openai/whisper-tiny>`_.
+
+The model
++++++++++
 """
 
 import pandas

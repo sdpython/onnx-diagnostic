@@ -129,10 +129,12 @@ class TestInputObserver(ExtTestCase):
             torch.testing.assert_close(expected[i], observer.info.flat_outputs[i][0])
 
         cst = torch.export.Dim.DYNAMIC
-        self.assertEqual(dict(x={0: cst, 1: cst}, y={1: cst}), observer.infer_dynamic_shapes())
+        self.assertEqual(
+            dict(x={0: cst, 1: cst}, y={1: cst}, add=None), observer.infer_dynamic_shapes()
+        )
         args = observer.infer_arguments()
         self.assertIsInstance(args, dict)
-        self.assertEqual(2, len(args))
+        self.assertEqual(3, len(args))
 
     def test_io_captured_args_kwargs(self):
         class Model(torch.nn.Module):
@@ -512,7 +514,6 @@ class TestInputObserver(ExtTestCase):
         self.assertEqual(expected, observer.infer_dynamic_shapes())
 
     def test_io_captured_custom_class(self):
-
         class TestCustomClass:
             def __init__(self, keys, values):
                 self.data = list(zip(keys, values))
@@ -570,7 +571,10 @@ class TestInputObserver(ExtTestCase):
         ]
 
         cst = torch.export.Dim.DYNAMIC
-        expected = ({0: cst, 1: cst}, [{0: cst, 1: cst}, {1: cst}, {1: cst}, {0: cst, 1: cst}])
+        expected = (
+            {0: cst, 1: cst},
+            [{0: cst, 1: cst}, {1: cst}, {1: cst}, {0: cst, 1: cst}],
+        )
         flat = torch.utils._pytree.tree_flatten(inputs[-1])[0]
         self.assertEqual(len(flat), 5)
 
@@ -811,6 +815,35 @@ class TestInputObserver(ExtTestCase):
         self.assertEqual(2, len(args))
         self.assertEqual(len([v for v in args.values() if v is not None]), 2)
 
+    def test_io_int_kwargs(self):
+        class Model(torch.nn.Module):
+            def forward(self, x=None, y=None, option=1):
+                if option == 1:
+                    return x + y
+                return x - y
+
+        inputs = [
+            dict(x=torch.randn((5, 7)), y=torch.randn((5, 7)), option=0),
+            dict(x=torch.randn((5, 9)), y=torch.randn((5, 9)), option=0),
+        ]
+
+        model = Model()
+        observer = InputObserver()
+        with observer(model, store_n_calls=4):
+            for kwargs in inputs:
+                model(**kwargs)
+        kwargs = observer.infer_arguments()
+        self.assertIn("option", kwargs)
+        self.assertEqual(kwargs["option"], 0)
+        shapes = observer.infer_dynamic_shapes()
+        self.assertIn("option", shapes)
+        self.assertEqual(shapes["option"], None)
+        ep = torch.export.export(model, (), kwargs=kwargs, dynamic_shapes=shapes)
+        self.assertEqualArray(model(**kwargs), ep.module()(**kwargs))
+        epo = torch.onnx.export(model, (), kwargs=kwargs, dynamic_shapes=shapes)
+        proto = epo.model_proto
+        self.assertEqual(["x", "y"], [i.name for i in proto.graph.input])
+
     def test_io_mixed_args_kwargs_as_dict_2(self):
         class Model(torch.nn.Module):
             def forward(self, x=None, y=None):
@@ -844,6 +877,26 @@ class TestInputObserver(ExtTestCase):
         # self.assertIsInstance(args, dict)
         # self.assertEqual(2, len(args))
         # self.assertEqual(len([v for v in args.values() if v is not None]), 2)
+
+    def test_infer_dynamic_shapes_exception(self):
+        """
+        dict(input_ids:T7s1x282,
+            pixel_values:T1s1x3x896x896,
+            attention_mask:T7s1x282,
+            position_ids:T7s1x282,
+            token_type_ids:T7s1x282,cache_position:T7s282
+        )
+        dict(input_ids:T7s1x1,attention_mask:T7s1x283,position_ids:T7s1x1,
+                past_key_values:DynamicCache(
+                    DynamicSlidingWindowLayer(T16s1x1x282x32, T16s1x1x282x32),
+                    DynamicLayer(T16s1x1x282x32, T16s1x1x282x32)),
+                token_type_ids:T7s1x1,cache_position:T7s1)
+        dict(input_ids:T7s1x1,attention_mask:T7s1x284,position_ids:T7s1x1,
+                past_key_values:DynamicCache(
+                    DynamicSlidingWindowLayer(T16s1x1x283x32, T16s1x1x283x32),
+                    DynamicLayer(T16s1x1x283x32, T16s1x1x283x32)),
+                token_type_ids:T7s1x1,cache_position:T7s1)
+        """
 
 
 if __name__ == "__main__":

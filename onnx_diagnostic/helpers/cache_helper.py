@@ -224,41 +224,58 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         are supported.
         """
         key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
-        cls_kwargs = {}
         if isinstance(cls_layers, str):
             assert hasattr(
                 transformers.cache_utils, cls_layers
             ), f"Unable to find class {cls_layers!r} in transformers.cache_utils"
+            cls_kwargs = {}
             cls_layer = getattr(transformers.cache_utils, cls_layers)
             if cls_layers == "DynamicSlidingWindowLayer":
                 cls_kwargs["sliding_window"] = key_value_pairs[0][0].shape[2]
                 assert isinstance(
                     cls_kwargs["sliding_window"], int
                 ), f"sliding_window must be an integer but shape={key_value_pairs[0][0].shape}"
-        elif cls_layers is not None:
-            unique = set(cls_layers)
-            assert len(unique) == 1, f"Not implemented when cls_layers={cls_layers}"
-            cls_layer = unique.pop()
+        elif cls_layers is not None and isinstance(cls_layers, list):
+            assert len(cls_layers) == len(key_value_pairs), (
+                f"Length mismatch {len(key_value_pairs)} expected but "
+                f"{len(cls_layers)} layer types are given."
+            )
+            cls_kwargs = [{} for _kv in key_value_pairs]  # type: ignore[assignment]
+            cls_layer = None
             if (
                 hasattr(transformers.cache_utils, "DynamicSlidingWindowLayer")
-                and cls_layer == transformers.cache_utils.DynamicSlidingWindowLayer
+                and transformers.cache_utils.DynamicSlidingWindowLayer in cls_layers
             ):
-                from .helper import string_type
-
-                assert key_value_pairs and key_value_pairs[0], (
-                    f"not implemented for key_value_pairs="
-                    f"{string_type(key_value_pairs, with_shape=True)}"
-                )
-                cls_kwargs["sliding_window"] = key_value_pairs[0][0].shape[2]
-                assert isinstance(
-                    cls_kwargs["sliding_window"], int
-                ), f"sliding_window must be an integer but shape={key_value_pairs[0][0].shape}"
+                assert (
+                    key_value_pairs and key_value_pairs[0]
+                ), f"not implemented for type(key_value_pairs[0])={type(key_value_pairs[0])}"
+                for kv, clsy, kws in zip(key_value_pairs, cls_layers, cls_kwargs):
+                    if clsy == transformers.cache_utils.DynamicSlidingWindowLayer:
+                        kws["sliding_window"] = kv[0].shape[2]  # type: ignore[index]
+                        assert isinstance(
+                            kws["sliding_window"], int  # type: ignore[index]
+                        ), f"sliding_window must be an integer but shape={kv[0].shape}"
         else:
+            assert (
+                cls_layers is None
+            ), f"cls_layers must be list or a string but it is {cls_layers}"
+            cls_kwargs = {}
             cls_layer = (
                 transformers.cache_utils.DynamicLayer
                 if hasattr(transformers.cache_utils, "DynamicLayer")
                 else None
             )
+
+        if cls_layer is not None:
+            cls_layers = [cls_layer for _ in key_value_pairs]
+            cls_kwargs = (
+                cls_kwargs  # type: ignore[assignment]
+                if isinstance(cls_kwargs, list)
+                else [cls_kwargs for _ in key_value_pairs]
+            )
+        elif cls_layers is not None:
+            assert isinstance(cls_layers, list), f"Unexpected type cls_layers={cls_layers}"
+            assert isinstance(cls_kwargs, list), f"Unexpected type cls_kwargs={cls_kwargs}"
 
         if (
             key_value_pairs
@@ -266,7 +283,9 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             and pv.Version(transformers.__version__) >= pv.Version("4.56")
         ):
             cache = transformers.cache_utils.DynamicCache()
-            cache.layers.extend([cls_layer(**cls_kwargs) for _ in key_value_pairs])
+            cache.layers.extend(
+                [cls_layer(**kws) for cls_layer, kws in zip(cls_layers, cls_kwargs)]  # type: ignore[operator, arg-type]
+            )
             for i, layer in enumerate(cache.layers):
                 k, v = key_value_pairs[i][0], key_value_pairs[i][1]
                 layer.dtype = k.dtype
@@ -281,8 +300,22 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             return finalize_cache(cache)
 
         cache = transformers.cache_utils.DynamicCache()
-        if hasattr(cache, "layers") and cls_layer != transformers.cache_utils.DynamicLayer:
-            cache.layers.extend([cls_layer(**cls_kwargs) for _ in key_value_pairs])
+        if hasattr(cache, "layers") and (
+            cls_layer is None or cls_layer != transformers.cache_utils.DynamicLayer
+        ):
+            assert isinstance(
+                cls_kwargs, list
+            ), f"Wrong type {type(cls_kwargs)} for cls_kwargs"
+            assert len(cls_kwargs) == len(
+                cls_layers
+            ), f"Length mismatch between cls_kwargs={cls_kwargs} and cls_layers={cls_layers}"
+            assert len(cls_kwargs) == len(key_value_pairs), (
+                f"Length mismatch between cls_kwargs={cls_kwargs} and "
+                f"len(key_value_pairs)={len(key_value_pairs)}"
+            )
+            cache.layers.extend(
+                [cls_layer(**kws) for cls_layer, kws in zip(cls_layers, cls_kwargs)]  # type: ignore[operator, arg-type]
+            )
             for i, layer in enumerate(cache.layers):
                 layer.keys, layer.values = key_value_pairs[i][0], key_value_pairs[i][1]
                 layer.is_initialized = True

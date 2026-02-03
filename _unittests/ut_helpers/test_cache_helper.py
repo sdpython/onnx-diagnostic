@@ -13,7 +13,7 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_sliding_window_cache,
     make_static_cache,
 )
-from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
+from onnx_diagnostic.helpers.torch_helper import torch_deepcopy, to_any
 from onnx_diagnostic.export import CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
@@ -352,6 +352,63 @@ class TestCacheHelpers(ExtTestCase):
             dynamic_shapes=({0: DYN, 1: DYN}, sh, sh),
         )
         self.assertNotEmpty(ep)
+
+    @requires_transformers("4.57")
+    def test_make_dynamic_cache_2_types(self):
+        cache = make_dynamic_cache(
+            [
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+            ],
+            cls_layers=[
+                transformers.cache_utils.DynamicLayer,
+                transformers.cache_utils.DynamicSlidingWindowLayer,
+            ],
+        )
+        text = self.string_type(cache, with_shape=True)
+        self.assertEqual(
+            "DynamicCache(DynamicLayer(T1s4x5x6x7, T1s4x5x6x7), "
+            "DynamicSlidingWindowLayer(T1s4x5x6x7, T1s4x5x6x7))",
+            text,
+        )
+        self.assertEqual(0, max_diff(cache, cache)["abs"])
+
+    @requires_transformers("4.57")
+    def test_unflatten_flatten_mixed_layers(self):
+        with torch_export_patches(patch_transformers=True):
+            c2 = make_dynamic_cache(
+                [
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                    (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                ],
+                cls_layers=[
+                    transformers.cache_utils.DynamicLayer,
+                    transformers.cache_utils.DynamicSlidingWindowLayer,
+                ],
+            )
+            self.assertEqual(0, max_diff(c2, c2)["abs"])
+            self.assertIsInstance(c2, transformers.cache_utils.DynamicCache)
+            flat, spec = torch.utils._pytree.tree_flatten(c2)
+            self.assertIsInstance(flat, list)
+            self.assertEqual(len(flat), 4)
+            unflat = flatten_unflatten_for_dynamic_shapes(c2)
+            self.assertIsInstance(unflat, list)
+            self.assertEqual(len(unflat), 4)
+            restored = torch.utils._pytree.tree_unflatten(flat, spec)
+            self.assertEqual(
+                [type(lay) for lay in c2.layers], [type(lay) for lay in restored.layers]
+            )
+            self.assertEqual(0, max_diff(c2, restored)["abs"])
+            ct = to_any(c2, torch.float16)
+            self.assertEqual(
+                [type(lay) for lay in c2.layers], [type(lay) for lay in ct.layers]
+            )
+            self.assertLess(max_diff(c2, ct)["abs"], 1e-3)
+            c3 = torch_deepcopy(c2)
+            self.assertEqual(0, max_diff(c2, c3)["abs"])
+            self.assertEqual(
+                [type(lay) for lay in c2.layers], [type(lay) for lay in c3.layers]
+            )
 
 
 if __name__ == "__main__":

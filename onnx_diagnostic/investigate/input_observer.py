@@ -81,14 +81,16 @@ def _infer_dynamic_dimensions(
         shape_list:
             list of shapes, they must all have the same length
         set_batch_dimension:
-            make the first dimension dynamic if it is not
+            forces the first dimension to be treated as dynamic,
+            even if all shapes have the same value for that dimension
 
     Returns:
         list of dynamic dimensions
     """
     unique_ranks = {len(shape) for shape in shape_list}
     torch._check(
-        len(unique_ranks) == 1, lambda: "all shapes in shape_list must have the same rank"
+        len(unique_ranks) == 1,
+        lambda: "all shapes in shape_list must have the same rank",
     )
     rank = unique_ranks.pop()
     dynamic = []
@@ -100,43 +102,32 @@ def _infer_dynamic_dimensions(
 
 
 class InputCandidate:
-    """Steals forward method to collect inputs and outputs.
-    This information is used to infer dynamic shapes and
-    export arguments.
+    """Retains one set of inputs given to the forward method or any
+    other method the class :class:`InputObserver` is stealing from.
 
-    Examples
-    --------
-    >>> input_observer = InputObserver()
-    >>> with input_observer(model):
-    >>>     model(x1, y1)
-    >>>     model(x2, y2)
-    >>> ep = torch.export.export(  # or torch.onnx.export
-    >>>     model,
-    >>>     input_observer.infer_arguments(),
-    >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
-    >>> )
-
-    With LLM:
-    >>> input_observer = InputObserver()
-    >>> with input_observer(model):
-    >>>     model.generate(input_ids)
-    >>> ep = torch.export.export(  # or torch.onnx.export
-    >>>     model,
-    >>>     ()
-    >>>     kwargs=input_observer.infer_arguments(),
-    >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
-    >>> )
-
-    See example :ref:`l-plot-tiny-llm-export-input-observer`.
+    Args:
+        args: Positional arguments.
+        kwargs: Optional arguments.
+        clone: Clone the inputs before storing them. Some tensors
+            may be modified inplace, the original value must be retained.
+        cst_kwargs: Any optional arguments constant over multiple calls.
+            int, float, str, bool values must be stored here.
     """
 
-    def __init__(self, args: tuple[Any, ...], kwargs: dict[str, Any], clone: bool):
+    def __init__(
+        self,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        clone: bool,
+        cst_kwargs: dict[str, int | str | float | bool],
+    ):
         self.args = args
         self.kwargs = kwargs
         self.flat_list, self.spec = torch.utils._pytree.tree_flatten((args, kwargs))
         self.n_tensors = sum(t is not None for t in self.flat_list)
         self._position_to_args_kwargs: list[int | str] | None = None
         self._n_tensors_for_args_kwargs: dict[int | str, int] | None = None
+        self.cst_kwargs = cst_kwargs.copy()
 
         if clone:
             self.flat_list = [
@@ -165,7 +156,8 @@ class InputCandidate:
         """Prints out some information about the osbervations."""
         return (
             f"InputCandidate(args={string_type(self.args, with_shape=True)}, "
-            f"kwargs={string_type(self.kwargs, with_shape=True)})"
+            f"kwargs={string_type(self.kwargs, with_shape=True)}, "
+            f"cst_kwargs={self.cst_kwargs})"
         )
 
     def build_mappings(self) -> list[int | str]:
@@ -222,6 +214,12 @@ class InputCandidate:
     ):
         """Two candidates are considered as aligned if after being flattened
         if they have the same number of tensors (None allowed)."""
+        if self.cst_kwargs != best_candidate.cst_kwargs:
+            raise RuntimeError(
+                f"Two calls were made with different constant values, "
+                f"{self.cst_kwargs} != {best_candidate.cst_kwargs}"
+            )
+
         args = self.args
         if len(self.args) > len(best_candidate.args):
             # We need to move some args to kwargs as the best_candidate does.
@@ -285,9 +283,14 @@ class InputObserverInfo:
             They are used a second time because :func:`torch.export.export`
             cares about the order in kwargs and dynamic shapes, it needs
             to be the same in the ordered dictionaries `add_inputs` receive.
+        default_values: Default values defined by the signature of the function,
+            any value equal to that is ignore to simplify the export.
     """
 
-    def __init__(self, signature_names: list[str]):
+    def __init__(
+        self, signature_names: list[str], default_values: dict[str, int | bool | str | float]
+    ):
+        self.default_values = default_values
         self.inputs: list[InputCandidate] = []
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_outputs: list[list[torch.Tensor | None]] = []
@@ -307,6 +310,13 @@ class InputObserverInfo:
             args: Positional arguments.
             kwargs: Named arguments.
         """
+        cst_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k in self.signature_names
+            and isinstance(v, (int, float, bool, str))
+            and v != self.default_values.get(k, None)
+        }
         kwargs = {
             k: v
             for k, v in kwargs.items()
@@ -322,7 +332,7 @@ class InputObserverInfo:
             if k not in ordered_kwargs:
                 ordered_kwargs[k] = v
 
-        candidate = InputCandidate(args, ordered_kwargs, clone=True)
+        candidate = InputCandidate(args, ordered_kwargs, clone=True, cst_kwargs=cst_kwargs)
         self.inputs.append(candidate)
         if self._best_candidate is None or len(self._best_candidate) < len(candidate):
             self._best_candidate = candidate
@@ -371,16 +381,21 @@ class InputObserverInfo:
         self,
         set_batch_dimension_for: set[int | str] | bool | None = None,
         return_flat: bool = False,
-    ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
-        """Infers dynamic shapes.  based on the collected tensors.
+    ) -> tuple[dict[int, Any] | None, ...] | dict[str, dict[int, Any] | None]:
+        """Infers dynamic shapes based on the collected tensors.
         Most of the time, models do support a batch dimension
         but this batch dimension has the same value for every input sample.
         Instead of running inference on new samples, argument `set_batch_dimension_for`
         can be used to tell the first dimension is a dynamic dimension for a particular
         set of inputs referenced by their name (str) or their position (int).
 
-        `return_flat` tells the function to return a flat tuple instead of
-        nested structured.
+        Args:
+            set_batch_dimension_for (set[int | str] | None): Set of input identifiers,
+                by name (``str``) or position (``int``), for which the first dimension
+                should be treated as a dynamic batch dimension. If ``None`` or empty,
+                no additional batch dimensions are marked as dynamic.
+            return_flat: Tells the function to return a flat tuple instead of
+                nested structured.
         """
         self.align_inputs_none_values()
         # type checking
@@ -445,18 +460,20 @@ class InputObserverInfo:
             self._best_candidate.kwargs
         ):
             # It means forward method is called with tensors only.
-            if not self._best_candidate.kwargs:
+            if not self._best_candidate.kwargs and not self._best_candidate.cst_kwargs:
                 # only positional arguments
                 return tuple(flat_dynamic_shapes)
             if not self._best_candidate.args:
                 # only named arguments
-                return dict(zip(list(self._best_candidate.kwargs), flat_dynamic_shapes))
+                ds = dict(zip(list(self._best_candidate.kwargs), flat_dynamic_shapes))
+                return {**ds, **dict.fromkeys(self._best_candidate.cst_kwargs, None)}
             # positional arguments needs to be moved to the named arguments
             n_args = len(self._best_candidate.args)
             pos_names = self.signature_names[:n_args]
             return {
                 **dict(zip(pos_names, flat_dynamic_shapes[:n_args])),
                 **dict(zip(list(self._best_candidate.kwargs), flat_dynamic_shapes[n_args:])),
+                **dict.fromkeys(self._best_candidate.cst_kwargs, None),
             }
 
         # nested types, here comes the fun part because the shapes cannot be unflattened,
@@ -492,6 +509,8 @@ class InputObserverInfo:
             (self._best_candidate.args, self._best_candidate.kwargs),
             change_function=change_function,
         )
+        if self._best_candidate.cst_kwargs:
+            ds_kwargs = {**ds_kwargs, **dict.fromkeys(self._best_candidate.cst_kwargs, None)}
         if not ds_kwargs:
             return tuple(ds_args)
         if not ds_args:
@@ -595,6 +614,9 @@ class InputObserverInfo:
         args, kwargs = torch.utils._pytree.tree_unflatten(
             aligned_flat_list, candidate.aligned_spec
         )
+        if self._best_candidate.cst_kwargs:
+            kwargs = {**kwargs, **self._best_candidate.cst_kwargs}
+
         if not kwargs:
             return args
         if not args:
@@ -631,6 +653,9 @@ class InputObserver:
     >>>     kwargs=input_observer.infer_arguments(),
     >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
     >>> )
+
+    Examples can be found in :ref:`l-plot-tiny-llm-export-input-observer`,
+    :ref:`l-plot-whisper-tiny-export-input-observer`.
     """
 
     def __init__(self):
@@ -661,7 +686,10 @@ class InputObserver:
 
     @contextlib.contextmanager
     def __call__(
-        self, model: torch.nn.Module, store_n_calls: int = 3, method_name: str = "forward"
+        self,
+        model: torch.nn.Module,
+        store_n_calls: int = 3,
+        method_name: str = "forward",
     ):
         """Starts collecting inputs and outputs of a specific method.
         The model method is replaced by a new one collecting tensors
@@ -675,25 +703,34 @@ class InputObserver:
             method_name: Method name to spy on.
         """
         if not hasattr(model, method_name):
-            raise ValueError(f"Model type {model} does not have a method {method_name!r}")
+            raise ValueError(f"Model type {model} does not have a method {method_name!r}.")
         captured_method = getattr(model, method_name)
+        sig = inspect.signature(captured_method)
         if self.info is None:
             self.info = InputObserverInfo(
-                signature_names=list(inspect.signature(captured_method).parameters)
+                signature_names=list(sig.parameters),
+                default_values={
+                    p.name: p.default
+                    for p in sig.parameters.values()
+                    if p.default != inspect.Parameter.empty
+                    and isinstance(p.default, (int, bool, str, float))
+                },
             )
         n_already_stored = len(self.info)
-        setattr(
-            model,
-            method_name,
-            lambda *args, _cm=captured_method, _snc=(
-                store_n_calls + n_already_stored
-            ), **kwargs: self._replaced_method(
-                *args,
-                _captured_method=_cm,
-                _store_n_calls=_snc,
-                **kwargs,
-            ),
+        lambda_method = lambda *args, _cm=captured_method, _snc=(  # noqa: E731
+            store_n_calls + n_already_stored
+        ), **kwargs: self._replaced_method(
+            *args, _captured_method=_cm, _store_n_calls=_snc, **kwargs
         )
+
+        # It may happen than the signature of the forward is used to trigger a preprocessing.
+        # This is used in GenerationMixin (transformers):
+        #   position_ids_key = "decoder_position_ids" if ... else "position_ids"
+        #   if position_ids_key in set(inspect.signature(self.forward).parameters.keys()):
+        lambda_method.__signature__ = sig  # type: ignore[attr-defined]
+
+        setattr(model, method_name, lambda_method)
+
         try:
             yield self
         finally:
@@ -705,13 +742,20 @@ class InputObserver:
 
     def infer_dynamic_shapes(
         self, set_batch_dimension_for: set[int | str] | bool | None = None
-    ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
+    ) -> tuple[dict[int, Any] | None, ...] | dict[str, dict[int, Any] | None]:
         """
         Infers dynamic shapes. Most of the time, models do support a batch dimension
         but this batch dimension has the same value for every input sample.
         Instead of running inference on new samples, argument `set_batch_dimension_for`
         can be used to tell the first dimension is a dynamic dimension for a particular
         set of inputs referenced by their name (str) or their position (int).
+
+        Args:
+            set_batch_dimension_for (set[int | str] | None): A set of input
+                identifiers (by position as ``int`` or by name as ``str``) for
+                which the first dimension should be treated as a dynamic batch
+                dimension. If ``None``, no dimensions are explicitly marked as
+                dynamic.
         """
         self._check_captured()
         assert self.info is not None  # missed by type checking
@@ -746,11 +790,22 @@ class InputObserver:
         else:
             if isinstance(index_or_args_or_kwargs, tuple):
                 index_or_candidate = InputCandidate(
-                    args=index_or_args_or_kwargs, kwargs={}, clone=False
+                    args=index_or_args_or_kwargs, kwargs={}, clone=False, cst_kwargs={}
                 )
             elif isinstance(index_or_args_or_kwargs, dict):
                 index_or_candidate = InputCandidate(
-                    args=(), kwargs=index_or_args_or_kwargs, clone=False
+                    args=(),
+                    kwargs={
+                        k: v
+                        for k, v in index_or_args_or_kwargs.items()
+                        if k not in self.info.default_values
+                    },
+                    clone=False,
+                    cst_kwargs={
+                        k: v
+                        for k, v in index_or_args_or_kwargs.items()
+                        if k in self.info.default_values
+                    },
                 )
             else:
                 raise ValueError(
@@ -832,6 +887,7 @@ class InputObserver:
             except Exception as e:
                 error = str(e)
                 ort_outputs = None
+
             duration = time.perf_counter() - begin
             if error:
                 diff: dict[str, Any] = dict(error=error, SUCCESS=False)
