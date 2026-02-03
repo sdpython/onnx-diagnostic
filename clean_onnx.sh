@@ -47,6 +47,9 @@ rm _doc/examples/*.dynamo.onnx
 rm _doc/examples/*.script.onnx
 rm _doc/examples/dump_models -rf
 rm _doc/examples/dump_onx_*
+rm _doc/examples/*.ep
+rm _doc/examples/*.ep.graph
+rm _doc/examples/*.pt
 
 rm _doc/recipes/plot*.onnx
 rm _doc/recipes/plot*.onnx.weight
@@ -66,6 +69,9 @@ rm _doc/recipes/*.dynamo.onnx
 rm _doc/recipes/*.script.onnx
 rm _doc/recipes/dump_models -rf
 rm _doc/recipes/dump_onx_*
+rm _doc/recipes/*.ep
+rm _doc/recipes/*.ep.graph
+rm _doc/recipes/*.pt
 
 rm _doc/final/plot*.onnx
 rm _doc/final/plot*.onnx.weight
@@ -85,6 +91,9 @@ rm _doc/final/*.dynamo.onnx
 rm _doc/final/*.script.onnx
 rm _doc/final/dump_models -rf
 rm _doc/final/dump_onx_*
+rm _doc/final/*.ep
+rm _doc/final/*.ep.graph
+rm _doc/final/*.pt
 
 rm _doc/technical/plot*.onnx
 rm _doc/technical/plot*.onnx.weight
@@ -105,6 +114,9 @@ rm _doc/technical/*.script.onnx
 rm _doc/technical/dump_models -rf
 rm _doc/technical/dump_onx_*
 rm _doc/technical/model_*.onnx* -rf
+rm _doc/technical/*.ep
+rm _doc/technical/*.ep.graph
+rm _doc/technical/*.pt
 
 rm _tools/bin -rf
 rm _tools/mambaroot -rf

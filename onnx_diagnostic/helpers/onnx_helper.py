@@ -1742,7 +1742,7 @@ def _find_used_names(node_list, node_indices):
         possible_outputs |= {o for o in node_list[i_node].output if o}
     # find all requires input from the other nodes
     set_indices = set(node_indices)
-    not_known: Set[str] = set()
+    not_known = set()
     ranges = list(range(len(node_list)))
     for i_node in ranges[::-1]:
         if i_node in set_indices:

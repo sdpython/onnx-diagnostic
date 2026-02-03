@@ -210,7 +210,7 @@ sphinx_gallery_conf = {
 
 if int(os.environ.get("UNITTEST_GOING", "0")):
     sphinx_gallery_conf["ignore_pattern"] = (
-        ".*((tiny_llm)|(dort)|(draft_mode)|(hub_codellama.py)).*"
+        ".*((tiny_llm)|(dort)|(draft_mode)|(hub_codellama.py)|(whisper)).*"
     )
 elif pv.Version(torch.__version__) < pv.Version("2.8"):
     sphinx_gallery_conf["ignore_pattern"] = ".*((_oe_)|(dort)|(draft_mode)).*"
@@ -275,6 +275,7 @@ epkg_dictionary = {
     "torch.compiler": "https://docs.pytorch.org/docs/stable/torch.compiler.html",
     "torch.export.export": "https://docs.pytorch.org/docs/stable/export.html#torch.export.export",
     "torch.onnx": "https://docs.pytorch.org/docs/stable/onnx.html",
+    "tqdm": "https://github.com/tqdm/tqdm",
     "transformers": "https://huggingface.co/docs/transformers/en/index",
     "vocos": "https://github.com/gemelo-ai/vocos",
     "Windows": "https://www.microsoft.com/windows",

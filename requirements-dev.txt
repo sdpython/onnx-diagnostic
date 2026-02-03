@@ -1,5 +1,6 @@
 accelerate  # transformers/src/transformers/modeling_utils.py -> init_empty_weights missing if this package is not installed
 black
+datasets
 diffusers>=0.30.0
 git+https://github.com/sdpython/experimental-experiment.git
 furo
@@ -29,6 +30,7 @@ sphinx-issues
 sphinx-runpython
 tabulate
 timm
+torchcodec
 transformers>=4.45
 tqdm
 wheel

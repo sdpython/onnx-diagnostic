@@ -524,8 +524,10 @@ class patched_ShapeEnv:
 
             transmute_into_runtime_assert = False
 
-            backed_var_to_val = getattr(
-                self, "backed_var_to_val", getattr(self, "var_to_val", {})
+            backed_var_to_val = (
+                self.backed_var_to_val
+                if hasattr(self, "backed_var_to_val")
+                else self.var_to_val
             )
             concrete_val = None
             if not (expr.free_symbols <= backed_var_to_val.keys()):
