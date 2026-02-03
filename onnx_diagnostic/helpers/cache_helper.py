@@ -273,6 +273,9 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                 if isinstance(cls_kwargs, list)
                 else [cls_kwargs for _ in key_value_pairs]
             )
+        else:
+            assert isinstance(cls_layers, list), f"Unexpected type cls_layers={cls_layers}"
+            assert isinstance(cls_kwargs, list), f"Unexpected type cls_kwargs={cls_kwargs}"
 
         if (
             key_value_pairs
@@ -306,6 +309,10 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             assert len(cls_kwargs) == len(
                 cls_layers
             ), f"Length mismatch between cls_kwargs={cls_kwargs} and cls_layers={cls_layers}"
+            assert len(cls_kwargs) == len(key_value_pairs), (
+                f"Length mismatch between cls_kwargs={cls_kwargs} and "
+                f"len(key_value_pairs)={len(key_value_pairs)}"
+            )
             cache.layers.extend(
                 [cls_layer(**kws) for cls_layer, kws in zip(cls_layers, cls_kwargs)]  # type: ignore[operator, arg-type]
             )
