@@ -240,7 +240,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                 f"Length mismatch {len(key_value_pairs)} expected but "
                 f"{len(cls_layers)} layer types are given."
             )
-            cls_kwargs = [{} for _kv in key_value_pairs]
+            cls_kwargs = [{} for _kv in key_value_pairs]  # type: ignore[assignment]
             cls_layer = None
             if (
                 hasattr(transformers.cache_utils, "DynamicSlidingWindowLayer")
@@ -251,7 +251,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                 ), f"not implemented for type(key_value_pairs[0])={type(key_value_pairs[0])}"
                 for kv, clsy, kws in zip(key_value_pairs, cls_layers, cls_kwargs):
                     if clsy == transformers.cache_utils.DynamicSlidingWindowLayer:
-                        kws["sliding_window"] = kv[0].shape[2]
+                        kws["sliding_window"] = kv[0].shape[2]  # type: ignore[index]
                         assert isinstance(
                             kws["sliding_window"], int
                         ), f"sliding_window must be an integer but shape={kv[0].shape}"
@@ -269,7 +269,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         if cls_layer is not None:
             cls_layers = [cls_layer for _ in key_value_pairs]
             cls_kwargs = (
-                cls_kwargs
+                cls_kwargs  # type: ignore[assignment]
                 if isinstance(cls_kwargs, list)
                 else [cls_kwargs for _ in key_value_pairs]
             )
@@ -281,7 +281,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         ):
             cache = transformers.cache_utils.DynamicCache()
             cache.layers.extend(
-                [cls_layer(**kws) for cls_layer, kws in zip(cls_layers, cls_kwargs)]
+                [cls_layer(**kws) for cls_layer, kws in zip(cls_layers, cls_kwargs)]  # type: ignore[operator, arg-type]
             )
             for i, layer in enumerate(cache.layers):
                 k, v = key_value_pairs[i][0], key_value_pairs[i][1]
@@ -301,7 +301,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             cls_layer is None or cls_layer != transformers.cache_utils.DynamicLayer
         ):
             cache.layers.extend(
-                [cls_layer(**kws) for cls_layer, kws in zip(cls_layers, cls_kwargs)]
+                [cls_layer(**kws) for cls_layer, kws in zip(cls_layers, cls_kwargs)]  # type: ignore[operator, arg-type]
             )
             for i, layer in enumerate(cache.layers):
                 layer.keys, layer.values = key_value_pairs[i][0], key_value_pairs[i][1]

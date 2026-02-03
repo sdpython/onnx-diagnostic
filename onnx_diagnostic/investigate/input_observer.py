@@ -695,7 +695,7 @@ class InputObserver:
         # This is used in GenerationMixin (transformers):
         #   position_ids_key = "decoder_position_ids" if ... else "position_ids"
         #   if position_ids_key in set(inspect.signature(self.forward).parameters.keys()):
-        lambda_method.__signature__ = inspect.signature(captured_method)
+        lambda_method.__signature__ = inspect.signature(captured_method)  # type: ignore[attr-defined]
 
         setattr(model, method_name, lambda_method)
 
