@@ -9,6 +9,7 @@ for model `tiny-random/gemma-3 <https://huggingface.co/tiny-random/gemma-3>`_.
 """
 
 import pandas
+import torch
 from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.export.api import to_onnx
@@ -50,7 +51,7 @@ print("model type:", type(pipe.model))
 
 # %%
 # Captures inputs and outputs for the model.
-observer = InputObserver()
+observer = InputObserver(missing=dict(pixel_values=torch.empty((0, 3, 896, 896))))
 with (
     register_additional_serialization_functions(patch_transformers=True),
     observer(pipe.model),

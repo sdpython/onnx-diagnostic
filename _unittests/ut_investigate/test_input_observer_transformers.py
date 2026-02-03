@@ -216,6 +216,94 @@ class TestInputObserverTransformers(ExtTestCase):
             args["cache"].cross_attention_cache.layers[0].keys.shape, (1, 6, 1500, 64)
         )
 
+    def test_infer_dynamic_shapes_missing_pixels(self):
+        import transformers
+
+        class Model(torch.nn.Module):
+            def forward(
+                self,
+                input_ids=None,
+                pixel_values=None,
+                attention_mask=None,
+                position_ids=None,
+                past_key_values=None,
+                token_type_ids=None,
+                cache_position=None,
+            ):
+                return input_ids
+
+        inputs = [
+            dict(
+                input_ids=torch.ones((1, 282), dtype=torch.int64),
+                pixel_values=torch.ones((1, 3, 896, 896), dtype=torch.int64),
+                attention_mask=torch.ones((1, 282), dtype=torch.int64),
+                position_ids=torch.ones((1, 282), dtype=torch.int64),
+                token_type_ids=torch.ones((1, 282), dtype=torch.int64),
+                cache_position=torch.ones((282,), dtype=torch.int64),
+            ),
+            dict(
+                input_ids=torch.ones((1, 1), dtype=torch.int64),
+                attention_mask=torch.ones((1, 283), dtype=torch.int64),
+                position_ids=torch.ones((1, 1), dtype=torch.int64),
+                past_key_values=make_dynamic_cache(
+                    [
+                        (torch.rand((1, 1, 282, 32)), torch.rand((1, 1, 282, 32))),
+                        (torch.rand((1, 1, 282, 32)), torch.rand((1, 1, 282, 32))),
+                    ],
+                    cls_layers=[
+                        transformers.cache_utils.DynamicSlidingWindowLayer,
+                        transformers.cache_utils.DynamicLayer,
+                    ],
+                ),
+                token_type_ids=torch.ones((1, 1), dtype=torch.int64),
+                cache_position=torch.ones((1,), dtype=torch.int64),
+            ),
+            dict(
+                input_ids=torch.ones((1, 1), dtype=torch.int64),
+                attention_mask=torch.ones((1, 284), dtype=torch.int64),
+                position_ids=torch.ones((1, 1), dtype=torch.int64),
+                past_key_values=make_dynamic_cache(
+                    [
+                        (torch.rand((1, 1, 283, 32)), torch.rand((1, 1, 283, 32))),
+                        (torch.rand((1, 1, 283, 32)), torch.rand((1, 1, 283, 32))),
+                    ],
+                    cls_layers=[
+                        transformers.cache_utils.DynamicSlidingWindowLayer,
+                        transformers.cache_utils.DynamicLayer,
+                    ],
+                ),
+                token_type_ids=torch.ones((1, 1), dtype=torch.int64),
+                cache_position=torch.ones((1,), dtype=torch.int64),
+            ),
+        ]
+
+        model = Model()
+        observer = InputObserver(missing=dict(pixel_values=torch.empty((0, 3, 896, 896))))
+        with (
+            register_additional_serialization_functions(patch_transformers=True),
+            observer(model),
+        ):
+            for kwargs in inputs:
+                model(**kwargs)
+
+        shapes = observer.infer_dynamic_shapes(set_batch_dimension_for=True)
+        cst = torch.export.Dim.DYNAMIC
+        expected = {
+            "input_ids": {0: cst, 1: cst},
+            "pixel_values": {0: cst},
+            "attention_mask": {0: cst, 1: cst},
+            "position_ids": {0: cst, 1: cst},
+            "past_key_values": [
+                {0: cst, 2: cst},
+                {0: cst, 2: cst},
+                {0: cst, 2: cst},
+                {0: cst, 2: cst},
+            ],
+            "token_type_ids": {0: cst, 1: cst},
+            "cache_position": {0: cst},
+        }
+        self.assertEqual(expected, shapes)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

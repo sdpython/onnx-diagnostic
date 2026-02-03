@@ -285,12 +285,23 @@ class InputObserverInfo:
             to be the same in the ordered dictionaries `add_inputs` receive.
         default_values: Default values defined by the signature of the function,
             any value equal to that is ignore to simplify the export.
+        missing: If a named argument (in kwargs) is missing,
+            a default value will be taken in this dictionary,
+            this is used when after the prefill step, an argument
+            disappears (such as `pixel_values`) and another one
+            is added (such as `past_key_values`).
+            The values are only to infer dynamic shapes and arguments,
+            not to run the model.
     """
 
     def __init__(
-        self, signature_names: list[str], default_values: dict[str, int | bool | str | float]
+        self,
+        signature_names: list[str],
+        default_values: dict[str, int | bool | str | float],
+        missing: dict[str, Any],
     ):
         self.default_values = default_values
+        self.missing = missing
         self.inputs: list[InputCandidate] = []
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_outputs: list[list[torch.Tensor | None]] = []
@@ -322,6 +333,11 @@ class InputObserverInfo:
             for k, v in kwargs.items()
             if v is not None and not isinstance(v, (int, float, bool))
         }
+
+        # adds missing attributes
+        for k, v in self.missing.items():
+            if k not in kwargs:
+                kwargs[k] = v
 
         # kwargs may come in a different ordeer teach.
         # dictionaries are ordered and torch.export.export expects
@@ -631,6 +647,15 @@ class InputObserver:
     This information is used to infer dynamic shapes and
     export arguments.
 
+    Args:
+        missing: If a named argument (in kwargs) is missing,
+            a default value will be taken in this dictionary,
+            this is used when after the prefill step, an argument
+            disappears (such as `pixel_values`) and another one
+            is added (such as `past_key_values`).
+            The values are only to infer dynamic shapes and arguments,
+            not to run the model.
+
     Examples
     --------
     >>> input_observer = InputObserver()
@@ -658,8 +683,9 @@ class InputObserver:
     :ref:`l-plot-whisper-tiny-export-input-observer`.
     """
 
-    def __init__(self):
+    def __init__(self, missing: dict[str, Any] | None = None):
         self.info: InputObserverInfo | None = None  # type: ignore[annotation-unchecked]
+        self.missing = missing or {}
 
     def _replaced_method(
         self,
@@ -715,6 +741,7 @@ class InputObserver:
                     if p.default != inspect.Parameter.empty
                     and isinstance(p.default, (int, bool, str, float))
                 },
+                missing=self.missing,
             )
         n_already_stored = len(self.info)
         lambda_method = lambda *args, _cm=captured_method, _snc=(  # noqa: E731

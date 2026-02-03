@@ -878,25 +878,61 @@ class TestInputObserver(ExtTestCase):
         # self.assertEqual(2, len(args))
         # self.assertEqual(len([v for v in args.values() if v is not None]), 2)
 
-    def test_infer_dynamic_shapes_exception(self):
-        """
-        dict(input_ids:T7s1x282,
-            pixel_values:T1s1x3x896x896,
-            attention_mask:T7s1x282,
-            position_ids:T7s1x282,
-            token_type_ids:T7s1x282,cache_position:T7s282
-        )
-        dict(input_ids:T7s1x1,attention_mask:T7s1x283,position_ids:T7s1x1,
-                past_key_values:DynamicCache(
-                    DynamicSlidingWindowLayer(T16s1x1x282x32, T16s1x1x282x32),
-                    DynamicLayer(T16s1x1x282x32, T16s1x1x282x32)),
-                token_type_ids:T7s1x1,cache_position:T7s1)
-        dict(input_ids:T7s1x1,attention_mask:T7s1x284,position_ids:T7s1x1,
-                past_key_values:DynamicCache(
-                    DynamicSlidingWindowLayer(T16s1x1x283x32, T16s1x1x283x32),
-                    DynamicLayer(T16s1x1x283x32, T16s1x1x283x32)),
-                token_type_ids:T7s1x1,cache_position:T7s1)
-        """
+    def test_infer_dynamic_shapes_missing(self):
+        class Model(torch.nn.Module):
+            def forward(
+                self,
+                input_ids=None,
+                pixel_values=None,
+                attention_mask=None,
+                position_ids=None,
+                past_key_values=None,
+                token_type_ids=None,
+                cache_position=None,
+            ):
+                return input_ids
+
+        inputs = [
+            dict(
+                input_ids=torch.ones((1, 282), dtype=torch.int64),
+                pixel_values=torch.ones((1, 3, 896, 896), dtype=torch.int64),
+                attention_mask=torch.ones((1, 282), dtype=torch.int64),
+                position_ids=torch.ones((1, 282), dtype=torch.int64),
+                token_type_ids=torch.ones((1, 282), dtype=torch.int64),
+                cache_position=torch.ones((282,), dtype=torch.int64),
+            ),
+            dict(
+                input_ids=torch.ones((1, 1), dtype=torch.int64),
+                attention_mask=torch.ones((1, 283), dtype=torch.int64),
+                position_ids=torch.ones((1, 1), dtype=torch.int64),
+                past_key_values=torch.rand((1, 1, 282, 32)),
+            ),
+            dict(
+                input_ids=torch.ones((1, 1), dtype=torch.int64),
+                attention_mask=torch.ones((1, 284), dtype=torch.int64),
+                position_ids=torch.ones((1, 1), dtype=torch.int64),
+                past_key_values=torch.rand((1, 1, 283, 32)),
+            ),
+        ]
+
+        model = Model()
+        observer = InputObserver(missing=dict(pixel_values=torch.empty((0, 3, 896, 896))))
+        with observer(model):
+            for kwargs in inputs:
+                model(**kwargs)
+
+        shapes = observer.infer_dynamic_shapes(set_batch_dimension_for=True)
+        cst = torch.export.Dim.DYNAMIC
+        expected = {
+            "input_ids": {0: cst, 1: cst},
+            "pixel_values": {0: cst},
+            "attention_mask": {0: cst, 1: cst},
+            "position_ids": {0: cst, 1: cst},
+            "past_key_values": {0: cst, 2: cst},
+            "token_type_ids": {0: cst, 1: cst},
+            "cache_position": {0: cst},
+        }
+        self.assertEqual(expected, shapes)
 
 
 if __name__ == "__main__":
