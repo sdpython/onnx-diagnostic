@@ -210,7 +210,7 @@ sphinx_gallery_conf = {
 
 if int(os.environ.get("UNITTEST_GOING", "0")):
     sphinx_gallery_conf["ignore_pattern"] = (
-        ".*((tiny_llm)|(dort)|(draft_mode)|(hub_codellama.py)).*"
+        ".*((tiny_llm)|(dort)|(draft_mode)|(hub_codellama.py)|(whisper)).*"
     )
 elif pv.Version(torch.__version__) < pv.Version("2.8"):
     sphinx_gallery_conf["ignore_pattern"] = ".*((_oe_)|(dort)|(draft_mode)).*"

@@ -55,6 +55,7 @@ class TestInputObserverTransformers(ExtTestCase):
         )
         self.assertEqualArray(outputs, onnx_tokens)
 
+    @requires_transformers("4.55")
     def test_encoder_decoder_cache_args(self):
         class Model(torch.nn.Module):
             def forward(self, cache):
@@ -134,6 +135,7 @@ class TestInputObserverTransformers(ExtTestCase):
         self.assertEqual(args[0].self_attention_cache.layers[0].keys.shape, (1, 6, 0, 64))
         self.assertEqual(args[0].cross_attention_cache.layers[0].keys.shape, (1, 6, 1500, 64))
 
+    @requires_transformers("4.55")
     def test_encoder_decoder_cache_kwargs(self):
         class Model(torch.nn.Module):
             def forward(self, cache):

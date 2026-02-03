@@ -290,7 +290,7 @@ class InputObserverInfo:
     def __init__(self, signature_names: list[str]):
         self.inputs: list[InputCandidate] = []
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
-        self.flat_outputs: list[list[torch.Tensor]] = []
+        self.flat_outputs: list[list[torch.Tensor | None]] = []
         self.latencies: list[float] = []
         self.signature_names = signature_names
         self._best_candidate: InputCandidate | None = None
