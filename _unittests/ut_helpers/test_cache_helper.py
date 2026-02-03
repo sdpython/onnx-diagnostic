@@ -13,7 +13,7 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_sliding_window_cache,
     make_static_cache,
 )
-from onnx_diagnostic.helpers.torch_helper import torch_deepcopy
+from onnx_diagnostic.helpers.torch_helper import torch_deepcopy, to_any
 from onnx_diagnostic.export import CoupleInputsDynamicShapes
 from onnx_diagnostic.torch_export_patches.patch_inputs import (
     convert_dynamic_axes_into_dynamic_shapes,
@@ -399,6 +399,16 @@ class TestCacheHelpers(ExtTestCase):
                 [type(lay) for lay in c2.layers], [type(lay) for lay in restored.layers]
             )
             self.assertEqual(0, max_diff(c2, restored)["abs"])
+            ct = to_any(c2, torch.float16)
+            self.assertEqual(
+                [type(lay) for lay in c2.layers], [type(lay) for lay in ct.layers]
+            )
+            self.assertLess(max_diff(c2, ct)["abs"], 1e-3)
+            c3 = torch_deepcopy(c2)
+            self.assertEqual(0, max_diff(c2, c3)["abs"])
+            self.assertEqual(
+                [type(lay) for lay in c2.layers], [type(lay) for lay in c3.layers]
+            )
 
 
 if __name__ == "__main__":

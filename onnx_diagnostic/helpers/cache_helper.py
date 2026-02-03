@@ -253,7 +253,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                     if clsy == transformers.cache_utils.DynamicSlidingWindowLayer:
                         kws["sliding_window"] = kv[0].shape[2]  # type: ignore[index]
                         assert isinstance(
-                            kws["sliding_window"], int
+                            kws["sliding_window"], int  # type: ignore[index]
                         ), f"sliding_window must be an integer but shape={kv[0].shape}"
         else:
             assert (
@@ -300,6 +300,12 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         if hasattr(cache, "layers") and (
             cls_layer is None or cls_layer != transformers.cache_utils.DynamicLayer
         ):
+            assert isinstance(
+                cls_kwargs, list
+            ), f"Wrong type {type(cls_kwargs)} for cls_kwargs"
+            assert len(cls_kwargs) == len(
+                cls_layers
+            ), f"Length mismatch between cls_kwargs={cls_kwargs} and cls_layers={cls_layers}"
             cache.layers.extend(
                 [cls_layer(**kws) for cls_layer, kws in zip(cls_layers, cls_kwargs)]  # type: ignore[operator, arg-type]
             )
