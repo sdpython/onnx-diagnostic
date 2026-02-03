@@ -397,7 +397,7 @@ class InputObserverInfo:
         self,
         set_batch_dimension_for: set[int | str] | bool | None = None,
         return_flat: bool = False,
-    ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
+    ) -> tuple[dict[int, Any] | None, ...] | dict[str, dict[int, Any] | None]:
         """Infers dynamic shapes.  based on the collected tensors.
         Most of the time, models do support a batch dimension
         but this batch dimension has the same value for every input sample.
@@ -477,8 +477,7 @@ class InputObserverInfo:
             if not self._best_candidate.args:
                 # only named arguments
                 ds = dict(zip(list(self._best_candidate.kwargs), flat_dynamic_shapes))
-                ds = {**ds, **dict.fromkeys(self._best_candidate.cst_kwargs, None)}
-                return ds
+                return {**ds, **dict.fromkeys(self._best_candidate.cst_kwargs, None)}
             # positional arguments needs to be moved to the named arguments
             n_args = len(self._best_candidate.args)
             pos_names = self.signature_names[:n_args]
@@ -751,7 +750,7 @@ class InputObserver:
 
     def infer_dynamic_shapes(
         self, set_batch_dimension_for: set[int | str] | bool | None = None
-    ) -> tuple[dict[int, Any], ...] | dict[str, dict[int, Any]]:
+    ) -> tuple[dict[int, Any] | None, ...] | dict[str, dict[int, Any] | None]:
         """
         Infers dynamic shapes. Most of the time, models do support a batch dimension
         but this batch dimension has the same value for every input sample.
