@@ -1,11 +1,11 @@
 Change Logs
 ===========
 
-0.8.12
-++++++
+0.9.0
++++++
 
-
-* :pr:`400`, :pr:`401`:, :pr:`402`, :pr:`403`: improves InputObserver (investigations), add it the documentation
+* :pr:`403`: update the serialization of SlidingWindowCache to include parameter slidinw_window
+* :pr:`400`, :pr:`401`:, :pr:`402`: improves InputObserver (investigations), add it the documentation
 * :pr:`399`: update CI
 
 0.8.11
