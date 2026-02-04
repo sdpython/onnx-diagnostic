@@ -920,8 +920,9 @@ class InputObserver:
                 diff: dict[str, Any] = dict(error=error, SUCCESS=False)
             else:
                 # The last output may be empty and torch could skip it.
-                while len(ort_outputs) > len(outputs) and ort_outputs[-1].numel() == 0:
-                    ort_outputs.pop()
+                if isinstance(outputs, list):
+                    while len(ort_outputs) > len(outputs) and ort_outputs[-1].numel() == 0:
+                        ort_outputs.pop()
                 diff = max_diff(outputs, ort_outputs, hist=lhist)
                 if "rep" in diff and isinstance(diff["rep"], dict):
                     diff.update(diff["rep"])

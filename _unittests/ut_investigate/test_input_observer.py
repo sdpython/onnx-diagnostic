@@ -695,7 +695,7 @@ class TestInputObserver(ExtTestCase):
             exporter="custom",
             filename=proto_name,
         )
-        data = observer.check_discrepancies(proto_name, progress_bar=False)
+        data = observer.check_discrepancies(proto_name, progress_bar=False, include_io=True)
         df = pandas.DataFrame(data)
         self.assertLess(df["abs"].max(), 1e-5)
 
