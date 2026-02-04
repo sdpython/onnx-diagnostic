@@ -923,7 +923,7 @@ class InputObserver:
                 if isinstance(outputs, list) and isinstance(ort_outputs, list):
                     while len(ort_outputs) > len(outputs) and ort_outputs[-1].numel() == 0:
                         ort_outputs.pop()
-                diff = max_diff(outputs, ort_outputs, hist=lhist)
+                diff = max_diff(outputs, ort_outputs, hist=lhist)  # type: ignore[assignment]
                 if "rep" in diff and isinstance(diff["rep"], dict):
                     diff.update(diff["rep"])
                     del diff["rep"]
