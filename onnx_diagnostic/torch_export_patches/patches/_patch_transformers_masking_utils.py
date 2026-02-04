@@ -169,7 +169,7 @@ if patch_masking_utils:
         if (
             allow_is_bidirectional_skip
             and _ignore_bidirectional_mask_sdpa
-            and _ignore_bidirectional_mask_sdpa(padding_mask)
+            and _ignore_bidirectional_mask_sdpa(padding_mask, kv_length, kv_offset)
         ):
             return None
 
