@@ -860,7 +860,7 @@ class InputObserver:
         hist=(0.1, 0.01),
         progress_bar: bool = False,
         include_io: bool = True,
-    ) -> list[dict[str, str | int | float]]:
+    ) -> list[dict[str, str | int | float | bool]]:
         """Computes the discrepancies between the saved inputs and outputs
         with the saved onnx model.
 
@@ -917,13 +917,13 @@ class InputObserver:
 
             duration = time.perf_counter() - begin
             if error:
-                diff: dict[str, Any] = dict(error=error, SUCCESS=False)
+                diff: dict[str, str | int | float | bool] = dict(error=error, SUCCESS=False)
             else:
                 # The last output may be empty and torch could skip it.
-                if isinstance(outputs, list):
+                if isinstance(outputs, list) and isinstance(ort_outputs, list):
                     while len(ort_outputs) > len(outputs) and ort_outputs[-1].numel() == 0:
                         ort_outputs.pop()
-                diff = max_diff(outputs, ort_outputs, hist=lhist)
+                diff = max_diff(outputs, ort_outputs, hist=lhist)  # type: ignore[bad-assignment]
                 if "rep" in diff and isinstance(diff["rep"], dict):
                     diff.update(diff["rep"])
                     del diff["rep"]

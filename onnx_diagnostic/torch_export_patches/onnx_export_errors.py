@@ -586,21 +586,6 @@ def _patch_transformers(
                     f_transformers_sdpa_mask,
                     patch_transformers_list.patched_sdpa_mask_recent_torch,
                 )
-        elif hasattr(masking_utils, "sdpa_mask"):
-            if verbose:
-                print(
-                    "[torch_export_patches] patches transformers.masking_utils.sdpa_mask (2)"
-                )
-            f_transformers_sdpa_mask = masking_utils.sdpa_mask
-            masking_utils.sdpa_mask = patch_transformers_list.patched_sdpa_mask
-            if patch_details:
-                patch_details.append(
-                    "transformers",
-                    f_transformers_sdpa_mask,
-                    patch_transformers_list.patched_sdpa_mask,
-                )
-        else:
-            f_transformers_sdpa_mask = None
 
     if (  # vmap
         masking_utils
@@ -775,17 +760,17 @@ def _unpatch_transformers(
                 "transformers.masking_utils.sdpa_mask_recent_torch"
             )
 
-        if f_transformers_sdpa_mask is not None:
-            assert f_transformers_sdpa_mask.__name__ in (
-                "sdpa_mask",
-                "sdpa_mask_recent_torch",
-            ), (
-                f"corrupted function 'sdpa_mask', its name is "
-                f"{f_transformers_sdpa_mask.__name__!r}"
-            )
-            masking_utils.sdpa_mask = f_transformers_sdpa_mask
-            if verbose:
-                print("[torch_export_patches] restored transformers.masking_utils.sdpa_mask")
+    if f_transformers_sdpa_mask is not None:
+        assert f_transformers_sdpa_mask.__name__ in (
+            "sdpa_mask",
+            "sdpa_mask_recent_torch",
+        ), (
+            f"corrupted function 'sdpa_mask', its name is "
+            f"{f_transformers_sdpa_mask.__name__!r}"
+        )
+        masking_utils.sdpa_mask = f_transformers_sdpa_mask
+        if verbose:
+            print("[torch_export_patches] restored transformers.masking_utils.sdpa_mask")
 
     if (  # eager_mask
         masking_utils
