@@ -859,22 +859,20 @@ class InputObserver:
         rtol: float = 0.1,
         hist=(0.1, 0.01),
         progress_bar: bool = False,
+        include_io: bool = True,
     ) -> list[dict[str, str | int | float]]:
         """Computes the discrepancies between the saved inputs and outputs
         with the saved onnx model.
 
         Args:
-            onnx_model:
-                ONNX Model to verify.
-            atol:
-                Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
-            rtol:
-                Relative tolerance.
-            hist:
-                Thresholds, the function determines the number of discrepancies
+            onnx_model: ONNX Model to verify.
+            atol: Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
+            rtol: Relative tolerance.
+            hist: Thresholds, the function determines the number of discrepancies
                 above these thresholds.
-            progress_bar:
-                Shows a progress bar (requires :epkg:`tqdm`).
+            progress_bar: Shows a progress bar (requires :epkg:`tqdm`).
+            include_io: Shows inputs/outputs shapes in the summary
+                returned by this function.
 
         Returns:
             A list of dictionaries, ready to be consumed by a dataframe.
@@ -921,6 +919,9 @@ class InputObserver:
             if error:
                 diff: dict[str, Any] = dict(error=error, SUCCESS=False)
             else:
+                # The last output may be empty and torch could skip it.
+                while len(ort_outputs) > len(outputs) and ort_outputs[-1].numel() == 0:
+                    ort_outputs.pop()
                 diff = max_diff(outputs, ort_outputs, hist=lhist)
                 if "rep" in diff and isinstance(diff["rep"], dict):
                     diff.update(diff["rep"])
@@ -941,5 +942,9 @@ class InputObserver:
                     n_empty=n_empty,
                 )
             )
+            if include_io:
+                diff["inputs"] = string_type(feeds, with_shape=True)
+                diff["outputs_torch"] = string_type(outputs, with_shape=True)
+                diff["outputs_ort"] = string_type(ort_outputs, with_shape=True)
             data.append(diff)
         return data

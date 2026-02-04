@@ -92,8 +92,10 @@ with torch_export_patches(patch_transformers=True, patch_torch=True, stop_if_sta
 
 # %%
 # Let's measure the discrepancies.
-data = observer.check_discrepancies(filename, progress_bar=True, atol=1e-2)
-print(pandas.DataFrame(data))
+data = observer.check_discrepancies(filename, progress_bar=True, atol=1e-2, include_io=True)
+df = pandas.DataFrame(data)
+df.to_excel("plot_export_gemma3_tiny_input_observer.xlsx")
+print(df)
 
 # %%
 # Let's show the errors.
