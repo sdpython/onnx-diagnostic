@@ -562,6 +562,7 @@ def _patch_transformers(
                 "[torch_export_patches] patches "
                 "transformers.masking_utils.sdpa_mask_recent_torch"
             )
+
         f_transformers_sdpa_mask_recent_torch = masking_utils.sdpa_mask_recent_torch
         masking_utils.sdpa_mask_recent_torch = (
             patch_transformers_list.patched_sdpa_mask_recent_torch
@@ -574,7 +575,9 @@ def _patch_transformers(
             )
         if masking_utils.sdpa_mask == f_transformers_sdpa_mask_recent_torch:
             if verbose:
-                print("[torch_export_patches] patches transformers.masking_utils.sdpa_mask")
+                print(
+                    "[torch_export_patches] patches transformers.masking_utils.sdpa_mask (1)"
+                )
             f_transformers_sdpa_mask = masking_utils.sdpa_mask
             masking_utils.sdpa_mask = patch_transformers_list.patched_sdpa_mask_recent_torch
             if patch_details:
@@ -583,8 +586,37 @@ def _patch_transformers(
                     f_transformers_sdpa_mask,
                     patch_transformers_list.patched_sdpa_mask_recent_torch,
                 )
+        elif hasattr(masking_utils, "sdpa_mask"):
+            if verbose:
+                print(
+                    "[torch_export_patches] patches transformers.masking_utils.sdpa_mask (2)"
+                )
+            f_transformers_sdpa_mask = masking_utils.sdpa_mask
+            masking_utils.sdpa_mask = patch_transformers_list.patched_sdpa_mask
+            if patch_details:
+                patch_details.append(
+                    "transformers",
+                    f_transformers_sdpa_mask,
+                    patch_transformers_list.patched_sdpa_mask,
+                )
         else:
             f_transformers_sdpa_mask = None
+
+    if (  # vmap
+        masking_utils
+        and patch_transformers_list.patch_masking_utils
+        and hasattr(masking_utils, "sdpa_mask")
+    ):
+        if verbose:
+            print("[torch_export_patches] patches transformers.masking_utils.sdpa_mask (3)")
+        f_transformers_sdpa_mask = masking_utils.sdpa_mask
+        masking_utils.sdpa_mask = patch_transformers_list.patched_sdpa_mask
+        if patch_details:
+            patch_details.append(
+                "transformers",
+                f_transformers_sdpa_mask,
+                patch_transformers_list.patched_sdpa_mask,
+            )
 
     if (  # eager_mask
         masking_utils

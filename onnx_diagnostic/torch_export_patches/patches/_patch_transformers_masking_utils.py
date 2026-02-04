@@ -36,6 +36,8 @@ if patch_masking_utils:
         _ignore_bidirectional_mask_sdpa = None
         bidirectional_mask_function = None
 
+    from transformers.masking_utils import _non_vmap_expansion_sdpa
+
     def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) -> Callable:
         """manual patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""
         from ...helpers import string_type
@@ -180,3 +182,83 @@ if patch_masking_utils:
             batch_arange, head_arange, cache_position, kv_arange
         )
         return causal_mask
+
+    def patched_sdpa_mask(
+        batch_size: int,
+        cache_position: torch.Tensor,
+        kv_length: int,
+        kv_offset: int = 0,
+        mask_function: Callable = causal_mask_function,
+        attention_mask: torch.Tensor | None = None,
+        local_size: int | None = None,
+        allow_is_causal_skip: bool = True,
+        allow_is_bidirectional_skip: bool = False,
+        allow_torch_fix: bool = True,
+        use_vmap: bool = False,
+        **kwargs,
+    ) -> torch.Tensor | None:
+        """manual patch for function ``transformers.masking_utils.sdpa_mask``."""
+        q_length = cache_position.shape[0]
+
+        # Potentially pad the 2D mask
+        padding_mask = prepare_padding_mask(attention_mask, kv_length, kv_offset)
+
+        # Under specific conditions, we can avoid materializing the mask
+        #   1. Causal masks can rely on the `is_causal` argument
+        #   2. Bidirectional do not need any further processing (no bias)
+        if allow_is_causal_skip and _ignore_causal_mask_sdpa(
+            padding_mask, q_length, kv_length, kv_offset, local_size
+        ):
+            return None
+        if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa(
+            padding_mask, kv_length, local_size
+        ):
+            return None
+
+        # Potentially add the padding 2D mask
+        if padding_mask is not None:
+            mask_function = and_masks(mask_function, padding_mask_function(padding_mask))
+
+        batch_arange = torch.arange(batch_size, device=cache_position.device)
+        head_arange = torch.arange(1, device=cache_position.device)
+        # Similar to `kv_arange = torch.arange(start=kv_offset,
+        # end=kv_offset + kv_length, device=cache_position.device)`
+        # but without data-dependent slicing (i.e. torch.compile friendly)
+        kv_arange = torch.arange(kv_length, device=cache_position.device) + kv_offset
+
+        # Actual mask creation
+        # Option 1: Fast non-vmap mask creation (default)
+        # PATCHED
+        use_vmap = False
+        if not use_vmap:
+            # Apply mask function element-wise through broadcasting
+            attention_mask = mask_function(
+                *_non_vmap_expansion_sdpa(batch_arange, head_arange, cache_position, kv_arange)
+            )
+            # Expand the mask to match batch size
+            # and query length if they weren't used in the mask function
+            attention_mask = attention_mask.expand(batch_size, -1, q_length, kv_length)
+
+        # Option 2: Vmap mask creation (torch>=2.6 and custom patterns)
+        # elif _is_torch_greater_or_equal_than_2_6:
+        # This creates the 4D mask easily.
+        # Note that we need this context manager as vmap cannot handle slicing a tensor from
+        # scalar tensor (it internally calls `.item()` which vmap does not allow,
+        # but this context works around it
+        # We don't need to add an offset to the mask_function either,
+        # as we vmap directly the correct indices for k and kv indices
+        #    with TransformGetItemToIndex():
+        #        attention_mask = _vmap_expansion_sdpa(mask_function)(
+        #            batch_arange, head_arange, cache_position, kv_arange
+        #        )
+
+        # Option 3: Error out since it indicates that the user did something custom,
+        # which they shouldn't have (torch<2.6)
+        else:
+            raise ValueError(
+                "The vmap functionality for mask creation "
+                "is only supported from torch>=2.6. "
+                "Please update your torch version or use "
+                "`use_vmap=False` with index-based masks."
+            )
+        return attention_mask

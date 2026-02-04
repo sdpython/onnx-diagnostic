@@ -216,6 +216,7 @@ class TestInputObserverTransformers(ExtTestCase):
             args["cache"].cross_attention_cache.layers[0].keys.shape, (1, 6, 1500, 64)
         )
 
+    @requires_transformers("4.57")
     def test_infer_dynamic_shapes_missing_pixels(self):
         import transformers
 

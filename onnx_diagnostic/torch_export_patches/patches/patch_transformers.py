@@ -38,6 +38,7 @@ if patch_masking_utils:
     from ._patch_transformers_masking_utils import (
         patched__vmap_for_bhqkv,
         patched_eager_mask,
+        patched_sdpa_mask,
         patched_sdpa_mask_recent_torch,
     )
 

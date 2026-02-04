@@ -128,6 +128,7 @@ class InputCandidate:
         self._position_to_args_kwargs: list[int | str] | None = None
         self._n_tensors_for_args_kwargs: dict[int | str, int] | None = None
         self.cst_kwargs = cst_kwargs.copy()
+        assert "use_cache" not in self.cst_kwargs
 
         if clone:
             self.flat_list = [
@@ -327,6 +328,7 @@ class InputObserverInfo:
             if k in self.signature_names
             and isinstance(v, (int, float, bool, str))
             and v != self.default_values.get(k, None)
+            and self.default_values.get(k, None) is not None
         }
         kwargs = {
             k: v
@@ -580,7 +582,7 @@ class InputObserverInfo:
             dynamic_shapes = self.infer_dynamic_shapes(return_flat=True)
             # type checking
             assert isinstance(dynamic_shapes, tuple)
-            aligned_flat_list = aligned_flat_list.copy()
+            aligned_flat_list = list(aligned_flat_list)
             for index in range(len(aligned_flat_list)):
                 if aligned_flat_list[index] is not None:
                     continue

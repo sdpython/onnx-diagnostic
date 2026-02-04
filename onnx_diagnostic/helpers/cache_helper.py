@@ -360,6 +360,7 @@ else:
     def make_dynamic_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
         cls_layers: Optional[Union[str, List[type]]] = None,
+        cls_kwargs: Optional[Union[Dict[str, int], List[Dict[str, int]]]] = None,
     ) -> transformers.cache_utils.DynamicCache:
         """
         Creates an instance of :class:`transformers.cache_utils.DynamicCache`.
@@ -391,7 +392,9 @@ else:
             )
             print(string_type(past_key_values, with_shape=True))
         """
-        assert not cls_layers, "cls_layers cannot be used for transformers<5."
+        assert (
+            not cls_layers and not cls_kwargs
+        ), "cls_layers, cls_kwargs cannot be used for transformers<5."
         key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
         cache = transformers.cache_utils.DynamicCache(len(key_value_pairs))  # type: ignore
         for i, (key, value) in enumerate(key_value_pairs):

@@ -188,6 +188,11 @@ def patched__broadcast_shapes(*_shapes):
     return common_shape
 
 
+def value_ranges_is_positive(value_ranges: torch.utils._sympy.value_ranges.ValueRanges):
+    """Tells if an interval is equivalent to a positive or null integer."""
+    return value_ranges.lower == 0 and value_ranges.upper > 4623372036854775806
+
+
 class patched_ShapeEnv:
 
     def _check_frozen(
@@ -281,7 +286,10 @@ class patched_ShapeEnv:
                     )
                     self._update_var_to_range(b, b_bound, self.var_to_range_sloc[a])
                     tgt_bound = self.bound_sympy(tgt)
-                    assert tgt_bound.issubset(
+                    assert (
+                        value_ranges_is_positive(tgt_bound)
+                        and value_ranges_is_positive(src_bound)
+                    ) or tgt_bound.issubset(
                         src_bound
                     ), f"{tgt_bound=} not a subset of {src_bound=}"
 
