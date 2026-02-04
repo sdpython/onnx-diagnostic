@@ -246,7 +246,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             ), f"Missing layer class {cls_layers!r}"
             cls_layers = getattr(transformers.cache_utils, cls_layers)
         if cls_layers and not isinstance(cls_layers, list):
-            cls_layers = [cls_layers for _ in key_value_pairs]
+            cls_layers = [cls_layers for _ in key_value_pairs]  # type: ignore[misc]
         if cls_layers is not None and isinstance(cls_layers, list):
             assert len(cls_layers) == len(key_value_pairs), (
                 f"Length mismatch {len(key_value_pairs)} expected but "
@@ -267,7 +267,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
                 default_values = KWARGS_LAYER.get(clsy, lambda tensor: {})(kv[0])
                 for k, v in default_values.items():
                     if k not in kws:
-                        kws[k] = v
+                        kws[k] = v  # type: ignore[index]
         else:
             assert cls_kwargs is None, "cls_layers must be a list if cls_kwargs is specified"
             assert (
@@ -321,16 +321,19 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         if hasattr(cache, "layers") and (
             cls_layer is None or cls_layer != transformers.cache_utils.DynamicLayer
         ):
-            assert isinstance(
-                cls_kwargs, list
-            ), f"Wrong type {type(cls_kwargs)} for cls_kwargs"
-            assert len(cls_kwargs) == len(
-                cls_layers
-            ), f"Length mismatch between cls_kwargs={cls_kwargs} and cls_layers={cls_layers}"
-            assert len(cls_kwargs) == len(key_value_pairs), (
-                f"Length mismatch between cls_kwargs={cls_kwargs} and "
-                f"len(key_value_pairs)={len(key_value_pairs)}"
+            assert isinstance(cls_layers, list) and isinstance(cls_kwargs, list), (
+                f"Wrong type {type(cls_layers)} for cls_layers or "
+                f"{type(cls_kwargs)} for cls_kwargs"
             )
+            assert len(cls_kwargs) == len(cls_layers) and len(cls_kwargs) == len(
+                key_value_pairs
+            ), (
+                f"Length mismatch between len(cls_kwargs)={len(cls_kwargs)}, "
+                f"len(cls_layers)={len(cls_layers)}, "
+                f"len(key_value_pairs)={len(key_value_pairs)}, "
+                f"cls_kwargs={cls_kwargs}, cls_layers={cls_layers}"
+            )
+            del cache.layers[:]
             cache.layers.extend(
                 [cls_layer(**kws) for cls_layer, kws in zip(cls_layers, cls_kwargs)]  # type: ignore[operator, arg-type]
             )
