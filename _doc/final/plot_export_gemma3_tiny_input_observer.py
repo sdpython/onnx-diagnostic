@@ -26,7 +26,7 @@ model_id = "tiny-random/gemma-3"
 pipe = pipeline(
     "image-text-to-text",
     model=model_id,
-    device="cuda",
+    device="cpu",
     trust_remote_code=True,
     max_new_tokens=3,
 )
