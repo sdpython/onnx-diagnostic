@@ -36,7 +36,25 @@ if patch_masking_utils:
         _ignore_bidirectional_mask_sdpa = None
         bidirectional_mask_function = None
 
-    from transformers.masking_utils import _non_vmap_expansion_sdpa
+    try:
+        from transformers.masking_utils import _non_vmap_expansion_sdpa
+    except ImportError:
+
+        def _non_vmap_expansion_sdpa(
+            batch_indices: torch.Tensor,
+            head_indices: torch.Tensor,
+            q_indices: torch.Tensor,
+            kv_indices: torch.Tensor,
+        ):
+            """
+            https://github.com/huggingface/optimum-onnx/blob/
+            c123e8f4fab61b54a8e0e31ce74462bcacca576e/optimum/exporters/onnx/model_patcher.py#L362-L365
+            """
+            batch_indices = batch_indices[:, None, None, None]
+            head_indices = head_indices[None, :, None, None]
+            q_indices = q_indices[None, None, :, None]
+            kv_indices = kv_indices[None, None, None, :]
+            return batch_indices, head_indices, q_indices, kv_indices
 
     def patched__vmap_for_bhqkv(mask_function: Callable, bh_indices: bool = True) -> Callable:
         """manual patch for function ``transformers.masking_utils._vmap_for_bhqkv``."""

@@ -606,6 +606,7 @@ def _patch_transformers(
         masking_utils
         and patch_transformers_list.patch_masking_utils
         and hasattr(masking_utils, "sdpa_mask")
+        and f_transformers_sdpa_mask is None
     ):
         if verbose:
             print("[torch_export_patches] patches transformers.masking_utils.sdpa_mask (3)")
