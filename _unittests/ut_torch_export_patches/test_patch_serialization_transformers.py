@@ -275,13 +275,19 @@ class TestPatchSerialization(ExtTestCase):
     @unittest.skipIf(make_sliding_window_cache, "transformers<5")
     def test_sliding_window_cache_flatten5(self):
         cache = make_dynamic_cache(
-            [(torch.rand((4, 4, 4, 4)), torch.rand((4, 4, 4, 4)))],
+            [
+                (torch.rand((4, 4, 4, 4)), torch.rand((4, 4, 4, 4))),
+                (torch.rand((4, 4, 4, 4)), torch.rand((4, 4, 4, 4))),
+            ],
             cls_layers="DynamicSlidingWindowLayer",
+            cls_kwargs=[dict(sliding_window=11), dict(sliding_window=12)],
         )
+        self.assertEqual(cache.layers[0].sliding_window, 11)
+        self.assertEqual(cache.layers[1].sliding_window, 12)
         with torch_export_patches(patch_transformers=True):
             flat, _spec = torch.utils._pytree.tree_flatten(cache)
             self.assertEqual(
-                "#2[T1s4x4x4x4,T1s4x4x4x4]",
+                "#4[T1s4x4x4x4,T1s4x4x4x4,T1s4x4x4x4,T1s4x4x4x4]",
                 self.string_type(flat, with_shape=True),
             )
             cache2 = torch.utils._pytree.tree_unflatten(flat, _spec)
@@ -292,6 +298,8 @@ class TestPatchSerialization(ExtTestCase):
             self.assertEqual(
                 [type(lay) for lay in cache.layers], [type(lay) for lay in cache2.layers]
             )
+            self.assertEqual(cache2.layers[0].sliding_window, 11)
+            self.assertEqual(cache2.layers[1].sliding_window, 12)
 
     @ignore_warnings(UserWarning)
     @requires_torch("2.7.99")

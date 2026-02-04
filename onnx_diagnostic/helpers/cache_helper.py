@@ -4,6 +4,19 @@ import torch
 import transformers
 import transformers.cache_utils
 
+KWARGS_LAYER = {}
+if hasattr(transformers.cache_utils, "DynamicSlidingWindowLayer"):
+    KWARGS_LAYER.update(
+        {
+            transformers.cache_utils.DynamicSlidingWindowLayer: lambda tensor: {
+                "sliding_window": tensor.shape[2]
+            },
+            transformers.cache_utils.StaticSlidingWindowLayer: lambda tensor: {
+                "sliding_window": tensor.shape[2]
+            },
+        }
+    )
+
 
 class CacheKeyValue:
     """
@@ -185,6 +198,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
     def make_dynamic_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
         cls_layers: Optional[Union[str, List[type]]] = None,
+        cls_kwargs: Optional[Union[Dict[str, int], List[Dict[str, int]]]] = None,
     ) -> transformers.cache_utils.DynamicCache:
         """
         Creates an instance of :class:`transformers.cache_utils.DynamicCache`.
@@ -194,6 +208,8 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         :param cls_layers: to select the appropriate class to use on each layer,
             if specified, sliding_window is ignored, it can be a string
             if all layers are expected to follow the same class
+        :param cls_kwargs: arguments used to build a specific layer,
+            such as ``sliding_window`` for ``DynamicSlidingWindowLayer``
         :return: :class:`transformers.cache_utils.DynamicCache`
 
         Example:
@@ -227,35 +243,33 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         if isinstance(cls_layers, str):
             assert hasattr(
                 transformers.cache_utils, cls_layers
-            ), f"Unable to find class {cls_layers!r} in transformers.cache_utils"
-            cls_kwargs = {}
-            cls_layer = getattr(transformers.cache_utils, cls_layers)
-            if cls_layers == "DynamicSlidingWindowLayer":
-                cls_kwargs["sliding_window"] = key_value_pairs[0][0].shape[2]
-                assert isinstance(
-                    cls_kwargs["sliding_window"], int
-                ), f"sliding_window must be an integer but shape={key_value_pairs[0][0].shape}"
-        elif cls_layers is not None and isinstance(cls_layers, list):
+            ), f"Missing layer class {cls_layers!r}"
+            cls_layers = getattr(transformers.cache_utils, cls_layers)
+        if cls_layers and not isinstance(cls_layers, list):
+            cls_layers = [cls_layers for _ in key_value_pairs]
+        if cls_layers is not None and isinstance(cls_layers, list):
             assert len(cls_layers) == len(key_value_pairs), (
                 f"Length mismatch {len(key_value_pairs)} expected but "
                 f"{len(cls_layers)} layer types are given."
             )
-            cls_kwargs = [{} for _kv in key_value_pairs]  # type: ignore[assignment]
+            if cls_kwargs is None:
+                cls_kwargs = [{} for _kv in key_value_pairs]  # type: ignore[assignment]
+            assert len(cls_layers) == len(cls_kwargs), (
+                f"Length mismatch {len(cls_kwargs)} expected but "
+                f"{len(cls_layers)} layer types are given, "
+                f"cls_layers={cls_layers}, cls_kwargs={cls_kwargs}"
+            )
             cls_layer = None
-            if (
-                hasattr(transformers.cache_utils, "DynamicSlidingWindowLayer")
-                and transformers.cache_utils.DynamicSlidingWindowLayer in cls_layers
-            ):
-                assert (
-                    key_value_pairs and key_value_pairs[0]
-                ), f"not implemented for type(key_value_pairs[0])={type(key_value_pairs[0])}"
-                for kv, clsy, kws in zip(key_value_pairs, cls_layers, cls_kwargs):
-                    if clsy == transformers.cache_utils.DynamicSlidingWindowLayer:
-                        kws["sliding_window"] = kv[0].shape[2]  # type: ignore[index]
-                        assert isinstance(
-                            kws["sliding_window"], int  # type: ignore[index]
-                        ), f"sliding_window must be an integer but shape={kv[0].shape}"
+            assert (
+                key_value_pairs and key_value_pairs[0]
+            ), f"not implemented for type(key_value_pairs[0])={type(key_value_pairs[0])}"
+            for kv, clsy, kws in zip(key_value_pairs, cls_layers, cls_kwargs):
+                default_values = KWARGS_LAYER.get(clsy, lambda tensor: {})(kv[0])
+                for k, v in default_values.items():
+                    if k not in kws:
+                        kws[k] = v
         else:
+            assert cls_kwargs is None, "cls_layers must be a list if cls_kwargs is specified"
             assert (
                 cls_layers is None
             ), f"cls_layers must be list or a string but it is {cls_layers}"
@@ -267,6 +281,10 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
             )
 
         if cls_layer is not None:
+            assert isinstance(cls_kwargs, dict), (
+                f"one layer = one set of arguments, cls_layer={cls_layer}, "
+                f"cls_kwargs={cls_kwargs}"
+            )
             cls_layers = [cls_layer for _ in key_value_pairs]
             cls_kwargs = (
                 cls_kwargs  # type: ignore[assignment]

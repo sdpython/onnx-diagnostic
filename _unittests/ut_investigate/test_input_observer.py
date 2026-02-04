@@ -906,12 +906,16 @@ class TestInputObserver(ExtTestCase):
                 attention_mask=torch.ones((1, 283), dtype=torch.int64),
                 position_ids=torch.ones((1, 1), dtype=torch.int64),
                 past_key_values=torch.rand((1, 1, 282, 32)),
+                token_type_ids=torch.ones((1, 1), dtype=torch.int64),
+                cache_position=torch.ones((1,), dtype=torch.int64),
             ),
             dict(
                 input_ids=torch.ones((1, 1), dtype=torch.int64),
                 attention_mask=torch.ones((1, 284), dtype=torch.int64),
                 position_ids=torch.ones((1, 1), dtype=torch.int64),
                 past_key_values=torch.rand((1, 1, 283, 32)),
+                token_type_ids=torch.ones((1, 1), dtype=torch.int64),
+                cache_position=torch.ones((1,), dtype=torch.int64),
             ),
         ]
 
