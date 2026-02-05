@@ -144,6 +144,7 @@ nitpick_ignore = [
     ("py:class", "torch.utils._pytree.Context"),
     ("py:class", "torch.utils._pytree.KeyEntry"),
     ("py:class", "torch.utils._pytree.TreeSpec"),
+    ("py:class", "torch.utils._sympy.value_ranges.ValueRanges"),
     ("py:class", "transformers.BartForConditionalGeneration"),
     ("py:class", "transformers.LlamaConfig"),
     ("py:class", "transformers.cache_utils.Cache"),

@@ -428,6 +428,16 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                 new_kwargs[k] = v
         return new_kwargs
 
+    def is_empty_cache(self, cache):
+        if cache.__class__.__name__ == "DynamicCache" and hasattr(cache, "layers"):
+            if len(cache.layers) == 1 and cache.layers[0].keys is None:
+                return True
+            if len(cache.layers) == 0:
+                return True
+        if cache is None:
+            return True
+        return False
+
     def forward(self, *args, **kwargs):
         if not self._export_done:
             inp_args = args
@@ -443,6 +453,7 @@ class WrapperToExportMethodToOnnx(torch.nn.Module):
                     if v is not None
                     and (not self.skip_kwargs_names or k not in self.skip_kwargs_names)
                     and not isinstance(v, (bool, int, float))
+                    and not self.is_empty_cache(v)
                 }
             )
             inp_args, inp_kwargs = torch_deepcopy((inp_args, inp_kwargs))

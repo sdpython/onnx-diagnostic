@@ -832,4 +832,13 @@ def finalize_cache(cache: transformers.cache_utils.Cache) -> transformers.cache_
         # This is used to expand the cache when it does not contains enough layers.
         # This is needed since transformers>4.55.3
         cache.layer_class_to_replicate = cache.layers[0].__class__
+    assert (
+        not hasattr(cache, "layers")
+        or len(cache.layers) != 1
+        or cache.layers[0].keys is not None
+    ), (
+        f"Size mismatch between {len(cache.layers)=}, "
+        f"first key={cache.layers[0].keys}, "  # type: ignore[attr-defined]
+        f"first value={cache.layers[0].values}"  # type: ignore[attr-defined]
+    )
     return cache

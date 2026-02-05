@@ -834,7 +834,7 @@ class ModelInputs:
         """Guesses the dynamic shapes for one argument."""
         if len(objs) == 0:
             return None
-        set_types = set(type(o) for o in objs)
+        set_types = set(type(o) for o in objs if o is not None)
         assert (
             len(set_types) == 1
         ), f"Unexpected variety of input type {set_types}{msg() if msg else ''})"

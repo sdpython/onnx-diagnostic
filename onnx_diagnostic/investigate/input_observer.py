@@ -32,7 +32,7 @@ def _flatten_unflatten_for_dynamic_shapes(
             like replace them by a shape
 
     Returns:
-        the serialized object
+        the flattened object
     """
     if isinstance(obj, torch.Tensor):
         return change_function(obj) if change_function else obj
@@ -104,14 +104,22 @@ def _infer_dynamic_dimensions(
 class InputCandidate:
     """Retains one set of inputs given to the forward method or any
     other method the class :class:`InputObserver` is stealing from.
+    Any class is allowed as long as it can be flattened.
 
     Args:
-        args: Positional arguments.
-        kwargs: Optional arguments.
-        clone: Clone the inputs before storing them. Some tensors
+        args:
+            Positional arguments.
+        kwargs:
+            Optional arguments.
+        clone:
+            Clones the inputs before storing them. Some tensors
             may be modified inplace, the original value must be retained.
-        cst_kwargs: Any optional arguments constant over multiple calls.
+        cst_kwargs:
+            Any optional arguments constant over multiple calls.
             int, float, str, bool values must be stored here.
+
+    The constructor flattens the received arguments.
+    Any necessary flattening function should have been registered first.
     """
 
     def __init__(
@@ -671,18 +679,20 @@ class InputObserver:
     >>> )
 
     With LLM:
+
     >>> input_observer = InputObserver()
     >>> with input_observer(model):
     >>>     model.generate(input_ids)
     >>> ep = torch.export.export(  # or torch.onnx.export
     >>>     model,
-    >>>     ()
+    >>>     (),
     >>>     kwargs=input_observer.infer_arguments(),
     >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
     >>> )
 
     Examples can be found in :ref:`l-plot-tiny-llm-export-input-observer`,
-    :ref:`l-plot-whisper-tiny-export-input-observer`.
+    :ref:`l-plot-whisper-tiny-export-input-observer`,
+    :ref:`l-plot-gemma3-tiny-export-input-observer`.
     """
 
     def __init__(self, missing: dict[str, Any] | None = None):
@@ -865,17 +875,26 @@ class InputObserver:
         with the saved onnx model.
 
         Args:
-            onnx_model: ONNX Model to verify.
-            atol: Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
-            rtol: Relative tolerance.
-            hist: Thresholds, the function determines the number of discrepancies
+            onnx_model:
+                ONNX Model to verify.
+            atol:
+                Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
+            rtol:
+                Relative tolerance.
+            hist:
+                Thresholds, the function determines the number of discrepancies
                 above these thresholds.
-            progress_bar: Shows a progress bar (requires :epkg:`tqdm`).
-            include_io: Shows inputs/outputs shapes in the summary
+            progress_bar:
+                Shows a progress bar (requires :epkg:`tqdm`).
+            include_io:
+                Shows inputs/outputs shapes in the summary
                 returned by this function.
 
         Returns:
             A list of dictionaries, ready to be consumed by a dataframe.
+
+        The function catches exceptions, it shows the error in the returned
+        summary.
         """
         sess = OnnxruntimeEvaluator(onnx_model, whole=True)
         input_names = sess.input_names
