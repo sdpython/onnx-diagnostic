@@ -166,12 +166,13 @@ if patch_masking_utils:
             padding_mask, q_length, kv_length, kv_offset, local_size
         ):
             return None
-        if (
-            allow_is_bidirectional_skip
-            and _ignore_bidirectional_mask_sdpa
-            and _ignore_bidirectional_mask_sdpa(padding_mask, kv_length, kv_offset)
-        ):
-            return None
+        if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa:
+            # transformers<=5.0: 1 parameter, 3 for transformers>5.0
+            n_parameters = len(inspect.signature(_ignore_bidirectional_mask_sdpa).parameters)
+            if _ignore_bidirectional_mask_sdpa(
+                *[padding_mask, kv_length, kv_offset][:n_parameters]
+            ):
+                return None
 
         if mask_function is bidirectional_mask_function:
             if padding_mask is not None:
