@@ -691,7 +691,8 @@ class InputObserver:
     >>> )
 
     Examples can be found in :ref:`l-plot-tiny-llm-export-input-observer`,
-    :ref:`l-plot-whisper-tiny-export-input-observer`.
+    :ref:`l-plot-whisper-tiny-export-input-observer`,
+    :ref:`l-plot-gemma3-tiny-export-input-observer`.
     """
 
     def __init__(self, missing: dict[str, Any] | None = None):
