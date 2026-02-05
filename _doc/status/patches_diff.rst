@@ -62,7 +62,9 @@ Those two versions leads to the following list of patches.
     ):
         pass
     for patch in details.patched:
-        print(f"* {patch.family} - {getattr(patch.function_to_patch, '__name__', patch.function_to_patch)}")
+        if patch.function_to_patch == patch.patch:
+            continue
+        print(f"* :ref:`{patch.refid}`")
     print()
     print()
     for patch in details.patched:
