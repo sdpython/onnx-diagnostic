@@ -240,12 +240,9 @@ The function replaces dynamic dimensions defined as strings by
 Older versions
 ==============
 
+* `0.9.1 <../v0.9.1/index.html>`_
 * `0.9.0 <../v0.9.0/index.html>`_
 * `0.8.11 <../v0.8.11/index.html>`_
-* `0.7.16 <../v0.7.16/index.html>`_
-* `0.6.3 <../v0.6.3/index.html>`_
-* `0.5.0 <../v0.5.0/index.html>`_
-* `0.4.4 <../v0.4.4/index.html>`_
 
 The documentation was updated on:
 
