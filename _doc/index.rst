@@ -54,6 +54,7 @@ It also implements tools to investigate, validate exported models (ExportedProgr
     api/index
     cmds/index
     auto_examples/index
+    auto_final/index
     auto_recipes/index
     auto_technical/index
 
