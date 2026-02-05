@@ -838,7 +838,7 @@ def finalize_cache(cache: transformers.cache_utils.Cache) -> transformers.cache_
         or cache.layers[0].keys is not None
     ), (
         f"Size mismatch between {len(cache.layers)=}, "
-        f"first key={cache.layers[0].keys}, "
-        f"first value={cache.layers[0].values}"
+        f"first key={cache.layers[0].keys}, "  # type: ignore[attr-defined]
+        f"first value={cache.layers[0].values}"  # type: ignore[attr-defined]
     )
     return cache
