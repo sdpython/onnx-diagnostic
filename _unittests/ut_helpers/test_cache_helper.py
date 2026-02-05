@@ -374,6 +374,28 @@ class TestCacheHelpers(ExtTestCase):
         self.assertEqual(0, max_diff(cache, cache)["abs"])
 
     @requires_transformers("4.57")
+    def test_make_dynamic_cache_2_types_kwargs(self):
+        cache = make_dynamic_cache(
+            [
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+                (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
+            ],
+            cls_layers=[
+                transformers.cache_utils.DynamicLayer,
+                transformers.cache_utils.DynamicSlidingWindowLayer,
+            ],
+            cls_kwargs=[{}, dict(sliding_window=12)],
+        )
+        text = self.string_type(cache, with_shape=True)
+        self.assertEqual(
+            "DynamicCache(DynamicLayer(T1s4x5x6x7, T1s4x5x6x7), "
+            "DynamicSlidingWindowLayer(T1s4x5x6x7, T1s4x5x6x7))",
+            text,
+        )
+        self.assertEqual(0, max_diff(cache, cache)["abs"])
+        self.assertEqual(cache.layers[1].sliding_window, 12)
+
+    @requires_transformers("4.57")
     def test_unflatten_flatten_mixed_layers(self):
         with torch_export_patches(patch_transformers=True):
             c2 = make_dynamic_cache(

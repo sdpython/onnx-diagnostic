@@ -9,6 +9,7 @@ for model `tiny-random/gemma-3 <https://huggingface.co/tiny-random/gemma-3>`_.
 """
 
 import pandas
+import torch
 from onnx_diagnostic import doc
 from onnx_diagnostic.helpers import string_type
 from onnx_diagnostic.export.api import to_onnx
@@ -25,9 +26,10 @@ model_id = "tiny-random/gemma-3"
 pipe = pipeline(
     "image-text-to-text",
     model=model_id,
-    device="cuda",
+    device="cpu",
     trust_remote_code=True,
     max_new_tokens=3,
+    dtype=torch.float16,
 )
 messages = [
     {"role": "system", "content": [{"type": "text", "text": "You are a helpful assistant."}]},
@@ -50,7 +52,9 @@ print("model type:", type(pipe.model))
 
 # %%
 # Captures inputs and outputs for the model.
-observer = InputObserver()
+observer = InputObserver(
+    missing=dict(pixel_values=torch.empty((0, 3, 896, 896), dtype=torch.float16))
+)
 with (
     register_additional_serialization_functions(patch_transformers=True),
     observer(pipe.model),
@@ -76,7 +80,7 @@ for candidate in observer.info.inputs:
 
 
 filename = "plot_export_gemma3_tiny_input_observer.onnx"
-with torch_export_patches(patch_transformers=True):
+with torch_export_patches(patch_transformers=True, patch_torch=True, stop_if_static=2):
     to_onnx(
         pipe.model,
         args=(),
@@ -88,8 +92,16 @@ with torch_export_patches(patch_transformers=True):
 
 # %%
 # Let's measure the discrepancies.
-data = observer.check_discrepancies(filename, progress_bar=True)
-print(pandas.DataFrame(data))
+data = observer.check_discrepancies(filename, progress_bar=True, atol=1e-2, include_io=True)
+df = pandas.DataFrame(data)
+df.to_excel("plot_export_gemma3_tiny_input_observer.xlsx")
+print(df)
+
+# %%
+# Let's show the errors.
+for row in data:
+    if not row["SUCCESS"] and "error" in row:
+        print(row["error"])
 
 
 # %%

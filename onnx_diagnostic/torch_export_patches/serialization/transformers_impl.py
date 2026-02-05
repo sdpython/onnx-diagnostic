@@ -24,10 +24,12 @@ from ...helpers.cache_helper import make_dynamic_cache, make_static_cache, Cache
 from . import make_serialization_function_for_dataclass
 
 SUPPORTED_DATACLASSES: Set[type] = set()
+
 WRONG_REGISTRATIONS = {
     DynamicCache: "4.50",
     BaseModelOutput: None,
 }
+
 SHORTEN_LAYER_NAMES = {
     "DynamicLayer": "D",
     "DynamicSlidingWindowLayer": "W",
@@ -37,6 +39,20 @@ SHORTEN_LAYER_NAMES = {
     "W": "DynamicSlidingWindowLayer",
     "S": "StaticLayer",
     "X": "StaticSlidingWindowLayer",
+}
+
+KWARGS_LAYER_NAMES = {
+    "DynamicLayer": lambda layer: "",
+    "DynamicSlidingWindowLayer": lambda layer: str(layer.sliding_window),
+    "StaticLayer": lambda layer: "",
+    "StaticSlidingWindowLayer": lambda layer: str(layer.sliding_window),
+}
+
+PARSE_LAYER_NAMES = {
+    "DynamicLayer": lambda skw: {},
+    "DynamicSlidingWindowLayer": lambda skw: dict(sliding_window=int(skw[1:])),
+    "StaticLayer": lambda skw: {},
+    "StaticSlidingWindowLayer": lambda skw: dict(sliding_window=int(skw[1:])),
 }
 
 
@@ -59,7 +75,11 @@ def _flatten_key_value_cache(cache: Cache) -> Tuple[List[Any], torch.utils._pytr
     keys = []
     for i in range(len(ca.key_cache)):
         letter = SHORTEN_LAYER_NAMES[ca.cls_layers[i].__name__]
-        keys.extend([f"key_{letter}{i}", f"value_{letter}{i}"])
+        if hasattr(cache, "layers"):
+            kwargs = KWARGS_LAYER_NAMES[ca.cls_layers[i].__name__](cache.layers[i])
+        else:
+            kwargs = ""
+        keys.extend([f"key_{letter}{kwargs}_{i}", f"value_{letter}{kwargs}_{i}"])
     return flat, keys
 
 
@@ -86,10 +106,16 @@ def _unflatten_cache(
         res = make_cache(list(zip(values[::2], values[1::2])))
     else:
         cls_layer_names = [SHORTEN_LAYER_NAMES[name.split("_")[1][0]] for name in context][::2]
+        cls_kwargs = [
+            PARSE_LAYER_NAMES[SHORTEN_LAYER_NAMES[name.split("_")[1][0]]](name.split("_")[1])
+            for name in context
+        ][::2]
         cls_layers = [
             getattr(transformers.cache_utils, cls_name) for cls_name in cls_layer_names
         ]
-        res = make_cache(list(zip(values[::2], values[1::2])), cls_layers=cls_layers)
+        res = make_cache(
+            list(zip(values[::2], values[1::2])), cls_layers=cls_layers, cls_kwargs=cls_kwargs
+        )
 
     assert output_type is None or isinstance(
         res, output_type

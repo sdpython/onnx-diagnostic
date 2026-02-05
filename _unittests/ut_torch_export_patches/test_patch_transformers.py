@@ -66,6 +66,40 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqualArray(expected, got)
 
     @requires_transformers("4.99")
+    def test_sdpa_mask_patched(self):
+        sdpa_mask = transformers.masking_utils.sdpa_mask
+        patched_sdpa_mask = patch_transformers.patched_sdpa_mask
+        kwargs = {
+            "batch_size": 1,
+            "cache_position": torch.tensor([3], dtype=torch.int64),
+            "kv_length": 4,
+            "kv_offset": 0,
+            "mask_function": transformers.masking_utils.causal_mask_function,
+            "attention_mask": torch.tensor([[True, True, True, True]]),
+            "local_size": None,
+            "allow_is_causal_skip": True,
+            "allow_is_bidirectional_skip": False,
+        }
+        expected = sdpa_mask(**kwargs)
+        got = patched_sdpa_mask(**kwargs)
+        self.assertEqual(expected, got)
+
+        kwargs = {
+            "batch_size": 1,
+            "cache_position": torch.tensor([3], dtype=torch.int64),
+            "kv_length": 4,
+            "kv_offset": 0,
+            "mask_function": transformers.masking_utils.causal_mask_function,
+            "attention_mask": torch.tensor([[True, True, True, True]]),
+            "local_size": None,
+            "allow_is_causal_skip": False,
+            "allow_is_bidirectional_skip": False,
+        }
+        expected = sdpa_mask(**kwargs)
+        got = patched_sdpa_mask(**kwargs)
+        self.assertEqualArray(expected, got)
+
+    @requires_transformers("4.99")
     def test_sdpa_mask_recent_torch_is_running(self):
         def _copy_vmap_for_bhqkv(mask_function, bh_indices=True):
             dimensions = [(None, None, None, 0), (None, None, 0, None)]

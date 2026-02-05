@@ -128,6 +128,7 @@ class InputCandidate:
         self._position_to_args_kwargs: list[int | str] | None = None
         self._n_tensors_for_args_kwargs: dict[int | str, int] | None = None
         self.cst_kwargs = cst_kwargs.copy()
+        assert "use_cache" not in self.cst_kwargs
 
         if clone:
             self.flat_list = [
@@ -285,12 +286,23 @@ class InputObserverInfo:
             to be the same in the ordered dictionaries `add_inputs` receive.
         default_values: Default values defined by the signature of the function,
             any value equal to that is ignore to simplify the export.
+        missing: If a named argument (in kwargs) is missing,
+            a default value will be taken in this dictionary,
+            this is used when after the prefill step, an argument
+            disappears (such as `pixel_values`) and another one
+            is added (such as `past_key_values`).
+            The values are only to infer dynamic shapes and arguments,
+            not to run the model.
     """
 
     def __init__(
-        self, signature_names: list[str], default_values: dict[str, int | bool | str | float]
+        self,
+        signature_names: list[str],
+        default_values: dict[str, int | bool | str | float],
+        missing: dict[str, Any],
     ):
         self.default_values = default_values
+        self.missing = missing
         self.inputs: list[InputCandidate] = []
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_outputs: list[list[torch.Tensor | None]] = []
@@ -316,12 +328,18 @@ class InputObserverInfo:
             if k in self.signature_names
             and isinstance(v, (int, float, bool, str))
             and v != self.default_values.get(k, None)
+            and self.default_values.get(k, None) is not None
         }
         kwargs = {
             k: v
             for k, v in kwargs.items()
             if v is not None and not isinstance(v, (int, float, bool))
         }
+
+        # adds missing attributes
+        for k, v in self.missing.items():
+            if k not in kwargs:
+                kwargs[k] = v
 
         # kwargs may come in a different ordeer teach.
         # dictionaries are ordered and torch.export.export expects
@@ -564,7 +582,7 @@ class InputObserverInfo:
             dynamic_shapes = self.infer_dynamic_shapes(return_flat=True)
             # type checking
             assert isinstance(dynamic_shapes, tuple)
-            aligned_flat_list = aligned_flat_list.copy()
+            aligned_flat_list = list(aligned_flat_list)
             for index in range(len(aligned_flat_list)):
                 if aligned_flat_list[index] is not None:
                     continue
@@ -631,6 +649,15 @@ class InputObserver:
     This information is used to infer dynamic shapes and
     export arguments.
 
+    Args:
+        missing: If a named argument (in kwargs) is missing,
+            a default value will be taken in this dictionary,
+            this is used when after the prefill step, an argument
+            disappears (such as `pixel_values`) and another one
+            is added (such as `past_key_values`).
+            The values are only to infer dynamic shapes and arguments,
+            not to run the model.
+
     Examples
     --------
     >>> input_observer = InputObserver()
@@ -658,8 +685,9 @@ class InputObserver:
     :ref:`l-plot-whisper-tiny-export-input-observer`.
     """
 
-    def __init__(self):
+    def __init__(self, missing: dict[str, Any] | None = None):
         self.info: InputObserverInfo | None = None  # type: ignore[annotation-unchecked]
+        self.missing = missing or {}
 
     def _replaced_method(
         self,
@@ -715,6 +743,7 @@ class InputObserver:
                     if p.default != inspect.Parameter.empty
                     and isinstance(p.default, (int, bool, str, float))
                 },
+                missing=self.missing,
             )
         n_already_stored = len(self.info)
         lambda_method = lambda *args, _cm=captured_method, _snc=(  # noqa: E731
@@ -830,22 +859,20 @@ class InputObserver:
         rtol: float = 0.1,
         hist=(0.1, 0.01),
         progress_bar: bool = False,
-    ) -> list[dict[str, str | int | float]]:
+        include_io: bool = True,
+    ) -> list[dict[str, str | int | float | bool]]:
         """Computes the discrepancies between the saved inputs and outputs
         with the saved onnx model.
 
         Args:
-            onnx_model:
-                ONNX Model to verify.
-            atol:
-                Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
-            rtol:
-                Relative tolerance.
-            hist:
-                Thresholds, the function determines the number of discrepancies
+            onnx_model: ONNX Model to verify.
+            atol: Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
+            rtol: Relative tolerance.
+            hist: Thresholds, the function determines the number of discrepancies
                 above these thresholds.
-            progress_bar:
-                Shows a progress bar (requires :epkg:`tqdm`).
+            progress_bar: Shows a progress bar (requires :epkg:`tqdm`).
+            include_io: Shows inputs/outputs shapes in the summary
+                returned by this function.
 
         Returns:
             A list of dictionaries, ready to be consumed by a dataframe.
@@ -890,9 +917,13 @@ class InputObserver:
 
             duration = time.perf_counter() - begin
             if error:
-                diff: dict[str, Any] = dict(error=error, SUCCESS=False)
+                diff: dict[str, str | int | float | bool] = dict(error=error, SUCCESS=False)
             else:
-                diff = max_diff(outputs, ort_outputs, hist=lhist)
+                # The last output may be empty and torch could skip it.
+                if isinstance(outputs, list) and isinstance(ort_outputs, list):
+                    while len(ort_outputs) > len(outputs) and ort_outputs[-1].numel() == 0:
+                        ort_outputs.pop()
+                diff = max_diff(outputs, ort_outputs, hist=lhist)  # type: ignore[assignment]
                 if "rep" in diff and isinstance(diff["rep"], dict):
                     diff.update(diff["rep"])
                     del diff["rep"]
@@ -912,5 +943,9 @@ class InputObserver:
                     n_empty=n_empty,
                 )
             )
+            if include_io:
+                diff["inputs"] = string_type(feeds, with_shape=True)
+                diff["outputs_torch"] = string_type(outputs, with_shape=True)
+                diff["outputs_ort"] = string_type(ort_outputs, with_shape=True)
             data.append(diff)
         return data
