@@ -28,7 +28,14 @@ model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 
 
 def generate_text(
-    prompt, model, tokenizer, max_length=50, temperature=1, top_k=50, top_p=0.95
+    prompt,
+    model,
+    tokenizer,
+    max_length=50,
+    temperature=1,
+    top_k=50,
+    top_p=0.95,
+    do_sample=False,
 ):
     inputs = tokenizer(prompt, return_tensors="pt")
     input_ids = inputs["input_ids"]
@@ -41,7 +48,7 @@ def generate_text(
         temperature=temperature,
         top_k=top_k,
         top_p=top_p,
-        do_sample=True,
+        do_sample=do_sample,
     )
 
     generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)

@@ -671,12 +671,13 @@ class InputObserver:
     >>> )
 
     With LLM:
+
     >>> input_observer = InputObserver()
     >>> with input_observer(model):
     >>>     model.generate(input_ids)
     >>> ep = torch.export.export(  # or torch.onnx.export
     >>>     model,
-    >>>     ()
+    >>>     (),
     >>>     kwargs=input_observer.infer_arguments(),
     >>>     dynamic_shapes.input_observer.infer_dynamic_shapes(),
     >>> )

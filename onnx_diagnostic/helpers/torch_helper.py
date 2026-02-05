@@ -851,9 +851,14 @@ def torch_deepcopy(value: Any) -> Any:
         from .cache_helper import CacheKeyValue
 
         ca = CacheKeyValue(value)
-        return make_dynamic_cache(
-            torch_deepcopy(list(zip(ca.key_cache, ca.value_cache))), cls_layers=ca.cls_layers
+        pairs = list(zip(ca.key_cache, ca.value_cache))
+        assert not hasattr(value, "layers") or len(value.layers) == len(pairs), (
+            f"Size mismatch between {len(value.layers)=} and {len(pairs)=}. "
+            f"value={string_type(value, with_shape=True)}, "
+            f"first key={value.layers[0].keys}, "
+            f"first value={value.layers[0].values}"
         )
+        return make_dynamic_cache(torch_deepcopy(pairs), cls_layers=ca.cls_layers)
     if value.__class__.__name__ == "StaticCache":
         from .cache_helper import CacheKeyValue
 
