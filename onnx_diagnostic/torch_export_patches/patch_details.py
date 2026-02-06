@@ -120,7 +120,13 @@ class PatchInfo:
     @property
     def refid(self) -> str:
         kind = self.family or ""
-        patch_name = self.function_name(self.patch)
+        patch_name = (
+            self.function_name(self.patch)
+            .replace(".", "-")
+            .replace("/", "-")
+            .replace(">", "")
+            .replace("<", "")
+        )
         return f"patch-{kind}-{patch_name}"
 
     def format_diff(self, format: str = "raw") -> str:
@@ -155,13 +161,14 @@ class PatchInfo:
             else self.function_name(self.function_to_patch)
         )
         patch_name = self.function_name(self.patch)
+        kind = kind.replace("_PATCHED_", "")
         title = f"{kind}{function_to_pach_name} -> {patch_name}"
         if format == "raw":
             return f"{title}\n{diff}"
 
         rows = [
             "",
-            f".. _{self.refid}",
+            f".. _{self.refid}:",
             "",
             title,
             "=" * len(title),

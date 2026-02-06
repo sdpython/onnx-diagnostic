@@ -17,7 +17,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         python: ['3.10', '3.11', '3.12', '3.13']
-        transformers: ['4.48.3', '4.51.3', '4.55.4', '4.57.6', '5.0', 'main']
+        transformers: ['4.48.3', '4.51.3', '4.55.4', '4.57.6', '5.1.0', 'main']
         torch: ['2.10', 'main']
         exclude:
           # 3.10 - torch
@@ -29,7 +29,7 @@ jobs:
           - python: '3.10'
             transformers: '4.57.6'
           - python: '3.10'
-            transformers: '5.0'
+            transformers: '5.1.0'
           - python: '3.10'
             transformers: 'main'
           # 3.11 - torch
@@ -41,7 +41,7 @@ jobs:
           - python: '3.11'
             transformers: '4.57.6'
           - python: '3.11'
-            transformers: '5.0'
+            transformers: '5.1.0'
           - python: '3.11'
             transformers: 'main'
           # 3.13 - torch
