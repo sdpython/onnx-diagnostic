@@ -141,7 +141,7 @@ backend_test.exclude("test_gradient")
 
 backend_test.exclude("(test_adagrad|test_adam|test_add_uint8)")
 
-if pv.Version(onnxruntime.__version__) <= pv.Version("1.24"):
+if pv.Version(onnxruntime.__version__) <= pv.Version("1.25"):
     backend_test.exclude("(test_attention_4d_with|test_attention_4d_gqa)")
 
 

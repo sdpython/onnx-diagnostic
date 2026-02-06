@@ -299,7 +299,7 @@ if onnx_opset_version() <= 26:
     )
 
 
-if pv.Version(onnxruntime.__version__) <= pv.Version("1.24"):
+if pv.Version(onnxruntime.__version__) <= pv.Version("1.25"):
     backend_test.exclude("(test_attention_4d_with|test_attention_4d_gqa)")
 
 # import all test cases at global scope to make them visible to python.unittest
