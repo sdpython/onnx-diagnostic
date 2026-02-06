@@ -4,6 +4,8 @@ Change Logs
 0.9.1
 +++++
 
+* :pr:`408`: fix torch_deepcopy for empty DynamicCache and transformers==5.1.0
+
 0.9.0
 +++++
 
