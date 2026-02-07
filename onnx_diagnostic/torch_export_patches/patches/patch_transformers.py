@@ -42,6 +42,12 @@ if patch_masking_utils:
         patched_sdpa_mask_recent_torch,
     )
 
+from ._patch_transformers_output_capturing import patch_output_capturing
+
+if patch_output_capturing:
+    from ._patch_transformers_output_capturing import patched_CompileableContextVar
+
+
 # transformers models dependent patches
 
 if _has_transformers("4.51"):
