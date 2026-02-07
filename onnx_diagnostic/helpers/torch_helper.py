@@ -850,6 +850,15 @@ def torch_deepcopy(value: Any) -> Any:
     if value.__class__.__name__ == "DynamicCache":
         from .cache_helper import CacheKeyValue
 
+        if (
+            hasattr(value, "layers")
+            and len(value.layers) == 1
+            and value.layers[0].keys is None
+        ):
+            import transformers
+
+            return transformers.cache_utils.DynamicCache(None)
+
         ca = CacheKeyValue(value)
         pairs = list(zip(ca.key_cache, ca.value_cache))
         assert not hasattr(value, "layers") or len(value.layers) == len(pairs), (

@@ -61,11 +61,21 @@ Those two versions leads to the following list of patches.
         patch_details=details,
     ):
         pass
+    done = set()
     for patch in details.patched:
-        print(f"* {patch.family} - {getattr(patch.function_to_patch, '__name__', patch.function_to_patch)}")
+        if patch.function_to_patch == patch.patch:
+            continue
+        if patch.refid in done:
+            continue
+        done.add(patch.refid)
+        print(f"* :ref:`{patch.refid}`")
     print()
     print()
+    done = set()
     for patch in details.patched:
+        if patch.refid in done:
+            continue
+        done.add(patch.refid)
         if patch.function_to_patch == patch.patch:
             continue
         rst = patch.format_diff(format="rst")

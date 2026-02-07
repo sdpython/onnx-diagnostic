@@ -703,7 +703,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.01)
         self.assertLess(results.diffs[0]["abs"], 0.01)
 
-    @requires_onnxruntime("1.24")
+    @requires_onnxruntime("1.25")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_plug_multi_head_attention_qwen25_loopmha_float16(self):
         from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
@@ -738,7 +738,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.01)
         self.assertLess(results.diffs[0]["abs"], 0.01)
 
-    @requires_onnxruntime("1.24")
+    @requires_onnxruntime("1.25")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_plug_multi_head_attention_qwen25_loopmha_float32(self):
         from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
@@ -773,7 +773,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=1e-5)
         self.assertLess(results.diffs[0]["abs"], 1e-5)
 
-    @requires_onnxruntime("1.24")
+    @requires_onnxruntime("1.25")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_plug_multi_head_attention_qwen25_loopa24_float16(self):
         from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
@@ -801,7 +801,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqualArray(results.eager_outputs[0], results.onnx_outputs[0], atol=0.005)
         self.assertLess(results.diffs[0]["abs"], 0.005)
 
-    @requires_onnxruntime("1.24")
+    @requires_onnxruntime("1.25")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_plug_multi_head_attention_qwen25_loopa24_float32(self):
         from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (

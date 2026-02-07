@@ -71,10 +71,10 @@ def patch_module_or_classes(
     if isinstance(mod, list):
         to_patch = mod
         name = "list"
-        list_name = "auto/list"
+        list_name = "_PATCHED_list"
     else:
         name, to_patch = get_patches(mod, verbose)
-        list_name = f"auto/{mod.__name__.split('.')[-1]}"
+        list_name = f"_PATCHED_{mod.__name__.split('.')[-1]}"
 
     res = {}
     for cls in to_patch:

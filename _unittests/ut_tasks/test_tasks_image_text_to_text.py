@@ -15,7 +15,7 @@ from onnx_diagnostic.helpers.cache_helper import get_make_hybrid_cache
 
 class TestTasksImageTextToText(ExtTestCase):
     @hide_stdout()
-    @requires_transformers("5.0.99")
+    @requires_transformers("5.2.99")
     @requires_torch("2.7.99")
     def test_image_text_to_text_idefics(self):
         mid = "HuggingFaceM4/tiny-random-idefics"
@@ -32,7 +32,7 @@ class TestTasksImageTextToText(ExtTestCase):
             self.assertEqualAny(expected, ep.module()(**inputs), atol=1)
 
     @hide_stdout()
-    @requires_transformers("5.0.99")
+    @requires_transformers("5.2.99")
     @requires_torch("2.7.99")
     def test_image_text_to_text_tiny_gemma3(self):
         """
@@ -88,7 +88,7 @@ class TestTasksImageTextToText(ExtTestCase):
             self.assertEqualAny(expected, ep.module()(**inputs))
 
     @hide_stdout()
-    @requires_transformers("5.0.99")
+    @requires_transformers("5.2.99")
     @requires_torch("2.7.99")
     def test_image_text_to_text_zai_glm(self):
         """

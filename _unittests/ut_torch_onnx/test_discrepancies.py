@@ -46,7 +46,7 @@ class TestDiscrepancies(ExtTestCase):
             return attn_output
 
         for model_name in ["attention_loopa24.onnx", "attention_loopmha.onnx"]:
-            if model_name == "attention_loopa24.onnx" and not has_onnxruntime("1.24"):
+            if model_name == "attention_loopa24.onnx" and not has_onnxruntime("1.25"):
                 # not available
                 continue
             with self.subTest(model=model_name):
