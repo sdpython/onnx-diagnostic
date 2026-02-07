@@ -266,7 +266,7 @@ class TestTasks(ExtTestCase):
         model(**inputs)
         model(**data["inputs2"])
         self.assertIn((data["size"], data["n_weights"]), [(274958336, 68739584)])
-        if not has_transformers("5.1.99"):
+        if not has_transformers("5.2.99"):
             raise unittest.SkipTest("The model has control flow.")
         with torch_export_patches(patch_transformers=True, verbose=10, stop_if_static=1):
             torch.export.export(
