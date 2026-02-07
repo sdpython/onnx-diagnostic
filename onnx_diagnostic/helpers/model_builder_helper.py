@@ -310,7 +310,8 @@ def create_model_builder(
             if not hasattr(config, key):
                 setattr(config, key, getattr(text_config, key))
     elif config.architectures[0] == "GptOssForCausalLM":
-        delattr(config, "quantization_config")
+        if hasattr(config, "quantization_config"):
+            delattr(config, "quantization_config")
     elif (
         config.architectures[0] == "PhiMoEForCausalLM"
         and config.max_position_embeddings != config.original_max_position_embeddings
