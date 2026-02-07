@@ -4,7 +4,7 @@ Change Logs
 0.9.1
 +++++
 
-* :pr:`409`: remove one assert in ModelBuilder wrapper
+* :pr:`409`: improves ModelBuilder wrapper
 * :pr:`408`: fix torch_deepcopy for empty DynamicCache and transformers==5.1.0, 5.2.0 (see https://github.com/huggingface/transformers/pull/43765/)
 
 0.9.0
