@@ -301,6 +301,7 @@ class InputObserverInfo:
             is added (such as `past_key_values`).
             The values are only to infer dynamic shapes and arguments,
             not to run the model.
+        kwargs_name: Name of parameter **kwargs if it exists.
     """
 
     def __init__(
@@ -308,6 +309,7 @@ class InputObserverInfo:
         signature_names: list[str],
         default_values: dict[str, int | bool | str | float],
         missing: dict[str, Any],
+        kwargs_name: str | None,
     ):
         self.default_values = default_values
         self.missing = missing
@@ -315,6 +317,7 @@ class InputObserverInfo:
         self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
         self.flat_outputs: list[list[torch.Tensor | None]] = []
         self.latencies: list[float] = []
+        self.kwargs_name = kwargs_name
         self.signature_names = signature_names
         self._best_candidate: InputCandidate | None = None
         self._captured_inputs: dict[int | str, int] | None = None
@@ -492,15 +495,21 @@ class InputObserverInfo:
             if not self._best_candidate.args:
                 # only named arguments
                 ds = dict(zip(list(self._best_candidate.kwargs), flat_dynamic_shapes))
-                return {**ds, **dict.fromkeys(self._best_candidate.cst_kwargs, None)}
+                return self._post_process_for_kwargs(
+                    {**ds, **dict.fromkeys(self._best_candidate.cst_kwargs, None)}
+                )
             # positional arguments needs to be moved to the named arguments
             n_args = len(self._best_candidate.args)
             pos_names = self.signature_names[:n_args]
-            return {
-                **dict(zip(pos_names, flat_dynamic_shapes[:n_args])),
-                **dict(zip(list(self._best_candidate.kwargs), flat_dynamic_shapes[n_args:])),
-                **dict.fromkeys(self._best_candidate.cst_kwargs, None),
-            }
+            return self._post_process_for_kwargs(
+                {
+                    **dict(zip(pos_names, flat_dynamic_shapes[:n_args])),
+                    **dict(
+                        zip(list(self._best_candidate.kwargs), flat_dynamic_shapes[n_args:])
+                    ),
+                    **dict.fromkeys(self._best_candidate.cst_kwargs, None),
+                }
+            )
 
         # nested types, here comes the fun part because the shapes cannot be unflattened,
         # custom classes must appear in their flattened shape.
@@ -540,9 +549,9 @@ class InputObserverInfo:
         if not ds_kwargs:
             return tuple(ds_args)
         if not ds_args:
-            return ds_kwargs
+            return self._post_process_for_kwargs(ds_kwargs)
         pos_names = self.signature_names[: len(ds_args)]
-        return {**dict(zip(pos_names, ds_args)), **ds_kwargs}
+        return self._post_process_for_kwargs({**dict(zip(pos_names, ds_args)), **ds_kwargs})
 
     def infer_arguments(
         self, index_or_candidate: InputCandidate | int | None = None, flat: bool = False
@@ -651,6 +660,21 @@ class InputObserverInfo:
         pos_names = self.signature_names[: len(args)]
         return {**dict(zip(pos_names, args)), **kwargs}
 
+    def _post_process_for_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """
+        :func:`torch.export.export` requires to have dynamic shapes and keyword arguments
+        wrapped into `'kwargs': { 'param':  shape or tensor }` if 'param' is not part
+        of the signature but is caught through `**kwargs`.
+        This function ensures this is the case.
+        """
+        if not self.kwargs_name:
+            # Nothing to do here.
+            return kwargs
+        to_be_moved = {k for k in kwargs if k not in self.signature_names}
+        keywords = {k: v for k, v in kwargs.items() if k in to_be_moved}
+        new_kwargs = {k: v for k, v in kwargs.items() if k not in to_be_moved}
+        return {**new_kwargs, self.kwargs_name: keywords}
+
 
 class InputObserver:
     """Steals forward method to collect inputs and outputs.
@@ -745,6 +769,21 @@ class InputObserver:
         captured_method = getattr(model, method_name)
         sig = inspect.signature(captured_method)
         if self.info is None:
+            kwargs_names = [
+                p
+                for p in sig.parameters
+                if sig.parameters[p].kind == inspect.Parameter.VAR_KEYWORD
+            ]
+            args_names = [
+                p
+                for p in sig.parameters
+                if sig.parameters[p].kind == inspect.Parameter.VAR_POSITIONAL
+            ]
+            if args_names:
+                raise RuntimeError(
+                    f"Inference is not implemented "
+                    f"when the signature includes '*{args_names[0]}'."
+                )
             self.info = InputObserverInfo(
                 signature_names=list(sig.parameters),
                 default_values={
@@ -754,6 +793,7 @@ class InputObserver:
                     and isinstance(p.default, (int, bool, str, float))
                 },
                 missing=self.missing,
+                kwargs_name=kwargs_names[0] if kwargs_names else None,
             )
         n_already_stored = len(self.info)
         lambda_method = lambda *args, _cm=captured_method, _snc=(  # noqa: E731

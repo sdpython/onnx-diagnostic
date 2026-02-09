@@ -1,18 +1,20 @@
 """
-.. _l-plot-optimind-export-input-observer:
+.. _l-plot-tiny-llm-attention-export-input-observer:
 
-Export OptiMind-SFT with InputObserver
-======================================
+Export attention from arnir0/Tiny-LLM with InputObserver
+========================================================
 
-This reuses the recipe introduced by example :ref:`l-plot-tiny-llm-export-input-observer`
-for model `microsoft/OptiMind-SFT <https://huggingface.co/microsoft/OptiMind-SFT>`_.
-We only export class ``GptOssExperts``.
+This shows how to only export attention from model
+`arnir0/Tiny-LLM <https://huggingface.co/arnir0/Tiny-LLM>`_.
+It uses what was shown in example
+:ref:`l-plot-tiny-llm-export-input-observer`.
 
 Let's create a random model
 +++++++++++++++++++++++++++
 """
 
 import pandas
+import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from onnx_diagnostic import doc
 from onnx_diagnostic.export.api import to_onnx
@@ -24,35 +26,33 @@ from onnx_diagnostic.torch_export_patches import (
 from onnx_diagnostic.investigate.input_observer import InputObserver
 
 device = "cuda"
-model_id = "microsoft/OptiMind-SFT"
+model_id = "arnir0/Tiny-LLM"
 print(f"get tokenizer {model_id!r}")
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 print(f"get config {model_id!r}")
 config = AutoConfig.from_pretrained(model_id)
-config.num_hidden_layers = 2
-config.layer_types = config.layer_types[:2]
 print(f"create model from config for {model_id!r}")
 model = AutoModelForCausalLM.from_config(config)
 print(f"the model is created with {len(list(model.named_modules()))} subdmodules.")
-model = model.to(device)
+model = model.to(device).to(torch.float16)
 
 # %%
-# We need to only export class GptOssExperts
-# ++++++++++++++++++++++++++++++++++++++++++
+# We need to only export class LlamaAttention
+# +++++++++++++++++++++++++++++++++++++++++++
 
 
 export_module = None
 for _name, sub in model.named_modules():
-    if sub.__class__.__name__ == "GptOssExperts":
+    if sub.__class__.__name__ == "LlamaAttention":
         export_module = sub
 
 assert export_module is not None, (
-    f"Unable to find a submodule from class GptOssExperts in "
+    f"Unable to find a submodule from class LlamaAttention in "
     f"{set(sub.__class__.__name__ for _, sub in model.named_modules())}"
 )
 
 # %%
-# Let's run the model and capture inputs and outputs
+# Let's run the model and capture the inputs and outputs of the attention part.
 
 
 def generate_text(
@@ -98,20 +98,21 @@ with (
 #
 # First, what was inferred.
 
-args = observer.infer_arguments()
+kwargs = observer.infer_arguments()
 dynamic_shapes = observer.infer_dynamic_shapes()
-print(f"args={string_type(args, with_shape=True, with_device=True)}")
+print(f"kwargs={string_type(kwargs, with_shape=True, with_device=True)}")
 print(f"dynamic_shapes={dynamic_shapes}")
 
 # %%
 # Next, the export.
 
 
-filename = "plot_export_optimind_experts_input_observer.onnx"
+filename = "plot_export_tiny_llm_attention_input_observer.onnx"
 with torch_export_patches(patch_transformers=True):
     to_onnx(
         export_module,
-        args=args,
+        args=(),
+        kwargs=kwargs,
         filename=filename,
         dynamic_shapes=dynamic_shapes,
         exporter="custom",
@@ -122,7 +123,7 @@ with torch_export_patches(patch_transformers=True):
 # Let's measure the discrepancies.
 data = observer.check_discrepancies(filename, progress_bar=True, atol=1e-2, include_io=True)
 df = pandas.DataFrame(data)
-df.to_excel("plot_export_optimind_input_observer.xlsx")
+df.to_excel("plot_export_tiny_llm_attention_input_observer.xlsx")
 print(df)
 
 # %%
