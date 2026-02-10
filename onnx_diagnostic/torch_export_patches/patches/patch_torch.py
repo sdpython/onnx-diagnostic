@@ -143,7 +143,7 @@ def patched__get_range_constraints(
 ):
     """
     Patches ``torch.export._trace._get_range_constraints``.
-    See PR `#174593 whttps://github.com/pytorch/pytorch/pull/174593>`_.
+    See PR `#174593 <https://github.com/pytorch/pytorch/pull/174593>`_.
     """
     gm: torch.fx.GraphModule = export_artifact.aten.gm
     export_graph_signature: torch.export.graph_signature.ExportGraphSignature = (

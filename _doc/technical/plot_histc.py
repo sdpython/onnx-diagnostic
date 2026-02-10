@@ -193,7 +193,7 @@ print(
 )
 
 # %%
-# This does not add up. Let's proove now :func:`torch.histc` is really confusing.
+# This does not add up. Let's prove now :func:`torch.histc` is really confusing.
 # The following sum should be null but it is not.
 
 diff = torch.histc(tensor, hbins, hmin, hmax) - (

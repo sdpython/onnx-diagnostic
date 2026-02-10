@@ -141,6 +141,7 @@ nitpick_ignore = [
     ("py:class", "torch.fx.proxy.TracerBase"),
     ("py:class", "torch.FloatTensor"),
     ("py:class", "torch.LongTensor"),
+    ("py:class", "torch.export._trace.ExportArtifact"),
     ("py:class", "torch.utils._pytree.Context"),
     ("py:class", "torch.utils._pytree.KeyEntry"),
     ("py:class", "torch.utils._pytree.TreeSpec"),

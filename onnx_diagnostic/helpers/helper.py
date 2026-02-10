@@ -1071,6 +1071,7 @@ def max_diff(
     _index: int = 0,
     allow_unique_tensor_with_list_of_one_element: bool = True,
     hist: Optional[Union[bool, List[float]]] = None,
+    skip_none: bool = False,
 ) -> Dict[str, Union[float, int, Tuple[Any, ...]]]:
     """
     Returns the maximum discrepancy.
@@ -1087,6 +1088,7 @@ def max_diff(
     :param allow_unique_tensor_with_list_of_one_element:
         allow a comparison between a single tensor and a list of one tensor
     :param hist: compute an histogram of the discrepancies
+    :param skip_none: skips none value
     :return: dictionary with many values
 
     * abs: max absolute error
@@ -1112,6 +1114,7 @@ def max_diff(
         end=end,
         _index=_index,
         hist=hist,
+        skip_none=skip_none,
     )
     _dkws = {**_dkws_, "flatten": flatten}
     _dkwsf = {**_dkws_, "flatten": False}
@@ -1129,6 +1132,7 @@ def max_diff(
                 debug_info=debug_info,
                 allow_unique_tensor_with_list_of_one_element=False,
                 hist=hist,
+                skip_none=skip_none,
             )
         return max_diff(
             expected,
@@ -1142,6 +1146,7 @@ def max_diff(
             _index=_index,
             allow_unique_tensor_with_list_of_one_element=False,
             hist=hist,
+            skip_none=skip_none,
         )
 
     if expected.__class__.__name__ == "CausalLMOutputWithPast":
@@ -1269,6 +1274,7 @@ def max_diff(
                 _index=_index + ip,
                 flatten=flatten,
                 hist=hist,
+                skip_none=skip_none,
             )
             am = max(am, d["abs"])
             dn = max(dn, d["dnan"])
@@ -1792,6 +1798,9 @@ def max_diff(
             debug_info=_debug(expected.__class__.__name__),
             **_dkws,
         )
+
+    if skip_none and (expected is None or got is None):
+        return {"abs": 0, "rel": 0, "dnan": 0, "n": 0, "sum": 0}
 
     raise AssertionError(
         f"Not implemented with implemented with expected="

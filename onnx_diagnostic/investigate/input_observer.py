@@ -286,22 +286,28 @@ class InputObserverInfo:
     and the arguments to send to :func:`torch.export.export`.
 
     Args:
-        signature_names: Names of the arguments of the method
+        signature_names:
+            Names of the arguments of the method
             the collector tensors come from. They are used if it becomes
             necessary to move positional arguments to named ones.
             They are used a second time because :func:`torch.export.export`
             cares about the order in kwargs and dynamic shapes, it needs
             to be the same in the ordered dictionaries `add_inputs` receive.
-        default_values: Default values defined by the signature of the function,
+        default_values:
+            Default values defined by the signature of the function,
             any value equal to that is ignore to simplify the export.
-        missing: If a named argument (in kwargs) is missing,
+        missing:
+            If a named argument (in kwargs) is missing,
             a default value will be taken in this dictionary,
             this is used when after the prefill step, an argument
             disappears (such as `pixel_values`) and another one
             is added (such as `past_key_values`).
             The values are only to infer dynamic shapes and arguments,
             not to run the model.
-        kwargs_name: Name of parameter **kwargs if it exists.
+        kwargs_name:
+            Name of parameter `**kwargs` if it exists.
+
+    This is used by class :class:`InputObserver`.
     """
 
     def __init__(
@@ -910,6 +916,7 @@ class InputObserver:
         hist=(0.1, 0.01),
         progress_bar: bool = False,
         include_io: bool = True,
+        skip_none: bool = True,
     ) -> list[dict[str, str | int | float | bool]]:
         """Computes the discrepancies between the saved inputs and outputs
         with the saved onnx model.
@@ -929,6 +936,8 @@ class InputObserver:
             include_io:
                 Shows inputs/outputs shapes in the summary
                 returned by this function.
+            skip_none:
+                Dooes not check discrepancies when an output is None.
 
         Returns:
             A list of dictionaries, ready to be consumed by a dataframe.
@@ -982,7 +991,7 @@ class InputObserver:
                 if isinstance(outputs, list) and isinstance(ort_outputs, list):
                     while len(ort_outputs) > len(outputs) and ort_outputs[-1].numel() == 0:
                         ort_outputs.pop()
-                diff = max_diff(outputs, ort_outputs, hist=lhist)  # type: ignore[assignment]
+                diff = max_diff(outputs, ort_outputs, hist=lhist, skip_none=skip_none)  # type: ignore[assignment]
                 if "rep" in diff and isinstance(diff["rep"], dict):
                     diff.update(diff["rep"])
                     del diff["rep"]

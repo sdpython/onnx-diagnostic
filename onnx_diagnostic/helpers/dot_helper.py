@@ -203,6 +203,8 @@ def to_dot(model: onnx.ModelProto) -> str:
                 if att.type == onnx.AttributeProto.GRAPH:
                     unique |= get_hidden_inputs(att.g)
             for i in unique:
+                if i in tiny_inits:
+                    continue
                 edge = name_to_ids[i], _mkn(node)  # type: ignore[assignment]
                 if edge in done:
                     continue

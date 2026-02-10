@@ -122,7 +122,9 @@ with torch_export_patches(patch_torch=True, patch_transformers=True):
 
 # %%
 # Let's measure the discrepancies.
-data = observer.check_discrepancies(filename, progress_bar=True, atol=1e-2, include_io=True)
+data = observer.check_discrepancies(
+    filename, progress_bar=True, atol=1e-2, include_io=True, skip_none=True
+)
 df = pandas.DataFrame(data)
 df.to_excel("plot_export_tiny_llm_attention_input_observer.xlsx")
 print(df)
