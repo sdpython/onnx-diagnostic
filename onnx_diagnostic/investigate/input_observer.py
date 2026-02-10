@@ -677,6 +677,8 @@ class InputObserverInfo:
             # Nothing to do here.
             return kwargs
         to_be_moved = {k for k in kwargs if k not in self.signature_names}
+        if not to_be_moved:
+            return kwargs
         keywords = {k: v for k, v in kwargs.items() if k in to_be_moved}
         new_kwargs = {k: v for k, v in kwargs.items() if k not in to_be_moved}
         return {**new_kwargs, self.kwargs_name: keywords}

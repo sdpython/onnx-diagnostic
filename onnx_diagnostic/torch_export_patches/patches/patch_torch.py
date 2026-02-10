@@ -165,13 +165,8 @@ def patched__get_range_constraints(
     assert isinstance(
         combined_args, dict
     ), f"unexpected type {type(combined_args)} for 'combined_args'"
-    input_names = [
-        s.arg.name
-        for s in export_graph_signature.input_specs
-        if s.kind == torch.export.graph_signature.InputKind.USER_INPUT
-    ]
     new_args = {}
-    for k in input_names:
+    for k in kwargs:
         if k in combined_args:
             new_args[k] = combined_args[k]
     for k in combined_args:
