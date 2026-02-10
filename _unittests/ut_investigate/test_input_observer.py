@@ -2,7 +2,12 @@ import itertools
 import unittest
 import pandas
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    requires_torch,
+    hide_stdout,
+    ignore_warnings,
+)
 from onnx_diagnostic.investigate.input_observer import (
     InputObserver,
     _infer_dynamic_dimensions,
@@ -816,6 +821,8 @@ class TestInputObserver(ExtTestCase):
         self.assertEqual(2, len(args))
         self.assertEqual(len([v for v in args.values() if v is not None]), 2)
 
+    @hide_stdout()
+    @ignore_warnings(FutureWarning)
     def test_io_int_kwargs(self):
         class Model(torch.nn.Module):
             def forward(self, x=None, y=None, option=1):

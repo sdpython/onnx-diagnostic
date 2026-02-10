@@ -12,6 +12,7 @@ from onnx_diagnostic.ext_test_case import (
     requires_torch,
     ignore_warnings,
     has_onnxscript,
+    requires_onnxscript,
 )
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy, fake_torchdynamo_exporting
 from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimensions
@@ -352,6 +353,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqualArray(expected, got)
 
     @requires_transformers("4.55")
+    @requires_onnxscript("0.6.2")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
     def test_qwen_apply_multimodal_rotary_pos_emb(self):
         apply_multimodal_rotary_pos_emb = (
