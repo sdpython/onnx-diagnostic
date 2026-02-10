@@ -100,6 +100,7 @@ with (
 
 kwargs = observer.infer_arguments()
 dynamic_shapes = observer.infer_dynamic_shapes()
+print("attention type:", type(export_module))
 print(f"kwargs={string_type(kwargs, with_shape=True, with_device=True)}")
 print(f"dynamic_shapes={dynamic_shapes}")
 
@@ -108,7 +109,7 @@ print(f"dynamic_shapes={dynamic_shapes}")
 
 
 filename = "plot_export_tiny_llm_attention_input_observer.onnx"
-with torch_export_patches(patch_transformers=True):
+with torch_export_patches(patch_torch=True, patch_transformers=True):
     to_onnx(
         export_module,
         args=(),

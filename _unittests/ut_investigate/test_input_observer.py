@@ -8,6 +8,7 @@ from onnx_diagnostic.investigate.input_observer import (
     _infer_dynamic_dimensions,
 )
 from onnx_diagnostic.export.api import to_onnx
+from onnx_diagnostic.torch_export_patches import torch_export_patches
 
 
 class TestInputObserver(ExtTestCase):
@@ -976,13 +977,14 @@ class TestInputObserver(ExtTestCase):
         self.assertEqual({"x": (cst, cst), "kwargs": {"y": (None, cst)}}, dss)
 
         # _get_range_constraints
-        torch.export.export(
-            model,
-            (),
-            kwargs=args,
-            dynamic_shapes={"x": {0: cst, 1: cst}, "kwargs": {"y": {1: cst}}},
-        )
-        torch.export.export(model, (), kwargs=args, dynamic_shapes=ds)
+        with torch_export_patches(patch_torch=True):
+            torch.export.export(
+                model,
+                (),
+                kwargs=args,
+                dynamic_shapes={"x": {0: cst, 1: cst}, "kwargs": {"y": {1: cst}}},
+            )
+            torch.export.export(model, (), kwargs=args, dynamic_shapes=ds)
 
 
 if __name__ == "__main__":

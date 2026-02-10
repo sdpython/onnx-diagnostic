@@ -7,6 +7,7 @@ from functools import reduce
 from typing import Any, Callable, cast, Dict, List, Optional, Sequence, Tuple, Union
 import sympy
 import torch
+import torch.export._trace
 from torch._subclasses.fake_tensor import FakeTensorMode
 
 
@@ -61,7 +62,7 @@ def _catch_produce_guards_and_solve_constraints(
         torch._dynamo.reset()
 
 
-def patch__check_input_constraints_for_graph(
+def patched__check_input_constraints_for_graph(
     previous_function: Callable,
     input_placeholders: list[torch.fx.Node],
     flat_args_with_path,
@@ -131,6 +132,38 @@ def patched_infer_size(a, b):
             # PATCHED: generic case, the dimension is known, no need to assert
             expandedSizes[i] = torch.sym_max(sizeA, sizeB)
     return tuple(expandedSizes)
+
+
+def patched__get_range_constraints(
+    mod: torch.nn.Module,
+    export_artifact: torch.export._trace.ExportArtifact,
+    args,
+    kwargs,
+    dynamic_shapes,
+):
+    """
+    Patches ``torch.export._trace._get_range_constraints``.
+    See PR `#174593 whttps://github.com/pytorch/pytorch/pull/174593>`_.
+    """
+    gm: torch.fx.GraphModule = export_artifact.aten.gm
+    export_graph_signature: torch.export.graph_signature.ExportGraphSignature = (
+        export_artifact.aten.sig
+    )
+    fake_mode: FakeTensorMode = export_artifact.fake_mode
+    num_lifted = next(
+        (
+            i
+            for i, s in enumerate(export_graph_signature.input_specs)
+            if s.kind == torch.export.graph_signature.InputKind.USER_INPUT
+        ),
+        len(export_graph_signature.input_specs),
+    )
+    combined_args = torch.export._trace._combine_args(mod, args, kwargs)
+
+    range_constraints = torch._export.non_strict_utils.make_constraints(
+        fake_mode, gm, combined_args, dynamic_shapes, num_lifted
+    )
+    return range_constraints
 
 
 def patched__broadcast_shapes(*_shapes):
