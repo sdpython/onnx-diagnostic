@@ -44,6 +44,10 @@ class CoupleInputsDynamicShapes:
         dynamic shapes must be a dictionary, and positional must be added
         to the named arguments. Arguments names or a module must be given
         in that case.
+
+    .. note::
+        If the parameters ``**kwargs`` is not named, ``**kwargs``,
+        this could raise exceptions.
     """
 
     def __init__(
@@ -361,18 +365,21 @@ class CoupleInputsDynamicShapes:
                     f"not_in_ds={not_in_ds}, not_in_inputs={not_in_inputs}"
                 )
                 # Tweak...
-                kws = ds["kwargs"]
-                del ds["kwargs"]
-                ds.update(kws)
+                keys_inputs = set(inputs)
+                keys_ds = {k for k in ds if k != "kwargs"} | set(ds["kwargs"])
+            else:
+                keys_inputs = set(inputs)
+                keys_ds = set(ds)
 
-            assert set(inputs) == set(ds), (
-                f"Keys mismatch between inputs {set(inputs)} and ds={set(ds)}, "
+            assert keys_inputs == keys_ds, (
+                f"Keys mismatch between inputs {keys_inputs} and ds={keys_ds}, "
                 f"inputs={string_type(inputs, with_shape=True)}, ds={ds}"
             )
             dvalue = {}
             for k, v in inputs.items():
+                s = ds[k] if k in ds else ds["kwargs"][k]
                 t = cls._generic_walker_step(
-                    processor, v, ds[k], flatten_unflatten=flatten_unflatten
+                    processor, v, s, flatten_unflatten=flatten_unflatten
                 )
                 if t is not None:
                     dvalue[k] = t

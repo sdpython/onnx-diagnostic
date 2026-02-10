@@ -160,6 +160,9 @@ def patched_sdpa_attention_forward(
     # TypeError: scaled_dot_product_attention(): argument 'is_causal' must be bool, not SymBool
     # is_causal=torch.tensor(query.shape[2] > 1)
     # TypeError: scaled_dot_product_attention(): argument 'is_causal' must be bool, not Tensor
+    query = query.contiguous()
+    key = key.contiguous()
+    value = value.contiguous()
     attn_output = torch.cond(
         query.shape[2] > 1,  # distinction between prefill and decoding steps
         lambda query, key, value: torch.nn.functional.scaled_dot_product_attention(

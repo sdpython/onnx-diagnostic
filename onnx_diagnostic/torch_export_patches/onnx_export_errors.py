@@ -227,14 +227,15 @@ def _patch_torch(
     import torch._export.non_strict_utils  # produce_guards_and_solve_constraints
     from torch.fx.experimental.symbolic_shapes import ShapeEnv
     from .patches.patch_torch import (
+        _catch_produce_guards_and_solve_constraints,
         patched_infer_size,
         patched_vmap,
-        patched__broadcast_shapes,
-        patched__constrain_user_specified_dimhint_range,
-        _catch_produce_guards_and_solve_constraints,
-        patch__check_input_constraints_for_graph,
         patched__broadcast_in_dim_meta,
         patched__broadcast_in_dim_meta_level_2,
+        patched__broadcast_shapes,
+        patched__check_input_constraints_for_graph,
+        patched__constrain_user_specified_dimhint_range,
+        patched__get_range_constraints,
         patched__maybe_broadcast,
         patched_ShapeEnv,
     )
@@ -259,6 +260,7 @@ def _patch_torch(
     f_shape_env__log_guard = None
     f_shape_env__set_replacement = None
     f_vmap = None
+    f__get_range_constraints = None
 
     if verbose:
         print(f"[torch_export_patches] torch.__version__={torch.__version__!r}")
@@ -293,6 +295,12 @@ def _patch_torch(
     torch._subclasses.fake_impls.infer_size = patched_infer_size
     if patch_details:
         patch_details.append("torch", f_infer_size, patched_infer_size)
+
+    # torch.export._trace._get_range_constraints
+    f__get_range_constraints = torch.export._trace._get_range_constraints
+    torch.export._trace._get_range_constraints = patched__get_range_constraints
+    if patch_details:
+        patch_details.append("torch", f__get_range_constraints, patched__get_range_constraints)
 
     # torch._refs._broadcast_shapes
     f__broadcast_shapes = torch._refs._broadcast_shapes
@@ -358,7 +366,7 @@ def _patch_torch(
             )
         )
         torch._export.utils._check_input_constraints_for_graph = (
-            lambda *args, **kwargs: patch__check_input_constraints_for_graph(
+            lambda *args, **kwargs: patched__check_input_constraints_for_graph(
                 f__check_input_constraints_for_graph, *args, verbose=verbose, **kwargs
             )
         )
@@ -410,6 +418,7 @@ def _patch_torch(
         f_shape_env__set_replacement,
         f_vmap,
         f__print_symbol,
+        f__get_range_constraints,
     )
 
 
@@ -435,6 +444,7 @@ def _unpatch_torch(
     f_shape_env__set_replacement: Optional[Callable],
     f_vmap: Optional[Callable],
     f__print_symbol: Optional[Callable],
+    f__get_range_constraints: Optional[Callable],
 ):
     import torch
     import torch.jit
@@ -460,6 +470,7 @@ def _unpatch_torch(
     torch._prims.broadcast_in_dim = f_broadcast_in_dim
     torch._refs._maybe_broadcast = f__maybe_broadcast
     ShapeEnv._evaluate_expr = f_shape_env__evaluate_expr
+    torch.export._trace._get_range_constraints = f__get_range_constraints
 
     if verbose:
         print("[torch_export_patches] restored pytorch functions")
@@ -1035,6 +1046,7 @@ def torch_export_patches(
                 f_shape_env__set_replacement,
                 f_vmap,
                 f__print_Symbol,
+                f__get_range_constraints,
             ) = _patch_torch(
                 verbose, patch_details, patch_torch, catch_constraints, stop_if_static
             )
@@ -1111,6 +1123,7 @@ def torch_export_patches(
                     f_shape_env__set_replacement,
                     f_vmap,
                     f__print_Symbol,
+                    f__get_range_constraints,
                 )
 
             if patch_transformers:

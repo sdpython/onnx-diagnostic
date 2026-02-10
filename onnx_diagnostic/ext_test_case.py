@@ -13,7 +13,7 @@ import shutil
 import sys
 import unittest
 import warnings
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout, contextmanager
 from io import StringIO
 from timeit import Timer
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -1465,3 +1465,16 @@ class ExtTestCase(unittest.TestCase):
                     if verbose:
                         print(f"[subloop] it={it!r}")
                     yield it
+
+    @contextmanager
+    def set_env(self, varname: str, value: str):
+        """
+        Sets environment variable `varname` to `value`
+        and sets it back.
+        """
+        old_value = os.environ.get(varname, None)
+        os.environ[varname] = value
+        try:
+            yield
+        finally:
+            os.environ[varname] = old_value or ""

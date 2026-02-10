@@ -1107,6 +1107,21 @@ class TestDynamicShapes(ExtTestCase):
             ds,
         )
 
+    def test_weird_case_kwargs_kwargs(self):
+        import torch
+
+        ags = tuple()
+        kws = {
+            "x": torch.zeros((1, 2), dtype=torch.float32),
+            "y": torch.zeros((1, 2), dtype=torch.float32),
+        }
+        ds = {"x": {0: "batch"}, "kwargs": {"y": {0: "batch"}}}
+
+        cpl = CoupleInputsDynamicShapes(ags, kws, ds)
+        backed_size_oblivious = cpl.invalid_dimensions_for_export()
+        self.assertTrue(backed_size_oblivious)
+        self.assertEqual({"x": {0: "batch"}, "kwargs": {"y": {0: "batch"}}}, ds)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

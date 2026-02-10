@@ -664,6 +664,30 @@ class TestPatchPatchTorch(ExtTestCase):
         got = ep.module()(*inputs)
         self.assertEqualArray(expected, got)
 
+    def test_mixed_named_and_unnamed_kwargs(self):
+        # see https://github.com/pytorch/pytorch/pull/174593
+        class Model(torch.nn.Module):
+            def forward(self, x, **kwargs):
+                return x + kwargs["y"]
+
+        kwargs = dict(x=torch.randn((5, 6)), y=torch.randn((1, 6)))
+        model = Model()
+        expected = model(**kwargs)
+        with torch_export_patches(patch_torch=True):
+            ep = torch.export.export(
+                model,
+                (),
+                kwargs=kwargs,
+                dynamic_shapes={
+                    "x": {0: torch.export.Dim.DYNAMIC, 1: torch.export.Dim.DYNAMIC},
+                    "kwargs": {"y": {1: torch.export.Dim.DYNAMIC}},
+                },
+            )
+        # ep.module()(**kwargs): raises NameError: name 'L' is not defined
+        self.assertEqualArray(kwargs["x"] + kwargs["y"], expected)
+        inputs = [n.name for n in ep.graph.nodes if n.op == "placeholder"]
+        self.assertEqual(["x", "y"], inputs)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
