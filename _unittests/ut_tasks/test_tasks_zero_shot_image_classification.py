@@ -17,7 +17,7 @@ class TestTasksZeroShotImageClassification(ExtTestCase):
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         expected = model(**inputs)
         model(**data["inputs2"])
-        with torch_export_patches(patch_transformers=True, verbose=10):
+        with torch_export_patches(patch_torch=True, patch_transformers=True, verbose=10):
             ep = torch.export.export(
                 model, (), kwargs=inputs, dynamic_shapes=use_dyn_not_str(ds), strict=False
             )

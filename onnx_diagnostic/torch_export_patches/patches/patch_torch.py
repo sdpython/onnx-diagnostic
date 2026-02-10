@@ -158,7 +158,24 @@ def patched__get_range_constraints(
         ),
         len(export_graph_signature.input_specs),
     )
+
     combined_args = torch.export._trace._combine_args(mod, args, kwargs)
+
+    # _combine_args does not preserve the order.
+    if isinstance(combined_args, dict):
+        input_names = [
+            s.arg.name
+            for s in export_graph_signature.input_specs
+            if s.kind == torch.export.graph_signature.InputKind.USER_INPUT
+        ]
+        new_args = {}
+        for k in input_names:
+            if k in combined_args:
+                new_args[k] = combined_args[k]
+        for k in combined_args:
+            if k not in new_args:
+                new_args[k] = combined_args[k]
+        combined_args = new_args
 
     range_constraints = torch._export.non_strict_utils.make_constraints(
         fake_mode, gm, combined_args, dynamic_shapes, num_lifted
