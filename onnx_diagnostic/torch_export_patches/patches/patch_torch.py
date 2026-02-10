@@ -161,18 +161,24 @@ def patched__get_range_constraints(
 
     combined_args = torch.export._trace._combine_args(mod, args, kwargs)
 
-    # _combine_args does not preserve the order.
+    # This is because we trace based on the kwargs passed in from user
+    # not based on the signature. I feel it would be better to just enforce
+    # one ordering at the start of tracing to avoid confusions, but that is
+    # bigger refactor, so do this to unblock for now.
     assert isinstance(
         combined_args, dict
     ), f"unexpected type {type(combined_args)} for 'combined_args'"
-    new_args = {}
-    for k in kwargs:
-        if k in combined_args:
-            new_args[k] = combined_args[k]
-    for k in combined_args:
-        if k not in new_args:
-            new_args[k] = combined_args[k]
-    combined_args = new_args
+
+    combined_args_traced_order = {}
+    for arg in kwargs:
+        if arg in combined_args:
+            combined_args_traced_order[arg] = combined_args[arg]
+
+    for key in combined_args:
+        if key not in combined_args_traced_order:
+            combined_args_traced_order[key] = combined_args[key]
+
+    combined_args = combined_args_traced_order
 
     range_constraints = torch._export.non_strict_utils.make_constraints(
         fake_mode, gm, combined_args, dynamic_shapes, num_lifted
