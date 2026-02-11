@@ -144,6 +144,39 @@ class RewriteControlFlow(ast.NodeTransformer):
             self.local_variables.add(node.id)
         return node
 
+    def is_expression_context(self, node):
+        if not hasattr(node, "_parent") or node._parent is None:
+            return False
+        parent = node._parent
+        # Common expression contexts:
+        if isinstance(
+            parent,
+            (
+                ast.BinOp,
+                ast.UnaryOp,
+                ast.BoolOp,
+                ast.Call,
+                ast.Subscript,
+                ast.Compare,
+                ast.Return,
+                ast.Expr,
+                ast.If,
+                ast.While,
+            ),
+        ):
+            return True
+        # RHS of assignment: parent is Assign and node is in value
+        if isinstance(parent, ast.Assign) and node in ast.walk(parent.value):
+            return True
+        return False
+
+    def _attach_parents(self, node, parent=None):
+        node._parent = parent
+        if parent and not hasattr(node, "lineno"):
+            node.lineno = parent.lineno
+        for child in ast.iter_child_nodes(node):
+            self._attach_parents(child, node)
+
     def visit_FunctionDef(self, node):
         # Capture argument names for branch functions
         old_args = self.current_func_args
@@ -152,8 +185,11 @@ class RewriteControlFlow(ast.NodeTransformer):
         for n in node.body:
             visited = self.visit(n)
             if isinstance(visited, list):
+                for n in visited:
+                    self._attach_parents(n, node)
                 new_body.extend(visited)
             else:
+                self._attach_parents(visited, node)
                 new_body.append(visited)
         node.body = new_body
         self.current_func_args = old_args
@@ -455,10 +491,10 @@ class RewriteControlFlow(ast.NodeTransformer):
                     f"Inconsistencies between n_returned_values={n_returned_values}, "
                     f"dropped={dropped}, tgt.elts={tgt.elts}, tgt_elts={tgt_elts}"
                 )
-                tgt = ast.Tuple(tgt_elts, ctx=ast.Store())
+                tgt = ast.Tuple(list(tgt_elts), ctx=ast.Store())
 
             added = {tgt.id} if isinstance(tgt, ast.Name) else set(t.id for t in tgt.elts)
-            assign = ast.Assign(targets=[tgt], value=call)
+            assign = ast.Assign(targets=[tgt], value=call, ctx=ast.Store())
             ast.copy_location(assign, node)
             ast.fix_missing_locations(assign)
             self.local_variables = known_local_variables | added
@@ -631,7 +667,7 @@ class RewriteControlFlow(ast.NodeTransformer):
                 ),
             ],
             decorator_list=[],
-            ctx=ast.Store(),
+            ctx=ast.Load(),
         )
 
         # final rewriting
@@ -654,7 +690,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             args=[
                 ast.Name(id=func_name, ctx=ast.Load()),
                 ast.List(
-                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in init_vars], ctx=ast.Store()
+                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in init_vars], ctx=ast.Load()
                 ),
                 ast.List(
                     elts=[
@@ -700,13 +736,13 @@ class RewriteControlFlow(ast.NodeTransformer):
                         ],
                         *[ast.Name(id=v, ctx=ast.Load()) for v in scan_vars],
                     ],
-                    ctx=ast.Store(),
+                    ctx=ast.Load(),
                 ),
                 ast.List(
                     elts=[
                         ast.Name(id=v, ctx=ast.Load()) for v in [*scan_shape_vars, *input_vars]
                     ],
-                    ctx=ast.Store(),
+                    ctx=ast.Load(),
                 ),
             ],
             keywords=[],
@@ -923,8 +959,12 @@ def transform_method(
         )
     try:
         mod = compile(new_tree, filename="<ast>", mode="exec")
-    except TypeError as e:
-        if 'required field "lineno" missing from stmt' in str(e):
+    except (TypeError, ValueError) as e:
+        se = str(e)
+        if (
+            'required field "lineno" missing from' in se
+            or "expression must have Load context but has Store instead" in se
+        ):
             # Could not find a way to avoid compiling a string.
             # The error message still pops up without indicating which node is not
             # properly set.
@@ -932,14 +972,15 @@ def transform_method(
             try:
                 mod = compile(code, filename="<source>", mode="exec")
             except IndentationError as ee:
-                raise RuntimeError(f"Unable to compile\n{code}") from ee
+                raise RuntimeError(f"Unable to compile due to {ee} (and {e})\n{code}") from ee
         else:
             kws = dict(include_attributes=True, annotate_fields=True, indent=4)
             raise RuntimeError(
-                f"Unable to compile code\n--CODE--\n"
+                f"Unable to compile code due to {e}\n--CODE--\n"
                 f"{ast.unparse(new_tree)}\n--TREE--\n"
                 f"{ast.dump(new_tree, **kws)}"
             ) from e
+
     namespace: Dict[str, type] = {}
     globs = func.__globals__.copy()
     exec(mod, globs, namespace)
