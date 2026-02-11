@@ -899,7 +899,8 @@ def torch_export_patches(
         before being exported if the execution path depends on the inputs,
         this is done by function :func:`transform_method
         <onnx_diagnostic.torch_export_patches.patch_module.transform_method>`,
-        its documentation provides possible values
+        its documentation provides possible values, if `rewrite==True`, then
+        all known methods to rewrite are added.
     :param dump_rewriting: dumps rewriting information in file beginning with that prefix,
         this only applied on the automated rewritings
     :param patch_details: if specified, this class is used to stored every applied rewriting.

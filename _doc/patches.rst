@@ -124,7 +124,7 @@ Here is the list of supported caches:
 
 .. _l-control-flow-rewriting:
 
-Control flow rewriting
+Control Flow Rewriting
 ======================
 
 This is an attempt to automatically rewrite control flow using :mod:`ast`.
@@ -217,17 +217,17 @@ The locations where it has to be done:
 
     import pprint
     from onnx_diagnostic.torch_export_patches.patch_module_helper import (
-        known_transformers_rewritings_clamp_float16,
+        known_transformers_rewritings,
     )
 
-    pprint.pprint(known_transformers_rewritings_clamp_float16())
+    pprint.pprint(known_transformers_rewritings())
 
 .. runpython::
     :showcode:
 
     import pprint
     from onnx_diagnostic.torch_export_patches.patch_module_helper import (
-        _rewrite_forward_clamp_float16,
+        _rewrite_forward,
     )
 
-    pprint.pprint(_rewrite_forward_clamp_float16())
+    pprint.pprint(_rewrite_forward())

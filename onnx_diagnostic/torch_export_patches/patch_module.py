@@ -148,7 +148,14 @@ class RewriteControlFlow(ast.NodeTransformer):
         # Capture argument names for branch functions
         old_args = self.current_func_args
         self.current_func_args = [arg.arg for arg in node.args.args]
-        node.body = [self.visit(n) for n in node.body]
+        new_body = []
+        for n in node.body:
+            visited = self.visit(n)
+            if isinstance(visited, list):
+                new_body.extend(visited)
+            else:
+                new_body.append(visited)
+        node.body = new_body
         self.current_func_args = old_args
         return node
 
@@ -332,6 +339,36 @@ class RewriteControlFlow(ast.NodeTransformer):
         tgt = d[0] if len(d) == 1 else ast.Tuple(d, ctx=ast.Load())
         return tgt, tgt_mapping
 
+    def _rewrite_if_raise(self, cond_node, raise_node, known_local_variables=None):
+        assert known_local_variables is not None, "known_local_variables cannot be None"
+
+        expr = ast.Expr(
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id="torch", ctx=ast.Load()),
+                    attr="_check",
+                    ctx=ast.Load(),
+                ),
+                args=[
+                    ast.UnaryOp(op=ast.Not(), operand=cond_node),
+                    ast.Lambda(
+                        args=ast.arguments(
+                            posonlyargs=[],
+                            args=[],
+                            vararg=None,
+                            kwonlyargs=[],
+                            kw_defaults=[],
+                            kwarg=None,
+                            defaults=[],
+                        ),
+                        body=raise_node.exc.args[0],
+                    ),
+                ],
+                keywords=[],
+            )
+        )
+        return expr
+
     def visit_If(self, node):
         if not self.filter_node(node):
             return [node]
@@ -356,6 +393,33 @@ class RewriteControlFlow(ast.NodeTransformer):
         )
         self._check(self.current_func_args is not None, node, "current_func_args is None")
         self.counter_test += 1
+
+        if not has_then_return and not node.orelse:
+            then_raise = [n for n in node.body if isinstance(n, ast.Raise)]
+            if then_raise:
+                self._check(
+                    len(then_raise) == 1 == len(node.body), node, "More than a simple raise."
+                )
+                check_node = self._rewrite_if_raise(
+                    node.test, then_raise[0], known_local_variables=known_local_variables
+                )
+                ast.copy_location(check_node, node)
+                ast.fix_missing_locations(check_node)
+                return [self.post_rewriter(check_node)]
+            if (
+                len(node.body) == 1
+                and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Call)
+                and isinstance(node.body[0].value.func, ast.Attribute)
+                and isinstance(node.body[0].value.func.value, ast.Name)
+                and node.body[0].value.func.value.id == "torch"
+                and node.body[0].value.func.attr == "_check"
+            ):
+                # We assume there is nothing to do,
+                # and this was rewritting by _rewrite_if_raise.
+                # Or maybe we can include that into the check itself.
+                return [node]
+            # Otherwise it is sompething else.
 
         if not has_then_return:
             # Case 1: simple assignment in both branches
@@ -861,11 +925,14 @@ def transform_method(
         mod = compile(new_tree, filename="<ast>", mode="exec")
     except TypeError as e:
         if 'required field "lineno" missing from stmt' in str(e):
-            # Could not find a way to avoid compilng a string.
+            # Could not find a way to avoid compiling a string.
             # The error message still pops up without indicating which node is not
             # properly set.
             code = ast.unparse(new_tree)
-            mod = compile(code, filename="<source>", mode="exec")
+            try:
+                mod = compile(code, filename="<source>", mode="exec")
+            except IndentationError as ee:
+                raise RuntimeError(f"Unable to compile\n{code}") from ee
         else:
             kws = dict(include_attributes=True, annotate_fields=True, indent=4)
             raise RuntimeError(

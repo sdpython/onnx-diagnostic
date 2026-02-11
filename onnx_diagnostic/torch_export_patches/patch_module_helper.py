@@ -1,6 +1,6 @@
 import ast
 import functools
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 
 class OrToBitOrTransformer(ast.NodeTransformer):
@@ -21,8 +21,7 @@ def ast_or_into_bitor(node: "ast.Node") -> "ast.Node":
 
 
 @functools.lru_cache
-def _rewrite_forward_clamp_float16() -> Dict[str, List[type]]:
-
+def _rewrite_forward() -> Dict[str, List[type]]:
     import transformers
 
     _known = {
@@ -48,6 +47,9 @@ def _rewrite_forward_clamp_float16() -> Dict[str, List[type]]:
         "NllbMoeEncoderLayer": [
             transformers.models.nllb_moe.modeling_nllb_moe.NllbMoeEncoderLayer
         ],
+        "PatchEmbeddings": [
+            transformers.models.vit.modeling_vit.ViTPatchEmbeddings,
+        ],
         "TimeSeriesTransformerEncoderLayer": [
             transformers.models.time_series_transformer.modeling_time_series_transformer.TimeSeriesTransformerEncoderLayer
         ],
@@ -56,11 +58,11 @@ def _rewrite_forward_clamp_float16() -> Dict[str, List[type]]:
 
 
 @functools.lru_cache
-def known_transformers_rewritings_clamp_float16() -> Dict[str, str]:
+def known_transformers_rewritings() -> Dict[str, str]:
     """
     This functions returns the list of known classes to be rewritten.
     in :epkg:`transformers`. Each class is mapped to an alias,
-    this alias is then given to :func:`rewritings_transformers_clamp_float16`
+    this alias is then given to :func:`rewritings_transformers`
     to rewrite the encoder layers because of a specific control flow.
 
     .. runpython::
@@ -68,10 +70,10 @@ def known_transformers_rewritings_clamp_float16() -> Dict[str, str]:
 
         import pprint
         from onnx_diagnostic.torch_export_patches.patch_module_helper import (
-            known_transformers_rewritings_clamp_float16,
+            known_transformers_rewritings,
         )
 
-        pprint.pprint(known_transformers_rewritings_clamp_float16())
+        pprint.pprint(known_transformers_rewritings())
     """
     _alias = {
         "AutoformerEncoder": "AutoformerEncoderLayer",
@@ -108,11 +110,14 @@ def known_transformers_rewritings_clamp_float16() -> Dict[str, str]:
         "PLBartForConditionalGeneration": "BartEncoderLayer",
         "TimeSeriesTransformerEncoderLayer": "TimeSeriesTransformerEncoderLayer",
         "TimeSeriesTransformerForPrediction": "TimeSeriesTransformerEncoderLayer",
+        "ViTPatchEmbeddings": "PatchEmbeddings",
+        "ViTForImageClassification": "PatchEmbeddings",
+        "ViTModel": "PatchEmbeddings",
     }
     return _alias
 
 
-def rewritings_transformers_clamp_float16(cls_name) -> List[type]:
+def rewritings_transformers(cls_name) -> List[type]:
     """
     Rewrites known control flows equal to this:
 
@@ -132,15 +137,15 @@ def rewritings_transformers_clamp_float16(cls_name) -> List[type]:
 
         import pprint
         from onnx_diagnostic.torch_export_patches.patch_module_helper import (
-            _rewrite_forward_clamp_float16,
+            _rewrite_forward,
         )
 
-        pprint.pprint(_rewrite_forward_clamp_float16())
+        pprint.pprint(_rewrite_forward())
 
-    Function `_rewrite_forward_clamp_float16` collects
+    Function `_rewrite_forward` collects
     all model classes using those layers.
     """
-    _known = _rewrite_forward_clamp_float16()
+    _known = _rewrite_forward()
 
     assert cls_name in _known, f"cls_name={cls_name!r} unknown in {sorted(_known)}."
 
@@ -159,10 +164,10 @@ def rewritings_transformers_clamp_float16(cls_name) -> List[type]:
     return [_add(cls.forward) for cls in _known[cls_name]]
 
 
-def code_needing_rewriting(cls_name: str) -> Optional[List[Any]]:
+def code_needing_rewriting(cls_name: Union[type, str]) -> Optional[List[Any]]:
     """
     Returns a known list of classes mapped to a known rewritings
-    because of control flow. See :func:`known_transformers_rewritings_clamp_float16`.
+    because of control flow. See :func:`known_transformers_rewritings`.
 
     :param cls_name: name of the class
     :return: a list of rewriting
@@ -177,8 +182,10 @@ def code_needing_rewriting(cls_name: str) -> Optional[List[Any]]:
 
         pprint.pprint(code_needing_rewriting("BartForConditionalGeneration"))
     """
-    aliases = known_transformers_rewritings_clamp_float16()
+    if not isinstance(cls_name, str):
+        cls_name = cls_name.__name__
+    aliases = known_transformers_rewritings()
     if cls_name in aliases:
         alias = aliases[cls_name]
-        return rewritings_transformers_clamp_float16(alias)
+        return rewritings_transformers(alias)
     return None

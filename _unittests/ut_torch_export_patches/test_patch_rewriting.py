@@ -4,6 +4,7 @@ from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2 impo
     rewrite_loop_for_square_mask,
 )
 from onnx_diagnostic.torch_export_patches.patch_module_helper import code_needing_rewriting
+from onnx_diagnostic.torch_export_patches.patch_module import transform_method
 
 
 class TestPatchRewriting(ExtTestCase):
@@ -37,6 +38,21 @@ class TestPatchRewriting(ExtTestCase):
     def test_code_needing_rewriting(self):
         res = code_needing_rewriting("BartModel")
         self.assertEqual(len(res), 2)
+
+    def test_code_needing_rewriting_vit_patch_embedding(self):
+        res = code_needing_rewriting("ViTPatchEmbeddings")
+        self.assertEqual(len(res), 1)
+
+    def test_code_needing_rewriting_vit_class(self):
+        import transformers
+
+        res = code_needing_rewriting(transformers.models.vit.modeling_vit.ViTModel)
+        self.assertEqual(len(res), 1)
+
+    def test_rewriting_vit_patch_embedding(self):
+        import transformers
+
+        transform_method(transformers.models.vit.modeling_vit.ViTPatchEmbeddings.forward)
 
 
 if __name__ == "__main__":
