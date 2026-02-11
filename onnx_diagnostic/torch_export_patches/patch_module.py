@@ -452,7 +452,7 @@ class RewriteControlFlow(ast.NodeTransformer):
                 and node.body[0].value.func.attr == "_check"
             ):
                 # We assume there is nothing to do,
-                # and this was rewritting by _rewrite_if_raise.
+                # and this was rewritten by _rewrite_if_raise.
                 # Or maybe we can include that into the check itself.
                 return [node]
             # Otherwise it is sompething else.
