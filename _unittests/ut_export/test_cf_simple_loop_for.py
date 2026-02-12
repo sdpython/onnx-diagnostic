@@ -1,7 +1,7 @@
 import unittest
 from typing import Tuple
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch
+from onnx_diagnostic.ext_test_case import ExtTestCase, requires_torch, requires_transformers
 from onnx_diagnostic.export.control_flow_onnx import (
     enable_code_export_control_flow,
 )
@@ -332,6 +332,7 @@ class TestCfSimpleLoopFor(ExtTestCase):
         self.assertEqualArray(model(n, -x), ep.module()(n, -x))
 
     @requires_torch("2.9.99")
+    @requires_transformers("4.50")
     def test_simple_loop_for_phi4(self):
         _IMAGE_SPECIAL_TOKEN_ID = 200010
         vocab_size = 200064
