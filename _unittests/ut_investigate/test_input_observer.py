@@ -1026,41 +1026,46 @@ class TestInputObserver(ExtTestCase):
             {
                 "a": {0: cst, 1: cst},
                 "args": ({0: cst, 1: cst}, {0: cst, 1: cst}),
-                "kwargs": {"x": {1: cst}, "y": {1: cst}},
+                "kwargs": {"x": {0: cst, 1: cst}, "y": {1: cst}},
             },
             ds,
         )
-        args = observer.infer_arguments()
-        self.assertIsInstance(args, dict)
-        self.assertEqual(2, len(args))
-        self.assertEqual(["x", "y"], list(args))
 
         dynamic_shapes = torch.export.AdditionalInputs()
-        for kwargs in inputs:
-            dynamic_shapes.add((), kwargs)
-        dss = dynamic_shapes.dynamic_shapes(model, (), inputs[0])
+        for args, kwargs in inputs:
+            dynamic_shapes.add(args, kwargs)
+        dss = dynamic_shapes.dynamic_shapes(model, *inputs[0])
         self.assertEqual(
             {
-                "a": {0: cst, 1: cst},
-                "args": ({0: cst, 1: cst}, {0: cst, 1: cst}),
-                "kwargs": {"x": {1: cst}, "y": {1: cst}},
+                "a": (cst, cst),
+                "args": ((cst, cst), (cst, cst)),
+                "kwargs": {"x": (cst, cst), "y": (None, cst)},
             },
             dss,
         )
+
+        with self.assertRaises(RuntimeError):
+            observer.infer_arguments()
+
+        args, kwargs = observer.infer_arguments(as_args_kwargs=True)
+        self.assertIsInstance(kwargs, dict)
+        self.assertEqual(["x", "y"], list(kwargs))
+        self.assertIsInstance(args, tuple)
+        self.assertEqual(len(args), 3)
 
         # _get_range_constraints
         with torch_export_patches(patch_torch=True):
             torch.export.export(
                 model,
-                (),
+                args,
                 kwargs=kwargs,
                 dynamic_shapes={
                     "a": {0: cst, 1: cst},
                     "args": ({0: cst, 1: cst}, {0: cst, 1: cst}),
-                    "kwargs": {"x": {1: cst}, "y": {1: cst}},
+                    "kwargs": {"x": {0: cst, 1: cst}, "y": {1: cst}},
                 },
             )
-            torch.export.export(model, (), kwargs=args, dynamic_shapes=ds)
+            torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=ds)
 
 
 if __name__ == "__main__":
