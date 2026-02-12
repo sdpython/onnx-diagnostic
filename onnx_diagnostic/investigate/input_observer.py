@@ -606,7 +606,12 @@ class InputObserverInfo:
         index_or_candidate: InputCandidate | int | None = None,
         flat: bool = False,
         as_args_kwargs: bool = False,
-    ) -> list[torch.Tensor] | tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
+    ) -> (
+        list[torch.Tensor]
+        | tuple[torch.Tensor, ...]
+        | dict[str, torch.Tensor]
+        | tuple[list[torch.Tensor] | tuple[torch.Tensor, ...], dict[str, torch.Tensor]]
+    ):
         """Infers arguments based on the collected tensors."""
         # This is already checked by _build_inputs_completed_with_none_values
         # but this is not always well captured by tools checking types.
@@ -908,7 +913,12 @@ class InputObserver:
         index_or_args_or_kwargs: tuple[Any] | dict[str, Any] | int | None = None,
         flat: bool = False,
         as_args_kwargs: bool = False,
-    ) -> list[torch.Tensor] | tuple[torch.Tensor, ...] | dict[str, torch.Tensor]:
+    ) -> (
+        list[torch.Tensor]
+        | tuple[torch.Tensor, ...]
+        | dict[str, torch.Tensor]
+        | tuple[list[torch.Tensor] | tuple[torch.Tensor, ...], dict[str, torch.Tensor]]
+    ):
         """Infers arguments based on the collected tensors.
 
         Args:
