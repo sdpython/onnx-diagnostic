@@ -152,7 +152,25 @@ def _combine_args(f, args, kwargs, preserve_order: bool = False) -> dict[str, An
     if not preserve_order:
         return combined_args
 
-    combined_args_traced_order = dict(zip(signature.parameters, args))
+    var_position_parameters = [
+        name
+        for name, p in signature.parameters.items()
+        if p.kind == inspect.Parameter.VAR_POSITIONAL
+    ]
+    if var_position_parameters:
+        n_positional_only = max(
+            [
+                i
+                for i, p in enumerate(signature.parameters.values())
+                if p.kind == inspect.Parameter.VAR_POSITIONAL
+            ]
+        )
+        combined_args_traced_order = dict(zip(signature.parameters, args[:n_positional_only]))
+        combined_args_traced_order[var_position_parameters[0]] = tuple(
+            args[n_positional_only:]
+        )
+    else:
+        combined_args_traced_order = dict(zip(signature.parameters, args))
     for arg in kwargs:
         if arg in combined_args:
             combined_args_traced_order[arg] = combined_args[arg]
