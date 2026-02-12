@@ -144,11 +144,54 @@ class RewriteControlFlow(ast.NodeTransformer):
             self.local_variables.add(node.id)
         return node
 
+    def is_expression_context(self, node):
+        if not hasattr(node, "_parent") or node._parent is None:
+            return False
+        parent = node._parent
+        # Common expression contexts:
+        if isinstance(
+            parent,
+            (
+                ast.BinOp,
+                ast.UnaryOp,
+                ast.BoolOp,
+                ast.Call,
+                ast.Subscript,
+                ast.Compare,
+                ast.Return,
+                ast.Expr,
+                ast.If,
+                ast.While,
+            ),
+        ):
+            return True
+        # RHS of assignment: parent is Assign and node is in value
+        if isinstance(parent, ast.Assign) and node in ast.walk(parent.value):
+            return True
+        return False
+
+    def _attach_parents(self, node, parent=None):
+        node._parent = parent
+        if parent and not hasattr(node, "lineno"):
+            node.lineno = parent.lineno
+        for child in ast.iter_child_nodes(node):
+            self._attach_parents(child, node)
+
     def visit_FunctionDef(self, node):
         # Capture argument names for branch functions
         old_args = self.current_func_args
         self.current_func_args = [arg.arg for arg in node.args.args]
-        node.body = [self.visit(n) for n in node.body]
+        new_body = []
+        for n in node.body:
+            visited = self.visit(n)
+            if isinstance(visited, list):
+                for n in visited:
+                    self._attach_parents(n, node)
+                new_body.extend(visited)
+            else:
+                self._attach_parents(visited, node)
+                new_body.append(visited)
+        node.body = new_body
         self.current_func_args = old_args
         return node
 
@@ -332,6 +375,36 @@ class RewriteControlFlow(ast.NodeTransformer):
         tgt = d[0] if len(d) == 1 else ast.Tuple(d, ctx=ast.Load())
         return tgt, tgt_mapping
 
+    def _rewrite_if_raise(self, cond_node, raise_node, known_local_variables=None):
+        assert known_local_variables is not None, "known_local_variables cannot be None"
+
+        expr = ast.Expr(
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id="torch", ctx=ast.Load()),
+                    attr="_check",
+                    ctx=ast.Load(),
+                ),
+                args=[
+                    ast.UnaryOp(op=ast.Not(), operand=cond_node),
+                    ast.Lambda(
+                        args=ast.arguments(
+                            posonlyargs=[],
+                            args=[],
+                            vararg=None,
+                            kwonlyargs=[],
+                            kw_defaults=[],
+                            kwarg=None,
+                            defaults=[],
+                        ),
+                        body=raise_node.exc.args[0],
+                    ),
+                ],
+                keywords=[],
+            )
+        )
+        return expr
+
     def visit_If(self, node):
         if not self.filter_node(node):
             return [node]
@@ -356,6 +429,33 @@ class RewriteControlFlow(ast.NodeTransformer):
         )
         self._check(self.current_func_args is not None, node, "current_func_args is None")
         self.counter_test += 1
+
+        if not has_then_return and not node.orelse:
+            then_raise = [n for n in node.body if isinstance(n, ast.Raise)]
+            if then_raise:
+                self._check(
+                    len(then_raise) == 1 == len(node.body), node, "More than a simple raise."
+                )
+                check_node = self._rewrite_if_raise(
+                    node.test, then_raise[0], known_local_variables=known_local_variables
+                )
+                ast.copy_location(check_node, node)
+                ast.fix_missing_locations(check_node)
+                return [self.post_rewriter(check_node)]
+            if (
+                len(node.body) == 1
+                and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Call)
+                and isinstance(node.body[0].value.func, ast.Attribute)
+                and isinstance(node.body[0].value.func.value, ast.Name)
+                and node.body[0].value.func.value.id == "torch"
+                and node.body[0].value.func.attr == "_check"
+            ):
+                # We assume there is nothing to do,
+                # and this was rewritten by _rewrite_if_raise.
+                # Or maybe we can include that into the check itself.
+                return [node]
+            # Otherwise it is sompething else.
 
         if not has_then_return:
             # Case 1: simple assignment in both branches
@@ -391,10 +491,10 @@ class RewriteControlFlow(ast.NodeTransformer):
                     f"Inconsistencies between n_returned_values={n_returned_values}, "
                     f"dropped={dropped}, tgt.elts={tgt.elts}, tgt_elts={tgt_elts}"
                 )
-                tgt = ast.Tuple(tgt_elts, ctx=ast.Store())
+                tgt = ast.Tuple(list(tgt_elts), ctx=ast.Store())
 
             added = {tgt.id} if isinstance(tgt, ast.Name) else set(t.id for t in tgt.elts)
-            assign = ast.Assign(targets=[tgt], value=call)
+            assign = ast.Assign(targets=[tgt], value=call, ctx=ast.Store())
             ast.copy_location(assign, node)
             ast.fix_missing_locations(assign)
             self.local_variables = known_local_variables | added
@@ -567,7 +667,7 @@ class RewriteControlFlow(ast.NodeTransformer):
                 ),
             ],
             decorator_list=[],
-            ctx=ast.Store(),
+            ctx=ast.Load(),
         )
 
         # final rewriting
@@ -590,7 +690,7 @@ class RewriteControlFlow(ast.NodeTransformer):
             args=[
                 ast.Name(id=func_name, ctx=ast.Load()),
                 ast.List(
-                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in init_vars], ctx=ast.Store()
+                    elts=[ast.Name(id=v, ctx=ast.Load()) for v in init_vars], ctx=ast.Load()
                 ),
                 ast.List(
                     elts=[
@@ -636,13 +736,13 @@ class RewriteControlFlow(ast.NodeTransformer):
                         ],
                         *[ast.Name(id=v, ctx=ast.Load()) for v in scan_vars],
                     ],
-                    ctx=ast.Store(),
+                    ctx=ast.Load(),
                 ),
                 ast.List(
                     elts=[
                         ast.Name(id=v, ctx=ast.Load()) for v in [*scan_shape_vars, *input_vars]
                     ],
-                    ctx=ast.Store(),
+                    ctx=ast.Load(),
                 ),
             ],
             keywords=[],
@@ -859,20 +959,28 @@ def transform_method(
         )
     try:
         mod = compile(new_tree, filename="<ast>", mode="exec")
-    except TypeError as e:
-        if 'required field "lineno" missing from stmt' in str(e):
-            # Could not find a way to avoid compilng a string.
+    except (TypeError, ValueError) as e:
+        se = str(e)
+        if (
+            'required field "lineno" missing from' in se
+            or "expression must have Load context but has Store instead" in se
+        ):
+            # Could not find a way to avoid compiling a string.
             # The error message still pops up without indicating which node is not
             # properly set.
             code = ast.unparse(new_tree)
-            mod = compile(code, filename="<source>", mode="exec")
+            try:
+                mod = compile(code, filename="<source>", mode="exec")
+            except IndentationError as ee:
+                raise RuntimeError(f"Unable to compile due to {ee} (and {e})\n{code}") from ee
         else:
             kws = dict(include_attributes=True, annotate_fields=True, indent=4)
             raise RuntimeError(
-                f"Unable to compile code\n--CODE--\n"
+                f"Unable to compile code due to {e}\n--CODE--\n"
                 f"{ast.unparse(new_tree)}\n--TREE--\n"
                 f"{ast.dump(new_tree, **kws)}"
             ) from e
+
     namespace: Dict[str, type] = {}
     globs = func.__globals__.copy()
     exec(mod, globs, namespace)

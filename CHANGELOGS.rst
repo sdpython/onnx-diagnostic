@@ -4,6 +4,8 @@ Change Logs
 0.9.2
 +++++
 
+* pr:`412`: patches for ViTModel (through rewriting)
+
 0.9.1
 +++++
 

@@ -529,7 +529,6 @@ class TestPatchModule(ExtTestCase):
 
     @requires_torch("2.8")
     def test_rewrite_loop(self):
-
         class Model(torch.nn.Module):
             def forward(self, x, y):
                 z = torch.empty((x.shape[0], y.shape[0]))
@@ -714,6 +713,46 @@ class TestPatchModule(ExtTestCase):
                     )
                     got = ep.module()(x)
                     self.assertEqualArray(expected, got)
+
+    def test_test_raise(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                if x.shape[0] != y.shape[0]:
+                    raise ValueError(f"Wrong shape {x.shape=} and {y.shape=}")
+                return x + y
+
+        x, y = torch.rand((3, 4)), torch.rand((3, 4))
+        expected, expected_ = Model()(x, y), Model()(-x, y)
+
+        rewritten = transform_method(Model.forward)
+        self.assertIn("torch._check(", rewritten.code)
+        Model.forward = rewritten.func
+        self.assertEqualAny(expected, Model()(x, y))
+        self.assertEqualAny(expected_, Model()(-x, y))
+
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        ep = torch.export.export(Model(), (x, y), dynamic_shapes=ds)
+        self.assertEqualAny(expected, ep.module()(x, y))
+        self.assertEqualAny(expected_, ep.module()(-x, y))
+
+    @hide_stdout()
+    def test_test_raise_rewrite(self):
+        class Model(torch.nn.Module):
+            def forward(self, x, y):
+                if x.shape[0] != y.shape[0]:
+                    raise ValueError(f"Wrong shape {x.shape=} and {y.shape=}")
+                return x + y
+
+        model = Model()
+        x, y = torch.rand((4, 5)), torch.rand((4, 5))
+        expected = model(x, y)
+        DYN = torch.export.Dim.DYNAMIC
+        ds = ({0: DYN, 1: DYN}, {0: DYN, 1: DYN})
+        with torch_export_rewrite(rewrite=[(Model, "forward")], verbose=1):
+            ep = torch.export.export(model, (x, y), dynamic_shapes=ds)
+            got = ep.module()(x, y)
+            self.assertEqualArray(expected, got)
 
 
 if __name__ == "__main__":

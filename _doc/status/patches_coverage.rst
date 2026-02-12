@@ -49,17 +49,17 @@ The number of fixes if much less than the number of classes to fix.
 
     import pprint
     from onnx_diagnostic.torch_export_patches.patch_module_helper import (
-        known_transformers_rewritings_clamp_float16,
+        known_transformers_rewritings,
     )
 
-    pprint.pprint(known_transformers_rewritings_clamp_float16())
+    pprint.pprint(known_transformers_rewritings())
 
 .. runpython::
     :showcode:
 
     import pprint
     from onnx_diagnostic.torch_export_patches.patch_module_helper import (
-        _rewrite_forward_clamp_float16,
+        _rewrite_forward,
     )
 
-    pprint.pprint(_rewrite_forward_clamp_float16())
+    pprint.pprint(_rewrite_forward())

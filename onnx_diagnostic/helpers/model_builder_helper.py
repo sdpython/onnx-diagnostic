@@ -40,6 +40,7 @@ def download_model_builder_to_cache(
         "gemma.py",
         "gptoss.py",
         "granite.py",
+        "internlm.py",
         "llama.py",
         "mistral.py",
         "nemotron.py",
