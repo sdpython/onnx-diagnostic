@@ -19,20 +19,17 @@ def _flatten_unflatten_for_dynamic_shapes(
     the definition of the dynamic shapes should use.
 
     Args:
-        obj:
-            object from a custom class
-        use_dict:
-            closer to the original result but
+        obj: Object from a custom class.
+        use_dict: Closer to the original result but
             :func:`torch.export.export` only considers the values,
             the context gives the dictionary keys but it is not expressed
             in the dynamic shapes, these specifications seems to be different
             for the strict and non strict mode. It also preserves tuple.
-        change_function:
-            to modify the tensor in the structure itself,
-            like replace them by a shape
+        change_function: If not empty, this function is called to modify the tensors
+            in the structure itself, like replace them by a shape.
 
     Returns:
-        the flattened object
+        The flattened object.
     """
     if isinstance(obj, torch.Tensor):
         return change_function(obj) if change_function else obj
@@ -79,10 +76,10 @@ def _infer_dynamic_dimensions(
 
     Args:
         shape_list:
-            list of shapes, they must all have the same length
+            List of shapes, they must all have the same length.
         set_batch_dimension:
-            forces the first dimension to be treated as dynamic,
-            even if all shapes have the same value for that dimension
+            Forces the first dimension to be treated as dynamic,
+            even if all shapes have the same value for that dimension.
 
     Returns:
         list of dynamic dimensions
@@ -107,15 +104,11 @@ class InputCandidate:
     Any class is allowed as long as it can be flattened.
 
     Args:
-        args:
-            Positional arguments.
-        kwargs:
-            Optional arguments.
-        clone:
-            Clones the inputs before storing them. Some tensors
+        args: Positional arguments.
+        kwargs: Optional arguments.
+        clone: Clone the inputs before storing them. Some tensors
             may be modified inplace, the original value must be retained.
-        cst_kwargs:
-            Any optional arguments constant over multiple calls.
+        cst_kwargs: Any optional arguments constant over multiple calls.
             int, float, str, bool values must be stored here.
 
     The constructor flattens the received arguments.
@@ -136,7 +129,6 @@ class InputCandidate:
         self._position_to_args_kwargs: list[int | str] | None = None
         self._n_tensors_for_args_kwargs: dict[int | str, int] | None = None
         self.cst_kwargs = cst_kwargs.copy()
-        assert "use_cache" not in self.cst_kwargs
 
         if clone:
             self.flat_list = [
@@ -158,11 +150,11 @@ class InputCandidate:
         )
 
     def __len__(self) -> int:
-        """Returns the number of flattended tensors, None tensors are included."""
+        """Returns the number of flattened tensors, None tensors are included."""
         return len(self.flat_list)
 
     def str_obs(self) -> str:
-        """Prints out some information about the osbervations."""
+        """Prints out some information about the observations."""
         return (
             f"InputCandidate(args={string_type(self.args, with_shape=True)}, "
             f"kwargs={string_type(self.kwargs, with_shape=True)}, "
@@ -286,28 +278,24 @@ class InputObserverInfo:
     and the arguments to send to :func:`torch.export.export`.
 
     Args:
-        signature_names:
-            Names of the arguments of the method
+        signature_names: Names of the arguments of the method
             the collector tensors come from. They are used if it becomes
             necessary to move positional arguments to named ones.
             They are used a second time because :func:`torch.export.export`
             cares about the order in kwargs and dynamic shapes, it needs
             to be the same in the ordered dictionaries `add_inputs` receive.
-        default_values:
-            Default values defined by the signature of the function,
-            any value equal to that is ignore to simplify the export.
-        missing:
-            If a named argument (in kwargs) is missing,
+        default_values: Default values defined by the signature of the function,
+            any value equal to that is ignored to simplify the export.
+        missing: If a named argument (in kwargs) is missing,
             a default value will be taken in this dictionary,
             this is used when after the prefill step, an argument
             disappears (such as `pixel_values`) and another one
             is added (such as `past_key_values`).
             The values are only to infer dynamic shapes and arguments,
             not to run the model.
-        args_name_and_position:
-            Name of parameter `*args` and its position if it exists.
-        kwargs_name:
-            Name of parameter `**kwargs` if it exists.
+        args_name_and_position: Name of parameter `*args`
+            and its position if it exists.
+        kwargs_name: Name of parameter `**kwargs` if it exists.
 
     This is used by class :class:`InputObserver`.
     """
@@ -354,7 +342,7 @@ class InputObserverInfo:
         kwargs = {
             k: v
             for k, v in kwargs.items()
-            if v is not None and not isinstance(v, (int, float, bool))
+            if v is not None and not isinstance(v, (int, float, bool, str))
         }
 
         # adds missing attributes
@@ -364,7 +352,7 @@ class InputObserverInfo:
 
         # kwargs may come in a different ordeer teach.
         # dictionaries are ordered and torch.export.export expects
-        # dynamic shapes an kwargs to follow the same order.
+        # dynamic shapes and kwargs to follow the same order.
 
         ordered_kwargs = {k: kwargs[k] for k in self.signature_names if k in kwargs}
         for k, v in kwargs.items():
@@ -429,12 +417,12 @@ class InputObserverInfo:
         set of inputs referenced by their name (str) or their position (int).
 
         Args:
-            set_batch_dimension_for (set[int | str] | None): Set of input identifiers,
+            set_batch_dimension_for (set[int | str] | bool | None): Set of input identifiers,
                 by name (``str``) or position (``int``), for which the first dimension
                 should be treated as a dynamic batch dimension. If ``None`` or empty,
                 no additional batch dimensions are marked as dynamic.
             return_flat: Tells the function to return a flat tuple instead of
-                nested structured.
+                nested structured. This option is used internally to infer arguments.
         """
         self.align_inputs_none_values()
         # type checking
@@ -442,7 +430,7 @@ class InputObserverInfo:
         assert self._best_candidate.flat_list is not None
         assert self._best_candidate.aligned_flat_list is not None
 
-        def _set_batch_dimension(name_or_position):
+        def _set_batch_dimension(name_or_position) -> bool:
             if not set_batch_dimension_for:
                 return False
             if (
@@ -458,7 +446,7 @@ class InputObserverInfo:
                     return True
             return False
 
-        def _set_batch_dimension_for_flat_index(index):
+        def _set_batch_dimension_for_flat_index(index) -> bool:
             # type checking
             assert self._best_candidate is not None
             return _set_batch_dimension(self._best_candidate.position_to_args_kwargs[index])
@@ -466,8 +454,8 @@ class InputObserverInfo:
         if len(self._best_candidate.flat_list) != len(self._best_candidate.aligned_flat_list):
             raise NotImplementedError(
                 "infer_dynamic_shapes is not implemented "
-                "when the best candidate is not 'aligned'."
-                "This happens when there is not stored set inputs where "
+                "when the best candidate is not 'aligned'. "
+                "This happens when there is no stored set of inputs where "
                 "all optional inputs showing in other sets are defined."
             )
 
@@ -579,7 +567,10 @@ class InputObserverInfo:
             change_function=change_function,
         )
         if self._best_candidate.cst_kwargs:
-            ds_kwargs = {**ds_kwargs, **dict.fromkeys(self._best_candidate.cst_kwargs, None)}
+            ds_kwargs = {
+                **ds_kwargs,
+                **dict.fromkeys(self._best_candidate.cst_kwargs, None),
+            }
         if not ds_kwargs and not self.args_name_and_position:
             return tuple(ds_args)
         if not ds_args:
@@ -617,8 +608,6 @@ class InputObserverInfo:
         # but this is not always well captured by tools checking types.
         self.align_inputs_none_values()
         torch._check(self._best_candidate is not None, lambda: "No input was captured.")
-        # type checking
-        assert self._best_candidate is not None
         candidate = None
         if index_or_candidate is None:
             for cand in self.inputs:
@@ -641,8 +630,6 @@ class InputObserverInfo:
             candidate = index_or_candidate
 
         torch._check(candidate is not None, "No input was captured.")
-        # type checking
-        assert candidate is not None
         if candidate.aligned_flat_list is None:
             raise RuntimeError(
                 f"Candidate {candidate} has no aligned flat list of tensors, "
@@ -651,6 +638,7 @@ class InputObserverInfo:
             )
 
         aligned_flat_list = candidate.aligned_flat_list
+        assert aligned_flat_list is not None  # noqa: S101
         if any(t is None for t in aligned_flat_list):
             dynamic_shapes = self.infer_dynamic_shapes(return_flat=True)
             # type checking
@@ -704,7 +692,8 @@ class InputObserverInfo:
         assert candidate is not None
         assert candidate.aligned_spec is not None
         args, kwargs = torch.utils._pytree.tree_unflatten(
-            aligned_flat_list, candidate.aligned_spec
+            aligned_flat_list,
+            candidate.aligned_spec,
         )
         if self._best_candidate.cst_kwargs:
             kwargs = {**kwargs, **self._best_candidate.cst_kwargs}
@@ -731,10 +720,9 @@ class InputObserverInfo:
         return tuple(args), kwargs
 
     def _post_process_for_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
-        """
-        :func:`torch.export.export` requires to have dynamic shapes and keyword arguments
-        wrapped into `'kwargs': { 'param':  shape or tensor }` if 'param' is not part
-        of the signature but is caught through `**kwargs`.
+        """:func:`torch.export.export` requires to have dynamic shapes
+        and keyword arguments wrapped into `'kwargs': { 'param':  shape or tensor }`
+        if 'param' is not part of the signature but is caught through `**kwargs`.
         This function ensures this is the case.
         """
         if not self.kwargs_name:
@@ -815,7 +803,7 @@ class InputObserver:
         return res
 
     def num_obs(self) -> int:
-        """Returns the number of stored set if inputs."""
+        """Returns the number of stored set of inputs."""
         return 0 if not self.info else len(self.info)
 
     @contextlib.contextmanager
@@ -870,7 +858,7 @@ class InputObserver:
             *args, _captured_method=_cm, _store_n_calls=_snc, **kwargs
         )
 
-        # It may happen than the signature of the forward is used to trigger a preprocessing.
+        # It may happen that the signature of the forward is used to trigger a preprocessing.
         # This is used in GenerationMixin (transformers):
         #   position_ids_key = "decoder_position_ids" if ... else "position_ids"
         #   if position_ids_key in set(inspect.signature(self.forward).parameters.keys()):
@@ -898,7 +886,7 @@ class InputObserver:
         set of inputs referenced by their name (str) or their position (int).
 
         Args:
-            set_batch_dimension_for (set[int | str] | None): A set of input
+            set_batch_dimension_for (set[int | str] | bool | None): A set of input
                 identifiers (by position as ``int`` or by name as ``str``) for
                 which the first dimension should be treated as a dynamic batch
                 dimension. If ``None``, no dimensions are explicitly marked as
@@ -923,9 +911,9 @@ class InputObserver:
 
         Args:
             index_or_args_or_kwargs: If missing, the method selects one set of inputs
-                among the available ones, usually this inputs containing
-                the set of stored inputs with the highest number of tensors.
-                The then replaces None values and missing tensors by empty tensors.
+                among the available ones, usually the set of inputs containing
+                with the highest number of tensors.
+                It then replaces None values and missing tensors with empty tensors.
                 If not missing, it can be an integer to fetch one of the stored set
                 or some inputs.
             flat: If True, it returns a flattened list of tensors,
@@ -935,7 +923,7 @@ class InputObserver:
                 otherwise, it returns either a tuple (only args) or a dictionary
                 (only kwargs) or raises an exception if it cannot do so.
         Returns:
-            Inferred arguments, every optional tensor is replaced by a empty tensor.
+            Inferred arguments, every optional tensor is replaced by an empty tensor.
         """
         self._check_captured()
         assert self.info is not None  # missed by type checking
@@ -994,22 +982,15 @@ class InputObserver:
         with the saved onnx model.
 
         Args:
-            onnx_model:
-                ONNX Model to verify.
-            atol:
-                Absolute tolerance, recommended values, 1e-4 for float, 1e-2 flot float16.
-            rtol:
-                Relative tolerance.
-            hist:
-                Thresholds, the function determines the number of discrepancies
+            onnx_model: ONNX Model to verify.
+            atol: Absolute tolerance, recommended values, 1e-4 for float, 1e-2 for float16.
+            rtol: Relative tolerance.
+            hist: Thresholds, the function determines the number of discrepancies
                 above these thresholds.
-            progress_bar:
-                Shows a progress bar (requires :epkg:`tqdm`).
-            include_io:
-                Shows inputs/outputs shapes in the summary
+            progress_bar: Shows a progress bar (requires :epkg:`tqdm`).
+            include_io: Shows inputs/outputs shapes in the summary
                 returned by this function.
-            skip_none:
-                Dooes not check discrepancies when an output is None.
+            skip_none: Does not check discrepancies when an output is None.
 
         Returns:
             A list of dictionaries, ready to be consumed by a dataframe.
@@ -1042,8 +1023,8 @@ class InputObserver:
                     f"There are ({len(inputs.aligned_flat_list)}) "
                     f"tensors but the model expects {len(input_names)}."
                 )
-            n_none = sum([t is None for t in inputs.aligned_flat_list])
-            n_empty = sum([t is None or t.numel() == 0 for t in inputs.aligned_flat_list])
+            n_none = sum(t is None for t in inputs.aligned_flat_list)
+            n_empty = sum(t is None or t.numel() == 0 for t in inputs.aligned_flat_list)
 
             feeds = dict(zip(input_names, self.info.infer_arguments(inputs, flat=True)))
 
@@ -1075,7 +1056,7 @@ class InputObserver:
                 )
             diff.update(
                 dict(
-                    index=len(diff),
+                    index=len(data),
                     duration_torch=latency,
                     ort_duration=duration,
                     n_inputs=len(input_names),
