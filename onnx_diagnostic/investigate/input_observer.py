@@ -104,11 +104,15 @@ class InputCandidate:
     Any class is allowed as long as it can be flattened.
 
     Args:
-        args: Positional arguments.
-        kwargs: Optional arguments.
-        clone: Clone the inputs before storing them. Some tensors
+        args:
+            Positional arguments.
+        kwargs:
+            Optional arguments.
+        clone:
+            Clone the inputs before storing them. Some tensors
             may be modified inplace, the original value must be retained.
-        cst_kwargs: Any optional arguments constant over multiple calls,
+        cst_kwargs:
+            Any optional arguments constant over multiple calls,
             int, float, str, bool values must be stored here.
 
     The constructor flattens the received arguments.
