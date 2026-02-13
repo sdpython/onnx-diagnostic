@@ -607,7 +607,7 @@ class InputObserverInfo:
         # This is already checked by _build_inputs_completed_with_none_values
         # but this is not always well captured by tools checking types.
         self.align_inputs_none_values()
-        torch._check(self._best_candidate is not None, lambda: "No input was captured.")
+        assert self._best_candidate is not None, "No input was captured."
         candidate = None
         if index_or_candidate is None:
             for cand in self.inputs:
@@ -629,7 +629,7 @@ class InputObserverInfo:
         else:
             candidate = index_or_candidate
 
-        torch._check(candidate is not None, "No input was captured.")
+        assert candidate is not None, "No input was captured."
         if candidate.aligned_flat_list is None:
             raise RuntimeError(
                 f"Candidate {candidate} has no aligned flat list of tensors, "
