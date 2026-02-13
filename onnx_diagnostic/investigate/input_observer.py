@@ -910,18 +910,22 @@ class InputObserver:
         """Infers arguments based on the collected tensors.
 
         Args:
-            index_or_args_or_kwargs: If missing, the method selects one set of inputs
+            index_or_args_or_kwargs:
+                If missing, the method selects one set of inputs
                 among the available ones, usually the set of inputs containing
                 with the highest number of tensors.
                 It then replaces None values and missing tensors with empty tensors.
                 If not missing, it can be an integer to fetch one of the stored set
                 or some inputs.
-            flat: If True, it returns a flattened list of tensors,
+            flat:
+                If True, it returns a flattened list of tensors,
                 if False, it returns a tuple or a dictionary preserving
                 the nested structures.
-            as_args_kwargs: If True, the method always returns `(args, kwargs)`,
+            as_args_kwargs:
+                If True, the method always returns `(args, kwargs)`,
                 otherwise, it returns either a tuple (only args) or a dictionary
                 (only kwargs) or raises an exception if it cannot do so.
+
         Returns:
             Inferred arguments, every optional tensor is replaced by an empty tensor.
         """
@@ -982,15 +986,22 @@ class InputObserver:
         with the saved onnx model.
 
         Args:
-            onnx_model: ONNX Model to verify.
-            atol: Absolute tolerance, recommended values, 1e-4 for float, 1e-2 for float16.
-            rtol: Relative tolerance.
-            hist: Thresholds, the function determines the number of discrepancies
+            onnx_model:
+                ONNX Model to verify.
+            atol:
+                Absolute tolerance, recommended values, 1e-4 for float, 1e-2 for float16.
+            rtol:
+                Relative tolerance.
+            hist:
+                Thresholds, the function determines the number of discrepancies
                 above these thresholds.
-            progress_bar: Shows a progress bar (requires :epkg:`tqdm`).
-            include_io: Shows inputs/outputs shapes in the summary
+            progress_bar:
+                Shows a progress bar (requires :epkg:`tqdm`).
+            include_io:
+                Shows inputs/outputs shapes in the summary
                 returned by this function.
-            skip_none: Does not check discrepancies when an output is None.
+            skip_none:
+                Does not check discrepancies when an output is None.
 
         Returns:
             A list of dictionaries, ready to be consumed by a dataframe.
