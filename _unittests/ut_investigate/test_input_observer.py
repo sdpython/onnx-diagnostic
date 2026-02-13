@@ -872,7 +872,8 @@ class TestInputObserver(ExtTestCase):
             for args, kwargs in inputs:
                 model(*args, **kwargs)
         self.assertEqual(len(observer.info), 4)
-        self.assertRaise(lambda: observer.infer_dynamic_shapes(), RuntimeError)
+        with self.assertRaises(RuntimeError):
+            observer.infer_dynamic_shapes()
         # for cand in observer.info.inputs:
         #    cand.str_obs()
         #    self.assertEqual(
