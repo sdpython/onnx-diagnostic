@@ -1,3 +1,4 @@
+import os
 import subprocess
 from argparse import ArgumentParser, Namespace
 from typing import Dict, List, Optional, Tuple, Union
@@ -131,3 +132,14 @@ def get_parsed_args(
     if update:
         res.__dict__.update(update)
     return res
+
+
+def process_outputname(output_name: str, input_name: str) -> str:
+    """
+    If 'output_name' starts with '+', then it is modified into
+    ``<input_name_no_extension><output_name>.extension``.
+    """
+    if not output_name.startswith("+"):
+        return output_name
+    name, ext = os.path.splitext(input_name)
+    return f"{name}{output_name[1:]}{ext}"

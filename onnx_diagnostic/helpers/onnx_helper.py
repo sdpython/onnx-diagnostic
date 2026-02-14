@@ -1355,6 +1355,20 @@ def make_submodel(
     )
 
 
+def unknown_names_within_nodes(nodes: List[NodeProto]) -> Set[str]:
+    """Returns the list of unknown results from a list of nodes."""
+    not_known: Set[str] = set()
+    for node in nodes[::-1]:
+        not_known -= {o for o in node.output if o}
+        not_known |= {i for i in node.input if i}
+        if node.op_type in {"Scan", "If", "Loop"}:
+            # there are hidden inputs
+            for att in node.attribute:
+                if att.type == onnx.AttributeProto.GRAPH:
+                    not_known |= get_hidden_inputs(att.g)
+    return not_known
+
+
 def make_subfunction(
     name: str,
     nodes: List[NodeProto],
@@ -1374,21 +1388,11 @@ def make_subfunction(
     :param domain: function domain
     :return: model proto
     """
-    not_known: Set[str] = set()
-    for node in nodes[::-1]:
-        not_known -= {o for o in node.output if o}
-        not_known |= {i for i in node.input if i}
-        if node.op_type in {"Scan", "If", "Loop"}:
-            # there are hidden inputs
-            for att in node.attribute:
-                if att.type == onnx.AttributeProto.GRAPH:
-                    not_known |= get_hidden_inputs(att.g)
-
     return oh.make_function(
         domain,
         name,
         nodes=nodes,
-        inputs=sorted(not_known),
+        inputs=sorted(unknown_names_within_nodes(nodes)),
         outputs=output_names,
         opset_imports=opset_imports,
     )
@@ -1767,38 +1771,88 @@ def _find_used_names(node_list, node_indices):
 
 
 def check_for_non_recursivity(
-    node_list: List[Optional[NodeProto]], inputs: Sequence[str], outputs: Sequence[str]
+    node_indices: List[int],
+    node_list: List[Optional[NodeProto]],
+    inputs: Sequence[str],
+    outputs: Sequence[str],
 ):
     """
-    We finally need to check that any of this output is not required
+    We need to check that any of this output is not required
     by one input from the function itself, that would mean one node
     needs an output of the function and is also required by the function:
     it is probably missing from the initial set.
 
-
-
+    :param node_indices: node_indices part of the subset
     :param node_list: list of nodes
     :param inputs: input names to consider
     :param outputs: output names which cannot be involved in input names
     """
+    orginal_set_inputs = set(inputs)
     set_inputs = set(inputs)
-    set_outputs = set(outputs)
-    for node in node_list[::-1]:
+    original_set_outputs = set(outputs)
+    subset = set(node_indices)
+    before_inputs = set()
+    indexed_node = list(enumerate(node_list))
+    for ind, node in indexed_node[::-1]:
         if not node:
             continue
-        si = set(node.output)
-        if si & set_inputs:
-            set_inputs |= set(node.input)
-            if node.op_type in {"Scan", "If", "Loop"}:
-                # there are hidden inputs
-                for att in node.attribute:
-                    if att.type == onnx.AttributeProto.GRAPH:
-                        set_inputs |= get_hidden_inputs(att.g)
-        if set_outputs & set_inputs:
-            raise ValueError(
-                f"Results {set_outputs & set_inputs} are needed for inputs {inputs} "
-                f"but also requires {outputs} which is not allowed."
-            )
+        s_outputs = set(o for o in node.output if o)
+        if ind in subset:
+            # The node is part of the subset.
+            if s_outputs & set_inputs:
+                set_inputs |= set(i for i in node.input if i)
+                if node.op_type in {"Scan", "If", "Loop"}:
+                    # there are hidden inputs
+                    for att in node.attribute:
+                        if att.type == onnx.AttributeProto.GRAPH:
+                            set_inputs |= get_hidden_inputs(att.g)
+            if original_set_outputs & set_inputs:
+                raise ValueError(
+                    f"Results {original_set_outputs & set_inputs} "
+                    f"are needed for inputs {inputs} "
+                    f"but also requires {outputs} which is not allowed."
+                )
+        else:
+            # Not part of the function. Let's check
+            if s_outputs & orginal_set_inputs:
+                before_inputs |= set(i for i in node.input if i)
+                if node.op_type in {"Scan", "If", "Loop"}:
+                    # there are hidden inputs
+                    for att in node.attribute:
+                        if att.type == onnx.AttributeProto.GRAPH:
+                            before_inputs |= get_hidden_inputs(att.g)
+            if original_set_outputs & before_inputs:
+                raise ValueError(
+                    f"Results {original_set_outputs & before_inputs} "
+                    f"are needed for inputs {inputs} "
+                    f"but also requires {outputs} which is not allowed."
+                )
+
+
+def _select_nodes_from_metadata_with_regex(
+    model: ModelProto, prefix: str, regex: str
+) -> Tuple[Dict[str, List[int]], Set[str]]:
+    reg = re.compile(regex)
+    unique_values = set()
+    unique: Dict[str, List[int]] = {}
+    for i, node in enumerate(model.graph.node):
+        selected = False
+        for data in node.metadata_props:
+            if data.key.startswith(prefix):
+                values = re.split("[,:]", data.value)
+                for v in values:
+                    if not v:
+                        continue
+                    if reg.match(v):
+                        if v not in unique:
+                            unique[v] = []
+                        unique[v].append(i)
+                        selected = True
+                        break
+                    unique_values.add(v)
+                if selected:
+                    break
+    return unique, unique_values
 
 
 def make_model_with_local_functions(
@@ -1828,26 +1882,8 @@ def make_model_with_local_functions(
         if isinstance(metadata_key_prefix, tuple)
         else (metadata_key_prefix,)
     )
-    reg = re.compile(regex)
-    unique_values = set()
-    unique: Dict[str, List[int]] = {}
-    for i, node in enumerate(model.graph.node):
-        selected = False
-        for data in node.metadata_props:
-            if data.key.startswith(prefix):
-                values = re.split("[,:]", data.value)
-                for v in values:
-                    if not v:
-                        continue
-                    if reg.match(v):
-                        if v not in unique:
-                            unique[v] = []
-                        unique[v].append(i)
-                        selected = True
-                        break
-                    unique_values.add(v)
-                if selected:
-                    break
+    unique, unique_values = _select_nodes_from_metadata_with_regex(model, prefix, regex)
+
     # sets of nodes.
     if not unique:
         if verbose:
@@ -1856,6 +1892,12 @@ def make_model_with_local_functions(
 
     if verbose:
         print(f"[make_model_with_local_functions] matched {len(unique)} partitions")
+        for un, nid in unique.items():
+            print(f"[make_model_with_local_functions] {un!r}: {len(nid)} nodes")
+            for ind in nid[:5]:
+                print(f"     {pretty_onnx(model.graph.node[ind])}")
+            if len(nid) > 5:
+                print("     ...")
     functions = []
     new_nodes: List[Optional[NodeProto]] = list(model.graph.node)
     for key, node_indices in unique.items():
@@ -1866,15 +1908,27 @@ def make_model_with_local_functions(
                 f"nodes in partition {function_name!r}"
             )
         outputs = _find_used_names(new_nodes, node_indices)
-        function_nodes = [new_nodes[i] for i in node_indices]
+        function_nodes = [new_nodes[i] for i in node_indices if new_nodes[i]]
+
+        check_for_non_recursivity(
+            node_indices, model.graph.node, unknown_names_within_nodes(function_nodes), outputs
+        )
+
         lf = make_subfunction(
             function_name,
-            [n for n in function_nodes if n],
+            function_nodes,
             model.opset_import,
             outputs,
             domain=domain,
         )
-        check_for_non_recursivity(new_nodes, lf.input, lf.output)
+
+        check_for_non_recursivity(node_indices, model.graph.node, lf.input, lf.output)
+
+        if verbose:
+            print(
+                f"[make_model_with_local_functions] add function {function_name}"
+                f"({', '.join(lf.input)}) -> {', '.join(lf.input)}"
+            )
         functions.append(lf)
         maxi = max(node_indices)
         for i in node_indices:

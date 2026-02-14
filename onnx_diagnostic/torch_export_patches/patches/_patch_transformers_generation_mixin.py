@@ -1,6 +1,5 @@
 import inspect
-import os
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 import packaging.version as pv
 import torch
 import transformers
@@ -22,11 +21,11 @@ class patched_GenerationMixin:
             if pv.Version(transformers.__version__) >= pv.Version("4.56")
             else "prepare_inputs_for_generation"
         ),
-        (
-            "_sample"
-            if pv.Version(transformers.__version__) == pv.Version("4.57.0.dev0")
-            else None
-        ),
+        # (
+        #    "_sample"
+        #    if pv.Version(transformers.__version__) == pv.Version("4.57.0.dev0")
+        #    else None
+        # ),
     ]
     _PATCHED_CLASS_ = transformers.generation.utils.GenerationMixin
 
@@ -299,6 +298,8 @@ class patched_GenerationMixin:
         model_inputs.pop("labels", None)
         return model_inputs
 
+    '''
+    # drops a patch since it is for a very specific version.
     def _sample(
         self,
         input_ids: torch.LongTensor,
@@ -484,3 +485,4 @@ class patched_GenerationMixin:
                 )
         else:
             return input_ids
+    '''

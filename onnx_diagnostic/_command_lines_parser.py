@@ -47,6 +47,7 @@ def get_parser_dot() -> ArgumentParser:
 
 def _cmd_dot(argv: List[Any]):
     import subprocess
+    from .helpers.args_helper import process_outputname
     from .helpers.dot_helper import to_dot
 
     parser = get_parser_dot()
@@ -58,15 +59,17 @@ def _cmd_dot(argv: List[Any]):
         print("-- converts into dot")
     dot = to_dot(onx)
     if args.output:
+        outname = process_outputname(args.output, args.input)
         if args.verbose:
-            print(f"-- saves into {args.output}")
-        with open(args.output, "w") as f:
+            print(f"-- saves into {outname!r}")
+        with open(outname, "w") as f:
             f.write(dot)
     else:
         print(dot)
     if args.run:
         assert args.output, "Cannot run dot without an output file."
-        cmds = ["dot", f"-T{args.run}", args.output, "-o", f"{args.output}.{args.run}"]
+        outname = process_outputname(outname, args.input)
+        cmds = ["dot", f"-T{args.run}", outname, "-o", f"{args.output}.{args.run}"]
         if args.verbose:
             print(f"-- run {' '.join(cmds)}")
         p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1553,10 +1556,11 @@ def _cmd_optimize(argv: List[Any]):
     parser = get_parser_optimize()
     args = parser.parse_args(argv[1:])
 
+    from .helpers.args_helper import process_outputname
     from .helpers.optim_helper import optimize_model
 
     output = (
-        args.output
+        process_outputname(args.output, args.input)
         if args.output
         else f"{os.path.splitext(args.input)[0]}.o-{args.algorithm}.onnx"
     )
@@ -1586,10 +1590,21 @@ def get_parser_partition() -> ArgumentParser:
             The regular may match the following values,
             'model.layers.0.forward', 'model.layers.1.forward', ...
             A local function will be created for each distinct layer.
+
+            Example:
+
+                python -m onnx_diagnostic partition \\
+                        model.onnx +.part -v 1 -r "model.layers.0.s.*"
             """),
     )
     parser.add_argument("input", help="input model")
-    parser.add_argument("output", help="output model")
+    parser.add_argument(
+        "output",
+        help=textwrap.dedent("""
+            output model, an expression like '+.part'
+            inserts '.part' just before the extension"
+            """).strip("\n"),
+    )
     parser.add_argument(
         "-r",
         "--regex",
@@ -1619,6 +1634,7 @@ def get_parser_partition() -> ArgumentParser:
 
 
 def _cmd_partition(argv: List[Any]):
+    from .helpers.args_helper import process_outputname
     from .helpers.onnx_helper import make_model_with_local_functions
 
     parser = get_parser_partition()
@@ -1635,9 +1651,10 @@ def _cmd_partition(argv: List[Any]):
         metadata_key_prefix=tuple(args.meta_prefix.split(",")),
         verbose=args.verbose,
     )
+    outname = process_outputname(args.output, args.input)
     if args.verbose:
-        print(f"-- save into {args.output!r}")
-    onnx.save(onx2, args.output)
+        print(f"-- save into {outname!r}")
+    onnx.save(onx2, outname)
     if args.verbose:
         print("-- done")
 

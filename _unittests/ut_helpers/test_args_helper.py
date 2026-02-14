@@ -1,6 +1,10 @@
 import unittest
 from onnx_diagnostic.ext_test_case import ExtTestCase
-from onnx_diagnostic.helpers.args_helper import get_parsed_args, check_cuda_availability
+from onnx_diagnostic.helpers.args_helper import (
+    get_parsed_args,
+    check_cuda_availability,
+    process_outputname,
+)
 
 
 class TestHelpers(ExtTestCase):
@@ -51,6 +55,10 @@ class TestHelpers(ExtTestCase):
         self.assertEqual(args.optim, "")
         self.assertEqual(args.repeat, 10)
         self.assertEqual(args.warmup, 5)
+
+    def test_process_outputname(self):
+        self.assertEqual("ggg.g", process_outputname("ggg.g", "hhh.h"))
+        self.assertEqual("hhh.ggg.h", process_outputname("+.ggg", "hhh.h"))
 
 
 if __name__ == "__main__":
