@@ -984,12 +984,12 @@ class TestPatchPatchTransformers(ExtTestCase):
                 self.assertTrue(model_inputs["use_cache"] is True)
                 self.assertTrue(model_inputs["foo"] == "bar")
 
+            init_input_ids = input_ids[:, :2]
+            dynamic_cache = transformers.cache_utils.DynamicCache(config=config)
+            dynamic_cache = model(
+                init_input_ids, past_key_values=dynamic_cache
+            ).past_key_values
             with self.subTest(case="case5"):
-                init_input_ids = input_ids[:, :2]
-                dynamic_cache = transformers.cache_utils.DynamicCache(config=config)
-                dynamic_cache = model(
-                    init_input_ids, past_key_values=dynamic_cache
-                ).past_key_values
                 with self.assertRaises((AttributeError, TypeError)):
                     model_inputs = model.prepare_inputs_for_generation(
                         input_ids, past_key_values=dynamic_cache
