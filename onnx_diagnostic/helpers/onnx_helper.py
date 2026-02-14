@@ -1356,7 +1356,7 @@ def make_submodel(
 
 
 def unknown_names_within_nodes(nodes: List[NodeProto]) -> Set[str]:
-    """Returns the list of unkonwn results from a list of nodes."""
+    """Returns the list of unknown results from a list of nodes."""
     not_known: Set[str] = set()
     for node in nodes[::-1]:
         not_known -= {o for o in node.output if o}
@@ -1875,15 +1875,22 @@ def make_model_with_local_functions(
                 f"nodes in partition {function_name!r}"
             )
         outputs = _find_used_names(new_nodes, node_indices)
-        function_nodes = [new_nodes[i] for i in node_indices]
+        function_nodes = [new_nodes[i] for i in node_indices if new_nodes[i]]
+
+        check_for_non_recursivity(
+            function_nodes, unknown_names_within_nodes(function_nodes), outputs
+        )
+
         lf = make_subfunction(
             function_name,
-            [n for n in function_nodes if n],
+            function_nodes,
             model.opset_import,
             outputs,
             domain=domain,
         )
-        check_for_non_recursivity(new_nodes, lf.input, lf.output)
+
+        check_for_non_recursivity(function_nodes, lf.input, lf.output)
+
         functions.append(lf)
         maxi = max(node_indices)
         for i in node_indices:

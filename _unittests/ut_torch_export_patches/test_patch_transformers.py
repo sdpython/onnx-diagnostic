@@ -948,6 +948,7 @@ class TestPatchPatchTransformers(ExtTestCase):
             torch.testing.assert_close(eager1, export1)
             torch.testing.assert_close(eager2, export2)
 
+    @requires_transformers("4.57")
     def test_prepare_inputs_for_generation_decoder_llm(self):
         data = get_untrained_model_with_inputs(
             "hf-internal-testing/tiny-random-LlamaForCausalLM"
