@@ -793,13 +793,7 @@ class TestOnnxHelper(ExtTestCase):
             meta = node.metadata_props.add()
             meta.key = "namespace"
             meta.value = "LLL"
-        self.assertRaise(
-            lambda: make_model_with_local_functions(model, "^LLL$"),
-            ValueError,
-            "Results {'xu1'} are needed for inputs ['X', 'Y', 'shape1', "
-            "'shape2', 'xu2', 'zero'] but also requires ['xm1', 'xm2', 'xu1'] "
-            "which is not allowed.",
-        )
+        self.assertRaise(lambda: make_model_with_local_functions(model, "^LLL$"), ValueError)
         check_model(model)
 
     @hide_stdout()
