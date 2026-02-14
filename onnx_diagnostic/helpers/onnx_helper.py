@@ -1355,6 +1355,20 @@ def make_submodel(
     )
 
 
+def unknown_names_within_nodes(nodes: List[NodeProto]) -> Set[str]:
+    """Returns the list of unkonwn results from a list of nodes."""
+    not_known: Set[str] = set()
+    for node in nodes[::-1]:
+        not_known -= {o for o in node.output if o}
+        not_known |= {i for i in node.input if i}
+        if node.op_type in {"Scan", "If", "Loop"}:
+            # there are hidden inputs
+            for att in node.attribute:
+                if att.type == onnx.AttributeProto.GRAPH:
+                    not_known |= get_hidden_inputs(att.g)
+    return not_known
+
+
 def make_subfunction(
     name: str,
     nodes: List[NodeProto],
@@ -1374,21 +1388,12 @@ def make_subfunction(
     :param domain: function domain
     :return: model proto
     """
-    not_known: Set[str] = set()
-    for node in nodes[::-1]:
-        not_known -= {o for o in node.output if o}
-        not_known |= {i for i in node.input if i}
-        if node.op_type in {"Scan", "If", "Loop"}:
-            # there are hidden inputs
-            for att in node.attribute:
-                if att.type == onnx.AttributeProto.GRAPH:
-                    not_known |= get_hidden_inputs(att.g)
 
     return oh.make_function(
         domain,
         name,
         nodes=nodes,
-        inputs=sorted(not_known),
+        inputs=sorted(unknown_names_within_nodes(nodes)),
         outputs=output_names,
         opset_imports=opset_imports,
     )
@@ -1774,8 +1779,6 @@ def check_for_non_recursivity(
     by one input from the function itself, that would mean one node
     needs an output of the function and is also required by the function:
     it is probably missing from the initial set.
-
-
 
     :param node_list: list of nodes
     :param inputs: input names to consider
