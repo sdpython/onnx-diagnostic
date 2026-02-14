@@ -1856,6 +1856,12 @@ def make_model_with_local_functions(
 
     if verbose:
         print(f"[make_model_with_local_functions] matched {len(unique)} partitions")
+        for un, nid in unique.items():
+            print(f"[make_model_with_local_functions] {un!r}: {len(nid)} nodes")
+            for ind in nid[:5]:
+                print(f"     {pretty_onnx(model.graph.node[ind])}")
+            if len(nid) > 5:
+                print("     ...")
     functions = []
     new_nodes: List[Optional[NodeProto]] = list(model.graph.node)
     for key, node_indices in unique.items():
