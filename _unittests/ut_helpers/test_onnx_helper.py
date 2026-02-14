@@ -890,6 +890,7 @@ class TestOnnxHelper(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 18)],
             ir_version=9,
         )
+        check_model(model)
         for i_node in range(len(model.graph.node) - 1):
             if i_node == 2:
                 continue
@@ -900,7 +901,7 @@ class TestOnnxHelper(ExtTestCase):
         new_model = make_model_with_local_functions(
             model, "^LLL$", metadata_key_prefix="source[", verbose=1
         )
-        check_model(model)
+        check_model(new_model)
         self.assertEqual(len(new_model.functions), 1)
         p = pretty_onnx(new_model)
         self.assertIn("LLL0[local_function]", p)

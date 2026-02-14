@@ -1388,7 +1388,6 @@ def make_subfunction(
     :param domain: function domain
     :return: model proto
     """
-
     return oh.make_function(
         domain,
         name,
@@ -1891,6 +1890,11 @@ def make_model_with_local_functions(
 
         check_for_non_recursivity(function_nodes, lf.input, lf.output)
 
+        if verbose:
+            print(
+                f"[make_model_with_local_functions] add function {function_name}"
+                f"({', '.join(lf.input)}) -> {', '.join(lf.input)}"
+            )
         functions.append(lf)
         maxi = max(node_indices)
         for i in node_indices:
