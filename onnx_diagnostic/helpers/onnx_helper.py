@@ -1887,6 +1887,78 @@ def make_model_with_local_functions(
         a partition if there are not already inside another partition
     :param verbose: verbosity
     :return: model proto
+
+    Example:
+
+    .. runpython::
+        :showcode:
+
+        import numpy as np
+        import onnx
+        import onnx.helper as oh
+        import onnx.numpy_helper as onh
+        from onnx_diagnostic.helpers.onnx_helper import (
+            make_model_with_local_functions,
+            pretty_onnx,
+        )
+
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+                    oh.make_node("Unsqueeze", ["xu1", "un"], ["xu2"]),
+                    oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+                    oh.make_node("Cast", ["xm2c"], ["xm2"], to=1),
+                    oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                    oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [320, 1280])],
+                [oh.make_tensor_value_info("Z", onnx.TensorProto.FLOAT, [3, 5, 320, 640])],
+                [
+                    onh.from_array(
+                        np.random.rand(3, 5, 1280, 640).astype(np.float32), name="Y"
+                    ),
+                    onh.from_array(np.array([0], dtype=np.int64), name="zero"),
+                    onh.from_array(np.array([1], dtype=np.int64), name="un"),
+                    onh.from_array(np.array([1, 320, 1280], dtype=np.int64), name="shape1"),
+                    onh.from_array(np.array([15, 1280, 640], dtype=np.int64), name="shape2"),
+                    onh.from_array(np.array([3, 5, 320, 640], dtype=np.int64), name="shape3"),
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        for i_node in [0, 1, 2, 3]:
+            node = model.graph.node[i_node]
+            meta = node.metadata_props.add()
+            meta.key = f"source[{i_node}]"
+            meta.value = f"LLL{i_node//3}"
+
+        print("-- model before --")
+        print(pretty_onnx(model))
+        print()
+        print("-- metadata --")
+        for node in model.graph.node:
+            text = (
+                f" -- [{node.metadata_props[0].key}: {node.metadata_props[0].value}]"
+                if node.metadata_props
+                else ""
+            )
+            print(
+                f"-- {node.op_type}({', '.join(node.input)}) -> "
+                f"{', '.join(node.output)}{text}"
+            )
+        print()
+
+        new_model = make_model_with_local_functions(
+            model, "^LLL[01]$", metadata_key_prefix="source[", verbose=1
+        )
+
+        print()
+        print("-- model after --")
+        print(pretty_onnx(new_model))
     """
     prefix = (
         metadata_key_prefix
