@@ -1911,7 +1911,7 @@ def make_model_with_local_functions(
                 print("     ...")
     functions = []
     new_nodes: List[Optional[NodeProto]] = list(model.graph.node)
-    processed = {}
+    processed: Dict[str, FunctionProto] = {}
     unique_as_set = {k: set(v) for k, v in unique.items()}
     while len(processed) < len(unique):
         for key, node_indices in unique.items():
@@ -1932,7 +1932,7 @@ def make_model_with_local_functions(
 
             function_inputs = unknown_names_within_nodes(function_nodes)
             additional_nodes = check_for_non_recursivity(
-                node_indices, new_nodes, function_inputs, outputs, exc=False
+                node_indices, new_nodes, function_inputs, outputs, exc=not allow_extensions
             )
             if additional_nodes:
                 if not allow_extensions:

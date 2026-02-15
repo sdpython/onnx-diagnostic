@@ -793,7 +793,10 @@ class TestOnnxHelper(ExtTestCase):
             meta = node.metadata_props.add()
             meta.key = "namespace"
             meta.value = "LLL"
-        self.assertRaise(lambda: make_model_with_local_functions(model, "^LLL$"), ValueError)
+        self.assertRaise(
+            lambda: make_model_with_local_functions(model, "^LLL$", allow_extensions=False),
+            ValueError,
+        )
         check_model(model)
 
     @hide_stdout()
