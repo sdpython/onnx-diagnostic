@@ -7,12 +7,12 @@ exclude_lines =
     except ImportError as e:
     except Exception as e:
     except subprocess.TimeoutExpired as e:
-    raise AssertionError(
-    raise NotImplementedError(
+    raise AssertionError.*
+    raise NotImplementedError.*
     if patch_parse_processor_args:
     if patch_DynamicCache:
-    def make_sliding_window_cache(
-    def make_hybrid_cache(
+    def make_sliding_window_cache.*
+    def make_hybrid_cache.*
 
 [run]
 include =
