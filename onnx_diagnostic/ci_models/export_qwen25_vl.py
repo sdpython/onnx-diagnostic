@@ -460,7 +460,7 @@ def main(
                 import onnxscript
 
                 v_onnxscript = onnxscript.__version__
-                if pv.Version(v_onnxscript) <= pv.Version("0.5.6"):
+                if pv.Version(v_onnxscript) <= pv.Version("0.5.6"):  # pragma: no cover
                     print(f"-- onnxscript=={v_onnxscript} not recent enough")
                     print("-- stop.")
                     return

@@ -152,5 +152,5 @@ class patched_IdeficsAttention(torch.nn.Module):
             attn_weights = None
 
         if pv.Version(transformers.__version__) < pv.Version("4.53.99"):
-            return attn_output, attn_weights, past_key_value
+            return attn_output, attn_weights, past_key_value  # pragma: no cover
         return attn_output, attn_weights
