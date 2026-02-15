@@ -11,8 +11,8 @@ exclude_lines =
     raise NotImplementedError(
     if patch_parse_processor_args:
     if patch_DynamicCache:
-     def make_sliding_window_cache(
-     def make_hybrid_cache(
+    def make_sliding_window_cache(
+    def make_hybrid_cache(
 
 [run]
 include =
