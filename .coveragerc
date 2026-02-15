@@ -3,3 +3,9 @@ exclude_lines =
     pragma: no cover
     if __name__ == .__main__.:
     @onnxscript.*
+
+[run]
+include =
+    onnx_diagnostic/*
+omit =
+    onnx_diagnostic/big_models/export_phi4_mm*
