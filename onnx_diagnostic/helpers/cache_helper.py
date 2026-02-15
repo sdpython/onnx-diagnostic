@@ -355,7 +355,7 @@ if pv.Version(transformers.__version__) > pv.Version("4.49.99999"):
         )
         return finalize_cache(cache)
 
-else:
+else:  # pragma: no cover
 
     def make_dynamic_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],

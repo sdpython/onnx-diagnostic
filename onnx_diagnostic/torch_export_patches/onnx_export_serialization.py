@@ -83,7 +83,7 @@ def register_class_serialization(
         serialized_type_name=f"{cls.__module__}.{cls.__name__}",
         flatten_with_keys_fn=f_flatten_with_keys,
     )
-    if pv.Version(torch.__version__) < pv.Version("2.7"):
+    if pv.Version(torch.__version__) < pv.Version("2.7"):  # pragma: no cover
         if verbose:
             print(
                 f"[register_class_serialization] "
@@ -322,7 +322,7 @@ def unregister_class_serialization(cls: type, verbose: int = 0):
         import packaging.version as pv
 
         if pv.Version(torch.__version__) < pv.Version("2.7.0"):
-            del torch.utils._pytree.SUPPORTED_NODES[cls]
+            del torch.utils._pytree.SUPPORTED_NODES[cls]  # pragma: no cover
     assert cls not in torch.utils._pytree.SUPPORTED_NODES, (
         f"{cls} was not successful unregistered "
         f"from torch.utils._pytree.SUPPORTED_NODES="
