@@ -180,7 +180,7 @@ def run_benchmark(
         temp_output_data is None or "temp" in temp_output_data
     ), f"Unexpected value for {temp_output_data!r}"
     assert configs, f"No configuration was given (script_name={script_name!r})"
-    if verbose:
+    if verbose:  # pragma: no cover
         from tqdm import tqdm
 
         loop = tqdm(configs)
