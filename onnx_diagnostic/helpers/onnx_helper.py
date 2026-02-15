@@ -1773,9 +1773,10 @@ def _find_used_names(node_list, node_indices):
 def check_for_non_recursivity(
     node_indices: List[int],
     node_list: List[Optional[NodeProto]],
-    inputs: Sequence[str],
-    outputs: Sequence[str],
-):
+    inputs: Union[Set[str], Sequence[str]],
+    outputs: Union[Set[str], Sequence[str]],
+    exc: bool = True,
+) -> List[int]:
     """
     We need to check that any of this output is not required
     by one input from the function itself, that would mean one node
@@ -1786,13 +1787,17 @@ def check_for_non_recursivity(
     :param node_list: list of nodes
     :param inputs: input names to consider
     :param outputs: output names which cannot be involved in input names
+    :param exc: raise an exception as soon as possible it becomes impossible
+    :return: list of nodes to add to make the list of node consistence
+        with the list of inputs and outputs (they should be recomputed)
     """
-    orginal_set_inputs = set(inputs)
-    set_inputs = set(inputs)
-    original_set_outputs = set(outputs)
+    orginal_set_inputs = inputs if isinstance(inputs, set) else set(inputs)
+    set_inputs = orginal_set_inputs.copy()
+    original_set_outputs = outputs if isinstance(outputs, set) else set(outputs)
     subset = set(node_indices)
     before_inputs = set()
     indexed_node = list(enumerate(node_list))
+    additional_nodes: List[int] = []
     for ind, node in indexed_node[::-1]:
         if not node:
             continue
@@ -1822,15 +1827,18 @@ def check_for_non_recursivity(
                         if att.type == onnx.AttributeProto.GRAPH:
                             before_inputs |= get_hidden_inputs(att.g)
             if original_set_outputs & before_inputs:
-                raise ValueError(
-                    f"Results {original_set_outputs & before_inputs} "
-                    f"are needed for inputs {inputs} "
-                    f"but also requires {outputs} which is not allowed."
-                )
+                if exc:
+                    raise ValueError(
+                        f"Results {original_set_outputs & before_inputs} "
+                        f"are needed for inputs {inputs} "
+                        f"but also requires {outputs} which is not allowed."
+                    )
+                additional_nodes.append(ind)
+    return additional_nodes
 
 
 def _select_nodes_from_metadata_with_regex(
-    model: ModelProto, prefix: str, regex: str
+    model: ModelProto, prefix: Union[str, Tuple[str, ...]], regex: str
 ) -> Tuple[Dict[str, List[int]], Set[str]]:
     reg = re.compile(regex)
     unique_values = set()
@@ -1860,6 +1868,7 @@ def make_model_with_local_functions(
     regex: str = ".*[.]layers[.][0-9]+[.]forward$",
     domain: str = "local_function",
     metadata_key_prefix: Union[str, Tuple[str, ...]] = ("namespace", "source["),
+    allow_extensions: bool = True,
     verbose: int = 0,
 ) -> ModelProto:
     """
@@ -1874,6 +1883,8 @@ def make_model_with_local_functions(
     :param domain: function domain
     :param metadata_keys: list of metadata keys to consider,
         every value is split into multiple ones.
+    :param allow_extensions: allows the function to take nodes outside
+        a partition if there are not already inside another partition
     :param verbose: verbosity
     :return: model proto
     """
@@ -1900,40 +1911,82 @@ def make_model_with_local_functions(
                 print("     ...")
     functions = []
     new_nodes: List[Optional[NodeProto]] = list(model.graph.node)
-    for key, node_indices in unique.items():
-        function_name = key.strip().replace(".", "_")
-        if verbose:
-            print(
-                f"[make_model_with_local_functions] move {len(node_indices)} "
-                f"nodes in partition {function_name!r}"
+    processed = {}
+    unique_as_set = {k: set(v) for k, v in unique.items()}
+    while len(processed) < len(unique):
+        for key, node_indices in unique.items():
+            if key in processed:
+                # already processed
+                continue
+            function_name = key.strip().replace(".", "_")
+            if verbose:
+                print(
+                    f"[make_model_with_local_functions] move {len(node_indices)} "
+                    f"nodes in partition {key!r} (function={function_name!r})"
+                )
+            outputs = _find_used_names(new_nodes, node_indices)
+            # pyrefly: ignore[bad-assignment]
+            function_nodes: List[NodeProto] = [
+                new_nodes[i] for i in node_indices if new_nodes[i]
+            ]
+
+            function_inputs = unknown_names_within_nodes(function_nodes)
+            additional_nodes = check_for_non_recursivity(
+                node_indices, new_nodes, function_inputs, outputs, exc=False
             )
-        outputs = _find_used_names(new_nodes, node_indices)
-        function_nodes = [new_nodes[i] for i in node_indices if new_nodes[i]]
+            if additional_nodes:
+                if not allow_extensions:
+                    raise ValueError(
+                        f"Function for key={key!r} cannot be added because "
+                        f"it must steal a node outside the partition, node ids "
+                        f"{additional_nodes} are needed for inputs {function_inputs} "
+                        f"but also requires {outputs} which is not allowed."
+                    )
+                # Additional nodes are needed to make the function consistence.
+                # We check they are not in conflict with other partitions not
+                # yet processed.
+                set_add = set(additional_nodes)
+                for k, v in unique_as_set.items():
+                    if v & set_add:
+                        raise ValueError(
+                            f"Function for key={key!r} cannot be added because "
+                            f"it is conflict with other key {k!r} with node ids "
+                            f"{set_add & v} are needed for inputs {function_inputs} "
+                            f"but also requires {outputs} which is not allowed."
+                        )
+                # If no exception, everything is fine, let's add the nodes.
+                node_indices.extend(additional_nodes)
+                node_indices[:] = sorted(node_indices)
+                # Inputs and outputs needed to be recomputed. Let's do that in another
+                # iteration.
+                if verbose:
+                    print(
+                        f"[make_model_with_local_functions] add {len(additional_nodes)} "
+                        f"nodes in partition {key!r}"
+                    )
+                continue
 
-        check_for_non_recursivity(
-            node_indices, model.graph.node, unknown_names_within_nodes(function_nodes), outputs
-        )
-
-        lf = make_subfunction(
-            function_name,
-            function_nodes,
-            model.opset_import,
-            outputs,
-            domain=domain,
-        )
-
-        check_for_non_recursivity(node_indices, model.graph.node, lf.input, lf.output)
-
-        if verbose:
-            print(
-                f"[make_model_with_local_functions] add function {function_name}"
-                f"({', '.join(lf.input)}) -> {', '.join(lf.input)}"
+            lf = make_subfunction(
+                function_name,
+                function_nodes,
+                model.opset_import,
+                outputs,
+                domain=domain,
             )
-        functions.append(lf)
-        maxi = max(node_indices)
-        for i in node_indices:
-            new_nodes[i] = None
-        new_nodes[maxi] = oh.make_node(lf.name, lf.input, lf.output, domain=lf.domain)
+
+            check_for_non_recursivity(node_indices, new_nodes, lf.input, lf.output)
+
+            if verbose:
+                print(
+                    f"[make_model_with_local_functions] add function {function_name}"
+                    f"({', '.join(lf.input)}) -> {', '.join(lf.input)}"
+                )
+            functions.append(lf)
+            maxi = max(node_indices)
+            for i in node_indices:
+                new_nodes[i] = None
+            new_nodes[maxi] = oh.make_node(lf.name, lf.input, lf.output, domain=lf.domain)
+            processed[key] = lf
 
     return oh.make_model(
         oh.make_graph(

@@ -892,26 +892,31 @@ class TestOnnxHelper(ExtTestCase):
             meta = node.metadata_props.add()
             meta.key = f"source[{i_node}]"
             meta.value = "LLL"
+        self.assertRaise(
+            lambda: make_model_with_local_functions(
+                model,
+                "^LLL$",
+                metadata_key_prefix="source[",
+                verbose=1,
+                allow_extensions=False,
+            ),
+            ValueError,
+        )
         new_model = make_model_with_local_functions(
             model, "^LLL$", metadata_key_prefix="source[", verbose=1
         )
         check_model(new_model)
         self.assertEqual(len(new_model.functions), 1)
         p = pretty_onnx(new_model)
-        self.assertIn("LLL0[local_function]", p)
-        self.assertIn("LLL1[local_function]", p)
+        self.assertIn("LLL[local_function]", p)
 
-        self.assertEqual(["X", "shape1", "un", "zero"], new_model.functions[0].input)
-        self.assertEqual(["xm1"], new_model.functions[0].output)
-        self.assertEqual("LLL0", new_model.functions[0].name)
+        self.assertEqual(
+            ["X", "Y", "shape1", "shape2", "un", "zero"], new_model.functions[0].input
+        )
+        self.assertEqual(["xm"], new_model.functions[0].output)
+        self.assertEqual("LLL", new_model.functions[0].name)
         self.assertEqual("local_function", new_model.functions[0].domain)
-        self.assertEqual(len(new_model.functions[0].node), 3)
-
-        self.assertEqual(["Y", "shape2"], new_model.functions[1].input)
-        self.assertEqual(["xm2c"], new_model.functions[1].output)
-        self.assertEqual("LLL1", new_model.functions[1].name)
-        self.assertEqual("local_function", new_model.functions[1].domain)
-        self.assertEqual(len(new_model.functions[1].node), 1)
+        self.assertEqual(len(new_model.functions[0].node), 6)
 
         check_model(new_model)
 
