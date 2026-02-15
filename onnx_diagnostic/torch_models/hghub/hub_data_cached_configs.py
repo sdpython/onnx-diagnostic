@@ -4972,3 +4972,36 @@ def _ccached_qwen_qwen2_5_vl_7b_instruct():
             "vocab_size": 152064,
         },
     )
+
+
+def _ccached_hf_internal_testing_tiny_random_LlamaForCausalLM():
+    "hf-internal-testing/tiny-random-LlamaForCausalLM"
+    return transformers.LlamaConfig(
+        **{
+            "architectures": ["LlamaForCausalLM"],
+            "attention_bias": false,
+            "attention_dropout": 0.0,
+            "bos_token_id": 0,
+            "dtype": "float32",
+            "eos_token_id": 1,
+            "head_dim": 4,
+            "hidden_act": "silu",
+            "hidden_size": 16,
+            "initializer_range": 0.02,
+            "intermediate_size": 64,
+            "max_position_embeddings": 2048,
+            "mlp_bias": false,
+            "model_type": "llama",
+            "num_attention_heads": 4,
+            "num_hidden_layers": 2,
+            "num_key_value_heads": 4,
+            "pad_token_id": -1,
+            "pretraining_tp": 1,
+            "rms_norm_eps": 1e-06,
+            "rope_parameters": {"rope_theta": 10000.0, "rope_type": "default"},
+            "tie_word_embeddings": false,
+            "transformers_version": "5.2.0.dev0",
+            "use_cache": true,
+            "vocab_size": 32000,
+        }
+    )

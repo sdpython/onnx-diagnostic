@@ -794,11 +794,8 @@ class TestOnnxHelper(ExtTestCase):
             meta.key = "namespace"
             meta.value = "LLL"
         self.assertRaise(
-            lambda: make_model_with_local_functions(model, "^LLL$"),
+            lambda: make_model_with_local_functions(model, "^LLL$", allow_extensions=False),
             ValueError,
-            "Results {'xu1'} are needed for inputs ['X', 'Y', 'shape1', "
-            "'shape2', 'xu2', 'zero'] but also requires ['xm1', 'xm2', 'xu1'] "
-            "which is not allowed.",
         )
         check_model(model)
 
@@ -857,6 +854,72 @@ class TestOnnxHelper(ExtTestCase):
         self.assertEqual("LLL1", new_model.functions[1].name)
         self.assertEqual("local_function", new_model.functions[1].domain)
         self.assertEqual(len(new_model.functions[1].node), 1)
+
+        check_model(new_model)
+
+    @hide_stdout()
+    def test_make_model_with_local_functions_3(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+                    oh.make_node("Unsqueeze", ["xu1", "un"], ["xu2"]),
+                    oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+                    oh.make_node("Cast", ["xm2c"], ["xm2"], to=1),
+                    oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                    oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                ],
+                "dummy",
+                [oh.make_tensor_value_info("X", TFLOAT, [320, 1280])],
+                [oh.make_tensor_value_info("Z", TFLOAT, [3, 5, 320, 640])],
+                [
+                    onh.from_array(
+                        np.random.rand(3, 5, 1280, 640).astype(np.float32), name="Y"
+                    ),
+                    onh.from_array(np.array([0], dtype=np.int64), name="zero"),
+                    onh.from_array(np.array([1], dtype=np.int64), name="un"),
+                    onh.from_array(np.array([1, 320, 1280], dtype=np.int64), name="shape1"),
+                    onh.from_array(np.array([15, 1280, 640], dtype=np.int64), name="shape2"),
+                    onh.from_array(np.array([3, 5, 320, 640], dtype=np.int64), name="shape3"),
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        check_model(model)
+        for i_node in range(len(model.graph.node) - 1):
+            if i_node == 2:
+                continue
+            node = model.graph.node[i_node]
+            meta = node.metadata_props.add()
+            meta.key = f"source[{i_node}]"
+            meta.value = "LLL"
+        self.assertRaise(
+            lambda: make_model_with_local_functions(
+                model,
+                "^LLL$",
+                metadata_key_prefix="source[",
+                verbose=1,
+                allow_extensions=False,
+            ),
+            ValueError,
+        )
+        new_model = make_model_with_local_functions(
+            model, "^LLL$", metadata_key_prefix="source[", verbose=1
+        )
+        check_model(new_model)
+        self.assertEqual(len(new_model.functions), 1)
+        p = pretty_onnx(new_model)
+        self.assertIn("LLL[local_function]", p)
+
+        self.assertEqual(
+            ["X", "Y", "shape1", "shape2", "un", "zero"], new_model.functions[0].input
+        )
+        self.assertEqual(["xm"], new_model.functions[0].output)
+        self.assertEqual("LLL", new_model.functions[0].name)
+        self.assertEqual("local_function", new_model.functions[0].domain)
+        self.assertEqual(len(new_model.functions[0].node), 6)
 
         check_model(new_model)
 

@@ -12,6 +12,7 @@ from onnx_diagnostic.ext_test_case import (
     requires_torch,
     ignore_warnings,
     has_onnxscript,
+    has_transformers,
     requires_onnxscript,
 )
 from onnx_diagnostic.helpers.torch_helper import torch_deepcopy, fake_torchdynamo_exporting
@@ -19,6 +20,7 @@ from onnx_diagnostic.export.shape_helper import make_fake_with_dynamic_dimension
 from onnx_diagnostic.torch_models.hghub.hub_api import get_cached_configuration
 from onnx_diagnostic.torch_export_patches import torch_export_patches
 from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
+from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.torch_export_patches.patches.patch_transformers import (
     patch_qwen2_5,
     patch_funnel,
@@ -391,6 +393,20 @@ class TestPatchPatchTransformers(ExtTestCase):
             atol=1e-3,
             rtol=1,
         )
+
+    @requires_transformers("4.55")
+    @requires_onnxscript("0.6.2")
+    @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
+    def test_qwen_function_proto(self):
+        from onnx_diagnostic.torch_export_patches.patches._patch_transformers_qwen2_5 import (
+            LoopAttention23,
+            LoopMHAAttention,
+            PackedAttention,
+        )
+
+        LoopMHAAttention.to_function_proto()
+        LoopAttention23.to_function_proto()
+        PackedAttention.to_function_proto()
 
     @requires_transformers("4.55")
     @unittest.skipIf(not patch_qwen2_5, "Qwen25 not part of this transformers")
@@ -873,6 +889,173 @@ class TestPatchPatchTransformers(ExtTestCase):
         expected = rmha.relative_positional_attention(**inputs)
         got = patched.relative_positional_attention(**inputs)
         self.assertEqualArray(expected, got)
+
+    def test_cache_dependant_input_preparation_exporting(self):
+        from onnx_diagnostic.torch_export_patches.patches._patch_transformers_generation_mixin import (  # noqa: E501
+            patched_GenerationMixin as GenerationMixin,
+        )
+
+        with self.subTest(case="case1"):
+            input_ids = torch.randint(0, 16, (2, 8), dtype=torch.int64)[:, :0]
+            inputs_embeds = torch.rand((2, 8), dtype=torch.float32)
+            cache_position = torch.arange(0, 8, dtype=torch.int64)
+            eager1, eager2 = GenerationMixin()._cache_dependant_input_preparation(
+                input_ids, inputs_embeds, cache_position
+            )
+            export1, export2 = GenerationMixin()._cache_dependant_input_preparation_exporting(
+                input_ids, inputs_embeds, cache_position
+            )
+            torch.testing.assert_close(eager1, export1)
+            torch.testing.assert_close(eager2, export2)
+
+        with self.subTest(case="case2"):
+            raise unittest.SkipTest("torch 2.10+ has probably a bug here.")
+            input_ids = torch.randint(0, 16, (2, 8), dtype=torch.int64)
+            inputs_embeds = torch.rand((2, 8), dtype=torch.float32)
+            cache_position = torch.arange(0, 8, dtype=torch.int64)
+            eager1, eager2 = GenerationMixin()._cache_dependant_input_preparation(
+                input_ids, inputs_embeds, cache_position
+            )
+            export1, export2 = GenerationMixin()._cache_dependant_input_preparation_exporting(
+                input_ids, inputs_embeds, cache_position
+            )
+            torch.testing.assert_close(eager1, export1)
+            torch.testing.assert_close(eager2, export2)
+
+        with self.subTest(case="case3"):
+            input_ids = torch.randint(0, 16, (2, 12), dtype=torch.int64)
+            inputs_embeds = None
+            cache_position = torch.arange(0, 8, dtype=torch.int64)
+            eager1, eager2 = GenerationMixin()._cache_dependant_input_preparation(
+                input_ids, inputs_embeds, cache_position
+            )
+            export1, export2 = GenerationMixin()._cache_dependant_input_preparation_exporting(
+                input_ids, inputs_embeds, cache_position
+            )
+            torch.testing.assert_close(eager1, export1)
+            torch.testing.assert_close(eager2, export2)
+
+        with self.subTest(case="case4"):
+            input_ids = torch.randint(0, 16, (2, 8), dtype=torch.int64)
+            inputs_embeds = None
+            cache_position = torch.arange(0, 8, dtype=torch.int64)
+            eager1, eager2 = GenerationMixin()._cache_dependant_input_preparation(
+                input_ids, inputs_embeds, cache_position
+            )
+            export1, export2 = GenerationMixin()._cache_dependant_input_preparation_exporting(
+                input_ids, inputs_embeds, cache_position
+            )
+            torch.testing.assert_close(eager1, export1)
+            torch.testing.assert_close(eager2, export2)
+
+    @requires_transformers("4.57")
+    def test_prepare_inputs_for_generation_decoder_llm(self):
+        data = get_untrained_model_with_inputs(
+            "hf-internal-testing/tiny-random-LlamaForCausalLM"
+        )
+        model = data["model"]
+        config = model.config
+        torch_device = "cpu"
+
+        with torch_export_patches(patch_transformers=True):
+            with self.subTest(case="case1"):
+                self.assertTrue("GenerationMixin" in str(model.prepare_inputs_for_generation))
+
+            input_ids = torch.tensor([[1, 2, 3], [4, 5, 6]]).to(torch_device)
+            cache_position = torch.arange(input_ids.shape[1], device=input_ids.device)
+
+            with self.subTest(case="case2"):
+                input_ids = torch.tensor([[1, 2, 3], [4, 5, 6]]).to(torch_device)
+                model_inputs = model.prepare_inputs_for_generation(
+                    input_ids, cache_position=cache_position
+                )
+                self.assertTrue(torch.all(model_inputs["input_ids"] == input_ids))
+
+            with self.subTest(case="case3"):
+                attention_mask = torch.tensor([[1, 1, 1], [1, 1, 1]]).to(torch_device)
+                model_inputs = model.prepare_inputs_for_generation(
+                    input_ids, attention_mask=attention_mask, cache_position=cache_position
+                )
+                self.assertTrue(torch.all(model_inputs["attention_mask"] == attention_mask))
+                self.assertTrue(model_inputs["position_ids"].shape == input_ids.shape)
+
+            with self.subTest(case="case4"):
+                self.assertFalse("use_cache" in model_inputs)
+                model_inputs = model.prepare_inputs_for_generation(
+                    input_ids, use_cache=True, foo="bar", cache_position=cache_position
+                )
+                self.assertTrue(model_inputs["use_cache"] is True)
+                self.assertTrue(model_inputs["foo"] == "bar")
+
+            init_input_ids = input_ids[:, :2]
+            dynamic_cache = transformers.cache_utils.DynamicCache(config=config)
+            dynamic_cache = model(
+                init_input_ids, past_key_values=dynamic_cache
+            ).past_key_values
+
+            with self.subTest(case="case5"):
+                if not has_transformers("4.57"):
+                    raise unittest.SkipTest("transformers 4.57+.")
+                with self.assertRaises((AttributeError, TypeError)):
+                    model_inputs = model.prepare_inputs_for_generation(
+                        input_ids, past_key_values=dynamic_cache
+                    )
+
+            with self.subTest(case="case6"):
+                cache_position = torch.arange(input_ids.shape[-1], dtype=torch.long).to(
+                    torch_device
+                )
+                cache_position = cache_position[dynamic_cache.get_seq_length() :]
+                model_inputs = model.prepare_inputs_for_generation(
+                    input_ids,
+                    past_key_values=dynamic_cache,
+                    cache_position=cache_position,
+                    attention_mask=attention_mask,
+                )
+                self.assertTrue("past_key_values" in model_inputs)
+                self.assertTrue(torch.all(model_inputs["cache_position"] == cache_position))
+                self.assertTrue(
+                    model_inputs["input_ids"].shape[-1] == 1
+                )  # 1 = 3 fed tokens - 2 tokens in the cache
+                self.assertTrue(model_inputs["position_ids"].shape[-1] == 1)
+                self.assertTrue(
+                    model_inputs["attention_mask"].shape[-1] == 3
+                )  # we still need the full attention mask!
+
+            with self.subTest(case="case6.2"):
+                max_cache_len = 10
+                batch_size = 2
+                query_length = input_ids.shape[-1] - init_input_ids.shape[-1]
+                static_cache = transformers.cache_utils.StaticCache(
+                    config=config, max_cache_len=max_cache_len
+                )
+                static_cache = model(
+                    init_input_ids, past_key_values=static_cache
+                ).past_key_values
+                model_inputs = model.prepare_inputs_for_generation(
+                    input_ids,
+                    past_key_values=static_cache,
+                    cache_position=cache_position,
+                    attention_mask=attention_mask,
+                )
+                self.assertTrue("past_key_values" in model_inputs)
+                self.assertTrue(
+                    list(model_inputs["attention_mask"].shape)
+                    == [batch_size, 1, query_length, max_cache_len]
+                )
+
+            with self.subTest(case="case7"):
+                if not has_transformers("4.57"):
+                    raise unittest.SkipTest("transformers 4.57+.")
+                init_inputs_embeds = model.get_input_embeddings()(init_input_ids)
+                model_inputs = model.prepare_inputs_for_generation(
+                    input_ids,
+                    past_key_values=dynamic_cache,
+                    inputs_embeds=init_inputs_embeds,
+                    cache_position=cache_position,
+                )
+                self.assertTrue(model_inputs["input_ids"] is not None)
+                self.assertTrue(model_inputs["inputs_embeds"] is None)
 
 
 if __name__ == "__main__":
