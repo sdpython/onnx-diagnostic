@@ -134,7 +134,7 @@ class patched_GenerationMixin:
             )
         return inputs_embeds, input_ids
 
-    def prepare_inputs_for_generation(
+    def prepare_inputs_for_generation(  # pragma: no cover
         self,
         input_ids: torch.LongTensor,
         past_key_values: Optional[Cache] = None,

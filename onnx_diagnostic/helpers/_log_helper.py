@@ -357,7 +357,7 @@ def apply_excel_style(
         CubeViewDef.HighLightKind.GREEN: Font(color="00AA00"),
         CubeViewDef.HighLightKind.RED: Font(color="FF0000"),
     }
-    if verbose:
+    if verbose:  # pragma: no cover
         from tqdm import tqdm
 
         sheet_names = tqdm(list(workbook.sheetnames))

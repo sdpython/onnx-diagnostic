@@ -85,7 +85,7 @@ def evaluation(
 
     sorted_cases = sorted(cases.items())
     loop = list(itertools.product(sorted_cases, dynamic, exporters))
-    if verbose:
+    if verbose:  # pragma: no cover
         try:
             import tqdm
 
