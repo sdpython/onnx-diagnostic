@@ -117,7 +117,7 @@ class TestReferenceOps(ExtTestCase):
             got = ref.run(None, {"X": a})
             self.assertEqualArray(expected[0], got[0])
 
-    def test_scatter_elements(self):
+    def test_scatter_elements_4d(self):
         model = oh.make_model(
             oh.make_graph(
                 [
@@ -148,6 +148,42 @@ class TestReferenceOps(ExtTestCase):
         ref = ExtendedReferenceEvaluator(model)
         got = ref.run(None, {"data": data, "indices": indices, "updates": updates})
         self.assertEqualArray(y, got[0])
+
+    def test_scatter_elements_3d(self):
+        ys = [
+            np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32).reshape((2, 2, 2)),
+            np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32).reshape((2, 2, 2)),
+            np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32).reshape((2, 2, 2)),
+        ]
+
+        for axis, y in zip([0, 1, 2], ys):
+            model = oh.make_model(
+                oh.make_graph(
+                    [
+                        oh.make_node(
+                            "ScatterElements",
+                            ["data", "indices", "updates"],
+                            ["Z"],
+                            axis=axis,
+                            reduction="add",
+                        )
+                    ],
+                    "name",
+                    [
+                        oh.make_tensor_value_info("data", TensorProto.FLOAT, None),
+                        oh.make_tensor_value_info("indices", TensorProto.INT64, None),
+                        oh.make_tensor_value_info("updates", TensorProto.FLOAT, None),
+                    ],
+                    [make_tensor_value_info("Z", TensorProto.FLOAT, None)],
+                ),
+                opset_imports=[make_opsetid("", 18)],
+            )
+            data = np.zeros(2**3, dtype=np.float32).reshape((2, 2, 2))
+            indices = np.array([[[0]]], dtype=np.int64)
+            updates = np.array([[[1]]], dtype=np.float32)
+            ref = ExtendedReferenceEvaluator(model)
+            got = ref.run(None, {"data": data, "indices": indices, "updates": updates})
+            self.assertEqualArray(y, got[0])
 
     def test_skip_layer_normalization_nobias(self):
         import onnxruntime

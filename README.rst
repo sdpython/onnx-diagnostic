@@ -8,8 +8,8 @@ onnx-diagnostic: investigate onnx models
 .. image:: https://github.com/sdpython/onnx-diagnostic/actions/workflows/documentation.yml/badge.svg
     :target: https://github.com/sdpython/onnx-diagnostic/actions/workflows/documentation.yml
 
-.. image:: https://badge.fury.io/py/onnx-diagnostic.svg
-    :target: http://badge.fury.io/py/onnx-diagnostic
+.. image:: https://img.shields.io/pypi/v/onnx-diagnostic.svg
+    :target: https://pypi.org/project/onnx-diagnostic
 
 .. image:: https://img.shields.io/badge/license-MIT-blue.svg
     :alt: MIT License
@@ -18,6 +18,9 @@ onnx-diagnostic: investigate onnx models
 .. image:: https://img.shields.io/github/repo-size/sdpython/onnx-diagnostic
     :target: https://github.com/sdpython/onnx-diagnostic/
     :alt: size
+
+.. image:: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
+    :target: https://github.com/astral-sh/ruff
 
 .. image:: https://img.shields.io/badge/code%20style-black-000000.svg
     :target: https://github.com/psf/black

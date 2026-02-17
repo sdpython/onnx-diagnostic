@@ -4,18 +4,7 @@ from onnx import FunctionProto, ModelProto, NodeProto, TypeProto
 from onnx.defs import get_schema
 from onnx.reference import ReferenceEvaluator
 from onnx.reference.op_run import OpRun
-from .ops.op_add_add_mul_mul import (
-    AddAdd,
-    AddMul,
-    AddSharedInput,
-    MulAdd,
-    MulMul,
-    MulSharedInput,
-    MulSub,
-    SubMul,
-)
 from .ops.op_attention import Attention
-from .ops.op_average_pool_grad import AveragePoolGrad
 from .ops.op_bias_softmax import BiasSoftmax
 from .ops.op_cast_like import CastLike_15, CastLike_19
 from .ops.op_complex import ComplexModule, ToComplex
@@ -24,23 +13,16 @@ from .ops.op_constant_of_shape import ConstantOfShape
 from .ops.op_fused_matmul import FusedMatMul
 from .ops.op_gather import Gather
 from .ops.op_gather_elements import GatherElements
-from .ops.op_gather_grad import GatherGrad
 from .ops.op_memcpy_host import MemcpyFromHost, MemcpyToHost
-from .ops.op_mul_sigmoid import MulSigmoid
-from .ops.op_negxplus1 import NegXplus1
 from .ops.op_qlinear_average_pool import QLinearAveragePool
 from .ops.op_qlinear_conv import QLinearConv
 from .ops.op_quick_gelu import QuickGelu
-from .ops.op_replace_zero import ReplaceZero
 from .ops.op_rotary import Rotary
 from .ops.op_scan import Scan
 from .ops.op_scatter_elements import ScatterElements
-from .ops.op_scatternd_of_shape import MaskedScatterNDOfShape, ScatterNDOfShape
 from .ops.op_simplified_layer_normalization import SimplifiedLayerNormalization
 from .ops.op_skip_layer_normalization import SkipLayerNormalization
 from .ops.op_slice import Slice_1, Slice_10
-from .ops.op_transpose_cast import Transpose2DCastFP16, Transpose2DCastFP32
-from .ops.op_tri_matrix import TriMatrix
 
 logger = getLogger("onnx-diagnostic-eval")
 
@@ -70,11 +52,7 @@ class ExtendedReferenceEvaluator(ReferenceEvaluator):
     """
 
     default_ops: List[type[OpRun]] = [
-        AddAdd,
-        AddMul,
-        AddSharedInput,
         Attention,
-        AveragePoolGrad,
         BiasSoftmax,
         Concat,
         CastLike_15,
@@ -84,33 +62,19 @@ class ExtendedReferenceEvaluator(ReferenceEvaluator):
         FusedMatMul,
         Gather,
         GatherElements,
-        GatherGrad,
-        MaskedScatterNDOfShape,
         MemcpyFromHost,
         MemcpyToHost,
-        MulAdd,
-        MulMul,
-        MulSharedInput,
-        MulSigmoid,
-        MulSub,
-        NegXplus1,
         QLinearConv,
         QLinearAveragePool,
         QuickGelu,
-        ReplaceZero,
         Rotary,
         Scan,
         ScatterElements,
-        ScatterNDOfShape,
         SimplifiedLayerNormalization,
         SkipLayerNormalization,
         Slice_1,
         Slice_10,
-        SubMul,
         ToComplex,
-        Transpose2DCastFP16,
-        Transpose2DCastFP32,
-        TriMatrix,
     ]
 
     @staticmethod

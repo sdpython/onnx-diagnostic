@@ -45,7 +45,7 @@ class TestPatchPatchTorch(ExtTestCase):
         got = ep.module()(x, y)
         self.assertEqualArray(expected, got)
 
-    @requires_torch("2.11")
+    @requires_torch("2.12")
     def test_export_vmap(self):
         class Model(torch.nn.Module):
             def forward(self, x, y):
@@ -510,7 +510,7 @@ class TestPatchPatchTorch(ExtTestCase):
             got = ep.module()(**torch_deepcopy(inputs))
             self.assertEqualArrayAny(expected, got)
 
-    @requires_torch("2.11", "Eq(s3, Max(s10, s3)) is inconsistent!, until we know more")
+    @requires_torch("2.12", "Eq(s3, Max(s10, s3)) is inconsistent!, until we know more")
     def test_patch_tiny_llm_dim_meta_level_1(self):
         class Model(torch.nn.Module):
             def forward(self, x, ind1, ind2):
