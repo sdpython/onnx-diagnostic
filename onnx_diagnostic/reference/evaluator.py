@@ -17,7 +17,6 @@ from .ops.op_memcpy_host import MemcpyFromHost, MemcpyToHost
 from .ops.op_qlinear_average_pool import QLinearAveragePool
 from .ops.op_qlinear_conv import QLinearConv
 from .ops.op_quick_gelu import QuickGelu
-from .ops.op_replace_zero import ReplaceZero
 from .ops.op_rotary import Rotary
 from .ops.op_scan import Scan
 from .ops.op_scatter_elements import ScatterElements
@@ -68,7 +67,6 @@ class ExtendedReferenceEvaluator(ReferenceEvaluator):
         QLinearConv,
         QLinearAveragePool,
         QuickGelu,
-        ReplaceZero,
         Rotary,
         Scan,
         ScatterElements,

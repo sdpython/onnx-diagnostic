@@ -423,12 +423,20 @@ class TestPatchModule(ExtTestCase):
             filter_node=filter_node,
             pre_rewriter=ast_or_into_bitor,
         )
-        self.assertIn(
+        self.assertInOr(
             (
-                "torch.cond(hidden_states.dtype == torch.float16 and "
-                "torch.isinf(hidden_states).any()"
-                " | torch.isnan(hidden_states).any(), "
-                "branch_cond_then_1, branch_cond_else_1, [hidden_states])"
+                (
+                    "torch.cond(hidden_states.dtype == torch.float16 and "
+                    "torch.isinf(hidden_states).any()"
+                    " | torch.isnan(hidden_states).any(), "
+                    "branch_cond_then_1, branch_cond_else_1, [hidden_states])"
+                ),
+                # transformers>=5.2
+                (
+                    "torch.cond(hidden_states.dtype == torch.float16 and "
+                    "(not torch.isfinite(hidden_states).all()), "
+                    "branch_cond_then_1, branch_cond_else_1, [hidden_states])"
+                ),
             ),
             rewritten.code,
         )
