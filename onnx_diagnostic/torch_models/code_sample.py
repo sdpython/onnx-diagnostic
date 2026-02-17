@@ -309,7 +309,7 @@ def code_sample(
             dynamic_shapes=data["dynamic_shapes"],
         )
         if exporter is not None
-        else ([], [])
+        else ("", "")
     )
     input_code = make_code_for_inputs(data["inputs"])
     cache_import = (

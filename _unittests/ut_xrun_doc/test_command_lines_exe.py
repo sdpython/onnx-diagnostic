@@ -227,6 +227,29 @@ class TestCommandLines(ExtTestCase):
         text = st.getvalue()
         self.assertIn("-- done", text)
 
+    def test_n_parser_export_sample(self):
+        st = StringIO()
+        with redirect_stdout(st):
+            main(["exportsample", "-m", "arnir0/Tiny-LLM", "--run", "-v", "1"])
+        text = st.getvalue()
+        self.assertIn("def get_model_with_inputs(", text)
+        st = StringIO()
+        with redirect_stdout(st):
+            main(
+                [
+                    "exportsample",
+                    "-m",
+                    "arnir0/Tiny-LLM",
+                    "--run",
+                    "-v",
+                    "1",
+                    "--export",
+                    "custom",
+                ]
+            )
+        text = st.getvalue()
+        self.assertIn("def get_model_with_inputs(", text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
