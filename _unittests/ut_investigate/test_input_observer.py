@@ -929,7 +929,9 @@ class TestInputObserver(ExtTestCase):
         ]
 
         model = Model()
-        observer = InputObserver(missing=dict(pixel_values=torch.empty((0, 3, 896, 896))))
+        observer = InputObserver(
+            value_if_missing=dict(pixel_values=torch.empty((0, 3, 896, 896)))
+        )
         with observer(model):
             for kwargs in inputs:
                 model(**kwargs)
