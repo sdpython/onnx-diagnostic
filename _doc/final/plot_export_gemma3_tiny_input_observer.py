@@ -53,7 +53,7 @@ print("model type:", type(pipe.model))
 # %%
 # Captures inputs and outputs for the model.
 observer = InputObserver(
-    missing=dict(pixel_values=torch.empty((0, 3, 896, 896), dtype=torch.float16))
+    value_if_missing=dict(pixel_values=torch.empty((0, 3, 896, 896), dtype=torch.float16))
 )
 with (
     register_additional_serialization_functions(patch_transformers=True),
