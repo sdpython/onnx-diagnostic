@@ -280,7 +280,9 @@ class TestInputObserverTransformers(ExtTestCase):
 
         model = Model()
         observer = InputObserver(
-            value_if_missing=dict(pixel_values=torch.empty((0, 3, 896, 896)))
+            value_if_missing=dict(
+                pixel_values=torch.empty((0, 3, 896, 896), dtype=torch.int64)
+            )
         )
         with (
             register_additional_serialization_functions(patch_transformers=True),
