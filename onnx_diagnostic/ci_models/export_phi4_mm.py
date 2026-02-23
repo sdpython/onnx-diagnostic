@@ -711,6 +711,7 @@ def main(
     atol: float = 2,
     mismatch01: float = 0.01,
     profile_exporter: bool = False,
+    opset: Optional[int] = None,
 ):
     """
     Exports model Qwen/Qwen2.5-VL-7B-Instruct or pieces of it.
@@ -733,6 +734,7 @@ def main(
     :param atol: raises an exception if tolerance is above that threshold
     :param mismatch01: raises an exception if the ratio of mismatches
         is above that threshold
+    :param opset: opset to choose
     :param profile_exporter: profiles the exporter
     """
     prefix = simplify_model_id_for_a_filename(model_id)
@@ -947,7 +949,7 @@ def main(
 
         begin = time.perf_counter()
 
-        target_opset = 22
+        target_opset = opset or 22
 
         details = PatchDetails()
         with torch_export_patches(
@@ -1062,4 +1064,5 @@ if __name__ == "__main__":
         atol=args.atol,
         mismatch01=args.mismatch01,
         profile_exporter=args.profile_exporter,
+        opset=args.opset if args.opset > 0 else None,
     )

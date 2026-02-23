@@ -128,6 +128,12 @@ def get_parser(name: str, epilog: str = "") -> ArgumentParser:
         help="Profiles the exporter and outputs an html document from pyinstrument",
         action=BooleanOptionalAction,
     )
+    parser.add_argument(
+        "--opset",
+        type=int,
+        default=0,
+        help="default opsets, 0 to let the exporter choose",
+    )
     return parser
 
 

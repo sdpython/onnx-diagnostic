@@ -539,8 +539,10 @@ else:
 
 def make_mamba_cache(
     key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    cls_layers: Optional[Union[str, List[type]]] = None,
+    cls_kwargs: Optional[Union[Dict[str, int], List[Dict[str, int]]]] = None,
 ) -> "MambaCache":  # noqa: F821
-    "Creates a ``MambaCache``."
+    """Creates a ``MambaCache``. `cls_layers`, `cls_kwargs` are unused."""
     # import is moved here because this part is slow.
     try:
         from transformers.models.mamba.modeling_mamba import MambaCache
@@ -591,8 +593,13 @@ if hasattr(transformers.cache_utils, "SlidingWindowCache"):
 
     def make_sliding_window_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
+        cls_layers: Optional[Union[str, List[type]]] = None,
+        cls_kwargs: Optional[Union[Dict[str, int], List[Dict[str, int]]]] = None,
     ) -> transformers.cache_utils.SlidingWindowCache:
-        "Creates a :class:`transformers.cache_utils.SlidingWindowCache`."
+        """
+        Creates a :class:`transformers.cache_utils.SlidingWindowCache`.
+        `cls_layers`, `cls_kwargs` are unused.
+        """
         key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
 
         class _config:
@@ -654,6 +661,8 @@ if hasattr(transformers.cache_utils, "HybridCache"):
         max_cache_len: Optional[int] = None,
         max_batch_size: Optional[int] = None,
         sliding_window: Optional[int] = None,
+        cls_layers: Optional[Union[str, List[type]]] = None,
+        cls_kwargs: Optional[Union[Dict[str, int], List[Dict[str, int]]]] = None,
     ) -> transformers.cache_utils.HybridCache:
         """
         Creates an instance of :class:`transformers.cache_utils.HybridCache`.
@@ -661,6 +670,8 @@ if hasattr(transformers.cache_utils, "HybridCache"):
 
         :param key_value_pairs: list of pairs of (key, values)
         :return: :class:`transformers.cache_utils.HybridCache`
+
+        `cls_layers`, `cls_kwargs` are unused.
 
         Example:
 
@@ -742,16 +753,22 @@ if hasattr(transformers.cache_utils, "HybridCache"):
                 not max_batch_size and not max_cache_len
             ), "key_value_pairs is not empty, do not specify max_cache_len and max_batch_size"
             max_batch_size = key_value_pairs[0][0].shape[0]
+            assert max_cache_len is not None or all(
+                isinstance(kv[0].shape[2], int) for kv in key_value_pairs
+            ), (
+                f"Cannot determine max_cache_len with "
+                f"shapes={[kv[0].shape for kv in key_value_pairs]}"
+            )
             sets_of_dim = set(kv[0].shape[2] for kv in key_value_pairs)
             if len(sets_of_dim) == 1:
-                max_cache_len = sets_of_dim.pop()
-                sliding_window = max_cache_len
+                if max_cache_len is None:
+                    max_cache_len = sets_of_dim.pop()
             else:
                 assert (
                     len(sets_of_dim) == 2
                 ), f"Not implemented for more than 2 dimensions {sets_of_dim}"
-                max_cache_len = max(sets_of_dim)
-                sliding_window = min(sets_of_dim)
+                if max_cache_len is None:
+                    max_cache_len = max(sets_of_dim)
                 layer_types = [
                     "full_attention" if i == max_cache_len else "sliding_attention"
                     for i in [kv[0].shape[2] for kv in key_value_pairs]
@@ -760,8 +777,8 @@ if hasattr(transformers.cache_utils, "HybridCache"):
             assert (
                 max_batch_size and max_cache_len
             ), "key_value_pairs is empty, max_batch_size and max_cache_len are required"
-            if sliding_window is None:
-                sliding_window = max_cache_len
+        if sliding_window is None:
+            sliding_window = max_cache_len
         _max_cache_len = max_cache_len
         _sliding_window = sliding_window
 
