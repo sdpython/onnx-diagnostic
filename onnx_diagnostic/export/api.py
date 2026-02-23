@@ -320,12 +320,7 @@ def to_onnx(
         temp_filename = os.path.join(os.path.dirname(filename), "model.onnx")
         # renaming
         onx = onnx.load(temp_filename, load_external_data=True)
-        onnx.save(
-            onx,
-            filename,
-            save_as_external_data=True,
-            location=f"{os.path.splitext(filename[0])}.data",
-        )
+        onnx.save(onx, filename, save_as_external_data=True)
         return onx
 
     raise ValueError(f"Unknown exporter={exporter!r}")

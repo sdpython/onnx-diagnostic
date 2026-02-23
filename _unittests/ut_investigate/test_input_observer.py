@@ -1196,7 +1196,6 @@ class TestInputObserver(ExtTestCase):
             )
             torch.export.export(model, args, kwargs=kwargs, dynamic_shapes=ds)
 
-
     def test_remove_inputs_kwargs(self):
         """Test that remove_inputs removes a kwarg from the observer info."""
 
