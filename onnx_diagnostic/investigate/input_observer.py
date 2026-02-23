@@ -165,10 +165,10 @@ class InputCandidate:
         self.args = tuple(args_list)
         # remove any temporary structures
         self.flat_list, self.spec = torch.utils._pytree.tree_flatten((self.args, self.kwargs))
-        self._position_to_args_kwargs: list[int | str] | None = None
-        self._n_tensors_for_args_kwargs: dict[int | str, int] | None = None
-        self.aligned_spec: torch.utils._pytree.PyTreeSpec | None = None
-        self.aligned_flat_list: list[torch.Tensor | None] | None = None
+        self._position_to_args_kwargs = None
+        self._n_tensors_for_args_kwargs = None
+        self.aligned_spec = None
+        self.aligned_flat_list = None
 
     def __str__(self) -> str:
         return (
