@@ -139,6 +139,18 @@ def patched_sdpa_attention_forward(
         if is_causal is None and attention_mask is not None:
             is_causal = False
         if is_causal is not None:
+            torch._check(query.shape[0] > 0)
+            torch._check(query.shape[1] > 0)
+            torch._check(query.shape[2] > 0)
+            torch._check(query.shape[3] > 0)
+            torch._check(key.shape[0] > 0)
+            torch._check(key.shape[1] > 0)
+            torch._check(key.shape[2] > 0)
+            torch._check(key.shape[3] > 0)
+            torch._check(value.shape[0] > 0)
+            torch._check(value.shape[1] > 0)
+            torch._check(value.shape[2] > 0)
+            torch._check(value.shape[3] > 0)
             return (
                 torch.nn.functional.scaled_dot_product_attention(
                     query,

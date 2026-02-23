@@ -742,16 +742,22 @@ if hasattr(transformers.cache_utils, "HybridCache"):
                 not max_batch_size and not max_cache_len
             ), "key_value_pairs is not empty, do not specify max_cache_len and max_batch_size"
             max_batch_size = key_value_pairs[0][0].shape[0]
+            assert max_cache_len is not None or all(
+                isinstance(kv[0].shape[2], int) for kv in key_value_pairs
+            ), (
+                f"Cannot determine max_cache_len with "
+                f"shapes={[kv[0].shape for kv in key_value_pairs]}"
+            )
             sets_of_dim = set(kv[0].shape[2] for kv in key_value_pairs)
             if len(sets_of_dim) == 1:
-                max_cache_len = sets_of_dim.pop()
-                sliding_window = max_cache_len
+                if max_cache_len is None:
+                    max_cache_len = sets_of_dim.pop()
             else:
                 assert (
                     len(sets_of_dim) == 2
                 ), f"Not implemented for more than 2 dimensions {sets_of_dim}"
-                max_cache_len = max(sets_of_dim)
-                sliding_window = min(sets_of_dim)
+                if max_cache_len is None:
+                    max_cache_len = max(sets_of_dim)
                 layer_types = [
                     "full_attention" if i == max_cache_len else "sliding_attention"
                     for i in [kv[0].shape[2] for kv in key_value_pairs]
@@ -760,8 +766,8 @@ if hasattr(transformers.cache_utils, "HybridCache"):
             assert (
                 max_batch_size and max_cache_len
             ), "key_value_pairs is empty, max_batch_size and max_cache_len are required"
-            if sliding_window is None:
-                sliding_window = max_cache_len
+        if sliding_window is None:
+            sliding_window = max_cache_len
         _max_cache_len = max_cache_len
         _sliding_window = sliding_window
 

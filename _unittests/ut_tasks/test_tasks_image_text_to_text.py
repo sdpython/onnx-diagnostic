@@ -61,7 +61,9 @@ class TestTasksImageTextToText(ExtTestCase):
     def test_image_text_to_text_gemma3_4b_it(self):
         make_hybrid_cache = get_make_hybrid_cache()
         if make_hybrid_cache is None:
-            raise unittest.SkipTest("not implemented yet for transformers>=5")
+            raise unittest.SkipTest(
+                "not implemented yet for transformers>=5 (make_hybrid_cache is None)"
+            )
         mid = "google/gemma-3-4b-it"
         data = get_untrained_model_with_inputs(
             mid,
