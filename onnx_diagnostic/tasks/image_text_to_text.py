@@ -156,7 +156,7 @@ def _get_inputs_gemma3(
         },
         "position_ids": {0: batch, 1: seq_length},
         "cache_position": {0: seq_length},
-        "past_key_values": [{0: batch} for _ in range(num_hidden_layers * 2)],
+        "past_key_values": [{0: batch, 2: seq_length} for _ in range(num_hidden_layers * 2)],
         "pixel_values": {0: batch},
         "use_cache": None,
     }
@@ -280,7 +280,7 @@ def get_inputs_default(
         "past_key_values": list(
             itertools.chain.from_iterable(
                 zip(
-                    [{0: batch} for _ in range(num_hidden_layers)],
+                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
                     [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
                 )
             )
