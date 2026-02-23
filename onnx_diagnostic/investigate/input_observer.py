@@ -145,6 +145,25 @@ class InputCandidate:
         self.aligned_spec: torch.utils._pytree.PyTreeSpec | None = None
         self.aligned_flat_list: list[torch.Tensor | None] | None = None
 
+    def remove_inputs(self, input_names: Sequence[str]):
+        """Removes inputs."""
+        for name_or_pos in sorted(input_names, reverse=True):
+            if isinstance(name_or_pos, int):
+                if name_or_pos in self.args:
+                    del self.args[name_or_pos]
+            else:
+                if name_or_pos in self.kwargs:
+                    del self.kwargs[name_or_pos]
+                elif name_or_pos in self.cst_kwargs:
+                    del self.cst_kwargs[name_or_pos]
+
+        # remove any temporary structures
+        self.flat_list, self.spec = torch.utils._pytree.tree_flatten((self.args, self.kwargs))
+        self._position_to_args_kwargs: list[int | str] | None = None
+        self._n_tensors_for_args_kwargs: dict[int | str, int] | None = None
+        self.aligned_spec: torch.utils._pytree.PyTreeSpec | None = None
+        self.aligned_flat_list: list[torch.Tensor | None] | None = None
+
     def __str__(self) -> str:
         return (
             f"{self.__class__.__name__}({len(self.args)} args, "
@@ -811,6 +830,38 @@ class InputObserverInfo:
             )
         return {**new_kwargs, self.kwargs_name: keywords}
 
+    def remove_inputs(self, input_names: Sequence[str | int]):
+        """Lets the users drops inputs."""
+        if (
+            self.args_name_and_position is not None
+            and self.args_name_and_position in input_names
+        ):
+            raise ValueError(f"Cannot remove variadic {self.args_name_and_position}")
+        if self.kwargs_name is not None and self.kwargs_name in input_names:
+            raise ValueError(f"Cannot remove variadic {self.kwargs_name}")
+        for candidate in self.inputs:
+            candidate.remove_inputs(input_names)
+        if self._best_candidate:
+            self._best_candidate.remove_inputs(input_names)
+
+        for name_or_pos in sorted(input_names, reverse=True):
+            if self.default_values and name_or_pos in self.default_values:
+                del self.default_values[name_or_pos]
+            if self.value_if_missing and name_or_pos in self.value_if_missing:
+                del self.value_if_missing[name_or_pos]
+            if self._captured_inputs and name_or_pos in self._captured_inputs:
+                del self._captured_inputs[name_or_pos]
+
+        assert (
+            not self.args_name_and_position
+        ), f"Not implemented when {self.args_name_and_position=}"
+        input_names_str = {
+            (self.signature_name[i] if isinstance(i, int) else i) for i in input_names
+        }
+        self.signature_names = [
+            name for name in self.signature_names if name not in input_names_str
+        ]
+
 
 class InputObserver:
     """Steals forward method to collect inputs and outputs.
@@ -1209,3 +1260,7 @@ class InputObserver:
                 diff["outputs_ort"] = string_type(ort_outputs, with_shape=True)
             data.append(diff)
         return data
+
+    def remove_inputs(self, input_names: Sequence[str | int]):
+        """Lets the users drops inputs."""
+        self.info.remove_inputs(input_names)
