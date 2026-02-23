@@ -586,7 +586,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         for exporter in ("custom", "onnx-dynamo"):
             # onnx-dynamo needs OpOverload(op='aten.sym_storage_offset' (transformers>=5.0?)
             if exporter == "onnx-dynamo" and not has_onnxscript("0.5.7"):
-                raise unittest.SkipTest("needs onnxscript>=0.5.7")
+                self.skipTest("needs onnxscript>=0.5.7")
             filename = self.get_dump_file(
                 f"test_patched_qwen2_5_vl_vision_attention_forward.{exporter}.onnx"
             )
@@ -640,7 +640,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         )
         for exporter in ("custom", "onnx-dynamo"):
             if exporter == "onnx-dynamo" and aten_sym_storage_offset is None:
-                raise unittest.SkipTest("update onnxscript to make this test run")
+                self.skipTest("update onnxscript to make this test run")
             # onnx-dynamo needs OpOverload(op='aten.sym_storage_offset' (transformers>=5.0?)
             filename = self.get_dump_file(
                 f"test_qwen2_5_vl_vision_attention_iteration.{exporter}.onnx"
@@ -909,7 +909,7 @@ class TestPatchPatchTransformers(ExtTestCase):
             torch.testing.assert_close(eager2, export2)
 
         with self.subTest(case="case2"):
-            raise unittest.SkipTest("torch 2.10+ has probably a bug here.")
+            self.skipTest("torch 2.10+ has probably a bug here.")
             input_ids = torch.randint(0, 16, (2, 8), dtype=torch.int64)
             inputs_embeds = torch.rand((2, 8), dtype=torch.float32)
             cache_position = torch.arange(0, 8, dtype=torch.int64)
@@ -995,13 +995,17 @@ class TestPatchPatchTransformers(ExtTestCase):
 
             with self.subTest(case="case5"):
                 if not has_transformers("4.57"):
-                    raise unittest.SkipTest("transformers 4.57+.")
+                    self.skipTest("This test only works with transformers>=4.57, <5.3.")
+                if has_transformers("5.2.99"):
+                    self.skipTest("This test is no longer valid with transformers>=5.3.")
                 with self.assertRaises((AttributeError, TypeError)):
                     model_inputs = model.prepare_inputs_for_generation(
                         input_ids, past_key_values=dynamic_cache
                     )
 
             with self.subTest(case="case6"):
+                if has_transformers("5.2.99"):
+                    self.skipTest("This test is no longer valid with transformers>=5.3.")
                 cache_position = torch.arange(input_ids.shape[-1], dtype=torch.long).to(
                     torch_device
                 )
@@ -1023,6 +1027,8 @@ class TestPatchPatchTransformers(ExtTestCase):
                 )  # we still need the full attention mask!
 
             with self.subTest(case="case6.2"):
+                if has_transformers("5.2.99"):
+                    self.skipTest("This test is no longer valid with transformers>=5.3.")
                 max_cache_len = 10
                 batch_size = 2
                 query_length = input_ids.shape[-1] - init_input_ids.shape[-1]
@@ -1046,7 +1052,7 @@ class TestPatchPatchTransformers(ExtTestCase):
 
             with self.subTest(case="case7"):
                 if not has_transformers("4.57"):
-                    raise unittest.SkipTest("transformers 4.57+.")
+                    self.skipTest("This test only works with transformers>=4.57.")
                 init_inputs_embeds = model.get_input_embeddings()(init_input_ids)
                 model_inputs = model.prepare_inputs_for_generation(
                     input_ids,

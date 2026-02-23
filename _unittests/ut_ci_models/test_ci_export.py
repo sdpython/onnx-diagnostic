@@ -20,6 +20,7 @@ class TestCiExport(ExtTestCase):
             pretrained=False,
             part="",
             output_folder=self.get_dump_folder("test_main_qwen25_tiny_llm"),
+            opset=24,
         )
         self.clean_dump()
 

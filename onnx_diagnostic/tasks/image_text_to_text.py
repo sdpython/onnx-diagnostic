@@ -280,7 +280,7 @@ def get_inputs_default(
         "past_key_values": list(
             itertools.chain.from_iterable(
                 zip(
-                    [{0: batch} for _ in range(num_hidden_layers)],
+                    [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
                     [{0: batch, 2: cache_length} for _ in range(num_hidden_layers)],
                 )
             )
