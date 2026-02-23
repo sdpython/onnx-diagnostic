@@ -43,9 +43,13 @@ SHORTEN_LAYER_NAMES = {
 
 KWARGS_LAYER_NAMES = {
     "DynamicLayer": lambda layer: "",
-    "DynamicSlidingWindowLayer": lambda layer: str(layer.sliding_window),
+    "DynamicSlidingWindowLayer": lambda layer: str(
+        getattr(layer, "sliding_window", getattr(layer, "max_cache_len", 0))
+    ),
     "StaticLayer": lambda layer: "",
-    "StaticSlidingWindowLayer": lambda layer: str(layer.sliding_window),
+    "StaticSlidingWindowLayer": lambda layer: str(
+        getattr(layer, "sliding_window", getattr(layer, "max_cache_len", 0))
+    ),
 }
 
 PARSE_LAYER_NAMES = {
