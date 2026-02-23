@@ -60,7 +60,7 @@ import os
 import sys
 import time
 import warnings
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from .ci_helpers import (
     check_for_discrepancies_and_log_everything_into_a_json_file,
     compute_expected_outputs,
@@ -199,6 +199,7 @@ def main(
     atol: float = 0.01,
     mismatch01: float = 0.1,
     profile_exporter: bool = False,
+    opset: Optional[int] = None,
 ):
     """
     Exports model Qwen/Qwen2.5-VL-7B-Instruct or pieces of it.
@@ -221,6 +222,8 @@ def main(
     :param atol: raises an exception if tolerance is above that threshold
     :param mismatch01: raises an exception if the ratio of mismatches
         is above that threshold
+    :param opset: opset, if not specified, a value is chosen based on the
+        proposed rewriting
     :param profile_exporter: profiles the exporter
     """
     prefix = simplify_model_id_for_a_filename(model_id)
@@ -243,6 +246,7 @@ def main(
     print(f"-- make_zip={make_zip}")
     print(f"-- output_folder={output_folder}")
     print(f"-- atol={atol}")
+    print(f"-- opset={opset}")
     print(f"-- mismatch01={mismatch01}")
     print(f"-- profile_exporter={profile_exporter}")
     print("------------------------------------------------------------------")
@@ -473,7 +477,7 @@ def main(
 
         begin = time.perf_counter()
 
-        target_opset = 22
+        target_opset = opset or 22
         if (
             exporter == "onnx-dynamo"
             and device == "cuda"
@@ -481,7 +485,7 @@ def main(
         ):
             os.environ["QWEN25ATTENTION"] = "PACKED"
         elif "QWEN25ATTENTION" in os.environ and os.environ["QWEN25ATTENTION"] == "LOOPA23":
-            target_opset = 23
+            target_opset = opset or 23
 
         with torch_export_patches(
             patch_torch=False,

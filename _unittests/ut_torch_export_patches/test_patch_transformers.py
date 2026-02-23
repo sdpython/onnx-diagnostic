@@ -996,6 +996,8 @@ class TestPatchPatchTransformers(ExtTestCase):
             with self.subTest(case="case5"):
                 if not has_transformers("4.57"):
                     raise unittest.SkipTest("transformers 4.57+.")
+                if has_transformers("5.2.99"):
+                    raise unittest.SkipTest("transformers 5.2+.")
                 with self.assertRaises((AttributeError, TypeError)):
                     model_inputs = model.prepare_inputs_for_generation(
                         input_ids, past_key_values=dynamic_cache
