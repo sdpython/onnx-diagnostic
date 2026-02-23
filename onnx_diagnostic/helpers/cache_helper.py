@@ -539,8 +539,10 @@ else:
 
 def make_mamba_cache(
     key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
+    cls_layers: Optional[Union[str, List[type]]] = None,
+    cls_kwargs: Optional[Union[Dict[str, int], List[Dict[str, int]]]] = None,
 ) -> "MambaCache":  # noqa: F821
-    "Creates a ``MambaCache``."
+    """Creates a ``MambaCache``. `cls_layers`, `cls_kwargs` are unused."""
     # import is moved here because this part is slow.
     try:
         from transformers.models.mamba.modeling_mamba import MambaCache
@@ -591,8 +593,13 @@ if hasattr(transformers.cache_utils, "SlidingWindowCache"):
 
     def make_sliding_window_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
+        cls_layers: Optional[Union[str, List[type]]] = None,
+        cls_kwargs: Optional[Union[Dict[str, int], List[Dict[str, int]]]] = None,
     ) -> transformers.cache_utils.SlidingWindowCache:
-        "Creates a :class:`transformers.cache_utils.SlidingWindowCache`."
+        """
+        Creates a :class:`transformers.cache_utils.SlidingWindowCache`.
+        `cls_layers`, `cls_kwargs` are unused.
+        """
         key_value_pairs = _preprocess_key_value_pairs(key_value_pairs)
 
         class _config:
@@ -654,7 +661,8 @@ if hasattr(transformers.cache_utils, "HybridCache"):
         max_cache_len: Optional[int] = None,
         max_batch_size: Optional[int] = None,
         sliding_window: Optional[int] = None,
-        cls_layers: Optional[List[type]] = None,
+        cls_layers: Optional[Union[str, List[type]]] = None,
+        cls_kwargs: Optional[Union[Dict[str, int], List[Dict[str, int]]]] = None,
     ) -> transformers.cache_utils.HybridCache:
         """
         Creates an instance of :class:`transformers.cache_utils.HybridCache`.
@@ -663,7 +671,7 @@ if hasattr(transformers.cache_utils, "HybridCache"):
         :param key_value_pairs: list of pairs of (key, values)
         :return: :class:`transformers.cache_utils.HybridCache`
 
-        `cls_layers` is unused.
+        `cls_layers`, `cls_kwargs` are unused.
 
         Example:
 
