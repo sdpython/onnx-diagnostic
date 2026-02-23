@@ -1,9 +1,12 @@
+import packaging.version as pv
 import torch
+import transformers
 
 try:
     import transformers.models.qwen3_moe
 
-    patch_qwen3 = True
+    # Experts were refactored in transformers>=5.3 to use grouped_mm.
+    patch_qwen3 = pv.Version(transformers.__version__) < pv.Version("5.2.99")
 except ImportError:
     patch_qwen3 = False
 

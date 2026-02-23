@@ -569,4 +569,5 @@ if __name__ == "__main__":
         atol=args.atol,
         mismatch01=args.mismatch01,
         profile_exporter=args.profile_exporter,
+        opset=args.opset if args.opset > 0 else None,
     )

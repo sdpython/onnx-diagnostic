@@ -654,6 +654,7 @@ if hasattr(transformers.cache_utils, "HybridCache"):
         max_cache_len: Optional[int] = None,
         max_batch_size: Optional[int] = None,
         sliding_window: Optional[int] = None,
+        cls_layers: Optional[List[type]] = None,
     ) -> transformers.cache_utils.HybridCache:
         """
         Creates an instance of :class:`transformers.cache_utils.HybridCache`.
@@ -661,6 +662,8 @@ if hasattr(transformers.cache_utils, "HybridCache"):
 
         :param key_value_pairs: list of pairs of (key, values)
         :return: :class:`transformers.cache_utils.HybridCache`
+
+        `cls_layers` is unused.
 
         Example:
 
