@@ -147,16 +147,22 @@ class InputCandidate:
 
     def remove_inputs(self, input_names: Sequence[str | int]):
         """Removes inputs."""
+        # Work on a mutable copy of positional arguments.
+        args_list = list(self.args)
+
         for name_or_pos in sorted(input_names, reverse=True):
             if isinstance(name_or_pos, int):
-                if name_or_pos in self.args:
-                    del self.args[name_or_pos]
+                idx = name_or_pos
+                if 0 <= idx < len(args_list):
+                    del args_list[idx]
             else:
                 if name_or_pos in self.kwargs:
                     del self.kwargs[name_or_pos]
                 elif name_or_pos in self.cst_kwargs:
                     del self.cst_kwargs[name_or_pos]
 
+        # Update stored positional arguments.
+        self.args = tuple(args_list)
         # remove any temporary structures
         self.flat_list, self.spec = torch.utils._pytree.tree_flatten((self.args, self.kwargs))
         self._position_to_args_kwargs: list[int | str] | None = None
