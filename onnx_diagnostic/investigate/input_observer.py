@@ -145,7 +145,7 @@ class InputCandidate:
         self.aligned_spec: torch.utils._pytree.PyTreeSpec | None = None
         self.aligned_flat_list: list[torch.Tensor | None] | None = None
 
-    def remove_inputs(self, input_names: Sequence[str]):
+    def remove_inputs(self, input_names: Sequence[str | int]):
         """Removes inputs."""
         for name_or_pos in sorted(input_names, reverse=True):
             if isinstance(name_or_pos, int):
