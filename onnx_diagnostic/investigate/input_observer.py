@@ -851,7 +851,11 @@ class InputObserverInfo:
             self._best_candidate.remove_inputs(input_names)
 
         for name_or_pos in sorted(input_names, reverse=True):
-            if self.default_values and name_or_pos in self.default_values:
+            if (
+                isinstance(name_or_pos, str)
+                and self.default_values
+                and name_or_pos in self.default_values
+            ):
                 del self.default_values[name_or_pos]
             if self.value_if_missing and name_or_pos in self.value_if_missing:
                 del self.value_if_missing[name_or_pos]
@@ -862,7 +866,7 @@ class InputObserverInfo:
             not self.args_name_and_position
         ), f"Not implemented when {self.args_name_and_position=}"
         input_names_str = {
-            (self.signature_name[i] if isinstance(i, int) else i) for i in input_names
+            (self.signature_names[i] if isinstance(i, int) else i) for i in input_names
         }
         self.signature_names = [
             name for name in self.signature_names if name not in input_names_str
@@ -1269,4 +1273,6 @@ class InputObserver:
 
     def remove_inputs(self, input_names: Sequence[str | int]):
         """Lets the users drops inputs."""
+        if self.info is None:
+            raise RuntimeError("No input was captured.")
         self.info.remove_inputs(input_names)

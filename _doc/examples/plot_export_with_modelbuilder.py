@@ -65,7 +65,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 if not os.path.exists(filename):
     print(f"-- creating... on {device} into {filename!r}")
-    model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=torch.bfloat16)
+    model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, dtype=torch.bfloat16)
     model = model.to(device)
     config = model.config
 else:

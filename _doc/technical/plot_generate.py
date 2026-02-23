@@ -47,7 +47,7 @@ if unit_test_going():
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 else:
     model_id = "microsoft/phi-1_5"
-    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype="auto")
+    model = AutoModelForCausalLM.from_pretrained(model_id, dtype="auto")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     config = get_pretrained_config(model_id)
     task = task = task_from_id(model_id)

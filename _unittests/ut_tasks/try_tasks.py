@@ -263,7 +263,7 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             device_map="cuda",
-            torch_dtype="auto",
+            dtype="auto",
             trust_remote_code=True,
             # if you do not use Ampere or later GPUs, change attention to "eager"
             # _attn_implementation='flash_attention_2',
@@ -352,7 +352,7 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
         mid = "HuggingFaceM4/tiny-random-idefics"
         processor = AutoProcessor.from_pretrained(mid)
         model = IdeficsForVisionText2Text.from_pretrained(
-            mid, torch_dtype=torch.bfloat16, device_map="auto"
+            mid, dtype=torch.bfloat16, device_map="auto"
         )
 
         prompt = [
@@ -699,7 +699,7 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
             "text-generation",
             model=model,
             tokenizer=tokenizer,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             trust_remote_code=True,
             device_map="auto",
         )
@@ -736,7 +736,7 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
             "text-generation",
             model=model,
             tokenizer=tokenizer,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             trust_remote_code=True,
             device_map="auto",
         )
@@ -802,7 +802,7 @@ class TestTryHuggingFaceHubModel(ExtTestCase):
         from diffusers import StableDiffusionPipeline
 
         model_id = "diffusers/tiny-torch-full-checker"  # "stabilityai/stable-diffusion-2"
-        pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16).to(
+        pipe = StableDiffusionPipeline.from_pretrained(model_id, dtype=torch.float16).to(
             "cuda"
         )
 

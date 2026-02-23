@@ -794,7 +794,7 @@ def main(
             model_id,
             config=config,
             trust_remote_code=True,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
             device_map=device,
             attn_implementation="sdpa",
         ).eval()
