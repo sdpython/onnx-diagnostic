@@ -4,6 +4,7 @@ import textwrap
 import time
 from collections.abc import Mapping, Iterable
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
+import onnx
 import torch
 from .dynamic_shapes import ModelInputs
 from .onnx_plug import EagerDirectReplacementWithOnnx
@@ -312,10 +313,14 @@ def to_onnx(
             mod,
             precision=str(first_float[0].dtype).split(".")[-1],
             execution_provider="cuda" if first.is_cuda else "cpu",
-            cache_dir=os.path.dirname(filename),
+            cache_dir=os.path.dirname(filename) or ".",
             **(exporter_kwargs or {}),
         )
         save_model_builder(onx, os.path.dirname(filename))
+        temp_filename = os.path.join(os.path.dirname(filename), "model.onnx")
+        # renaming
+        onx = onnx.load(temp_filename, load_external_data=True)
+        onnx.save(onx, filename, save_as_external_data=True)
         return onx
 
     raise ValueError(f"Unknown exporter={exporter!r}")

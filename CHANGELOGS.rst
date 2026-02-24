@@ -4,6 +4,9 @@ Change Logs
 0.9.3
 +++++
 
+* :pr:`422`: add remove_inputs to InputObserver
+* :pr:`421`: fix a few patches for MoE
+
 0.9.2
 +++++
 
