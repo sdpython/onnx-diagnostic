@@ -85,7 +85,7 @@ class TestDocumentationExamples(ExtTestCase):
 
             # transformers
 
-            if not reason and not has_dot and name in {"plot_export_with_modelbuilder.py"}:
+            if not reason and name in {"plot_export_with_modelbuilder.py"}:
                 reason = "downloading"
 
             if (
