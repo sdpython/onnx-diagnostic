@@ -165,7 +165,10 @@ __data_arch__ = textwrap.dedent("""
     YolosModel,image-feature-extraction
     Alibaba-NLP/gte-large-en-v1.5,sentence-similarity
     emilyalsentzer/Bio_ClinicalBERT,fill-mask
-    nvidia/Cosmos-Predict2-2B-Video2World//transformer,image-to-video""")
+    nvidia/Cosmos-Predict2-2B-Video2World//transformer,image-to-video
+    diffusers/FLUX.2-dev-bnb-4bit,image-to-image
+    black-forest-labs/FLUX.2-dev,image-to-image
+    optimum-intel-internal-testing/tiny-random-stable-diffusion-xl-refiner,image-to-image""")
 
 __data_tasks__ = [
     "audio-classification",
@@ -177,6 +180,7 @@ __data_tasks__ = [
     "image-feature-extraction",
     "image-segmentation",
     "image-text-to-text",
+    "image-to-image",
     "image-to-text",
     "keypoint-detection",
     "mask-generation",
