@@ -2332,7 +2332,9 @@ def call_torch_export_custom(
         "custom-fake",
         "custom-tracing",
     }
-    assert exporter in available, f"Unexpected value for exporter={exporter!r} in {available}"
+    assert (
+        exporter in available
+    ), f"Unexpected value for exporter={exporter!r} in {sorted(available)}"  # type: ignore[type-var]
     assert "model" in data, f"model is missing from data: {sorted(data)}"
     assert "inputs_export" in data, f"inputs_export is missing from data: {sorted(data)}"
     assert ("-strict" not in exporter) or ("strict" not in exporter_options), (
