@@ -46,7 +46,6 @@ def all_dynamic_shapes_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
         from onnx_diagnostic.helpers.cache_helper import (
             make_dynamic_cache,
             make_encoder_decoder_cache,
-            make_mamba_cache,
             make_static_cache,
         )
         from onnx_diagnostic.export.shape_helper import all_dynamic_shapes_from_inputs
@@ -83,13 +82,6 @@ def all_dynamic_shapes_from_inputs(inputs: Any, dim_prefix: Any = "d") -> Any:
                     (torch.rand((4, 5, 6, 7)), torch.rand((4, 5, 6, 7))),
                 ],
                 max_cache_len=15,
-            ),
-            make_mamba_cache(
-                [
-                    (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                    (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                    (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                ]
             ),
         ]
 
