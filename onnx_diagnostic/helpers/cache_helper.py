@@ -537,58 +537,6 @@ else:
     make_encoder_decoder_cache = None  # type: ignore[assignment]
 
 
-def make_mamba_cache(
-    key_value_pairs: List[Tuple[torch.Tensor, torch.Tensor]],
-    cls_layers: Optional[Union[str, List[type]]] = None,
-    cls_kwargs: Optional[Union[Dict[str, int], List[Dict[str, int]]]] = None,
-) -> "MambaCache":  # noqa: F821
-    """Creates a ``MambaCache``. `cls_layers`, `cls_kwargs` are unused."""
-    # import is moved here because this part is slow.
-    try:
-        from transformers.models.mamba.modeling_mamba import MambaCache
-    except ImportError:
-        from transformers.cache_utils import MambaCache
-    dtype = key_value_pairs[0][0].dtype
-
-    class _config:
-        def __init__(self):
-            self.intermediate_size = key_value_pairs[0][0].shape[1]
-            self.conv_kernel = key_value_pairs[0][0].shape[-1]
-            self.state_size = key_value_pairs[0][1].shape[-1]
-            self.num_hidden_layers = len(key_value_pairs)
-            self.dtype = dtype
-
-        def get_text_config(self, *args, **kwargs):
-            return self
-
-    cache = MambaCache(
-        _config(),
-        max_batch_size=key_value_pairs[0][0].shape[0],
-        device=key_value_pairs[0][0].device,
-        dtype=dtype,
-    )
-    for i in range(len(key_value_pairs)):
-        assert cache.conv_states[i].dtype == dtype, (
-            f"Type mismatch for cache.conv_states[{i}].dtype="
-            f"{cache.conv_states[i].dtype} != {dtype}"
-        )
-        assert cache.ssm_states[i].dtype == dtype, (
-            f"Type mismatch for cache.ssm_states[{i}].dtype="
-            f"{cache.ssm_states[i].dtype} != {dtype}"
-        )
-        assert cache.conv_states[i].shape == key_value_pairs[i][0].shape, (
-            f"Shape mismatch, expected {cache.conv_states[i].shape}, "
-            f"got {key_value_pairs[i][0].shape}"
-        )
-        cache.conv_states[i][:, :, :] = key_value_pairs[i][0]
-        assert cache.ssm_states[i].shape == key_value_pairs[i][1].shape, (
-            f"Shape mismatch, expected {cache.ssm_states[i].shape}, "
-            f"got {key_value_pairs[i][1].shape}"
-        )
-        cache.ssm_states[i][:, :, :] = key_value_pairs[i][1]
-    return finalize_cache(cache)
-
-
 if hasattr(transformers.cache_utils, "SlidingWindowCache"):
 
     def make_sliding_window_cache(

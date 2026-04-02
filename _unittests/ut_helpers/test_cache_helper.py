@@ -9,7 +9,6 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_dynamic_cache,
     make_encoder_decoder_cache,
     make_hybrid_cache,
-    make_mamba_cache,
     make_sliding_window_cache,
     make_static_cache,
 )
