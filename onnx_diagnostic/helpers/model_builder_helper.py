@@ -48,7 +48,7 @@ def download_model_builder_to_cache(
         "phi.py",
         "qwen.py",
         "smollm.py",
-        "whipser.py",
+        "whisper.py",
     ]:
         u = f"{'/'.join(url.split('/')[:-1])}/builders/{subfile}"
         response = requests.get(u)
