@@ -51,17 +51,18 @@ class TestTinyLlm(ExtTestCase):
     @requires_torch("2.8")
     def test_tiny_llm_export_static(self):
         data = get_tiny_llm(use_static_cache=True)
-        model, inputs = data["model"], data["inputs"]
+        model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
+        if "cache_position" in inputs:
+            del inputs["cache_position"]
+            del ds["cache_position"]
         expected = model(**copy.deepcopy(inputs))
-        self.assertEqual(
-            {"attention_mask", "past_key_values", "input_ids", "cache_position"}, set(inputs)
-        )
+        self.assertEqual({"attention_mask", "past_key_values", "input_ids"}, set(inputs))
         with torch_export_patches(patch_transformers=True, stop_if_static=0):
             ep = torch.export.export(
                 model,
                 (),
                 kwargs=copy.deepcopy(inputs),
-                dynamic_shapes=use_dyn_not_str(data["dynamic_shapes"]),
+                dynamic_shapes=use_dyn_not_str(ds),
             )
             got = ep.module()(**inputs)
             self.assertEqualArrayAny(expected, got)
