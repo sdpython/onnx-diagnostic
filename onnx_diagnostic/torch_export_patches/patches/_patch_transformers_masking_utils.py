@@ -165,8 +165,8 @@ if patch_masking_utils:
             # `cache_position` is deprecated as an arg,
             # and will be removed in Transformers v5.6. Please use `q_length` and "
             # `q_offset` instead, similarly to `kv_length` and `kv_offset`"
-            q_length, q_offset = q_length.shape[0], q_length[0].to(device)
             device = q_length.device
+            q_length, q_offset = q_length.shape[0], q_length[0].to(device)
 
             padding_mask = prepare_padding_mask(
                 attention_mask, kv_length, kv_offset, **_prepare_padding_mask_kwargs
