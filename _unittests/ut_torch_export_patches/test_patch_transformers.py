@@ -74,7 +74,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         patched_sdpa_mask = patch_transformers.patched_sdpa_mask
         kwargs = {
             "batch_size": 1,
-            "cache_position": torch.tensor([3], dtype=torch.int64),
+            "q_length": torch.tensor([3], dtype=torch.int64),
             "kv_length": 4,
             "kv_offset": 0,
             "mask_function": transformers.masking_utils.causal_mask_function,
@@ -89,7 +89,7 @@ class TestPatchPatchTransformers(ExtTestCase):
 
         kwargs = {
             "batch_size": 1,
-            "cache_position": torch.tensor([3], dtype=torch.int64),
+            "q_length": torch.tensor([3], dtype=torch.int64),
             "kv_length": 4,
             "kv_offset": 0,
             "mask_function": transformers.masking_utils.causal_mask_function,
