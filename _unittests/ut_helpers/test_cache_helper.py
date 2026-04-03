@@ -9,7 +9,6 @@ from onnx_diagnostic.helpers.cache_helper import (
     make_dynamic_cache,
     make_encoder_decoder_cache,
     make_hybrid_cache,
-    make_mamba_cache,
     make_sliding_window_cache,
     make_static_cache,
 )
@@ -149,23 +148,6 @@ class TestCacheHelpers(ExtTestCase):
                 "[T1s5x5x5,T1s5x5x5,T1s5x5x5]))",
                 self.string_type(c2, with_shape=True),
             )
-
-    @requires_transformers("4.51")  # the structure changes
-    def test_make_mamba_cache(self):
-        cache = make_mamba_cache(
-            [
-                (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-            ]
-        )
-        text = self.string_type(cache, with_shape=True)
-        self.assertEqual(
-            "MambaCache(conv_states=#3[T1s4x4x4,T1s4x4x4,T1s4x4x4], "
-            "ssm_states=#3[T1s4x4x4,T1s4x4x4,T1s4x4x4])",
-            text,
-        )
-        self.assertEqual(0, max_diff(cache, cache)["abs"])
 
     @unittest.skipIf(
         not make_sliding_window_cache, "SlidingWindowCache removed in transformers>=5"

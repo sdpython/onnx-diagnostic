@@ -146,66 +146,112 @@ if patch_masking_utils:
         return mask
 
     def patched_sdpa_mask_recent_torch(
-        batch_size: int,
-        cache_position: torch.Tensor,
-        kv_length: int,
+        batch_size: int = 0,
+        q_length: int = 0,
+        kv_length: int = 0,
+        q_offset: int = 0,
         kv_offset: int = 0,
         mask_function: Callable = causal_mask_function,
         attention_mask: Optional[torch.Tensor] = None,
         local_size: Optional[int] = None,
         allow_is_causal_skip: bool = True,
         allow_is_bidirectional_skip: bool = False,
+        use_vmap: bool = False,
+        device: torch.device | str = "cpu",
         **kwargs,
     ) -> Optional[torch.Tensor]:
         """manual patch for function ``transformers.masking_utils.sdpa_mask_recent_torch``."""
-        q_length = cache_position.shape[0]
-        padding_mask = prepare_padding_mask(
-            attention_mask, kv_length, kv_offset, **_prepare_padding_mask_kwargs
-        )
+        if isinstance(q_length, torch.Tensor):
+            # `cache_position` is deprecated as an arg,
+            # and will be removed in Transformers v5.6. Please use `q_length` and "
+            # `q_offset` instead, similarly to `kv_length` and `kv_offset`"
+            device = q_length.device
+            q_length, q_offset = q_length.shape[0], q_length[0].to(device)
+
+            padding_mask = prepare_padding_mask(
+                attention_mask, kv_length, kv_offset, **_prepare_padding_mask_kwargs
+            )
+            if allow_is_causal_skip and _ignore_causal_mask_sdpa(
+                padding_mask, q_length, kv_length, kv_offset, local_size
+            ):
+                return None
+            if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa:
+                # transformers<=5.0: 1 parameter, 3 for transformers>5.0
+                n_parameters = len(
+                    inspect.signature(_ignore_bidirectional_mask_sdpa).parameters
+                )
+                if _ignore_bidirectional_mask_sdpa(
+                    *[padding_mask, kv_length, kv_offset][:n_parameters]
+                ):
+                    return None
+
+            if mask_function is bidirectional_mask_function:
+                if padding_mask is not None:
+                    # used for slicing without data-dependent slicing
+                    mask_indices = torch.arange(kv_length, device=device) + kv_offset
+                    return padding_mask[:, None, None, mask_indices].expand(
+                        -1, -1, q_length, -1
+                    )
+                return torch.ones(
+                    batch_size,
+                    1,
+                    q_length,
+                    kv_length,
+                    dtype=torch.bool,
+                    device=device,
+                )
+
+            kv_arange = torch.arange(kv_length, device=device)
+            kv_arange += kv_offset
+            if padding_mask is not None:
+                mask_function = and_masks(mask_function, padding_mask_function(padding_mask))
+            batch_arange = torch.arange(batch_size, device=device)
+            head_arange = torch.arange(1, device=device)
+            # PATCHED: this line calls the patched version of vmap_for_bhqkv
+            causal_mask = patched__vmap_for_bhqkv(mask_function)(
+                batch_arange, head_arange, q_length, kv_arange
+            )
+            return causal_mask
+
+        padding_mask = prepare_padding_mask(attention_mask, kv_length, kv_offset)
+
+        # Under specific conditions, we can avoid materializing the mask
+        #   1. Causal masks can rely on the `is_causal` argument
+        #   2. Bidirectional do not need any further processing (no bias)
         if allow_is_causal_skip and _ignore_causal_mask_sdpa(
             padding_mask, q_length, kv_length, kv_offset, local_size
         ):
             return None
-        if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa:
-            # transformers<=5.0: 1 parameter, 3 for transformers>5.0
-            n_parameters = len(inspect.signature(_ignore_bidirectional_mask_sdpa).parameters)
-            if _ignore_bidirectional_mask_sdpa(
-                *[padding_mask, kv_length, kv_offset][:n_parameters]
-            ):
-                return None
+        if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa(
+            padding_mask, kv_length, local_size
+        ):
+            return None
 
-        if mask_function is bidirectional_mask_function:
-            if padding_mask is not None:
-                # used for slicing without data-dependent slicing
-                mask_indices = (
-                    torch.arange(kv_length, device=cache_position.device) + kv_offset
-                )
-                return padding_mask[:, None, None, mask_indices].expand(-1, -1, q_length, -1)
-            return torch.ones(
-                batch_size,
-                1,
-                q_length,
-                kv_length,
-                dtype=torch.bool,
-                device=cache_position.device,
-            )
-
-        kv_arange = torch.arange(kv_length, device=cache_position.device)
-        kv_arange += kv_offset
+        # Potentially add the padding 2D mask
         if padding_mask is not None:
             mask_function = and_masks(mask_function, padding_mask_function(padding_mask))
-        batch_arange = torch.arange(batch_size, device=cache_position.device)
-        head_arange = torch.arange(1, device=cache_position.device)
-        # PATCHED: this line calls the patched version of vmap_for_bhqkv
-        causal_mask = patched__vmap_for_bhqkv(mask_function)(
-            batch_arange, head_arange, cache_position, kv_arange
+
+        batch_arange = torch.arange(batch_size, device=device)
+        head_arange = torch.arange(1, device=device)
+        q_arange = torch.arange(q_length, device=device) + q_offset
+        kv_arange = torch.arange(kv_length, device=device) + kv_offset
+
+        # Actual mask creation
+        # Option 1: Fast non-vmap mask creation (default)
+        # Apply mask function element-wise through broadcasting
+        attention_mask = mask_function(
+            *_non_vmap_expansion_sdpa(batch_arange, head_arange, q_arange, kv_arange)
         )
-        return causal_mask
+        # Expand the mask to match batch size and
+        # query length if they weren't used in the mask function
+        attention_mask = attention_mask.expand(batch_size, -1, q_length, kv_length)
+        return attention_mask
 
     def patched_sdpa_mask(
-        batch_size: int,
-        cache_position: torch.Tensor,
-        kv_length: int,
+        batch_size: int = 0,
+        q_length: int = 0,
+        kv_length: int = 0,
+        q_offset: int = 0,
         kv_offset: int = 0,
         mask_function: Callable = causal_mask_function,
         attention_mask: torch.Tensor | None = None,
@@ -217,7 +263,79 @@ if patch_masking_utils:
         **kwargs,
     ) -> torch.Tensor | None:
         """manual patch for function ``transformers.masking_utils.sdpa_mask``."""
-        q_length = cache_position.shape[0]
+        if isinstance(q_length, torch.Tensor):
+            # `cache_position` is deprecated as an arg,
+            # and will be removed in Transformers v5.6. Please use `q_length` and "
+            # `q_offset` instead, similarly to `kv_length` and `kv_offset`"
+            cache_position = q_length
+            device = q_length.device
+            q_length = q_length.shape[0]
+
+            # Potentially pad the 2D mask
+            padding_mask = prepare_padding_mask(attention_mask, kv_length, kv_offset)
+
+            # Under specific conditions, we can avoid materializing the mask
+            #   1. Causal masks can rely on the `is_causal` argument
+            #   2. Bidirectional do not need any further processing (no bias)
+            if allow_is_causal_skip and _ignore_causal_mask_sdpa(
+                padding_mask, q_length, kv_length, kv_offset, local_size
+            ):
+                return None
+            if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa(
+                padding_mask, kv_length, local_size
+            ):
+                return None
+
+            # Potentially add the padding 2D mask
+            if padding_mask is not None:
+                mask_function = and_masks(mask_function, padding_mask_function(padding_mask))
+
+            batch_arange = torch.arange(batch_size, device=device)
+            head_arange = torch.arange(1, device=device)
+            # Similar to `kv_arange = torch.arange(start=kv_offset,
+            # end=kv_offset + kv_length, device=cache_position.device)`
+            # but without data-dependent slicing (i.e. torch.compile friendly)
+            kv_arange = torch.arange(kv_length, device=device) + kv_offset
+
+            # Actual mask creation
+            # Option 1: Fast non-vmap mask creation (default)
+            # PATCHED
+            use_vmap = False
+            if not use_vmap:
+                # Apply mask function element-wise through broadcasting
+                attention_mask = mask_function(
+                    *_non_vmap_expansion_sdpa(
+                        batch_arange, head_arange, cache_position, kv_arange
+                    )
+                )
+                # Expand the mask to match batch size
+                # and query length if they weren't used in the mask function
+                attention_mask = attention_mask.expand(batch_size, -1, q_length, kv_length)
+
+            # Option 2: Vmap mask creation (torch>=2.6 and custom patterns)
+            # elif _is_torch_greater_or_equal_than_2_6:
+            # This creates the 4D mask easily.
+            # Note that we need this context manager as vmap
+            # cannot handle slicing a tensor from
+            # scalar tensor (it internally calls `.item()` which vmap does not allow,
+            # but this context works around it
+            # We don't need to add an offset to the mask_function either,
+            # as we vmap directly the correct indices for k and kv indices
+            #    with TransformGetItemToIndex():
+            #        attention_mask = _vmap_expansion_sdpa(mask_function)(
+            #            batch_arange, head_arange, cache_position, kv_arange
+            #        )
+
+            # Option 3: Error out since it indicates that the user did something custom,
+            # which they shouldn't have (torch<2.6)
+            else:
+                raise ValueError(
+                    "The vmap functionality for mask creation "
+                    "is only supported from torch>=2.6. "
+                    "Please update your torch version or use "
+                    "`use_vmap=False` with index-based masks."
+                )
+            return attention_mask
 
         # Potentially pad the 2D mask
         padding_mask = prepare_padding_mask(attention_mask, kv_length, kv_offset)
@@ -238,46 +356,17 @@ if patch_masking_utils:
         if padding_mask is not None:
             mask_function = and_masks(mask_function, padding_mask_function(padding_mask))
 
-        batch_arange = torch.arange(batch_size, device=cache_position.device)
-        head_arange = torch.arange(1, device=cache_position.device)
-        # Similar to `kv_arange = torch.arange(start=kv_offset,
-        # end=kv_offset + kv_length, device=cache_position.device)`
-        # but without data-dependent slicing (i.e. torch.compile friendly)
-        kv_arange = torch.arange(kv_length, device=cache_position.device) + kv_offset
+        batch_arange = torch.arange(batch_size, device=device)
+        head_arange = torch.arange(1, device=device)
+        q_arange = torch.arange(q_length, device=device) + q_offset
+        kv_arange = torch.arange(kv_length, device=device) + kv_offset
 
-        # Actual mask creation
-        # Option 1: Fast non-vmap mask creation (default)
-        # PATCHED
-        use_vmap = False
-        if not use_vmap:
-            # Apply mask function element-wise through broadcasting
-            attention_mask = mask_function(
-                *_non_vmap_expansion_sdpa(batch_arange, head_arange, cache_position, kv_arange)
-            )
-            # Expand the mask to match batch size
-            # and query length if they weren't used in the mask function
-            attention_mask = attention_mask.expand(batch_size, -1, q_length, kv_length)
+        # Apply mask function element-wise through broadcasting
+        attention_mask = mask_function(
+            *_non_vmap_expansion_sdpa(batch_arange, head_arange, q_arange, kv_arange)
+        )
+        # Expand the mask to match batch size and query
+        # length if they weren't used in the mask function
+        attention_mask = attention_mask.expand(batch_size, -1, q_length, kv_length)
 
-        # Option 2: Vmap mask creation (torch>=2.6 and custom patterns)
-        # elif _is_torch_greater_or_equal_than_2_6:
-        # This creates the 4D mask easily.
-        # Note that we need this context manager as vmap cannot handle slicing a tensor from
-        # scalar tensor (it internally calls `.item()` which vmap does not allow,
-        # but this context works around it
-        # We don't need to add an offset to the mask_function either,
-        # as we vmap directly the correct indices for k and kv indices
-        #    with TransformGetItemToIndex():
-        #        attention_mask = _vmap_expansion_sdpa(mask_function)(
-        #            batch_arange, head_arange, cache_position, kv_arange
-        #        )
-
-        # Option 3: Error out since it indicates that the user did something custom,
-        # which they shouldn't have (torch<2.6)
-        else:
-            raise ValueError(
-                "The vmap functionality for mask creation "
-                "is only supported from torch>=2.6. "
-                "Please update your torch version or use "
-                "`use_vmap=False` with index-based masks."
-            )
         return attention_mask
