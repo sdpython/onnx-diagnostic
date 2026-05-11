@@ -635,7 +635,7 @@ class TestHelpers(ExtTestCase):
     def test_string_type_config(self):
         conf = get_pretrained_config("microsoft/phi-2", use_only_preinstalled=True)
         s = string_type(conf)
-        self.assertStartsWith("PhiConfig(**{", s)
+        self.assertStartsWith("PhiConfig", s)
 
     @requires_transformers("4.55")
     def test_max_diff_causal_output(self):

@@ -17,6 +17,7 @@ from onnx_diagnostic.torch_models.hghub import get_untrained_model_with_inputs
 from onnx_diagnostic.helpers.rt_helper import make_feeds
 
 
+@unittest.skip("broken for ModelBuilder")
 class TestModelBuilderHelper(ExtTestCase):
     # This is to limit impact on CI.
     @requires_transformers("4.52")

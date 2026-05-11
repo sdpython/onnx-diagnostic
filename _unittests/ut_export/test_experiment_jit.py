@@ -89,7 +89,6 @@ class TestExperimentJit(ExtTestCase):
             (x, y),
             name2,
             dynamic_shapes={"images": {0: "batch", 1: "maxdim"}, "position": {0: "batch"}},
-            fallback=False,
         )
         import onnxruntime
 
