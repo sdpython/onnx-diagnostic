@@ -220,7 +220,7 @@ def unflatten_static_cache(
 ####################
 
 
-if SlidingWindowCache:
+if SlidingWindowCache and SlidingWindowCache.__name__ == "SlidingWindowCache":
 
     def flatten_sliding_window_cache(
         cache: SlidingWindowCache,

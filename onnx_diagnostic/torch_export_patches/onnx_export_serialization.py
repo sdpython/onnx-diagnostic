@@ -231,7 +231,7 @@ def serialization_functions(
             )
 
         SlidingWindowCache = get_sliding_window_cache_cls()
-        if SlidingWindowCache:
+        if SlidingWindowCache and SlidingWindowCache.__name__ == "SlidingWindowCache":
             from .serialization.transformers_impl import (
                 flatten_sliding_window_cache,
                 unflatten_sliding_window_cache,
