@@ -180,7 +180,7 @@ class TestCacheHelpers(ExtTestCase):
         )
         text = self.string_type(cache, with_shape=True)
         self.assertEqual(
-            "SlidingWindowCache(key_cache=#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7], "
+            f"{type(cache).__name__}(key_cache=#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7], "
             "value_cache=#3[T1s4x5x6x7,T1s4x5x6x7,T1s4x5x6x7])",
             text,
         )
