@@ -537,7 +537,10 @@ else:
     make_encoder_decoder_cache = None  # type: ignore[assignment]
 
 
-if hasattr(transformers.cache_utils, "SlidingWindowCache"):
+if (
+    hasattr(transformers.cache_utils, "SlidingWindowCache")
+    and transformers.cache_utils.SlidingWindowCache.__name__ == "SlidingWindowCache"
+):
 
     def make_sliding_window_cache(
         key_value_pairs: Union[List[torch.Tensor], List[Tuple[torch.Tensor, torch.Tensor]]],
