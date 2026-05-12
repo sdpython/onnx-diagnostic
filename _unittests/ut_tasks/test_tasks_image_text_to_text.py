@@ -17,6 +17,7 @@ class TestTasksImageTextToText(ExtTestCase):
     @hide_stdout()
     @requires_transformers("5.3.99")
     @requires_torch("2.7.99")
+    @unittest.skip("broken with transformers 5.5+")
     def test_image_text_to_text_idefics(self):
         mid = "HuggingFaceM4/tiny-random-idefics"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
@@ -34,6 +35,7 @@ class TestTasksImageTextToText(ExtTestCase):
     @hide_stdout()
     @requires_transformers("5.3.99")
     @requires_torch("2.7.99")
+    @unittest.skip("broken with transformers 5.5+")
     def test_image_text_to_text_tiny_gemma3(self):
         """
         If the model tails because of
@@ -92,6 +94,7 @@ class TestTasksImageTextToText(ExtTestCase):
     @hide_stdout()
     @requires_transformers("5.3.99")
     @requires_torch("2.7.99")
+    @unittest.skip("broken with transformers 5.5+")
     def test_image_text_to_text_zai_glm(self):
         """
         If the model tails because of

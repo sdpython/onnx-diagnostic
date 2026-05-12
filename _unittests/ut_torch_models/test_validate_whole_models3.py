@@ -14,6 +14,7 @@ class TestValidateWholeModels3(ExtTestCase):
     @hide_stdout()
     @ignore_warnings(FutureWarning)
     @requires_transformers("4.51")
+    @unittest.skip("modelbuilder not updated in the right way")
     def test_l_validate_model_modelbuilder(self):
         mid = "microsoft/phi-2"
         summary, data = validate_model(

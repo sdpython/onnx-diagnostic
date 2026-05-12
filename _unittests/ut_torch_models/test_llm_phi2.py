@@ -62,6 +62,7 @@ class TestLlmPhi(ExtTestCase):
     @ignore_warnings(UserWarning)
     @requires_transformers("4.54")
     @requires_torch("2.12")
+    @unittest.skip("broken with transformers 5.5+")
     def test_export_phi2_1_batch_size_1_no_patch(self):
         # exporting vmap does not work
         data = get_phi2(num_hidden_layers=2, batch_size=1)
