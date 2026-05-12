@@ -1,7 +1,12 @@
 import copy
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, hide_stdout, requires_transformers
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    ignore_warnings,
+    hide_stdout,
+    requires_transformers,
+)
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.torch_models.llms import get_phi2
 from onnx_diagnostic.helpers import string_type
