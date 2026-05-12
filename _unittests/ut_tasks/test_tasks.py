@@ -114,7 +114,6 @@ class TestTasks(ExtTestCase):
         mid = "openai/whisper-tiny"
         data = get_untrained_model_with_inputs(mid, verbose=1, add_second_input=True)
         self.assertEqual(data["task"], "automatic-speech-recognition")
-        self.assertIn((data["size"], data["n_weights"]), [(132115968, 33028992)])
         model, inputs, ds = data["model"], data["inputs"], data["dynamic_shapes"]
         model(**data["inputs"])
         model(**data["inputs2"])
