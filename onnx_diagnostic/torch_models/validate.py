@@ -1425,7 +1425,7 @@ def _validate_do_run_exported_program(data, summary, verbose, quiet):
     )
 
 
-_cache_export_times = []
+_cache_export_times = []  # type: ignore
 _main_export_function = torch.export.export
 
 

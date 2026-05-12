@@ -250,7 +250,7 @@ def _forward_(
 
 
 _steal_forward_status = [False]
-_additional_stolen_objects = {}
+_additional_stolen_objects = {}  # type: ignore
 
 
 def is_stealing() -> bool:
