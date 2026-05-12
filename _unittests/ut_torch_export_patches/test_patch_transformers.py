@@ -70,7 +70,7 @@ class TestPatchPatchTransformers(ExtTestCase):
         self.assertEqualArray(expected, got)
 
     @requires_transformers("4.99")
-    @unittest.skip("borken")
+    @unittest.skip("broken")
     def test_sdpa_mask_patched(self):
         sdpa_mask = transformers.masking_utils.sdpa_mask
         patched_sdpa_mask = patch_transformers.patched_sdpa_mask
