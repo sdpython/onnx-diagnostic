@@ -6,6 +6,7 @@ Change Logs
 
 * :pr:`422`: add remove_inputs to InputObserver
 * :pr:`421`: fix a few patches for MoE
+* :pr:`426`: remove MambaCache
 
 0.9.2
 +++++

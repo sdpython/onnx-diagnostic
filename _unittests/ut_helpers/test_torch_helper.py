@@ -4,7 +4,7 @@ import ml_dtypes
 import onnx
 import torch
 import transformers
-from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout, requires_torch
+from onnx_diagnostic.ext_test_case import ExtTestCase, hide_stdout
 from onnx_diagnostic.helpers import max_diff, string_type
 from onnx_diagnostic.helpers.torch_helper import (
     dummy_llm,
@@ -22,7 +22,6 @@ from onnx_diagnostic.helpers.torch_helper import (
 from onnx_diagnostic.helpers.cache_helper import (
     make_dynamic_cache,
     make_encoder_decoder_cache,
-    make_mamba_cache,
     make_sliding_window_cache,
     CacheKeyValue,
 )
@@ -312,24 +311,6 @@ class TestTorchTestHelper(ExtTestCase):
         hash2 = string_type(at, with_shape=True, with_min_max=True)
         self.assertEqual(hash1, hash2)
         self.assertGreater(torch_tensor_size(cc), 1)
-
-    @requires_torch("4.50")
-    def test_torch_deepcopy_mamba_cache(self):
-        cache = make_mamba_cache(
-            [
-                (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-                (torch.rand((4, 4, 4)), torch.rand((4, 4, 4))),
-            ]
-        )
-        at = torch_deepcopy(cache)
-        self.assertEqual(type(cache), type(at))
-        self.assertEqual(max_diff(cache, at)["abs"], 0)
-        hash1 = string_type(at, with_shape=True, with_min_max=True)
-        cache.conv_states[0] += 1000
-        hash2 = string_type(at, with_shape=True, with_min_max=True)
-        self.assertEqual(hash1, hash2)
-        self.assertGreater(torch_tensor_size(cache), 1)
 
     def test_torch_deepcopy_base_model_outputs(self):
         bo = transformers.modeling_outputs.BaseModelOutput(

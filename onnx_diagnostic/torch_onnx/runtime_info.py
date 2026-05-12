@@ -130,7 +130,7 @@ class RuntimeValue:
             )
         else:
             self.dtype = value.dtype
-        self.shape = None if is_sequence else tuple(map(int, value.shape))
+        self.shape = None if is_sequence else tuple(map(int, value.shape))  # type: ignore
 
     def clean_value(self):
         """Sets value to None."""

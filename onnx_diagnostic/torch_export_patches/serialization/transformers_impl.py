@@ -15,10 +15,6 @@ try:
 except ImportError:
     HybridCache = None
 
-try:
-    from transformers.models.mamba.modeling_mamba import MambaCache
-except ImportError:
-    from transformers.cache_utils import MambaCache
 from transformers.modeling_outputs import BaseModelOutput
 from ...helpers.cache_helper import make_dynamic_cache, make_static_cache, CacheKeyValue
 from . import make_serialization_function_for_dataclass
@@ -224,7 +220,7 @@ def unflatten_static_cache(
 ####################
 
 
-if SlidingWindowCache:
+if SlidingWindowCache and SlidingWindowCache.__name__ == "SlidingWindowCache":
 
     def flatten_sliding_window_cache(
         cache: SlidingWindowCache,
@@ -300,68 +296,6 @@ def unflatten_encoder_decoder_cache(
     return EncoderDecoderCache(
         dictionary["self_attention_cache"], dictionary["cross_attention_cache"]
     )
-
-
-############
-# MambaCache
-############
-
-
-def flatten_mamba_cache(
-    mamba_cache: MambaCache,
-) -> Tuple[List[Any], torch.utils._pytree.Context]:
-    """Serializes a :class:`transformers.cache_utils.MambaCache` with python objects."""
-    assert isinstance(mamba_cache.conv_states, list) and isinstance(
-        mamba_cache.ssm_states, list
-    ), (
-        f"Unexpected types for conv_states and ssm_states {type(mamba_cache.conv_states)}, "
-        f"{type(mamba_cache.ssm_states)}"
-    )
-    flat = [
-        ("conv_states", mamba_cache.conv_states),
-        ("ssm_states", mamba_cache.ssm_states),
-    ]
-    return [f[1] for f in flat], [f[0] for f in flat]
-
-
-def unflatten_mamba_cache(
-    values: List[Any], context: torch.utils._pytree.Context, output_type=None
-) -> MambaCache:
-    """Restores a :class:`transformers.cache_utils.MambaCache` from python objects."""
-    conv_states, ssm_states = values
-
-    class _config:
-        def __init__(self):
-            if isinstance(conv_states, list):
-                self.intermediate_size = conv_states[0].shape[1]
-                self.state_size = ssm_states[0].shape[2]
-                self.conv_kernel = conv_states[0].shape[2]
-                self.num_hidden_layers = len(conv_states)
-            else:
-                self.intermediate_size = conv_states.shape[2]
-                self.state_size = ssm_states.shape[3]
-                self.conv_kernel = conv_states.shape[3]
-                self.num_hidden_layers = conv_states.shape[0]
-
-    cache = MambaCache(
-        _config(),
-        max_batch_size=1,
-        dtype=values[-1][0].dtype,
-        device="cpu" if values[-1][0].get_device() < 0 else "cuda",
-    )
-    values = dict(zip(context, values))
-    for k, v in values.items():
-        setattr(cache, k, v)
-    return cache
-
-
-def flatten_with_keys_mamba_cache(cache: MambaCache) -> Tuple[
-    List[Tuple[torch.utils._pytree.KeyEntry, Any]],
-    torch.utils._pytree.Context,
-]:
-    """Serializes a :class:`transformers.cache_utils.MambaCache` with python objects."""
-    values, context = flatten_mamba_cache(cache)
-    return [(torch.utils._pytree.MappingKey(k), v) for k, v in zip(context, values)], context
 
 
 #############

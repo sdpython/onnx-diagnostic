@@ -250,7 +250,7 @@ def _forward_(
 
 
 _steal_forward_status = [False]
-_additional_stolen_objects = {}
+_additional_stolen_objects = {}  # type: ignore
 
 
 def is_stealing() -> bool:
@@ -898,10 +898,6 @@ def torch_deepcopy(value: Any) -> Any:
             torch_deepcopy(value.self_attention_cache),
             torch_deepcopy(value.cross_attention_cache),
         )
-    if value.__class__.__name__ == "MambaCache":
-        from .cache_helper import make_mamba_cache
-
-        return make_mamba_cache(list(zip(value.conv_states, value.ssm_states)))
 
     if value.__class__ in torch.utils._pytree.SUPPORTED_NODES:
         args, spec = torch.utils._pytree.tree_flatten(value)

@@ -16,20 +16,6 @@ from .serialization import _lower_name_with_
 PATCH_OF_PATCHES: Set[Any] = set()
 
 
-def get_mamba_cache_cls() -> type:
-    try:
-        from transformers.models.mamba.modeling_mamba import MambaCache
-
-        return MambaCache
-    except ImportError:
-        try:
-            from transformers.cache_utils import MambaCache
-
-            return MambaCache
-        except ImportError:
-            return None
-
-
 def get_hybrid_cache_cls() -> type:
     try:
         from transformers.cache_utils import HybridCache
@@ -226,23 +212,6 @@ def serialization_functions(
                 verbose=verbose,
             ),
         }
-        MambaCache = get_mamba_cache_cls()
-        if MambaCache:
-            from .serialization.transformers_impl import (
-                flatten_mamba_cache,
-                unflatten_mamba_cache,
-                flatten_with_keys_mamba_cache,
-            )
-
-            transformers_classes[MambaCache] = (
-                lambda verbose=verbose: register_class_serialization(
-                    MambaCache,
-                    flatten_mamba_cache,
-                    unflatten_mamba_cache,
-                    flatten_with_keys_mamba_cache,
-                    verbose=verbose,
-                )
-            )
         HybridCache = get_hybrid_cache_cls()
         if HybridCache:
             from .serialization.transformers_impl import (
@@ -262,7 +231,7 @@ def serialization_functions(
             )
 
         SlidingWindowCache = get_sliding_window_cache_cls()
-        if SlidingWindowCache:
+        if SlidingWindowCache and SlidingWindowCache.__name__ == "SlidingWindowCache":
             from .serialization.transformers_impl import (
                 flatten_sliding_window_cache,
                 unflatten_sliding_window_cache,

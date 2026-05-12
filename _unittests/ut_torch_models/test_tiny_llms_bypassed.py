@@ -1,7 +1,12 @@
 import copy
 import unittest
 import torch
-from onnx_diagnostic.ext_test_case import ExtTestCase, ignore_warnings, hide_stdout
+from onnx_diagnostic.ext_test_case import (
+    ExtTestCase,
+    ignore_warnings,
+    hide_stdout,
+    requires_transformers,
+)
 from onnx_diagnostic.torch_models.llms import get_tiny_llm
 from onnx_diagnostic.torch_models.llms import get_phi2
 from onnx_diagnostic.helpers import string_type
@@ -13,6 +18,7 @@ from onnx_diagnostic.torch_export_patches.patch_inputs import use_dyn_not_str
 class TestTinyLlmBypassed(ExtTestCase):
     @ignore_warnings(UserWarning)
     @hide_stdout()
+    @requires_transformers("5.5")
     def test_export_tiny_llm_2_bypassed(self):
         data = get_tiny_llm()
         model, inputs = data["model"], data["inputs"]
