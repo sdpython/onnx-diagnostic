@@ -142,8 +142,8 @@ class InputCandidate:
                 self.flat_list, self.spec
             )
 
-        self.aligned_spec: torch.utils._pytree.PyTreeSpec | None = None
-        self.aligned_flat_list: list[torch.Tensor | None] | None = None
+        self.aligned_spec = None
+        self.aligned_flat_list = None
 
     def remove_inputs(self, input_names: Sequence[str | int]):
         """Removes inputs."""
@@ -230,7 +230,7 @@ class InputCandidate:
     def _set_aligned_flat_list(
         self,
         aligned_flat_list: list[torch.Tensor | None],
-        aligned_spec: torch.utils._pytree.PyTreeSpec,
+        aligned_spec: "PyTreeSpec",  # noqa: F821
     ):
         self.aligned_flat_list = aligned_flat_list
         self.aligned_spec = aligned_spec
@@ -339,7 +339,7 @@ class InputObserverInfo:
         self.default_values = default_values
         self.value_if_missing = value_if_missing
         self.inputs: list[InputCandidate] = []
-        self.outputs_specs: list[torch.utils._pytree.PyTreeSpec] = []
+        self.outputs_specs: list["PyTreeSpec"] = []  # noqa: F821, UP037
         self.flat_outputs: list[list[torch.Tensor | None]] = []
         self.latencies: list[float] = []
         self.args_name_and_position = args_name_and_position
