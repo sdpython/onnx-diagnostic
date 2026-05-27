@@ -1,6 +1,11 @@
 Change Logs
 ===========
 
+0.9.4
++++++
+
+* :pr:`429`: fix issue related to PyTreeSpec
+
 0.9.3
 +++++
 
